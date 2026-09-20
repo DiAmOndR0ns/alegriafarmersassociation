@@ -1,0 +1,238 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI", "Arial", "Helvetica Neue", sans-serif;
+  --font-display: "Segoe UI", "Arial", "Helvetica Neue", sans-serif;
+  --font-mono: "Consolas", "Courier New", ui-monospace, monospace;
+
+  --color-afa-50: #f5faf6;
+  --color-afa-100: #eaf6ee;
+  --color-afa-200: #d6efd9;
+  --color-afa-300: #b6e3c0;
+  --color-afa-400: #7ec79f;
+  --color-afa-500: #4ca57b;
+  --color-afa-600: #2d6a4f;
+  --color-afa-700: #1d4f3d;
+  --color-afa-800: #153d31;
+  --color-afa-900: #0f2d24;
+
+  --color-afa-gold-200: #fff0c2;
+  --color-afa-gold-400: #f4c76d;
+  --color-afa-gold-500: #e9b34a;
+
+  --color-afa-coral-400: #f7a57a;
+  --color-afa-coral-500: #e87d5d;
+  --color-afa-coral-600: #d75d3e;
+
+  --color-bafa-50: #f5faf6;
+  --color-bafa-100: #eaf6ee;
+  --color-bafa-200: #d6efd9;
+  --color-bafa-300: #b6e3c0;
+  --color-bafa-400: #7ec79f;
+  --color-bafa-500: #4ca57b;
+  --color-bafa-600: #2d6a4f;
+  --color-bafa-700: #1d4f3d;
+  --color-bafa-800: #153d31;
+  --color-bafa-900: #0f2d24;
+
+  --color-bafa-gold-200: #fff0c2;
+  --color-bafa-gold-400: #f4c76d;
+  --color-bafa-gold-500: #e9b34a;
+
+  --color-bafa-coral-400: #f7a57a;
+  --color-bafa-coral-500: #e87d5d;
+  --color-bafa-coral-600: #d75d3e;
+
+  --color-bafa-neutral-50: #faf8f5;
+  --color-bafa-neutral-100: #f5f2eb;
+  --color-bafa-neutral-200: #e9e4d9;
+  --color-bafa-neutral-300: #d5cfc1;
+  --color-bafa-neutral-500: #85947e;
+  --color-bafa-neutral-700: #4f5e46;
+  --color-bafa-neutral-800: #2d3a22;
+}
+
+:root {
+  color-scheme: light;
+  --afa-bg: #f3faf5;
+  --afa-surface: #ffffff;
+  --afa-surface-soft: #f5f8f4;
+  --afa-surface-strong: #eaf6ee;
+  --afa-border: #d9e9de;
+  --afa-primary: #1b4332;
+  --afa-primary-strong: #123326;
+  --afa-primary-soft: #eaf5ee;
+  --afa-text: #18372d;
+  --afa-text-soft: #4b6259;
+  --afa-accent: #d77a4b;
+  --afa-accent-soft: #fff1e8;
+  --afa-gold: #e2af42;
+  --afa-shadow: rgba(19, 39, 31, 0.10);
+
+  --bafa-bg: #f3faf5;
+  --bafa-surface: #ffffff;
+  --bafa-surface-soft: #f5f8f4;
+  --bafa-surface-strong: #eaf6ee;
+  --bafa-border: #d9e9de;
+  --bafa-primary: #1b4332;
+  --bafa-primary-strong: #123326;
+  --bafa-primary-soft: #eaf5ee;
+  --bafa-text: #18372d;
+  --bafa-text-soft: #4b6259;
+  --bafa-accent: #d77a4b;
+  --bafa-accent-soft: #fff1e8;
+  --bafa-gold: #e2af42;
+  --bafa-shadow: rgba(19, 39, 31, 0.10);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+    background: var(--bafa-bg);
+    color: var(--bafa-text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bafa-bg);
+    color: var(--bafa-text);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+    overflow-x: hidden;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  body .text-slate-300,
+  body .text-slate-400,
+  body .text-slate-500,
+  body .text-slate-600,
+  body .text-slate-700,
+  body .text-slate-800,
+  body .text-slate-900 {
+    color: #1b4332 !important;
+  }
+
+  body .bg-slate-800,
+  body .bg-slate-900,
+  body .bg-slate-950,
+  body .dark\:bg-slate-800,
+  body .dark\:bg-slate-900,
+  body .dark\:bg-slate-950,
+  body .bg-slate-700 {
+    background-color: #f5f2eb !important;
+  }
+
+  body .border-slate-700,
+  body .border-slate-800,
+  body .border-slate-750,
+  body .border-slate-850,
+  body .dark\:border-slate-700,
+  body .dark\:border-slate-800,
+  body .dark\:border-slate-850 {
+    border-color: #d5cfc1 !important;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6, p, span, div, button, a, td, th, label, input, select, textarea {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+
+  button, input, select, textarea {
+    font: inherit;
+  }
+
+  input::placeholder,
+  textarea::placeholder,
+  select::placeholder {
+    color: #6a7f72;
+    opacity: 1;
+  }
+
+  button span, .btn-text {
+    white-space: normal;
+  }
+
+  ::selection {
+    background: rgba(45, 106, 79, 0.2);
+    color: var(--bafa-text);
+  }
+}
+
+/* Keep the member IGP surface aligned with the light member dashboard. */
+#member-screen-wrapper #hog-raising-igp-container {
+  color-scheme: light;
+}
+
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:bg-slate-950"],
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:bg-slate-900"],
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:bg-slate-800"] {
+  background-color: #faf8f5;
+}
+
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:text-white"],
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:text-slate-100"],
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:text-slate-200"],
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:text-slate-300"] {
+  color: #1b4332;
+}
+
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:border-slate-800"],
+#member-screen-wrapper #hog-raising-igp-container [class~="dark:border-slate-850"] {
+  border-color: #e9e4d9;
+}
+
+#member-screen-wrapper #hog-raising-igp-container select,
+#member-screen-wrapper #hog-raising-igp-container option,
+#member-screen-wrapper #hog-raising-igp-container input,
+#member-screen-wrapper #hog-raising-igp-container textarea {
+  color: #1b4332 !important;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-area-root, .print-area-root * {
+    visibility: visible !important;
+  }
+
+  .print-area-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+

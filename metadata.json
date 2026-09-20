@@ -1,0 +1,6 @@
+{
+  "name": "Alegria Farmers Association Portal",
+  "description": "Digital platform for the officers and members of Alegria Farmers Association (AFA) in Tuburan, Cebu, featuring member management, meeting minutes, resolutions, financial tracking, auditing, announcements, and offline synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
