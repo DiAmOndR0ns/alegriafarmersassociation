@@ -23,7 +23,7 @@
 
   --color-afa-coral-400: #f7a57a;
   --color-afa-coral-500: #e87d5d;
-  --color-afa-coral-600: #d75d3e;
+  --color-afa-coral-600: #c2410c;
 
   --color-bafa-50: #f5faf6;
   --color-bafa-100: #eaf6ee;
@@ -42,13 +42,13 @@
 
   --color-bafa-coral-400: #f7a57a;
   --color-bafa-coral-500: #e87d5d;
-  --color-bafa-coral-600: #d75d3e;
+  --color-bafa-coral-600: #c2410c;
 
   --color-bafa-neutral-50: #faf8f5;
   --color-bafa-neutral-100: #f5f2eb;
   --color-bafa-neutral-200: #e9e4d9;
   --color-bafa-neutral-300: #d5cfc1;
-  --color-bafa-neutral-500: #85947e;
+  --color-bafa-neutral-500: #647a5e;
   --color-bafa-neutral-700: #4f5e46;
   --color-bafa-neutral-800: #2d3a22;
 }
@@ -79,7 +79,7 @@
   --bafa-primary-strong: #123326;
   --bafa-primary-soft: #eaf5ee;
   --bafa-text: #18372d;
-  --bafa-text-soft: #4b6259;
+  --bafa-text-soft: #3f5349;
   --bafa-accent: #d77a4b;
   --bafa-accent-soft: #fff1e8;
   --bafa-gold: #e2af42;
@@ -115,6 +115,17 @@
     word-break: normal;
   }
 
+  /*
+   * READABILITY SAFEGUARD
+   * The application is a light theme, but a few views still carry dark-theme
+   * slate utility classes. Those classes render pale grey text on a pale
+   * background, so words visually vanish. These rules remap the dark-theme
+   * slate/white palette onto the readable light palette so every word stays
+   * legible. Rules are ordered low-to-high specificity and use `!important`
+   * only where a Tailwind utility would otherwise win.
+   */
+
+  /* Pale body text (slate-300/400/500) is invisible on light surfaces. */
   body .text-slate-300,
   body .text-slate-400,
   body .text-slate-500,
@@ -122,27 +133,131 @@
   body .text-slate-700,
   body .text-slate-800,
   body .text-slate-900 {
-    color: #1b4332 !important;
+    color: #33473d;
   }
 
+  /* Titles and emphasised values need full-strength ink. */
+  body .text-slate-800,
+  body .text-slate-900 {
+    color: #1b4332;
+  }
+
+  /*
+   * Hardcoded greys used for secondary text are too pale on the light
+   * surfaces. #85947E and #4A5F57 are applied in hundreds of places across
+   * the views; darkening them here fixes every one of them at once instead
+   * of chasing individual call sites. #4A5F57 in particular was the muted
+   * grey-green behind most "grey text" reports.
+   */
+  body [class*="text-[#85947E]"] {
+    color: #5c6e57 !important;
+  }
+
+  body [class*="text-[#4A5F57]"] {
+    color: #2b3d33 !important;
+  }
+
+  /* Dark-theme surfaces become the light surface instead of a grey block. */
   body .bg-slate-800,
   body .bg-slate-900,
   body .bg-slate-950,
+  body .bg-slate-700,
+  body .bg-slate-850,
+  body .bg-slate-750,
+  body .bg-slate-650,
   body .dark\:bg-slate-800,
   body .dark\:bg-slate-900,
-  body .dark\:bg-slate-950,
-  body .bg-slate-700 {
+  body .dark\:bg-slate-950 {
     background-color: #f5f2eb !important;
   }
 
+  /* Half-strength variants (bg-slate-900/50, /60, /80 ...) inherit the same
+     light surface so opacity blends do not produce muddy grey panels. */
+  body [class*="bg-slate-9"],
+  body [class*="bg-slate-8"],
+  body [class*="bg-slate-7"],
+  body [class*="dark:bg-slate-9"],
+  body [class*="dark:bg-slate-8"] {
+    --tw-bg-opacity: 1;
+  }
+
   body .border-slate-700,
-  body .border-slate-800,
   body .border-slate-750,
+  body .border-slate-800,
   body .border-slate-850,
+  body .border-slate-650,
   body .dark\:border-slate-700,
   body .dark\:border-slate-800,
   body .dark\:border-slate-850 {
     border-color: #d5cfc1 !important;
+  }
+
+  /* Any remaining white/near-white text sitting on a light surface. */
+  body .text-white,
+  body .dark\:text-white {
+    color: #1b4332 !important;
+  }
+
+  /*
+   * Restore genuine white-on-dark text for the surfaces that intentionally stay
+   * brand-dark (headers, footers, banners). This block comes later in the
+   * sheet, so it wins over the generic light-surface override above.
+   */
+  body [class*="bg-[#1B4332]"],
+  body [class*="bg-[#143326]"],
+  body [class*="bg-[#081C15]"],
+  body [class*="bg-[#0F2D24]"],
+  body [class*="bg-[#122E22]"],
+  body [class*="bg-[#BF360C]"],
+  body [class*="bg-[#8D2300]"],
+  body .bg-bafa-coral-500,
+  body .bg-bafa-coral-600,
+  body [class*="bg-bafa-800"],
+  body [class*="bg-bafa-900"],
+  body .bg-bafa-800,
+  body .bg-bafa-900 {
+    color: #f5faf6;
+  }
+
+  body [class*="bg-[#1B4332]"] .text-white,
+  body [class*="bg-[#143326]"] .text-white,
+  body [class*="bg-[#081C15]"] .text-white,
+  body [class*="bg-[#0F2D24]"] .text-white,
+  body [class*="bg-[#122E22]"] .text-white,
+  body [class*="bg-[#BF360C]"],
+  body [class*="bg-[#BF360C]"] .text-white,
+  body [class*="bg-[#BF360C]"].text-white,
+  body [class*="bg-[#8D2300]"],
+  body [class*="bg-[#8D2300]"] .text-white,
+  body [class*="bg-[#8D2300]"].text-white,
+  body .bg-bafa-coral-500,
+  body .bg-bafa-coral-500 .text-white,
+  body .bg-bafa-coral-500.text-white,
+  body .bg-bafa-coral-600,
+  body .bg-bafa-coral-600 .text-white,
+  body .bg-bafa-coral-600.text-white,
+  body [class*="bg-bafa-800"] .text-white,
+  body [class*="bg-bafa-900"] .text-white,
+  body [class*="bg-[#1B4332]"].text-white,
+  body [class*="bg-bafa-800"].text-white {
+    color: #ffffff !important;
+  }
+
+  body [class*="bg-[#1B4332]"] .text-slate-300,
+  body [class*="bg-[#1B4332]"] .text-slate-400,
+  body [class*="bg-[#143326]"] .text-slate-300,
+  body [class*="bg-[#143326]"] .text-slate-400,
+  body [class*="bg-[#081C15]"] .text-slate-300,
+  body [class*="bg-[#081C15]"] .text-slate-400,
+  body [class*="bg-bafa-800"] .text-slate-300,
+  body [class*="bg-bafa-800"] .text-slate-400 {
+    color: #d8f3dc !important;
+  }
+
+  /* Print surfaces (certificates, ID cards) keep true black on white. */
+  .print-area-root,
+  .print-area-root * {
+    color: inherit;
   }
 
   #root {
@@ -169,9 +284,189 @@
     white-space: normal;
   }
 
+  /*
+   * ACCESSIBILITY BASELINE
+   * Visible keyboard focus for every interactive element, and a consistent
+   * minimum tap target so senior citizens and touch users can operate the UI.
+   */
+  :focus-visible {
+    outline: 3px solid #b45309;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid #b45309;
+    outline-offset: 2px;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* Screen-reader-only helper (used for icon-only buttons and skip links). */
+  .sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border-width: 0 !important;
+  }
+
+  /* Honor the OS "reduce motion" preference. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   ::selection {
     background: rgba(45, 106, 79, 0.2);
     color: var(--bafa-text);
+  }
+
+  /*
+   * READABILITY FLOORS
+   * 8-11px text is unreadable for many members. Raise every micro font size
+   * to a legible minimum while keeping relative hierarchy.
+   */
+  body .text-\[8px\]  { font-size: 11px !important; line-height: 1.45; }
+  body .text-\[9px\]  { font-size: 12px !important; line-height: 1.45; }
+  body .text-\[10px\] { font-size: 12.5px !important; line-height: 1.45; }
+  body .text-\[11px\] { font-size: 13px !important; line-height: 1.5; }
+
+  /*
+   * PALE TEXT DARKENING
+   * Pastel accent colors (emerald-300/400, amber-300/400, rose-300/400, ...)
+   * were designed for dark-theme surfaces but are used on light backgrounds,
+   * where they are nearly invisible. Remap them to strong, readable tones.
+   */
+  body .text-emerald-200 { color: #065f46 !important; }
+  body .text-emerald-300,
+  body .text-emerald-400 { color: #047857 !important; }
+  body .text-teal-300,
+  body .text-teal-400    { color: #0f766e !important; }
+  body .text-rose-300,
+  body .text-rose-400    { color: #be123c !important; }
+  body .text-red-300,
+  body .text-red-400     { color: #b91c1c !important; }
+  body .text-amber-300,
+  body .text-amber-400   { color: #b45309 !important; }
+  body .text-yellow-300,
+  body .text-yellow-400  { color: #a16207 !important; }
+  body .text-orange-200,
+  body .text-orange-300,
+  body .text-orange-400  { color: #c2410c !important; }
+  body .text-blue-300,
+  body .text-blue-400    { color: #1d4ed8 !important; }
+  body .text-sky-300,
+  body .text-sky-400     { color: #0369a1 !important; }
+  body .text-indigo-300,
+  body .text-indigo-400  { color: #4338ca !important; }
+  body .text-violet-300,
+  body .text-violet-400  { color: #6d28d9 !important; }
+
+  /*
+   * KEEP LIGHT TEXT ON INTENTIONALLY DARK SURFACES
+   * These surfaces stay brand-dark, so the pastel accents must remain light
+   * there. This block wins because it comes after the darkening rules.
+   */
+  body [class*="bg-[#1B4332]"],
+  body [class*="bg-[#081C15]"],
+  body [class*="bg-[#0F2D24]"],
+  body [class*="bg-[#122E22]"],
+  body [class*="bg-[#143326]"],
+  body .bg-bafa-700,
+  body .bg-bafa-800,
+  body .bg-bafa-900 {
+    --pale-dark-surface: 1;
+  }
+
+  body [class*="bg-[#1B4332]"] .text-emerald-300,
+  body [class*="bg-[#1B4332]"] .text-emerald-400,
+  body [class*="bg-[#081C15]"] .text-emerald-300,
+  body [class*="bg-[#081C15]"] .text-emerald-400,
+  body [class*="bg-[#0F2D24]"] .text-emerald-300,
+  body [class*="bg-[#0F2D24]"] .text-emerald-400,
+  body [class*="bg-[#122E22]"] .text-emerald-300,
+  body [class*="bg-[#122E22]"] .text-emerald-400,
+  body .bg-bafa-800 .text-emerald-300,
+  body .bg-bafa-800 .text-emerald-400,
+  body .bg-bafa-900 .text-emerald-300,
+  body .bg-bafa-900 .text-emerald-400 {
+    color: #6ee7b7 !important;
+  }
+
+  body [class*="bg-[#1B4332]"] .text-amber-300,
+  body [class*="bg-[#1B4332]"] .text-amber-400,
+  body [class*="bg-[#081C15]"] .text-amber-300,
+  body [class*="bg-[#081C15]"] .text-amber-400,
+  body [class*="bg-[#0F2D24]"] .text-amber-300,
+  body [class*="bg-[#0F2D24]"] .text-amber-400,
+  body [class*="bg-amber-9"] .text-amber-300,
+  body [class*="bg-amber-9"].text-amber-300,
+  body .bg-bafa-800 .text-amber-300,
+  body .bg-bafa-900 .text-amber-300 {
+    color: #fcd34d !important;
+  }
+
+  body [class*="bg-rose-9"] .text-rose-300,
+  body [class*="bg-rose-9"].text-rose-300,
+  body [class*="bg-rose-9"] .text-rose-100,
+  body [class*="bg-red-9"] .text-red-300,
+  body [class*="bg-red-9"].text-red-300 {
+    color: #fecdd3 !important;
+  }
+
+  /* Dark code chips / panels that were not remapped to light keep pale text. */
+  body [class*="bg-slate-9"].text-amber-300,
+  body [class*="bg-slate-9"] .text-amber-300,
+  body [class*="bg-slate-8"].text-amber-300,
+  body [class*="bg-slate-8"] .text-amber-300,
+  body [class*="bg-slate-9"].text-emerald-300,
+  body [class*="bg-slate-9"] .text-emerald-300,
+  body [class*="bg-slate-9"].text-emerald-400,
+  body [class*="bg-slate-9"] .text-emerald-400,
+  body [class*="bg-slate-8"].text-emerald-400,
+  body [class*="bg-slate-8"] .text-emerald-400 {
+    color: #6ee7b7 !important;
+  }
+
+  body [class*="bg-slate-9"].text-amber-400,
+  body [class*="bg-slate-9"] .text-amber-400,
+  body [class*="bg-slate-8"].text-amber-400,
+  body [class*="bg-slate-8"] .text-amber-400,
+  body [class*="bg-slate-9"].text-slate-300,
+  body [class*="bg-slate-9"] .text-slate-300 {
+    color: #fcd34d !important;
+  }
+
+  /* Emerald solid buttons keep white text. */
+  body [class*="bg-emerald-6"] ,
+  body [class*="bg-emerald-7"] ,
+  body [class*="bg-emerald-8"] ,
+  body [class*="bg-emerald-9"] {
+    color: #ffffff;
+  }
+
+  /* Dark slate panels that were remapped to light keep their text dark. */
+  body [class*="bg-emerald-9"].text-emerald-300 {
+    color: #6ee7b7 !important;
   }
 }
 

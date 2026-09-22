@@ -191,20 +191,20 @@ export default function MemberDashboard({
     <div id="member-dashboard-root" className="space-y-4 text-[#2D3A22]">
       
       {/* HEADER ACTION AREA */}
-      <div className="bg-bafa-800 text-bafa-50 p-5 rounded-3xl border border-bafa-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print text-left shadow-sm">
+      <div className="bg-[#EAF4EC] text-[#1B4332] p-5 rounded-3xl border-2 border-[#2D6A4F]/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print text-left shadow-sm">
         <div>
           <div className="flex items-center gap-2">
-            <span className="bg-[#D8F3DC] text-[#1B4332] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+            <span className="bg-[#1B4332] text-[#D8F3DC] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
               AFA Regular Member            </span>
             <span className="bg-amber-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm">
               <ShieldCheck className="w-3 h-3" />
               Active Member
             </span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-black text-white mt-2 font-display">
+          <h2 className="text-xl sm:text-2xl font-black text-[#1B4332] mt-2 font-display">
             Welcome, {currentUser.name}!
           </h2>
-          <p className="text-xs sm:text-sm text-[#B7E4C7] mt-1 max-w-xl font-medium">
+          <p className="text-xs sm:text-sm text-[#33473d] mt-1 max-w-xl font-medium">
             This is your official member portal. You can update your profile photo, register farm parcels, view attendance dividends, and print your certified AFA membership ID.
           </p>
         </div>
@@ -219,7 +219,7 @@ export default function MemberDashboard({
 
       {activeTab === 'profile' && (
         /* DASHBOARD GRID */
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start no-print text-left">
+        <div id="member-profile-panel" className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start no-print text-left">
         
         {/* LEFT COLUMN: PROFILE MANAGEMENT (5 columns) */}
         <div className="lg:col-span-5 space-y-4">
@@ -791,7 +791,7 @@ export default function MemberDashboard({
       )}
 
       {activeTab === 'announcements' && (
-        <div className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print">
+        <div id="member-announcements-panel" className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print">
           <AnnouncementDashboard 
             announcements={announcements} 
             isOfficerMode={false}
@@ -800,7 +800,7 @@ export default function MemberDashboard({
       )}
 
       {activeTab === 'hog-raising' && (
-        <div className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print">
+        <div id="member-hog-raising-panel" className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print">
           <HogRaisingIgpTracker
             state={hogRaisingState}
             members={members}
@@ -816,7 +816,7 @@ export default function MemberDashboard({
       )}
 
       {activeTab === 'products' && (
-        <div className="bg-white border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print space-y-6 text-left">
+        <div id="member-products-panel" className="bg-white border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print space-y-6 text-left">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#F0EBE1] pb-4">
             <div>
               <h3 className="text-xl font-black text-[#1B4332] font-display flex items-center gap-2">
@@ -927,7 +927,7 @@ export default function MemberDashboard({
       )}
 
       {activeTab === 'activities' && (
-        <div className="bg-white border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print space-y-6 text-left">
+        <div id="member-activities-panel" className="bg-white border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print space-y-6 text-left">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#F0EBE1] pb-4">
             <div>
               <h3 className="text-xl font-black text-[#1B4332] font-display flex items-center gap-2">
