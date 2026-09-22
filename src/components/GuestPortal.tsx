@@ -873,7 +873,7 @@ export default function GuestPortal({
               <span className="font-black text-[10px] tracking-wider uppercase">LGU & DA REGISTERED PORTAL</span>
             </span>
             <a href="/privacy" className="text-[11px] font-bold text-[#D8F3DC] hover:text-white hover:underline">Privacy Policy</a>
-            <span className="text-[10px] text-[#85947E] break-words">© 2026 AFA • Design Optimized for Senior Citizen Accessibility</span>
+            <span className="text-[10px] text-[#B7E4C7] break-words">© 2026 AFA • Design Optimized for Senior Citizen Accessibility</span>
           </div>
         </div>
       </footer>
