@@ -68,9 +68,6 @@ export default function TreasurerView({
   // Add Transaction Form
   const [txType, setTxType] = useState<'income' | 'expense'>('income');
   const [txCategory, setTxCategory] = useState('Membership Dues');
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
   const [txFundSource, setTxFundSource] = useState('GF-SLP (General Fund / DSWD-SLP Operational Buffer)');
   const [txAmount, setTxAmount] = useState('');
   const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
@@ -98,29 +95,6 @@ export default function TreasurerView({
   const CATEGORIES = {
     income: ['Membership Dues', 'Donation', 'Livelihood Assistance', 'Produce Sales', 'Coop Fee', 'Other Income'],
     expense: ['Seeds & Seedlings', 'Fertilizer Depot', 'Equipment Purchase', 'Equipment Maintenance', 'Meeting Snacks & Logistics', 'Honorarium', 'Other Expense']
-  };
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('bafa_treasurer_categories');
-      if (stored) setCustomCategories(JSON.parse(stored));
-    } catch {
-      setCustomCategories([]);
-    }
-  }, []);
-
-  const availableCategories = [...CATEGORIES[txType], ...customCategories.filter(category => !CATEGORIES[txType].includes(category))];
-
-  const handleAddCategory = (event: React.FormEvent) => {
-    event.preventDefault();
-    const category = newCategoryName.trim();
-    if (!category || availableCategories.some(existing => existing.toLowerCase() === category.toLowerCase())) return;
-    const nextCategories = [...customCategories, category];
-    setCustomCategories(nextCategories);
-    localStorage.setItem('bafa_treasurer_categories', JSON.stringify(nextCategories));
-    setTxCategory(category);
-    setNewCategoryName('');
-    setShowCategoryModal(false);
   };
 
   const calculateBalances = () => {
@@ -160,13 +134,13 @@ export default function TreasurerView({
   const monthlyChartData = useMemo(() => {
     if (!hogRaising) return [];
 
-    const map: Record<string, {
-      monthKey: string;
-      monthLabel: string;
+    const map: Record<string, { 
+      monthKey: string; 
+      monthLabel: string; 
       shortMonth: string;
-      income: number;
-      expenses: number;
-      net: number;
+      income: number; 
+      expenses: number; 
+      net: number; 
       hogsSold: number;
       feedExpenses: number;
       pigletExpenses: number;
@@ -278,7 +252,7 @@ export default function TreasurerView({
 
     const allocated = parseFloat(fundFormAllocated) || 0;
     const balance = fundFormBalance ? parseFloat(fundFormBalance) : allocated;
-    const code = fundFormCode.trim().toUpperCase() ||
+    const code = fundFormCode.trim().toUpperCase() || 
                  fundFormName.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 8);
 
     if (onAddFund) {
@@ -694,14 +668,14 @@ export default function TreasurerView({
                   margin={{ top: 15, right: 20, left: 10, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} opacity={0.6} />
-                  <XAxis
-                    dataKey="shortMonth"
-                    stroke="#94a3b8"
+                  <XAxis 
+                    dataKey="shortMonth" 
+                    stroke="#94a3b8" 
                     tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }}
                     tickLine={{ stroke: '#475569' }}
                   />
-                  <YAxis
-                    stroke="#94a3b8"
+                  <YAxis 
+                    stroke="#94a3b8" 
                     tick={{ fill: '#94a3b8', fontSize: 11 }}
                     tickLine={{ stroke: '#475569' }}
                     tickFormatter={(val) => `₱${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
@@ -772,26 +746,26 @@ export default function TreasurerView({
                       return null;
                     }}
                   />
-                  <Legend
+                  <Legend 
                     verticalAlign="top"
                     align="right"
                     iconType="circle"
                     wrapperStyle={{ paddingBottom: '10px', fontSize: '12px' }}
                     formatter={(value) => <span className="text-slate-300 font-medium text-xs mr-3">{value}</span>}
                   />
-                  <Bar
-                    dataKey="income"
-                    name="Hog Sales (Income)"
-                    fill="#10B981"
-                    radius={[6, 6, 0, 0]}
-                    maxBarSize={42}
+                  <Bar 
+                    dataKey="income" 
+                    name="Hog Sales (Income)" 
+                    fill="#10B981" 
+                    radius={[6, 6, 0, 0]} 
+                    maxBarSize={42} 
                   />
-                  <Bar
-                    dataKey="expenses"
-                    name="IGP Expenses (Feeds & Stock)"
-                    fill="#F43F5E"
-                    radius={[6, 6, 0, 0]}
-                    maxBarSize={42}
+                  <Bar 
+                    dataKey="expenses" 
+                    name="IGP Expenses (Feeds & Stock)" 
+                    fill="#F43F5E" 
+                    radius={[6, 6, 0, 0]} 
+                    maxBarSize={42} 
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -832,8 +806,8 @@ export default function TreasurerView({
             <span>{isAuditor ? 'Auditor Financial Oversight' : 'Treasurer Financial Ledger'}</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            {isAuditor
-              ? 'Verify association transaction records and highlight any financial discrepancies.'
+            {isAuditor 
+              ? 'Verify association transaction records and highlight any financial discrepancies.' 
               : 'Record all incoming payments, member dues, and association expenses.'}
           </p>
         </div>
@@ -903,21 +877,21 @@ export default function TreasurerView({
         <div className="space-y-3">
           {filteredTx.length > 0 ? (
             filteredTx.map((tx) => (
-              <div
-                key={tx.id}
+              <div 
+                key={tx.id} 
                 className={`bg-slate-800 border rounded-2xl p-4.5 transition-all shadow-sm flex flex-col md:flex-row justify-between gap-4 ${
-                  tx.auditedStatus === 'Flagged'
-                    ? 'border-red-500/30 bg-gradient-to-r from-slate-800 to-red-950/10'
-                    : tx.auditedStatus === 'Audited'
-                    ? 'border-emerald-500/10'
+                  tx.auditedStatus === 'Flagged' 
+                    ? 'border-red-500/30 bg-gradient-to-r from-slate-800 to-red-950/10' 
+                    : tx.auditedStatus === 'Audited' 
+                    ? 'border-emerald-500/10' 
                     : 'border-slate-700/50'
                 }`}
               >
                 {/* LHS: Info */}
                 <div className="flex items-start gap-3.5">
                   <div className={`p-2.5 rounded-xl shrink-0 border ${
-                    tx.type === 'income'
-                      ? 'bg-emerald-950/40 border-emerald-500/20 text-emerald-400'
+                    tx.type === 'income' 
+                      ? 'bg-emerald-950/40 border-emerald-500/20 text-emerald-400' 
                       : 'bg-rose-950/40 border-rose-500/20 text-rose-400'
                   }`}>
                     {tx.type === 'income' ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
@@ -1046,22 +1020,22 @@ export default function TreasurerView({
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
             <div className={`px-5 py-4 border-b flex justify-between items-center ${
-              txType === 'income'
-                ? 'bg-gradient-to-r from-emerald-950/70 to-slate-900 border-emerald-500/30'
+              txType === 'income' 
+                ? 'bg-gradient-to-r from-emerald-950/70 to-slate-900 border-emerald-500/30' 
                 : 'bg-gradient-to-r from-rose-950/70 to-slate-900 border-rose-500/30'
             }`}>
               <div className="flex items-center gap-2.5">
                 <div className={`p-2 rounded-xl border ${
-                  txType === 'income'
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  txType === 'income' 
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
                     : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
                 }`}>
                   {txType === 'income' ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">
-                    {txType === 'income'
-                      ? 'I-rekord ang Kita / Record Income (Deposit Inflow)'
+                    {txType === 'income' 
+                      ? 'I-rekord ang Kita / Record Income (Deposit Inflow)' 
                       : 'I-rekord ang Gasto / Record Expenditure (Outflow)'}
                   </h3>
                   <p className="text-xs text-slate-400">
@@ -1071,7 +1045,7 @@ export default function TreasurerView({
                   </p>
                 </div>
               </div>
-              <button
+              <button 
                 onClick={() => {
                   setShowAddModal(false);
                   setIsCustomFundSource(false);
@@ -1096,8 +1070,8 @@ export default function TreasurerView({
                     type="button"
                     onClick={() => handleTypeChange('income')}
                     className={`py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      txType === 'income'
-                        ? 'bg-emerald-600 text-white shadow-md'
+                      txType === 'income' 
+                        ? 'bg-emerald-600 text-white shadow-md' 
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
@@ -1108,8 +1082,8 @@ export default function TreasurerView({
                     type="button"
                     onClick={() => handleTypeChange('expense')}
                     className={`py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      txType === 'expense'
-                        ? 'bg-rose-700 text-white shadow-md'
+                      txType === 'expense' 
+                        ? 'bg-rose-700 text-white shadow-md' 
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
@@ -1163,39 +1137,32 @@ export default function TreasurerView({
                   onChange={(e) => setTxCategory(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                 >
-                  {availableCategories.map(cat => (
+                  {CATEGORIES[txType].map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
-                {currentRole === 'Treasurer' && (
-                  <button type="button" onClick={() => setShowCategoryModal(true)} className="shrink-0 inline-flex items-center gap-1 rounded-xl border-[#2D6A4F] bg-[#EAF6EE] px-3 py-2 text-sm font-bold text-[#1B4332] hover:bg-[#D6EFD9]" aria-label="Add a custom transaction category" title="Add a custom category">
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">Add category</span>
-                  </button>
-                )}
-                <p className="mt-1 text-xs text-[#4B6259]">Choose a category or add one for this role, such as Budget Source Allocation.</p>
               </div>
 
               {/* Fund Account Selection (Deposit Destination for Income, Budget Source for Expense) */}
-              <div className="space-y-1.5 bg-[#EAF4EC] p-3.5 rounded-xl border border-[#D5CFC1]">
-                <label className="block text-xs font-bold text-[#1B4332] uppercase flex items-center justify-between">
+              <div className="space-y-1.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-750">
+                <label className="block text-xs font-bold text-slate-300 uppercase flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <Wallet className={`w-3.5 h-3.5 ${txType === 'income' ? 'text-emerald-700' : 'text-rose-700'}`} />
-                    <span className={txType === 'income' ? 'text-emerald-800' : 'text-rose-800'}>
-                      {txType === 'income'
-                        ? 'Deposit Destination (Where the income goes)'
-                        : 'Budget Source (Where the fund is taken from)'}
+                    <Wallet className={`w-3.5 h-3.5 ${txType === 'income' ? 'text-emerald-400' : 'text-rose-400'}`} />
+                    <span className={txType === 'income' ? 'text-emerald-300' : 'text-rose-300'}>
+                      {txType === 'income' 
+                        ? 'Diin Ibutang / Ideosito ang Kita (Deposit Destination)' 
+                        : 'Diin Kuhaon ang Pundo / Budget Source (Source to Debit)'}
                     </span>
                   </span>
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                    txType === 'income'
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-rose-100 text-rose-800 border border-rose-300'
+                    txType === 'income' 
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                      : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                   }`}>
                     {txType === 'income' ? 'Deposit Destination' : 'Source Account'}
                   </span>
                 </label>
-                <p className="text-[11px] text-[#33473d]">
+                <p className="text-[11px] text-slate-400">
                   {txType === 'income'
                     ? 'Pilia kon asa nga pundo o bank account ibutang kining maong kita (where the income will be put / deposited).'
                     : 'Pilia kon asa nga pundo o gahin kuhaon kining maong gasto alang sa audit traceability (where the budget will be taken from).'}
@@ -1212,7 +1179,7 @@ export default function TreasurerView({
                         setTxFundSource(e.target.value);
                       }
                     }}
-                    className="flex-1 px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
+                    className="flex-1 px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                   >
                     {/* Registered Dynamic Funds */}
                     {funds.length > 0 && (
@@ -1252,8 +1219,8 @@ export default function TreasurerView({
 
                     <optgroup label="Lahi nga Tinubdan / Different Source">
                       <option value="__custom__">
-                        {txType === 'income'
-                          ? '+ Magdugang og Lahi nga Pundo nga Sudlan (Specify Different Target Fund)...'
+                        {txType === 'income' 
+                          ? '+ Magdugang og Lahi nga Pundo nga Sudlan (Specify Different Target Fund)...' 
                           : '+ Magdugang og Lahi nga Tinubdan sa Pundo (Specify Different Source)...'}
                       </option>
                     </optgroup>
@@ -1263,7 +1230,7 @@ export default function TreasurerView({
                     type="button"
                     onClick={() => setShowAddFundModal(true)}
                     title="Rehistro og bag-ong permanenteng pundo sa asosasyon"
-                    className="px-3 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-bold border border-[#2D6A4F] flex items-center gap-1 shrink-0 transition-all cursor-pointer"
+                    className="px-3 py-2 bg-slate-750 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold border border-slate-650 flex items-center gap-1 shrink-0 transition-all cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Bag-ong Pundo</span>
@@ -1272,10 +1239,10 @@ export default function TreasurerView({
 
                 {/* Inline Different Fund Source Input */}
                 {isCustomFundSource && (
-                  <div className="mt-2.5 p-3.5 bg-white rounded-xl border border-[#2D6A4F]/40 space-y-2.5 animate-fade-in">
-                    <div className="flex items-center justify-between text-xs text-[#1B4332] font-bold">
+                  <div className="mt-2.5 p-3.5 bg-slate-950/90 rounded-xl border border-emerald-500/40 space-y-2.5 animate-fade-in">
+                    <div className="flex items-center justify-between text-xs text-emerald-400 font-bold">
                       <span>
-                        {txType === 'income' ? 'Different Target Fund (Income)' : 'Different Budget Source'}
+                        {txType === 'income' ? 'Lahi nga Pundo nga Sudlan sa Kita' : 'Lahi nga Tinubdan sa Pundo'}
                       </span>
                       <button
                         type="button"
@@ -1283,7 +1250,7 @@ export default function TreasurerView({
                           setIsCustomFundSource(false);
                           setTxFundSource(funds[0] ? `${funds[0].code} (${funds[0].name})` : 'GF-SLP (General Fund / DSWD-SLP Operational Buffer)');
                         }}
-                        className="text-[11px] text-[#2D6A4F] hover:underline cursor-pointer"
+                        className="text-[11px] text-slate-400 hover:text-slate-200 underline cursor-pointer"
                       >
                         Balik sa lista
                       </button>
@@ -1291,8 +1258,8 @@ export default function TreasurerView({
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-semibold text-[#1B4332] mb-0.5">
-                          Pangalan sa Pundo / Fund Name <span className="text-rose-700">*</span>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-0.5">
+                          Pangalan sa Pundo / Fund Name <span className="text-rose-400">*</span>
                         </label>
                         <input
                           type="text"
@@ -1300,7 +1267,7 @@ export default function TreasurerView({
                           placeholder={txType === 'income' ? 'e.g. DA Rice Assistance Fund, Barangay Subsidy' : 'e.g. Special Project Grant, Private Donation'}
                           value={customFundName}
                           onChange={(e) => setCustomFundName(e.target.value)}
-                          className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
+                          className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                         />
                       </div>
                       <div>
@@ -1337,8 +1304,8 @@ export default function TreasurerView({
               {/* Description */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase mb-1">
-                  {txType === 'income'
-                    ? 'Official Receipt / Collection Note (Resibo ug Deskripsyon sa Kita)'
+                  {txType === 'income' 
+                    ? 'Official Receipt / Collection Note (Resibo ug Deskripsyon sa Kita)' 
                     : 'Voucher / Expense Receipt Note (Resibo ug Deskripsyon sa Gasto)'}
                 </label>
                 <textarea
@@ -1369,8 +1336,8 @@ export default function TreasurerView({
                 <button
                   type="submit"
                   className={`flex-1 py-2.5 text-sm font-semibold text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    txType === 'income'
-                      ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40'
+                    txType === 'income' 
+                      ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40' 
                       : 'bg-rose-700 hover:bg-rose-650 shadow-rose-950/40'
                   }`}
                 >
@@ -1382,27 +1349,6 @@ export default function TreasurerView({
               </div>
             </form>
           </div>
-        </div>
-      )}
-
-      {/* ADD CUSTOM CATEGORY MODAL */}
-      {showCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10261D]/70 p-4" role="dialog" aria-modal="true" aria-labelledby="add-category-title">
-          <form onSubmit={handleAddCategory} className="w-full max-w-md rounded-2xl border-[#B8CDBE] bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h3 id="add-category-title" className="text-lg font-black text-[#1B4332]">Add transaction category</h3>
-                <p className="mt-1 text-sm text-[#4B6259]">This category is saved for the assigned finance officer on this device.</p>
-              </div>
-              <button type="button" onClick={() => setShowCategoryModal(false)} className="rounded-lg px-2 py-1 text-2xl leading-none text-[#4B6259] hover:bg-[#EAF6EE]" aria-label="Close add category dialog">×</button>
-            </div>
-            <label htmlFor="new-transaction-category" className="mb-1 block text-sm font-bold text-[#18372D]">Category name</label>
-            <input id="new-transaction-category" type="text" required maxLength={80} autoFocus value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="e.g. Budget Source Allocation" className="w-full rounded-xl border-[#B8CDBE] bg-white px-3 py-2.5 text-[#18372D] focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]" />
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setShowCategoryModal(false)} className="rounded-xl border-[#B8CDBE] px-4 py-2 text-sm font-bold text-[#1B4332] hover:bg-[#F5F8F4]">Cancel</button>
-              <button type="submit" className="rounded-xl bg-[#1B4332] px-4 py-2 text-sm font-bold text-white hover:bg-[#123326]">Save category</button>
-            </div>
-          </form>
         </div>
       )}
 

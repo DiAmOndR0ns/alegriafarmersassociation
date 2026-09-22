@@ -85,7 +85,7 @@ export default function App() {
 
   // Officer Role State
   const [currentRole, setCurrentRole] = useState<OfficerRole>('President');
-  const [officerTab, setOfficerTab] = useState<'tasks' | 'hog-raising' | 'announcements' | 'member-view' | 'products'>('tasks');
+  const [officerTab, setOfficerTab] = useState<'tasks' | 'hog-raising' | 'announcements' | 'member-view'>('tasks');
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
 
@@ -138,15 +138,6 @@ export default function App() {
   // Feedback State (Toasts)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' | 'error' } | null>(null);
 
-  const jumpToDashboardSection = (sectionId: string) => {
-    const target = document.getElementById(sectionId);
-    if (!target) return;
-
-    const topOffset = window.innerWidth >= 1024 ? 130 : 90;
-    const y = target.getBoundingClientRect().top + window.scrollY - topOffset;
-    window.scrollTo({ top: y, behavior: 'smooth' });
-  };
-
   // Load Data on Mount
   useEffect(() => {
     try {
@@ -198,7 +189,7 @@ export default function App() {
       }
 
       setSyncQueue(storedQueue ? JSON.parse(storedQueue) : []);
-
+      
       const parsedUsers = storedUsers ? JSON.parse(storedUsers) : OFFICIAL_OFFICERS;
       // Filter out any dummy members from users and strip any plain-text passwords
       const sanitizedUsers = (Array.isArray(parsedUsers) ? parsedUsers : OFFICIAL_OFFICERS)
@@ -609,7 +600,7 @@ export default function App() {
     const updatedQueue = [...syncQueue, queueItem];
     setSyncQueue(updatedQueue);
     updateStorage('bafa_sync_queue', updatedQueue);
-
+    
     // Also record a pending log
     logAction(
       `Queued Offline: ${action.toUpperCase()} ${entityType}`,
@@ -914,8 +905,8 @@ export default function App() {
     if (isOnline) {
       logAction('Registered Farmer', `Registered new member: ${newMember.name} from ${newMember.farmLocation}`);
       showToastMessage(
-        accountCreated
-          ? `Registered ${newMember.name} & created portal login (${loginCredentials?.username})!`
+        accountCreated 
+          ? `Registered ${newMember.name} & created portal login (${loginCredentials?.username})!` 
           : `Registered ${newMember.name} successfully!`
       );
       pushAllDataToCloud({ members: updated, users: updatedUsers }, { silent: true });
@@ -984,7 +975,7 @@ export default function App() {
     const updated = members.map(m => m.id === id ? { ...m, status } : m);
     setMembers(updated);
     updateStorage('bafa_members', updated);
-
+    
     const targetMember = members.find(m => m.id === id);
     const mName = targetMember ? targetMember.name : 'Unknown';
 
@@ -1000,7 +991,7 @@ export default function App() {
   const handleDeleteMember = async (id: string) => {
     const targetMember = members.find(m => m.id === id);
     const mName = targetMember ? targetMember.name : 'Farmer';
-
+    
     // 1. Immediately remove from local state and storage
     const updated = members.filter(m => m.id !== id);
     setMembers(updated);
@@ -1008,8 +999,8 @@ export default function App() {
     storeDeletedId('members', id);
 
     // 2. Identify linked portal user accounts by ID, memberIdNumber, or matching name
-    const matchedUsers = users.filter(u =>
-      u.id === id ||
+    const matchedUsers = users.filter(u => 
+      u.id === id || 
       (targetMember?.memberIdNumber && u.memberIdNumber === targetMember.memberIdNumber) ||
       (targetMember?.name && u.role === 'Member' && u.name.trim().toLowerCase() === targetMember.name.trim().toLowerCase())
     );
@@ -1046,11 +1037,11 @@ export default function App() {
 
       const allDeleted = getStoredDeletedIds();
       pushAllDataToCloud(
-        {
-          members: updated,
+        { 
+          members: updated, 
           users: updatedUsers,
           deletedIds: allDeleted
-        },
+        }, 
         { silent: true, source: 'Member Deletion', force: true }
       );
     } else {
@@ -1636,7 +1627,7 @@ export default function App() {
     const updated = [newUser, ...users];
     setUsers(updated);
     updateStorage('bafa_users', updated);
-
+    
     if (isOnline) {
       pushAllDataToCloud({ users: updated }, { silent: true });
     }
@@ -1652,7 +1643,7 @@ export default function App() {
     const updated = users.map(u => u.id === matchedUser.id ? { ...u, resetRequested: true } : u);
     setUsers(updated);
     updateStorage('bafa_users', updated);
-
+    
     // Add simple system log
     logAction('Requested Reset', `Requested password reset for ${matchedUser.name} (${matchedUser.username})`);
     showToastMessage(`Ang hangyo sa pag-reset sa password para kang ${matchedUser.name} napadala na sa Presidente!`, 'success');
@@ -1671,7 +1662,7 @@ export default function App() {
     });
     setUsers(updated);
     updateStorage('bafa_users', updated);
-
+    
     // Add simple system log
     logAction('Reset Password', `Updated password credentials for ${targetUser.name} (${targetUser.role})`);
     showToastMessage(`Malampusong na-reset ang password ni ${targetUser.name}!`, 'success');
@@ -1880,9 +1871,9 @@ export default function App() {
 
     const updatedUsers = users.map(user => {
       if (user.role === 'President') {
-        return {
-          ...user,
-          role: (outgoingNewRole === 'None' ? 'Member' : outgoingNewRole) as any
+        return { 
+          ...user, 
+          role: (outgoingNewRole === 'None' ? 'Member' : outgoingNewRole) as any 
         };
       }
       if (user.id === newPresidentId) {
@@ -1914,7 +1905,7 @@ export default function App() {
     }
 
     const turnoverDetails = `FORMAL OFFICERS TURNOVER: Following the election on ${electionDate}, ${currentPresident.name} has formally turned over the presidency and all AFA files, keys, and assets to the newly-elected President, ${newPresidentUser.name}. Memo/Notes: ${turnoverNotes}`;
-
+    
     logAction('Presidential Turnover', turnoverDetails);
     showToastMessage(`Turnover completed! The new President is ${newPresidentUser.name}!`, 'success');
   };
@@ -1966,7 +1957,7 @@ export default function App() {
   if (!currentUser) {
     if (guestMode) {
       return (
-        <GuestPortal
+        <GuestPortal 
           onEnterLogin={() => setGuestMode(false)}
           members={members}
           hogRaising={hogRaising}
@@ -1979,7 +1970,7 @@ export default function App() {
 
     return (
       <div id="auth-screen-wrapper" className="min-h-screen bg-bafa-50">
-        <AuthScreen
+        <AuthScreen 
           users={users}
           onLogin={handleLogin}
           onRegister={handleRegister}
@@ -1990,8 +1981,8 @@ export default function App() {
         {toast && (
           <div className="fixed bottom-6 right-6 z-50">
             <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${
-              toast.type === 'success'
-                ? 'bg-bafa-700 text-bafa-100 border-bafa-600'
+              toast.type === 'success' 
+                ? 'bg-bafa-700 text-bafa-100 border-bafa-600' 
                 : toast.type === 'warning'
                 ? 'bg-amber-900 text-amber-100 border-amber-600'
                 : toast.type === 'error'
@@ -2011,7 +2002,7 @@ export default function App() {
   if (currentUser.role === 'Member') {
     return (
       <div id="member-screen-wrapper" className="min-h-screen bg-[#FAF8F5]">
-        <MemberDashboard
+        <MemberDashboard 
           currentUser={currentUser}
           onUpdateProfile={handleUpdateProfile}
           onLogout={handleLogout}
@@ -2026,8 +2017,8 @@ export default function App() {
         {toast && (
           <div className="fixed bottom-6 right-6 z-50">
             <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${
-              toast.type === 'success'
-                ? 'bg-[#1B4332] text-[#D8F3DC] border-[#2D6A4F]'
+              toast.type === 'success' 
+                ? 'bg-[#1B4332] text-[#D8F3DC] border-[#2D6A4F]' 
                 : toast.type === 'warning'
                 ? 'bg-amber-900 text-amber-100 border-amber-600'
                 : toast.type === 'error'
@@ -2045,14 +2036,14 @@ export default function App() {
   }
 
   return (
-    <div id="application-root" className="min-h-screen bg-[#F5F2EB] text-slate-900 flex flex-col font-sans lg:pl-72">
-
+    <div id="application-root" className="min-h-screen bg-[#F5F2EB] text-slate-900 flex flex-col font-sans">
+      
       {/* GLOBAL TOAST NOTIFICATION BANNER */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 animate-bounce-short">
           <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${
-            toast.type === 'success'
-              ? 'bg-[#1B4332] text-[#D8F3DC] border-[#2D6A4F]'
+            toast.type === 'success' 
+              ? 'bg-[#1B4332] text-[#D8F3DC] border-[#2D6A4F]' 
               : toast.type === 'warning'
               ? 'bg-amber-900 text-amber-100 border-amber-600'
               : toast.type === 'error'
@@ -2112,8 +2103,46 @@ export default function App() {
               </button>
             </div>
 
+            {/* Download System Backup Button (President / Admin Only) */}
+            {currentRole === 'President' && (
+              <button
+                id="header-download-backup-btn"
+                type="button"
+                onClick={handleDownloadSystemBackup}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 bg-[#D8F3DC] hover:bg-[#b7e4c7] text-[#1B4332] border border-[#2D6A4F] rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm min-w-0"
+                title="Download formatted JSON backup of all local association data"
+              >
+                <Download className="w-4 h-4 text-[#1B4332] shrink-0" />
+                <span className="truncate">Download System Backup</span>
+              </button>
+            )}
+
+            {/* Export Officer Reports Button */}
+            <button
+              id="header-export-reports-btn"
+              type="button"
+              onClick={() => setShowReportModal(true)}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 bg-[#D8F3DC] hover:bg-[#b7e4c7] text-[#1B4332] border border-[#2D6A4F] rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm min-w-0"
+              title="Open Official Officer Reports & Export Center"
+            >
+              <FileText className="w-4 h-4 text-[#1B4332] shrink-0" />
+              <span className="truncate">Officer Reports & Export</span>
+            </button>
+
+            {/* Manage Association Products Button */}
+            <button
+              id="header-manage-products-btn"
+              type="button"
+              onClick={() => setShowProductModal(true)}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 bg-[#FFE0B2] hover:bg-[#FFD180] text-[#8C3B00] border border-[#FFB74D] rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm min-w-0"
+              title="Manage Association Products & Catalog"
+            >
+              <ShoppingBag className="w-4 h-4 text-[#8C3B00] shrink-0" />
+              <span className="truncate">Products Catalog</span>
+            </button>
+
             {/* Offline Switch & Sync Trigger */}
-            <OfflineIndicator
+            <OfflineIndicator 
               isOnline={isOnline}
               queueCount={syncQueue.length}
               onSync={handleSynchronize}
@@ -2128,91 +2157,12 @@ export default function App() {
         </div>
       </header>
 
-      {/* PERMANENT LEFT SIDEBAR NAVIGATION (Desktop) */}
-      {!guestMode && currentUser && currentUser.role !== 'Member' && (
-        <aside
-          id="officer-left-sidebar"
-          className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-72 flex-col bg-[#0F2D24] border-r-2 border-[#1B4332] shadow-2xl text-white"
-        >
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto px-3 pt-5 pb-4 space-y-1" aria-label="Officer navigation">
-            <p className="px-3 pb-1 text-[11px] font-black uppercase tracking-wider text-[#74C69D]">Main Views</p>
-            {([
-              { tab: 'tasks' as const, label: 'Officer Task Panel', icon: ShieldCheck },
-              { tab: 'hog-raising' as const, label: 'IGP Tracker', icon: Briefcase },
-              { tab: 'announcements' as const, label: 'Announcements Board', icon: Megaphone },
-              { tab: 'member-view' as const, label: 'Member Portal & ID', icon: Users },
-              { tab: 'products' as const, label: 'Products Catalog', icon: ShoppingBag }
-            ]).map(({ tab, label, icon: Icon }) => {
-              const isActive = officerTab === tab;
-              return (
-                <button
-                  key={tab}
-                  id={`sidebar-nav-${tab}`}
-                  type="button"
-                  aria-current={isActive ? 'page' : undefined}
-                  onClick={() => {
-                    setOfficerTab(tab);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left transition-all cursor-pointer border ${
-                    isActive
-                      ? 'bg-[#D8F3DC] text-[#1B4332] border-[#2D6A4F] shadow-md'
-                      : 'bg-transparent text-[#D8F3DC] border-transparent hover:bg-[#1B4332] hover:text-white'
-                  }`}
-                >
-                  <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-[#1B4332]' : 'text-[#95D5B2]'}`} />
-                  <span className="truncate">{label}</span>
-                  {isActive && <span className="ml-auto w-2 h-2 rounded-full bg-[#1B4332] shrink-0" aria-hidden="true" />}
-                </button>
-              );
-            })}
-
-            <p className="px-3 pt-4 pb-1 text-[11px] font-black uppercase tracking-wider text-[#74C69D]">System</p>
-            <button
-              id="sidebar-nav-sync"
-              type="button"
-              onClick={() => jumpToDashboardSection('sync-queue-panel-window')}
-              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
-            >
-              <Layers className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
-              <span className="truncate">Sync Queue</span>
-              {syncQueue.length > 0 && (
-                <span className="ml-auto min-w-6 text-center bg-amber-500 text-[#1B4332] text-[11px] font-black px-1.5 py-0.5 rounded-full">
-                  {syncQueue.length}
-                </span>
-              )}
-            </button>
-
-            {currentRole === 'President' && (
-              <button
-                id="sidebar-download-backup-btn"
-                type="button"
-                onClick={handleDownloadSystemBackup}
-                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
-              >
-                <Download className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
-                <span className="truncate">Download Backup</span>
-              </button>
-            )}
-          </nav>
-
-          {/* Footer status */}
-          <div className="px-5 py-4 border-t border-white/10">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#D8F3DC]">
-              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dbStatus.connected ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
-              <span className="truncate">{dbStatus.checking ? 'Checking database…' : dbStatus.connected ? `${dbStatus.provider} connected` : 'Offline local mode'}</span>
-            </div>
-          </div>
-        </aside>
-      )}
-
       {/* MAIN LAYOUT BODY */}
       <main className="flex-1 p-3 sm:p-4 overflow-y-auto">
         <div className="max-w-7xl mx-auto space-y-4">
 
-          {/* OFFICER MAIN VIEWS TAB BAR (Mobile only — desktop uses the left sidebar) */}
-          <div className="bg-white border-2 border-[#D5CFC1] rounded-2xl p-2.5 no-print space-y-1.5 shadow-sm lg:hidden">
+          {/* OFFICER MAIN VIEWS TAB BAR WITH SCROLL INDICATOR ARROWS */}
+          <div className="bg-white border-2 border-[#D5CFC1] rounded-2xl p-2.5 no-print space-y-1.5 shadow-sm">
             {/* Mobile Phone Scroll Hint Indicator */}
             <div className="flex sm:hidden items-center justify-between w-full px-2.5 py-1 text-[11px] font-black text-[#1B4332] bg-[#EAF4EC] rounded-lg border border-[#2D6A4F]/30">
               <span className="flex items-center gap-1">
@@ -2223,16 +2173,15 @@ export default function App() {
             </div>
 
             <div className="relative w-full flex items-center">
-              <div className="w-full flex justify-start gap-1.5 overflow-x-auto py-1 select-none scrollbar-thin scrollbar-thumb-emerald-600/30 px-2">
+              {/* Left Arrow Indicator */}
+              <div className="hidden sm:flex absolute left-0 z-10 p-1 bg-gradient-to-r from-white via-white to-transparent items-center text-amber-700">
+                <ChevronLeft className="w-5 h-5 animate-bounce-x" />
+              </div>
+
+              <div className="w-full flex justify-start gap-1.5 overflow-x-auto py-1 select-none scrollbar-thin scrollbar-thumb-emerald-600/30 px-2 sm:px-5">
                 <button
                   id="officer-tasks-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'tasks'}
-                  onClick={() => {
-                    setOfficerTab('tasks');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
+                  onClick={() => setOfficerTab('tasks')}
                   className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl ${
                     officerTab === 'tasks'
                       ? 'border-[#1B4332] text-[#1B4332] bg-[#EAF4EC]'
@@ -2245,13 +2194,7 @@ export default function App() {
 
                 <button
                   id="officer-hog-raising-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'hog-raising'}
-                  onClick={() => {
-                    setOfficerTab('hog-raising');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
+                  onClick={() => setOfficerTab('hog-raising')}
                   className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl ${
                     officerTab === 'hog-raising'
                       ? 'border-[#1B4332] text-[#1B4332] bg-[#EAF4EC]'
@@ -2266,13 +2209,7 @@ export default function App() {
 
                 <button
                   id="officer-announcements-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'announcements'}
-                  onClick={() => {
-                    setOfficerTab('announcements');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
+                  onClick={() => setOfficerTab('announcements')}
                   className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl relative ${
                     officerTab === 'announcements'
                       ? 'border-[#1B4332] text-[#1B4332] bg-[#EAF4EC]'
@@ -2288,13 +2225,7 @@ export default function App() {
 
                 <button
                   id="officer-member-view-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'member-view'}
-                  onClick={() => {
-                    setOfficerTab('member-view');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
+                  onClick={() => setOfficerTab('member-view')}
                   className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl relative ${
                     officerTab === 'member-view'
                       ? 'border-amber-600 text-amber-900 bg-amber-50'
@@ -2309,16 +2240,20 @@ export default function App() {
                 </button>
               </div>
 
+              {/* Right Arrow Indicator */}
+              <div className="hidden sm:flex absolute right-0 z-10 p-1 bg-gradient-to-l from-white via-white to-transparent items-center text-amber-700">
+                <ChevronRight className="w-5 h-5 animate-bounce-x" />
+              </div>
             </div>
           </div>
 
           {officerTab === 'tasks' && (
             /* ACTIVE VIEW WRAPPER */
             <div id="officer-dashboard-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
-
+            
             {/* President & Vice President View */}
             {(currentRole === 'President' || currentRole === 'Vice_President') && (
-              <ExecutiveView
+              <ExecutiveView 
                 members={members}
                 meetings={meetings}
                 resolutions={resolutions}
@@ -2344,7 +2279,7 @@ export default function App() {
 
             {/* Secretary View */}
             {currentRole === 'Secretary' && (
-              <SecretaryView
+              <SecretaryView 
                 members={members}
                 users={users}
                 onAddMember={handleAddMember}
@@ -2366,7 +2301,7 @@ export default function App() {
 
             {/* Treasurer & Auditor View */}
             {(currentRole === 'Treasurer' || currentRole === 'Auditor') && (
-              <TreasurerView
+              <TreasurerView 
                 transactions={transactions}
                 funds={funds}
                 hogRaising={hogRaising}
@@ -2383,7 +2318,7 @@ export default function App() {
 
             {/* PIO View */}
             {currentRole === 'PIO' && (
-              <PioView
+              <PioView 
                 announcements={announcements}
                 activities={activities}
                 onAddAnnouncement={handleAddAnnouncement}
@@ -2400,7 +2335,7 @@ export default function App() {
 
           {officerTab === 'hog-raising' && (
             <div id="officer-hog-raising-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900 text-left">
-              <HogRaisingIgpTracker
+              <HogRaisingIgpTracker 
                 state={hogRaising}
                 members={members}
                 meetings={meetings}
@@ -2418,22 +2353,9 @@ export default function App() {
             </div>
           )}
 
-          {officerTab === 'products' && (
-            <div id="officer-products-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
-              <ProductManagementModal
-                products={products}
-                currentRole={currentRole}
-                onAddProduct={handleAddProduct}
-                onUpdateProduct={handleUpdateProduct}
-                onDeleteProduct={handleDeleteProduct}
-                onClose={() => setOfficerTab('tasks')}
-              />
-            </div>
-          )}
-
           {officerTab === 'announcements' && (
             <div id="officer-announcements-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
-              <AnnouncementDashboard
+              <AnnouncementDashboard 
                 announcements={announcements}
                 isOfficerMode={false}
               />
@@ -2456,10 +2378,7 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setOfficerTab('tasks');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
+                  onClick={() => setOfficerTab('tasks')}
                   className="px-4 py-2 bg-[#1B4332] hover:bg-[#122e22] text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-4 h-4 object-cover rounded-sm shrink-0" />

@@ -41,7 +41,6 @@ export default function ProductManagementModal({
   const [farmerSitio, setFarmerSitio] = useState('');
   const [farmerPhone, setFarmerPhone] = useState('');
   const [isPublished, setIsPublished] = useState(true);
-  const [otherCategory, setOtherCategory] = useState('');
 
   const getOfficerTitle = (role: OfficerRole) => {
     switch (role) {
@@ -68,7 +67,6 @@ export default function ProductManagementModal({
     setFarmerSitio('Sitio Tapon');
     setFarmerPhone('0912-345-6789');
     setIsPublished(true);
-    setOtherCategory('');
     setShowAddEditModal(true);
   };
 
@@ -77,7 +75,6 @@ export default function ProductManagementModal({
     setName(p.name);
     setCebName(p.cebName || '');
     setCategory(p.category);
-    setOtherCategory(!['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops'].includes(p.category) ? p.category : '');
     setPrice(p.price);
     setUnit(p.unit);
     setQuantityAvailable(p.quantityAvailable || 'Available in harvest stock');
@@ -95,9 +92,6 @@ export default function ProductManagementModal({
     e.preventDefault();
     if (!name.trim() || !description.trim()) return;
 
-    const finalCategory = (category === 'Other' ? otherCategory.trim() : category) || 'Other';
-    if (!finalCategory) return;
-
     const contactStr = `${farmerName || 'AFA Member Farmer'} ${farmerSitio ? `• ${farmerSitio}` : ''} (${farmerPhone || 'Contact AFA Officer'})`;
 
     if (editingProduct) {
@@ -105,7 +99,7 @@ export default function ProductManagementModal({
         ...editingProduct,
         name,
         cebName,
-        category: finalCategory,
+        category,
         price: Number(price),
         unit,
         quantityAvailable,
@@ -124,7 +118,7 @@ export default function ProductManagementModal({
       onAddProduct({
         name,
         cebName,
-        category: finalCategory,
+        category,
         price: Number(price),
         unit,
         quantityAvailable,
@@ -165,7 +159,7 @@ export default function ProductManagementModal({
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[95] animate-fade-in text-left">
       <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[#1B4332]">
-
+        
         {/* HEADER */}
         <div className="p-5 bg-[#F0EDE7] border-b border-[#D5CFC1] flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -173,9 +167,14 @@ export default function ProductManagementModal({
               <ShoppingBag className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-base font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-2">
-                <span>Products Catalog</span>
+              <h2 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <span>AFA Product Management Module</span>
+                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] px-2 py-0.5 rounded-full">                  Pres., Treas. & Auditor Access
+                </span>
               </h2>
+              <p className="text-xs text-[#4A5F57] font-medium">
+                Manage and publish association farm produce, livestock, coffee & goods for guests and members.
+              </p>
             </div>
           </div>
           <button
@@ -212,7 +211,6 @@ export default function ProductManagementModal({
               <option value="Processed Goods">Processed Goods</option>
               <option value="Seeds & Fertilizer">Seeds & Fertilizer</option>
               <option value="Coffee & Crops">Coffee & Crops</option>
-              <option value="Other">Other (Iba pa)</option>
             </select>
           </div>
 
@@ -240,8 +238,8 @@ export default function ProductManagementModal({
                 <div
                   key={product.id}
                   className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
-                    product.isPublished
-                      ? 'bg-white border-[#D5CFC1] hover:border-[#C9BDAE]'
+                    product.isPublished 
+                      ? 'bg-white border-[#D5CFC1] hover:border-[#C9BDAE]' 
                       : 'bg-[#F7F4EF] border-[#D5CFC1] opacity-80'
                   }`}
                 >
@@ -307,8 +305,8 @@ export default function ProductManagementModal({
                           <span><strong>Kadaghanon (Quantity):</strong> {product.quantityAvailable}</span>
                         </div>
                       )}
-                      <div className="flex items-center gap-1.5 text-[#1B4332] font-semibold">
-                        <User className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                      <div className="flex items-center gap-1.5 text-amber-300 font-semibold">
+                        <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                         <span><strong>Mag-uuma (Selling Farmer):</strong> {product.farmerName || product.contactPerson || 'AFA Member'}</span>                      </div>
                       {(product.farmerSitio || product.farmerPhone) && (
                         <div className="flex items-center gap-3 text-[11px] text-[#4A5F57] pl-5">
@@ -361,8 +359,8 @@ export default function ProductManagementModal({
 
       {/* ADD / EDIT PRODUCT SUB-MODAL */}
       {showAddEditModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-[100] animate-fade-in text-left">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-lg rounded-2xl p-4 sm:p-6 space-y-4 shadow-2xl text-[#1B4332] max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-lg rounded-2xl p-6 space-y-4 shadow-2xl text-[#1B4332]">
             <div className="flex justify-between items-center border-b border-[#D5CFC1] pb-3">
               <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-amber-700" />
@@ -404,21 +402,9 @@ export default function ProductManagementModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[#4A5F57] font-bold mb-1">Kategoriya (Category):</label>
-                  {category === 'Other' || !['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops'].includes(category) ? (
-                    <input
-                      type="text"
-                      value={otherCategory}
-                      onChange={(e) => setOtherCategory(e.target.value)}
-                      placeholder="Enter new category name"
-                      className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
-                    />
-                  ) : (
                   <select
                     value={category}
-                    onChange={(e) => {
-                      if (e.target.value === 'Other') { setOtherCategory(''); }
-                      setCategory(e.target.value as any);
-                    }}
+                    onChange={(e) => setCategory(e.target.value as any)}
                     className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
                   >
                     <option value="Produce">Produce (Ani)</option>
@@ -426,9 +412,7 @@ export default function ProductManagementModal({
                     <option value="Processed Goods">Processed Goods</option>
                     <option value="Seeds & Fertilizer">Seeds & Fertilizer</option>
                     <option value="Coffee & Crops">Coffee & Crops</option>
-                    <option value="Other">Other (Iba pa — type your own)</option>
                   </select>
-                  )}
                 </div>
 
                 <div>
@@ -502,7 +486,7 @@ export default function ProductManagementModal({
                   <select
                     value={farmerSitio}
                     onChange={(e) => setFarmerSitio(e.target.value)}
-                    className="bg-white border border-[#D5CFC1] rounded-lg px-2.5 py-1.5 text-[#1B4332] focus:outline-none focus:border-amber-500 text-xs"
+                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-500 text-xs"
                   >
                     <option value="">Pilia ang Sitio (Official 4 Sitios)</option>
                     <option value="Sitio Tapon">Sitio Tapon</option>
