@@ -4,7 +4,7 @@ import {
 } from '../types';
 import { 
   Briefcase, Boxes, Package, Plus, ArrowUpRight, ArrowDownRight, Calendar, Users,   Activity, Trash2, Printer, CheckCircle, Info, DollarSign, 
-  Tag, ShieldCheck, Heart, Sparkles, Filter, FileText, Check, Award, Calculator, Pencil
+  Tag, ShieldCheck, Heart, Sparkles, Filter, FileText, Check, Award, Calculator
 } from 'lucide-react';
 import AttendanceDividendCalculatorModal from './AttendanceDividendCalculatorModal';
 
@@ -41,7 +41,7 @@ export default function HogRaisingIgpTracker({
 }: HogRaisingIgpTrackerProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'chores' | 'dividends' | 'ledger' | 'reports'>('overview');
   const [showDividendCalcModal, setShowDividendCalcModal] = useState(false);
-
+  
   // Dynamic produces - strictly remove any Tilapia and ensure Chairs & Sacks Rentals are available
   const rawProduces = state.produces || ['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'];
   const filteredProduces = Array.from(new Set(rawProduces.filter(p => p !== 'Tilapia Breeding' && !p.toLowerCase().includes('tilapia'))));
@@ -87,7 +87,6 @@ export default function HogRaisingIgpTracker({
 
   // New Expense Form
   const [expCategory, setExpCategory] = useState<string>('Feeds');
-  const [customExpCategory, setCustomExpCategory] = useState('');
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
   const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
@@ -284,27 +283,27 @@ export default function HogRaisingIgpTracker({
   const capitalGrant = typeof state.capitalGrant === 'number'
     ? state.capitalGrant
     : (Number(state.capitalGrant) || 0);
-
+  
   // Grant editing state
   const [isEditingGrant, setIsEditingGrant] = useState(false);
   const [newGrantAmount, setNewGrantAmount] = useState(capitalGrant.toString());
-
+  
   // Keep input field strictly synchronized whenever data arrives from PostgreSQL Cloud DB
   useEffect(() => {
     setNewGrantAmount(capitalGrant.toString());
   }, [capitalGrant]);
-
+  
   // Calculations filtered by selected produce
   const totalExpenses = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
   const totalSales = filteredSales.reduce((sum, item) => sum + item.revenue, 0);
-
+  
   // Overall expenditures across ALL projects (to correctly deduct from overall capital allocation)
   const overallExpensesTotal = state.expenses.reduce((sum, item) => sum + item.amount, 0);
   const remainingGrant = capitalGrant - overallExpensesTotal;
-
+  
   // Profits/Interest generated for the selected project
   const netProfit = totalSales - totalExpenses;
-
+  
   // Find active co-op members
   const activeMembers = members.filter(m => m.status === 'Active');
   const activeCount = activeMembers.length || 1;
@@ -445,14 +444,13 @@ export default function HogRaisingIgpTracker({
     }
     onAddExpense({
       produce: selectedProduce,
-      category: expCategory === 'Other' ? (customExpCategory.trim() || 'Other') : expCategory,
+      category: expCategory,
       description: expDesc,
       amount: parseFloat(expAmount),
       date: expDate
     });
     setExpDesc('');
     setExpAmount('');
-    setCustomExpCategory('');
     setExpenseDateError('');
     setShowExpenseModal(false);
   };
@@ -588,7 +586,7 @@ export default function HogRaisingIgpTracker({
 
   return (
     <div id="hog-raising-igp-container" className="space-y-6">
-
+      
       {/* SECTION HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-4 text-left">
         <div>
@@ -648,7 +646,11 @@ export default function HogRaisingIgpTracker({
           <button
             type="button"
             onClick={() => setShowAddProduceModal(true)}
-            className="flex items-center gap-1.5 text-xs font-black px-4.5 py-2.5 rounded-xl border transition-all cursor-pointer shadow-sm bg-[#1B4332] hover:bg-[#143326] text-white border-transparent"
+            className={`flex items-center gap-1.5 text-xs font-black px-4.5 py-2.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
+              isOfficerMode
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-transparent'
+                : 'bg-[#1B4332] hover:bg-[#143326] text-white border-transparent'
+            }`}
           >
             <Plus className="w-4 h-4" />
             <span>Dugang Bag-ong Produce (Add Project)</span>
@@ -673,7 +675,7 @@ export default function HogRaisingIgpTracker({
                 &times;
               </button>
             </div>
-            <p className="text-xs text-[#3A4A42] mb-4 font-semibold leading-relaxed">
+            <p className="text-xs text-slate-400 mb-4 font-semibold leading-relaxed">
               I-register ang bag-ong livelihood project o kagamitan nga abangan (e.g., Poultry Raising, Sound System Rental, Tent Rental, Mushrooms). Kini makapahimo sa asosasyon nga dynamic ug makasulod og daghang matang sa income projects.            </p>
             <form
               onSubmit={(e) => {
@@ -723,11 +725,11 @@ export default function HogRaisingIgpTracker({
 
       {/* METRIC CARDS FOR FINANCIAL BREAKDOWN */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 text-left">
-
+        
         {/* Capital Allocation Card */}
         <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm relative overflow-hidden`}>
           <div>
-            <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Capital Allocation</span>
+            <span className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Capital Allocation</span>
             {isEditingGrant ? (
               <form onSubmit={(e) => {
                 e.preventDefault();
@@ -775,10 +777,9 @@ export default function HogRaisingIgpTracker({
                       setNewGrantAmount(capitalGrant.toString());
                       setIsEditingGrant(true);
                     }}
-                    className="p-1.5 text-[#1B4332] hover:bg-[#F0EDE7] rounded-lg cursor-pointer border border-[#D5CFC1] bg-white shrink-0"
-                    title="Edit capital allocation"
+                    className="text-xs font-extrabold text-[#E65100] dark:text-amber-400 hover:underline cursor-pointer bg-[#FFE0B2] dark:bg-amber-950 px-2 py-1 rounded-lg shrink-0 border border-[#FFCC80]"
                   >
-                    <Pencil className="w-3.5 h-3.5" />
+                    Usba (Edit)
                   </button>
                 )}
               </div>
@@ -796,20 +797,20 @@ export default function HogRaisingIgpTracker({
         {/* Expenses (Capital Used) Card */}
         <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm relative overflow-hidden`}>
           <div>
-            <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Capital Spent (Gasto sa {selectedProduceLocalName})</span>
+            <span className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Capital Spent (Gasto sa {selectedProduceLocalName})</span>
             <span className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 block mt-1 font-mono">
               - PHP {totalExpenses.toLocaleString()}
             </span>
           </div>
           {/* Progress Bar of Capital Spent */}
           <div className="space-y-1">
-            <div className="flex justify-between text-xs text-[#1B4332] font-bold">
+            <div className="flex justify-between text-xs text-slate-700 dark:text-slate-300 font-bold">
               <span>Nagamit na nga Kapital:</span>
-              <span className="font-mono">{percentUsed.toFixed(1)}%</span>
+              <span>{percentUsed.toFixed(1)}%</span>
             </div>
-            <div className="w-full bg-[#D5CFC1] h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-rose-600 h-full transition-all duration-500"
+            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+              <div 
+                className="bg-rose-600 h-full transition-all duration-500" 
                 style={{ width: `${percentUsed}%` }}
               />
             </div>
@@ -819,28 +820,28 @@ export default function HogRaisingIgpTracker({
         {/* Remaining Capital Card */}
         <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm relative overflow-hidden`}>
           <div>
-            <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Sobra sa Kapital (Remaining)</span>
+            <span className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Sobra sa Kapital (Remaining)</span>
             <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 block mt-1 font-mono">
               PHP {remainingGrant.toLocaleString()}
             </span>
           </div>
-          <div className="pt-2 border-t border-[#D5CFC1] flex justify-between text-xs font-bold text-[#1B4332]">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
             <span>Para sa {selectedProduceLocalName} operations</span>
-            <span className="font-extrabold text-blue-700">Balido</span>
+            <span className="font-extrabold text-blue-700 dark:text-blue-400">Balido</span>
           </div>
         </div>
 
         {/* Accumulated Interest / Dividend per Member Card */}
         <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm relative overflow-hidden bg-gradient-to-br from-emerald-500/5 to-transparent`}>
           <div>
-            <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Interes / Dividends matag Miyembro</span>
+            <span className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Interes / Dividends matag Miyembro</span>
             <span className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400 block mt-1 font-mono">
               PHP {individualDividend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
-          <div className="pt-2 border-t border-[#D5CFC1] flex justify-between text-xs font-bold text-[#1B4332] items-center">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300 items-center">
             <span>Total Tubo: <strong className="text-emerald-700 font-mono">PHP {(netProfit > 0 ? netProfit : 0).toLocaleString()}</strong></span>
-            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded uppercase border border-emerald-300">
+            <span className="bg-emerald-600/15 text-emerald-800 dark:text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded uppercase">
               Para sa Tanan
             </span>
           </div>
@@ -886,8 +887,8 @@ export default function HogRaisingIgpTracker({
             {/* Breakdown graph / details */}
             <div className={`lg:col-span-7 p-6 rounded-3xl border ${theme.cardBg} space-y-6`}>
               <div>
-                <h3 className="font-extrabold text-base text-[#1B4332]">Breakdown sa Gastos sa IGP Capital</h3>
-                <p className="text-xs text-[#33473d] mt-1 font-semibold">Giunsa paggamit ang pundo para sa {selectedProduce} sumpay sa kagamitan, supplies, ug operating budget.</p>
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-white">Breakdown sa Gastos sa IGP Capital</h3>
+                <p className="text-xs text-slate-400 mt-1">Giunsa paggamit ang pundo para sa {selectedProduce} sumpay sa kagamitan, supplies, ug operating budget.</p>
               </div>
 
               {/* Graphical Visual Bars */}
@@ -901,15 +902,15 @@ export default function HogRaisingIgpTracker({
                   return (
                     <div key={cat.value} className="space-y-1.5">
                       <div className="flex justify-between text-xs">
-                        <span className="font-bold flex items-center gap-1.5 text-[#1B4332]">
+                        <span className="font-bold flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
                           <span className={`w-2.5 h-2.5 ${colorClass} rounded-full`} />
                           {cat.label}
                         </span>
-                        <span className="font-mono text-[#1B4332] font-bold">
+                        <span className="font-mono text-slate-500 font-bold">
                           PHP {catExpenses.toLocaleString()} ({catPercent.toFixed(0)}%)
                         </span>
                       </div>
-                      <div className="w-full bg-[#D5CFC1] h-2.5 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-150 dark:bg-slate-950 h-2.5 rounded-full overflow-hidden">
                         <div className={`${colorClass} h-full`} style={{ width: `${catPercent}%` }} />
                       </div>
                     </div>
@@ -918,10 +919,10 @@ export default function HogRaisingIgpTracker({
               </div>
 
               {/* Informative advice */}
-              <div className="p-4 bg-white rounded-2xl border border-[#D5CFC1] flex gap-3 text-xs">
-                <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-[#33473d] space-y-1">
-                  <p className="font-bold text-[#1B4332]">Giunsa Pagkwenta ang Tubo (Interest)?</p>
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850 flex gap-3 text-xs">
+                <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-slate-500 dark:text-slate-400 space-y-1">
+                  <p className="font-bold text-slate-800 dark:text-slate-300">Giunsa Pagkwenta ang Tubo (Interest)?</p>
                   <p className="leading-relaxed">
                     Ang tanan nga gasto (buying supplies, equipment, feeds) ibawas sa capital pundo sa IGP. Kon dunay kita o halin gikan sa abang ug benta, ang halin isulod sa pundo. Ang makuha nga deperensya (Net Profit/Surplus) mao ang i-apod-apod sa matag mag-uuma nga nakigbahin sa mga buluhaton!
                   </p>
@@ -939,20 +940,20 @@ export default function HogRaisingIgpTracker({
                   <span>Kondisyon sa Project (IGP Status Card)</span>
                 </h4>
 
-                <div className="grid grid-cols-2 gap-4 text-xs font-medium text-[#3A4A42]">
-                  <div className="p-3 rounded-xl border bg-[#F5FAF6] border-[#E9E4D9]">
-                    <span>Active Projects in Pen</span>
-                    <strong className="block text-lg font-extrabold mt-1 text-[#1B4332]">17 Baboy</strong>
+                <div className={`grid grid-cols-2 gap-4 text-xs font-medium ${isOfficerMode ? 'text-slate-400' : 'text-[#4B6259]'}`}>
+                  <div className={`p-3 rounded-xl border ${isOfficerMode ? 'bg-slate-950/40 border-slate-850' : 'bg-[#F5FAF6] border-[#E9E4D9]'}`}>
+                    <span>Active Hogs in Pen</span>
+                    <strong className={`block text-lg font-extrabold mt-1 ${isOfficerMode ? 'text-white' : 'text-[#1B4332]'}`}>17 Baboy</strong>
                   </div>
-                  <div className="p-3 rounded-xl border bg-[#F5FAF6] border-[#E9E4D9]">
-                    <span>Projects Sold (Nahalin)</span>
-                    <strong className="block text-lg font-extrabold mt-1 text-[#2D6A4F]">8 Baboy</strong>
+                  <div className={`p-3 rounded-xl border ${isOfficerMode ? 'bg-slate-950/40 border-slate-850' : 'bg-[#F5FAF6] border-[#E9E4D9]'}`}>
+                    <span>Hogs Sold (Nahalin)</span>
+                    <strong className={`block text-lg font-extrabold mt-1 ${isOfficerMode ? 'text-emerald-400' : 'text-[#2D6A4F]'}`}>8 Baboy</strong>
                   </div>
                 </div>
 
-                <div className="space-y-2 text-xs leading-relaxed text-[#3A4A42]">
+                <div className="space-y-2 text-xs leading-relaxed text-slate-500">
                   <p>
-                    <strong>Project Reference Code:</strong> <span className="font-mono text-[#1B4332] font-bold bg-[#F5FAF6] px-1.5 py-0.5 rounded border border-[#E9E4D9]">AFA-2026-IGP-01</span>
+                    <strong>Project Reference Code:</strong> <span className="font-mono text-slate-700 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-950 px-1.5 py-0.5 rounded border">AFA-2026-IGP-01</span>
                   </p>
                   <p>
                     <strong>Project Site:</strong> Communal Piggery Facility, Barangay Alegria (Duol sa Barangay Hall).
@@ -971,7 +972,7 @@ export default function HogRaisingIgpTracker({
                     Sistemang Bayanihan (Group System)
                   </h4>
                 </div>
-                <p className="text-[11px] text-[#3A4A42] leading-relaxed">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                   Ang matag miyembro sa Barangay Alegria Farmers Association adunay obligasyon nga mosunod sa adlaw sa iyang batch para sa paglimpyo ug pagpakaon sa mga baboy. Tungod niini nga sakripisyo, ang interes sa tibuok proyekto gikuha para sa tanan!
                 </p>
               </div>
@@ -986,8 +987,8 @@ export default function HogRaisingIgpTracker({
           <div className="space-y-6">
             <div className={`p-5 rounded-3xl border ${theme.cardBg} space-y-4`}>
               <div>
-                <h3 className="font-extrabold text-base text-[#1B4332]">Schedule sa Pag-alaga sa Baboy (Group Schedule)</h3>
-                <p className="text-xs text-[#1B4332] mt-1 font-semibold">
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-white">Schedule sa Pag-alaga sa Baboy (Group Schedule)</h3>
+                <p className="text-xs text-slate-400 mt-1">
                   Kini ang listahan sa mga batch ug mga mag-uuma nga gitahasan sa pagpakaon, pag-ayo, ug pagpabakuna sa mga baboy matag adlaw sa semana.
                 </p>
               </div>
@@ -995,7 +996,7 @@ export default function HogRaisingIgpTracker({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {state.groups.map((grp) => {
                   return (
-                    <div
+                    <div 
                       key={grp.id}
                       className={`border rounded-2xl p-5 ${theme.cardBg} hover:border-[#1B4332] dark:hover:border-slate-500 transition-all flex flex-col justify-between`}
                     >
@@ -1015,7 +1016,7 @@ export default function HogRaisingIgpTracker({
 
                         {/* Members assigned */}
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">Mga Miyembro sa Batch:</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Mga Miyembro sa Batch:</label>
                           <div className="space-y-1">
                             {grp.members.map((memName, idx) => (
                               <div key={idx} className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
@@ -1028,7 +1029,7 @@ export default function HogRaisingIgpTracker({
                       </div>
 
                       {/* Footer Badge */}
-                      <div className="mt-6 pt-3 border-t border-[#D5CFC1] text-[10px] text-[#3A4A42] font-bold flex justify-between items-center">
+                      <div className="mt-6 pt-3 border-t border-slate-150 dark:border-slate-850 text-[10px] text-slate-400 flex justify-between items-center">
                         <span>Group Status:</span>
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold">ON DUTY SCHEDULE</span>
                       </div>
@@ -1055,21 +1056,20 @@ export default function HogRaisingIgpTracker({
             {/* LHS: Log chore check-in form */}
             <div className={`lg:col-span-5 p-5 rounded-3xl border ${theme.cardBg} space-y-4`}>
               <div>
-                <h3 className="font-extrabold text-base text-[#1B4332]">Pag-log sa Buluhaton (Chore Check-in)</h3>
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-white">Pag-log sa Buluhaton (Chore Check-in)</h3>
+                <p className="text-xs text-slate-400 mt-1">Isulat kon nakakaon ba, nakalimpyo, ug nakahatag kaba og bitamina karong adlawa.</p>
               </div>
 
-              <form onSubmit={handleChoreSubmit} className="space-y-4 text-xs font-medium text-[#3A4A42]">
+              <form onSubmit={handleChoreSubmit} className="space-y-4 text-xs font-medium text-slate-300">
                 {/* Batch selection */}
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">Imong Batch (Assigned Group)</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">Imong Batch (Assigned Group)</label>
                   <select
                     value={choreBatchName}
                     onChange={(e) => setChoreBatchName(e.target.value)}
                     className={`w-full px-3 py-2 text-xs rounded-xl focus:outline-none ${theme.inputBg} font-bold`}
                   >
-                    {state.groups.length === 0 ? (
-                      <option value="">No groups available</option>
-                    ) : state.groups.map(g => (
+                    {state.groups.map(g => (
                       <option key={g.id} value={g.name}>{g.name}</option>
                     ))}
                   </select>
@@ -1077,7 +1077,7 @@ export default function HogRaisingIgpTracker({
 
                 {/* Name Selection */}
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">Gi-check ni (Checked / Logged By)</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">Gi-check ni (Checked / Logged By)</label>
                   <select
                     value={choreCheckedBy}
                     onChange={(e) => setChoreCheckedBy(e.target.value)}
@@ -1092,8 +1092,8 @@ export default function HogRaisingIgpTracker({
 
                 {/* Activities Done Checkboxes */}
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">MGA BULUHATON NGA NA-HUMAN (ACTIVITIES COMPLETED):</label>
-
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">MGA BULUHATON NGA NA-HUMAN (ACTIVITIES COMPLETED):</label>
+                  
                   <div className="grid grid-cols-2 gap-2 text-xs font-bold">
                     {dynamicChoreList.map((act) => {
                       const isChecked = choreChoreActivities.includes(act.id);
@@ -1102,10 +1102,10 @@ export default function HogRaisingIgpTracker({
                           type="button"
                           key={act.id}
                           onClick={() => handleChoreToggle(act.id)}
-                          className={`p-2.5 rounded-xl border text-left flex items-center justify-between cursor-pointer ${
+                          className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
                             isChecked
-                              ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
-                              : 'border-[#D5CFC1] bg-white text-[#1B4332]'
+                              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/35'
                           }`}
                         >
                           <span>{act.label}</span>
@@ -1118,7 +1118,7 @@ export default function HogRaisingIgpTracker({
 
                 {/* Notes */}
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">Dugang nga Obserbasyon (Notes/Observations)</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">Dugang nga Obserbasyon (Notes/Observations)</label>
                   <textarea
                     rows={2}
                     placeholder={
@@ -1138,10 +1138,9 @@ export default function HogRaisingIgpTracker({
                 <button
                   type="submit"
                   disabled={choreChoreActivities.length === 0 || !choreCheckedBy}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl text-sm font-black text-white bg-[#2D6A4F] hover:bg-[#1B4332] border border-[#1B4332] shadow-sm transition-colors cursor-pointer disabled:bg-[#D5CFC1] disabled:text-[#7A857C] disabled:border-[#D5CFC1] disabled:shadow-none disabled:cursor-not-allowed"
+                  className={`w-full py-2.5 rounded-xl text-xs font-black transition-colors cursor-pointer text-center ${theme.primaryButton} disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  <Check className="w-4 h-4 shrink-0" />
-                  <span>I-submit ang Care Log (Save Log)</span>
+                  I-submit ang Care Log (Save Log)
                 </button>
               </form>
             </div>
@@ -1149,8 +1148,8 @@ export default function HogRaisingIgpTracker({
             {/* RHS: Recent Chore History */}
             <div className={`lg:col-span-7 p-5 rounded-3xl border ${theme.cardBg} space-y-4`}>
               <div>
-                <h3 className="font-extrabold text-base text-[#1B4332]">Lista sa bag-ong Pag-atiman (Daily Care Logs)</h3>
-                <p className="text-xs text-[#3A4A42] mt-1">Kini ang real-time feed nga nagpakita kon kinsa ang mi-alaga sa {selectedProduce}.</p>
+                <h3 className="font-extrabold text-base text-slate-800 dark:text-white">Lista sa bag-ong Pag-atiman (Daily Care Logs)</h3>
+                <p className="text-xs text-slate-400 mt-1">Kini ang real-time feed nga nagpakita kon kinsa ang mi-alaga sa {selectedProduce}.</p>
               </div>
 
               <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
@@ -1210,11 +1209,11 @@ export default function HogRaisingIgpTracker({
               {/* Header inside */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-150 dark:border-slate-850 pb-4">
                 <div>
-                  <h3 className="font-extrabold text-base text-[#1B4332] flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-emerald-700" />
+                  <h3 className="font-extrabold text-base text-slate-800 dark:text-white flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                     <span>Net Income Distribution & December Dividends (50/30/20 Formula)</span>
                   </h3>
-                  <p className="text-xs text-[#1B4332] mt-1 font-semibold">
+                  <p className="text-xs text-slate-400 mt-1">
                     50% Handlers • 30% FCCT Cooperative Deposit (December Cut) • 20% Association Reserve • 5% Dispersal Risk Pool
                   </p>
                 </div>
@@ -1223,7 +1222,7 @@ export default function HogRaisingIgpTracker({
                   <button
                     id="calc-attendance-dividend-btn"
                     onClick={() => setShowDividendCalcModal(true)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-[#1B4332] hover:bg-[#143326] text-white shadow-md transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all cursor-pointer"
                   >
                     <Calculator className="w-4 h-4" />
                     <span>Attendance Dividend Engine</span>
@@ -1232,9 +1231,13 @@ export default function HogRaisingIgpTracker({
                   <button
                     id="print-dividend-btn"
                     onClick={handlePrintDividends}
-                    className="flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-black border transition-colors cursor-pointer bg-white hover:bg-[#EAF4EC] text-[#1B4332] border-[#2D6A4F]"
+                    className={`flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-black border transition-colors cursor-pointer ${
+                      isOfficerMode
+                        ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700'
+                        : 'bg-white hover:bg-slate-100 text-slate-800 border-[#D5CFC1]'
+                    }`}
                   >
-                    <Printer className="w-4 h-4 text-[#1B4332]" />
+                    <Printer className="w-4 h-4" />
                     <span>I-print ang Report</span>
                   </button>
                 </div>
@@ -1276,8 +1279,8 @@ export default function HogRaisingIgpTracker({
               </div>
 
               {/* Information disclaimer */}
-              <div className="p-4 bg-emerald-500/[0.04] rounded-2xl border border-emerald-500/20 text-xs text-[#1B4332] leading-relaxed space-y-1">
-                <p className="font-black text-emerald-700 uppercase tracking-wide">PAGPASABOT MAHITUNGOD SA DIVIDENDS & ATTENDANCE RULE:</p>
+              <div className="p-4 bg-emerald-500/[0.02] rounded-2xl border border-emerald-500/10 text-xs text-slate-500 dark:text-slate-400 leading-relaxed space-y-1">
+                <p className="font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">PAGPASABOT MAHITUNGOD SA DIVIDENDS & ATTENDANCE RULE:</p>
                 <p>
                   Ang 30% nga pundo (Cooperative Deposit) i-release inig abot sa <strong>Disyembre</strong> ug gibahin-bahin base sa <strong>Attendance sa mga Regular Assembly & Tigum</strong>. Ang mga miyembro nga adunay absent dili makakuha sa ilang bahin para sa maong bulan, ug ang ilang bahin i-reallocate isip dugang incentive sa mga aktibong miyembro.
                 </p>
@@ -1285,8 +1288,8 @@ export default function HogRaisingIgpTracker({
 
               {/* Members Share Listing */}
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left text-[#1B4332]">
-                  <thead className="bg-slate-50 font-black text-slate-700 uppercase tracking-wider text-[10px] border-b border-[#D5CFC1]">
+                <table className="w-full text-xs text-left text-slate-300">
+                  <thead className="bg-slate-50 dark:bg-slate-950 font-black text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-150 dark:border-slate-850">
                     <tr>
                       <th className="p-4 rounded-l-xl">Miyembro sa AFA (Farmer Name)</th>
                       <th className="p-4">Lokasyon (Sitio)</th>
@@ -1295,15 +1298,15 @@ export default function HogRaisingIgpTracker({
                       <th className="p-4 rounded-r-xl text-right">Estimated 30% Pool Share</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E9E4D9] font-semibold text-[#1B4332]">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-850 font-semibold text-slate-600 dark:text-slate-200">
                     {activeMembers.map((m) => {
                       const memberBatch = state.groups.find(g => g.members.includes(m.name))?.name || 'Weekend Rotation';
                       const estimated30PercentShare = activeCount > 0 ? ((netProfit > 0 ? netProfit : 0) * 0.30) / activeCount : 0;
                       return (
-                        <tr key={m.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="p-4 font-extrabold text-[#1B4332]">{m.name}</td>
-                          <td className="p-4 text-[#3A4A42]">{m.farmLocation}</td>
-                          <td className="p-4 font-bold text-[#1B4332]">{memberBatch}</td>
+                        <tr key={m.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
+                          <td className="p-4 font-extrabold text-slate-800 dark:text-white">{m.name}</td>
+                          <td className="p-4 text-slate-400">{m.farmLocation}</td>
+                          <td className="p-4 font-bold text-[#1B4332] dark:text-emerald-400">{memberBatch}</td>
                           <td className="p-4">
                             <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
                               Active
@@ -1320,9 +1323,9 @@ export default function HogRaisingIgpTracker({
               </div>
 
               {/* Total calculations under */}
-              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-[#D5CFC1] text-xs">
-                <span className="text-[#1B4332] font-bold">Total Net Profit / Tubo (Disyembre):</span>
-                <span className="text-base font-extrabold text-emerald-700 font-mono">
+              <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-850 text-xs">
+                <span className="text-slate-400 font-bold">Total Net Profit / Tubo (Disyembre):</span>
+                <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
                   PHP {netProfit > 0 ? netProfit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
                 </span>
               </div>
@@ -1334,28 +1337,28 @@ export default function HogRaisingIgpTracker({
         {/* TAB 5: TREASURER PIG LEDGER (EXPENSES & SALES LOGS) */}
         {activeTab === 'ledger' && (
           <div className="space-y-6">
-
+            
             {/* Quick Actions and Logs */}
             <div className={`p-5 rounded-3xl border ${theme.cardBg} space-y-4`}>
-
+              
               {/* Actions Header Row */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                  <h3 className="font-extrabold text-base text-[#1B4332]">IGP Financial Ledger (Gasto, Abang ug Halin)</h3>
-                  <p className="text-xs text-[#1B4332] mt-1 font-semibold">Isulat ang mga gasto sa {selectedProduce}, lakip ang kita o halin gikan sa abang ug benta.</p>                </div>
+                  <h3 className="font-extrabold text-base text-slate-800 dark:text-white">IGP Financial Ledger (Gasto, Abang ug Halin)</h3>
+                  <p className="text-xs text-slate-400 mt-1">Isulat ang mga gasto sa {selectedProduce}, lakip ang kita o halin gikan sa abang ug benta.</p>                </div>
 
                 <div className="flex gap-2 w-full sm:w-auto shrink-0 font-bold">
                   <button
                     id="add-pig-expense-btn"
                     onClick={() => setShowExpenseModal(true)}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 text-xs bg-white hover:bg-[#F0EDE7] text-[#1B4332] rounded-xl shadow-sm transition-all cursor-pointer border border-rose-400 font-black"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 text-xs bg-rose-100 hover:bg-rose-200 text-[#1B4332] rounded-xl shadow-sm transition-all cursor-pointer border border-rose-300 font-black"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Log IGP Expense</span>                  </button>
                   <button
                     id="add-hog-sale-btn"
                     onClick={() => setShowSaleModal(true)}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 text-xs bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl shadow-sm transition-all cursor-pointer font-black"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>{selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako') ? 'Record Rental Income' : 'Record Sale / Income'}</span>                  </button>
@@ -1364,8 +1367,8 @@ export default function HogRaisingIgpTracker({
 
               {/* Table ledger details */}
               <div className="overflow-x-auto pt-1">
-                <table className="w-full text-xs text-left text-[#1B4332]">
-                  <thead className="bg-slate-50 font-black text-slate-700 uppercase tracking-wider text-[10px] border-b border-[#D5CFC1]">
+                <table className="w-full text-xs text-left text-slate-300">
+                  <thead className="bg-slate-50 dark:bg-slate-950 font-black text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-150 dark:border-slate-850">
                     <tr>
                       <th className="p-4 rounded-l-xl">Type</th>
                       <th className="p-4">Kategorya (Category)</th>
@@ -1375,7 +1378,7 @@ export default function HogRaisingIgpTracker({
                       <th className="p-4 rounded-r-xl text-right">Kantidad (Amount PHP)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E9E4D9] font-semibold text-[#1B4332]">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-850 font-semibold text-slate-600 dark:text-slate-200">
                     {/* Combine Expenses and Sales sorted by date descending */}
                     {[
                       ...state.expenses.map(e => ({ ...e, type: 'expense' as const, qty: undefined })),
@@ -1385,7 +1388,7 @@ export default function HogRaisingIgpTracker({
                     .map((item, idx) => {
                       const isExp = item.type === 'expense';
                       return (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
                           <td className="p-4">
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${
                               isExp ? 'bg-rose-500/10 text-rose-500' : 'bg-emerald-500/10 text-emerald-500'
@@ -1393,10 +1396,10 @@ export default function HogRaisingIgpTracker({
                               {isExp ? 'Expense' : 'Sale'}
                             </span>
                           </td>
-                          <td className="p-4 font-bold text-[#1B4332]">{item.category}</td>
-                          <td className="p-4 text-[#3A4A42] max-w-xs truncate" title={item.description}>{item.description}</td>
-                          <td className="p-4 text-[#3A4A42] font-mono">{item.date}</td>
-                          <td className="p-4 text-[#3A4A42] font-bold">{item.qty || '-'}</td>
+                          <td className="p-4 font-bold text-slate-700 dark:text-slate-300">{item.category}</td>
+                          <td className="p-4 text-slate-400 max-w-xs truncate" title={item.description}>{item.description}</td>
+                          <td className="p-4 text-slate-400 font-mono">{item.date}</td>
+                          <td className="p-4 text-slate-400 font-bold">{item.qty || '-'}</td>
                           <td className={`p-4 text-right font-extrabold font-mono text-sm ${isExp ? 'text-rose-500' : 'text-emerald-500'}`}>
                             {isExp ? '-' : '+'} PHP {item.amount.toLocaleString()}
                           </td>
@@ -1420,21 +1423,25 @@ export default function HogRaisingIgpTracker({
               {/* Header inside reports tab */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-150 dark:border-slate-850 pb-4">
                 <div>
-                  <h3 className="font-extrabold text-base text-[#1B4332] flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-emerald-700" />
+                  <h3 className="font-extrabold text-base text-slate-800 dark:text-white flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-emerald-500" />
                     <span>Quarterly Proceeds & December Book Closing</span>
                   </h3>
-                  <p className="text-xs text-[#1B4332] mt-1 font-semibold">
-                    Bilingual summary of project proceeds per quarter, with year-end closing controls.
+                  <p className="text-xs text-slate-400 mt-1">
+                    Bilingual summary of hog-raising proceeds per quarter, with year-end closing controls.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handlePrintQuarterlyReport(reportYear)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black border transition-colors cursor-pointer bg-white hover:bg-[#EAF4EC] text-[#1B4332] border-[#2D6A4F]"
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black border transition-colors cursor-pointer ${
+                      isOfficerMode
+                        ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700'
+                        : 'bg-white hover:bg-slate-100 text-slate-800 border-[#D5CFC1]'
+                    }`}
                   >
-                    <Printer className="w-4 h-4 text-[#1B4332]" />
+                    <Printer className="w-4 h-4" />
                     <span>I-print ang Report ({reportYear})</span>
                   </button>
                 </div>
@@ -1443,7 +1450,7 @@ export default function HogRaisingIgpTracker({
               {/* Year Selectors & Book Closing Stamp Row */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
                 <div className="md:col-span-5 space-y-2">
-                  <label className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">Pilia ang Tuig (Select Year):</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Pilia ang Tuig (Select Year):</label>
                   <div className="flex gap-2 flex-wrap">
                     {[2024, 2025, 2026].map(yr => {
                       const isYrClosed = closedYears.includes(yr);
@@ -1454,8 +1461,8 @@ export default function HogRaisingIgpTracker({
                           onClick={() => setReportYear(yr)}
                           className={`px-4 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-1.5 cursor-pointer border ${
                             isCurrentSelected
-                              ? 'bg-[#1B4332] text-white border-[#1b4332]'
-                              : 'bg-white border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF4EC]'
+                              ? 'bg-[#1B4332] text-white border-[#1b4332] dark:bg-emerald-600 dark:border-emerald-500'
+                              : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                           }`}
                         >
                           <span>{yr}</span>
@@ -1474,8 +1481,8 @@ export default function HogRaisingIgpTracker({
                         <ShieldCheck className="w-6 h-6 animate-pulse" />
                       </div>
                       <div className="text-left space-y-0.5">
-                        <span className="text-[10px] font-black text-rose-600 uppercase tracking-widest block font-mono">LIBRO SA PINANSYAL GISIRADO NA (DECEMBER BOOKS CLOSED)</span>
-                        <p className="text-xs text-[#1B4332] font-bold">
+                        <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest block font-mono">LIBRO SA PINANSYAL GISIRADO NA (DECEMBER BOOKS CLOSED)</span>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 font-bold">
                           Ang financial books sa {reportYear} opisyal nang gisirado, gi-audit ug gipirmahan niadtong Disyembre 31. Dili na mahimong usbon.
                         </p>
                       </div>
@@ -1483,12 +1490,12 @@ export default function HogRaisingIgpTracker({
                   ) : (
                     <div className="p-4 bg-amber-500/5 border border-amber-500/25 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="text-left space-y-0.5 flex-1">
-                        <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest block font-mono">KASAMTANGANG ABLI (ACTIVE & UNLOCKED)</span>
-                        <p className="text-xs text-[#1B4332] font-semibold leading-relaxed">
+                        <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest block font-mono">KASAMTANGANG ABLI (ACTIVE & UNLOCKED)</span>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold leading-relaxed">
                           Ang financial books sa {reportYear} kasamtangang abli ug aktibo. Mahimo pang magtala og mga gasto ug halin sa baboy.
                         </p>
                       </div>
-
+                      
                       {isTreasurerOrOfficer && onCloseDecemberBook && (
                         <button
                           onClick={() => {
@@ -1496,9 +1503,9 @@ export default function HogRaisingIgpTracker({
                               onCloseDecemberBook(reportYear);
                             }
                           }}
-                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-[#1B4332] hover:bg-[#143326] text-white shadow-md border border-[#2D6A4F] flex items-center gap-1.5 cursor-pointer shrink-0 transition-all self-start sm:self-center"
+                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-rose-100 hover:bg-rose-200 text-[#1B4332] shadow-md border border-rose-300 flex items-center gap-1.5 cursor-pointer shrink-0 transition-all self-start sm:self-center"
                         >
-                          <span>Close Books (Sirad-an ang Libro)</span>
+                          <span className="text-[#1B4332]">Sirad-an ang Libro (Close Books)</span>
                         </button>
                       )}
                     </div>
@@ -1508,8 +1515,8 @@ export default function HogRaisingIgpTracker({
 
               {/* Quarterly proceeds Grid */}
               <div className="space-y-4 pt-2">
-                <h4 className="text-xs font-black text-[#1B4332] uppercase tracking-wider">Kalamposan ug Halin matag Kwarter (Quarterly Proceeds):</h4>
-
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Kalamposan ug Halin matag Kwarter (Quarterly Proceeds):</h4>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   {currentYearQuarters.map((q) => {
                     const profit = q.sales - q.expenses;
@@ -1518,25 +1525,25 @@ export default function HogRaisingIgpTracker({
                       <div key={q.name} className={`p-4 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-3 relative overflow-hidden transition-all hover:scale-[1.01] hover:shadow-sm`}>
                         <div className="space-y-1">
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded text-[#1B4332] uppercase tracking-wider">{q.name}</span>
-                            <span className="text-[10px] text-[#3A4A42] font-mono font-bold">{q.hogsSold} sold</span>
+                            <span className="text-[10px] font-black bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded text-slate-500 uppercase tracking-wider">{q.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono font-bold">{q.hogsSold} sold</span>
                           </div>
-                          <h5 className="text-sm font-black text-[#1B4332] leading-tight">{q.labelEng}</h5>
-                          <span className="text-[10.5px] text-[#3A4A42] block font-bold">{q.label}</span>
+                          <h5 className="text-sm font-black text-slate-800 dark:text-white leading-tight">{q.labelEng}</h5>
+                          <span className="text-[10.5px] text-slate-400 block font-bold">{q.label}</span>
                         </div>
 
-                        <div className="space-y-1.5 border-t border-[#D5CFC1] pt-2.5">
-                          <div className="flex justify-between text-[11px] font-semibold text-[#3A4A42]">
+                        <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-850 pt-2.5">
+                          <div className="flex justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                             <span>Proceeds (Halin):</span>
-                            <span className="font-mono text-[#1B4332]">PHP {q.sales.toLocaleString()}</span>
+                            <span className="font-mono text-slate-700 dark:text-slate-300">PHP {q.sales.toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between text-[11px] font-semibold text-[#3A4A42]">
+                          <div className="flex justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                             <span>Expenses (Gasto):</span>
-                            <span className="font-mono text-[#1B4332]">PHP {q.expenses.toLocaleString()}</span>
+                            <span className="font-mono text-slate-700 dark:text-slate-300">PHP {q.expenses.toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between text-[11px] font-black border-t border-dashed border-[#D5CFC1] pt-1.5">
+                          <div className="flex justify-between text-[11px] font-black border-t border-dashed border-slate-200 dark:border-slate-800 pt-1.5">
                             <span>Net (Tubo):</span>
-                            <span className={`font-mono ${isProfit ? 'text-emerald-700' : 'text-rose-500'}`}>
+                            <span className={`font-mono ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                               PHP {profit.toLocaleString()}
                             </span>
                           </div>
@@ -1548,24 +1555,24 @@ export default function HogRaisingIgpTracker({
               </div>
 
               {/* Annual Summary Box */}
-              <div className="p-5 rounded-2xl bg-white border border-[#D5CFC1] grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-850 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
                 <div className="space-y-0.5">
-                  <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">TOTAL ANNUAL PROCEEDS</span>
-                  <span className="text-base font-black text-emerald-700 font-mono">PHP {annualTotalSales.toLocaleString()}</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">TOTAL ANNUAL PROCEEDS</span>
+                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">PHP {annualTotalSales.toLocaleString()}</span>
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">TOTAL ANNUAL EXPENSES</span>
-                  <span className="text-base font-black text-rose-600 font-mono">PHP {annualTotalExpenses.toLocaleString()}</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">TOTAL ANNUAL EXPENSES</span>
+                  <span className="text-base font-black text-rose-500 font-mono">PHP {annualTotalExpenses.toLocaleString()}</span>
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">NET INTEREST PROFIT (TUBO)</span>
-                  <span className={`text-base font-black font-mono ${annualTotalNet >= 0 ? 'text-emerald-700' : 'text-rose-500'}`}>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">NET INTEREST PROFIT (TUBO)</span>
+                  <span className={`text-base font-black font-mono ${annualTotalNet >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                     PHP {annualTotalNet.toLocaleString()}
                   </span>
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">MATURE UNITS SOLD</span>
-                  <span className="text-base font-black text-blue-700 font-mono">{annualHogsSold} mature pigs</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">MATURE HOGS SOLD</span>
+                  <span className="text-base font-black text-blue-600 dark:text-blue-400 font-mono">{annualHogsSold} mature pigs</span>
                 </div>
               </div>
 
@@ -1578,11 +1585,11 @@ export default function HogRaisingIgpTracker({
       {/* MODAL 1: ADD PIG EXPENSE */}
       {showExpenseModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-left">
-            <div className="bg-[#F0EDE7] px-5 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
-              <h3 className="font-bold text-[#1B4332] text-base">Record Expense</h3>              <button
+          <div className="bg-slate-800 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-left">
+            <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
+              <h3 className="font-bold text-white text-base">Record Expense ({selectedProduce})</h3>              <button 
                 onClick={() => setShowExpenseModal(false)}
-                className="text-[#1B4332] hover:text-[#143326] text-lg font-bold cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg border border-[#D5CFC1] bg-white"
+                className="text-[#1B4332] hover:text-[#143326] text-lg font-bold cursor-pointer"
               >
                 &times;
               </button>
@@ -1599,22 +1606,8 @@ export default function HogRaisingIgpTracker({
                   {dynamicCategories.map(cat => (
                     <option key={cat.value} value={cat.value}>{cat.label}</option>
                   ))}
-                  <option value="Other">Other (Iba pa — type your own)</option>
                 </select>
               </div>
-              {expCategory === 'Other' && (
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">New Category Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter new expense category"
-                    value={customExpCategory}
-                    onChange={(e) => setCustomExpCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              )}
 
               {/* Amount & Date */}
               <div className="grid grid-cols-2 gap-4">
@@ -1671,8 +1664,8 @@ export default function HogRaisingIgpTracker({
                   disabled={!!expenseDateError}
                   className={`flex-1 py-2.5 text-xs font-black rounded-xl shadow-sm transition-all text-center ${
                     expenseDateError
-                      ? 'bg-slate-300 text-slate-600 cursor-not-allowed opacity-50'
-                      : 'bg-[#1B4332] hover:bg-[#143326] text-white cursor-pointer'
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'
+                      : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'
                   }`}
                 >
                   Record Expense
@@ -1686,25 +1679,25 @@ export default function HogRaisingIgpTracker({
       {/* MODAL 2: RECORD HOG SALE */}
       {showSaleModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-left">
-            <div className="bg-[#F0EDE7] px-5 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
-              <h3 className="font-bold text-[#1B4332] text-base">
+          <div className="bg-slate-800 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-left">
+            <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
+              <h3 className="font-bold text-white text-base">
                 {selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako')
-                  ? 'Record Rental Income'
-                  : 'Record Sale / Income'}
+                  ? `Record Rental Income (${selectedProduce})`
+                  : `Record Sale / Income (${selectedProduce})`}
               </h3>
-              <button
+              <button 
                 onClick={() => setShowSaleModal(false)}
-                className="text-[#1B4332] hover:text-[#143326] text-lg font-bold cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg border border-[#D5CFC1] bg-white"
+                className="text-slate-400 hover:text-white text-lg font-bold cursor-pointer"
               >
                 &times;
               </button>
             </div>
-            <form onSubmit={handleSaleSubmit} className="p-5 space-y-4 text-xs font-semibold text-[#1B4332]">
+            <form onSubmit={handleSaleSubmit} className="p-5 space-y-4 text-xs font-semibold text-slate-300">
               {/* Quantity sold & Date */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">
                     {selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako')
                       ? 'Number of Items Rented (Kadaghanon)'
                       : 'Quantity / Units Sold'}
@@ -1716,17 +1709,17 @@ export default function HogRaisingIgpTracker({
                     placeholder="e.g. 5"
                     value={saleHogsCount}
                     onChange={(e) => setSaleHogsCount(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white font-mono focus:outline-none"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">Date of Sale</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">Date of Sale</label>
                   <input
                     type="date"
                     required
                     value={saleDate}
                     onChange={(e) => handleSaleDateChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none"
                   />
                   {saleDateError && (
                     <span className="text-[10px] text-rose-500 font-bold block mt-1">{saleDateError}</span>
@@ -1736,7 +1729,7 @@ export default function HogRaisingIgpTracker({
 
               {/* Revenue */}
               <div className="space-y-1">
-                <label className="block text-[10px] font-black text-[#1B4332] uppercase">Total Revenue (Gross PHP)</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase">Total Revenue (Gross PHP)</label>
                 <input
                   type="number"
                   min="1"
@@ -1744,19 +1737,19 @@ export default function HogRaisingIgpTracker({
                   placeholder="e.g. 75000"
                   value={saleRevenue}
                   onChange={(e) => setSaleRevenue(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
               {/* Notes */}
               <div className="space-y-1">
-                <label className="block text-[10px] font-black text-[#1B4332] uppercase">Sale Notes (Buyer/Weight Details)</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase">Sale Notes (Buyer/Weight Details)</label>
                 <textarea
                   rows={3}
                   placeholder="e.g., Sold to Tuburan Public Market Buyer. Average weight 85kg per hog."
                   value={saleNotes}
                   onChange={(e) => setSaleNotes(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500 font-sans"
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500 font-sans"
                 />
               </div>
 
@@ -1764,7 +1757,7 @@ export default function HogRaisingIgpTracker({
                 <button
                   type="button"
                   onClick={() => setShowSaleModal(false)}
-                  className="flex-1 py-2.5 text-xs font-bold bg-white hover:bg-[#F0EDE7] text-[#1B4332] rounded-xl transition-all cursor-pointer text-center border border-[#D5CFC1]"
+                  className="flex-1 py-2.5 text-xs font-bold bg-slate-700 hover:bg-slate-650 text-slate-200 rounded-xl transition-all cursor-pointer text-center"
                 >
                   Cancel
                 </button>
@@ -1773,8 +1766,8 @@ export default function HogRaisingIgpTracker({
                   disabled={!!saleDateError}
                   className={`flex-1 py-2.5 text-xs font-black rounded-xl shadow-sm transition-all text-center ${
                     saleDateError
-                      ? 'bg-slate-300 text-slate-600 cursor-not-allowed opacity-50'
-                      : 'bg-[#1B4332] hover:bg-[#143326] text-white cursor-pointer'
+                      ? 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-50'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
                   }`}
                 >
                   {selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako')

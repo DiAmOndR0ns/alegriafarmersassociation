@@ -48,62 +48,62 @@ export default function OfflineIndicator({
     <>
       <div 
         id="offline-indicator-wrapper" 
-        className="flex flex-wrap items-center gap-2 bg-[#1B4332] border border-[#2D6A4F] rounded-xl px-3 py-1.5 shadow-sm text-xs text-[#D8F3DC]"
+        className="flex flex-wrap items-center gap-2.5 bg-slate-850/90 border border-slate-700/60 rounded-xl px-3 py-1.5 shadow-sm text-xs"
       >
         {/* Network Online/Offline Dot */}
         <div className="flex items-center gap-1.5 pr-1" title={isOnline ? "Network is connected" : "Network is offline"}>
           <div className="relative flex items-center justify-center">
             <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-amber-500'}`} />
             {isOnline && (
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 animate-ping" aria-hidden="true" />
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 animate-ping" />
             )}
           </div>
-          <span className="text-[11px] font-bold text-[#D8F3DC]">
+          <span className="text-[11px] font-medium text-white hidden md:inline">
             {isOnline ? 'Online' : 'Offline'}
           </span>
         </div>
 
-        <div className="h-3.5 w-[1px] bg-[#2D6A4F]" aria-hidden="true" />
+        <div className="h-3.5 w-[1px] bg-slate-700/80" />
 
         {/* Database Connection Status Badge (Clickable to view details) */}
         <button
           id="database-status-badge"
           type="button"
           onClick={() => setShowDbModal(true)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-bold text-[11px] transition-all cursor-pointer select-none ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-semibold text-[11px] transition-all cursor-pointer select-none ${
             isChecking
-              ? 'bg-[#0F2D24] text-[#95D5B2] border-[#2D6A4F] hover:bg-[#122E22]'
+              ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
               : isConnected
-              ? 'bg-[#0F2D24] text-[#95D5B2] border-[#2D6A4F] hover:bg-[#122E22]'
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/50'
               : isConfigured
-              ? 'bg-rose-900/40 text-rose-200 border-rose-500/50 hover:bg-rose-900/60'
-              : 'bg-[#0F2D24] text-[#95D5B2] border-[#2D6A4F] hover:bg-[#122E22]'
+              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25 hover:border-rose-500/50'
+              : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-750'
           }`}
           title="Click to view Database Connection details"
         >
           {isChecking ? (
             <>
-              <RefreshCw className="w-3 h-3 animate-spin text-[#4A5F57]" aria-hidden="true" />
+              <RefreshCw className="w-3 h-3 animate-spin text-slate-400" />
               <span>Checking DB...</span>
             </>
           ) : isConnected ? (
             <>
-              <span className="relative flex h-2 w-2" aria-hidden="true">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
               </span>
-              <Database className="w-3 h-3 text-emerald-700" aria-hidden="true" />
+              <Database className="w-3 h-3 text-emerald-400" />
               <span className="font-bold">{providerName}: Connected</span>
             </>
           ) : isConfigured ? (
             <>
-              <AlertCircle className="w-3 h-3 text-rose-700" aria-hidden="true" />
+              <AlertCircle className="w-3 h-3 text-rose-400" />
               <span className="font-bold">{providerName}: Disconnected</span>
             </>
           ) : (
             <>
-              <HardDrive className="w-3 h-3 text-[#4A5F57]" aria-hidden="true" />
-              <span className="font-bold">Local Storage</span>
+              <HardDrive className="w-3 h-3 text-slate-200" />
+              <span className="text-white font-bold">Local Storage</span>
             </>
           )}
         </button>
@@ -112,7 +112,7 @@ export default function OfflineIndicator({
         {isSyncing ? (
           <div 
             id="sync-status-syncing"
-            className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1 rounded-lg text-[11px] font-bold text-emerald-200 animate-pulse"
+            className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1 rounded-lg text-[11px] font-bold text-emerald-300 animate-pulse" 
             title="Automatically syncing changes to the database..."
           >
             <RotateCw className="w-3 h-3 animate-spin text-emerald-400" />
@@ -120,18 +120,18 @@ export default function OfflineIndicator({
           </div>
         ) : queueCount > 0 ? (
           !isOnline ? (
-            <div
+            <div 
               id="sync-status-offline-saved"
-              className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/35 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-amber-200"
+              className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/35 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-amber-300"
               title="Changes saved offline. They will automatically sync to the database as soon as you reconnect without pressing any button."
             >
               <AlertCircle className="w-3 h-3 text-amber-400" />
               <span>{queueCount} offline saved • Auto-syncs on connect</span>
             </div>
           ) : (
-            <div
+            <div 
               id="sync-status-pending-online"
-              className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-emerald-200"
+              className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-emerald-300"
               title="Auto-syncing queued offline changes to the database..."
             >
               <RotateCw className="w-3 h-3 animate-spin text-emerald-400" />
@@ -139,9 +139,9 @@ export default function OfflineIndicator({
             </div>
           )
         ) : isConnected ? (
-          <div
+          <div 
             id="sync-status-auto-synced"
-            className="hidden sm:flex items-center gap-1 bg-emerald-950/40 border border-emerald-500/25 px-2 py-0.5 rounded-md text-[10px] font-bold text-emerald-400"
+            className="hidden sm:flex items-center gap-1 bg-emerald-950/40 border border-emerald-500/25 px-2 py-0.5 rounded-md text-[10px] font-bold text-emerald-400" 
             title="All offline and online changes are automatically synced to the database. No button push required."
           >
             <CheckCircle2 className="w-3 h-3 text-emerald-400" />
@@ -157,10 +157,10 @@ export default function OfflineIndicator({
           onClick={onSync}
           className={`p-1 rounded-lg border transition-all ${
             !isOnline
-              ? 'bg-[#0F2D24] text-[#4A5F57] border-[#2D6A4F] cursor-not-allowed opacity-50'
+              ? 'bg-slate-800 text-slate-600 border-slate-700 cursor-not-allowed opacity-50'
               : isSyncing
               ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30 cursor-not-allowed opacity-60'
-              : 'bg-[#0F2D24] text-[#95D5B2] hover:text-white hover:bg-[#122E22] border-[#2D6A4F] cursor-pointer'
+              : 'bg-slate-800/80 text-slate-400 hover:text-emerald-300 hover:bg-slate-750 border-slate-700 cursor-pointer'
           }`}
           title="Auto-sync is active. Click to trigger an immediate database heartbeat pulse if desired."
         >

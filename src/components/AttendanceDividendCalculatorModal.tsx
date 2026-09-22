@@ -255,12 +255,14 @@ export default function AttendanceDividendCalculatorModal({
                   December Cut
                 </span>
               </h3>
+              <p className="text-xs text-emerald-200">
+                50% Handlers • 30% FCCT Membership (Attendance-Weighted) • 20% Association • 5% Dispersal Pool
+              </p>
             </div>
           </div>
-          <button
+          <button 
             onClick={onClose}
-            aria-label="Close dividend engine"
-            className="p-2 rounded-full transition-colors cursor-pointer text-[#D8F3DC] hover:text-white bg-white/5 border border-[#52B788]/60 hover:bg-white/15"
+            className="p-2 hover:bg-white/10 rounded-full transition-colors cursor-pointer text-slate-300 hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>

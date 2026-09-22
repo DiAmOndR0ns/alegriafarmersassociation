@@ -196,6 +196,19 @@ export default function ExecutiveView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto min-w-0">
+          {currentRole === 'President' && onDownloadBackup && (
+            <button
+              id="executive-download-backup-btn"
+              type="button"
+              onClick={onDownloadBackup}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-black bg-[#D8F3DC] hover:bg-[#b7e4c7] text-[#1B4332] border border-[#52B788] rounded-2xl shadow-sm transition-all cursor-pointer uppercase tracking-wider min-w-0"
+              title="Download formatted JSON backup of all local association data"
+            >
+              <Download className="w-4 h-4 text-[#1B4332] shrink-0" />
+              <span className="truncate">Download System Backup</span>
+            </button>
+          )}
+
           {onOpenReportModal && (
             <button
               id="executive-report-btn"
@@ -904,11 +917,11 @@ export default function ExecutiveView({
             {/* Turnover Education / Checklist Box */}
             <div className="bg-[#FFF3E0] border border-[#FFE082] rounded-3xl p-5 space-y-3">
               <div className="space-y-3">
-                <h4 className="text-xs font-black text-[#8A3700] uppercase tracking-wider flex items-center gap-1.5 font-display">
+                <h4 className="text-xs font-black text-[#E65100] uppercase tracking-wider flex items-center gap-1.5 font-display">
                   <AlertTriangle className="w-4.5 h-4.5" />
                   <span>MAHINUNGDANONG PAHINUMDOM (Turnover Checklist)</span>
                 </h4>
-
+                
                 <p className="text-[11px] text-slate-700 leading-relaxed font-semibold">
                   Ang pag-turn over sa opisina sa Presidente usa ka pormal nga proseso. Subay sa balaod sa AFA, siguroha nga ang mosunod natuman sa dili pa i-klik ang turnover:
                 </p>
@@ -922,7 +935,7 @@ export default function ExecutiveView({
               </div>
 
               <div className="bg-white/80 p-3.5 rounded-2xl border border-[#FFE082] text-[10px] text-slate-600 font-semibold space-y-1">
-                <p className="text-[#8A3700] font-black uppercase">💡 Pagsiguro sa Kasegurohan:</p>
+                <p className="text-[#E65100] font-black uppercase">💡 Pagsiguro sa Kasegurohan:</p>
                 <p>Kini nga transaksyon i-rekord sa cryptographic audit trail ug dili na mamahimong usbon pa (Immutable Audit Record).</p>
               </div>
             </div>

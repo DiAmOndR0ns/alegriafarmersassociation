@@ -221,26 +221,26 @@ export default function AnnouncementDashboard({
         {/* Total Announcements block */}
         <div className={`p-4 rounded-2xl border ${theme.cardBg} flex flex-col space-y-1.5 shadow-sm relative overflow-hidden`}>
           <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">Total</span>
-            <BookOpen className="w-4 h-4 text-[#2D6A4F]" />
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Total</span>
+            <BookOpen className="w-4 h-4 text-slate-400" />
           </div>
           <div>
             <span className="text-2xl font-black block leading-none">{totalCount}</span>
-            <span className="text-[9px] text-[#33473d] block mt-1">Official bulletins</span>
+            <span className="text-[9px] text-slate-400 block mt-1">Official bulletins</span>
           </div>
         </div>
 
         {/* Unread block */}
         <div className={`p-4 rounded-2xl border ${theme.cardBg} flex flex-col space-y-1.5 shadow-sm relative overflow-hidden`}>
           <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">Unread</span>
-            <Bell className={`w-4 h-4 ${unreadCount > 0 ? 'text-amber-600' : 'text-[#2D6A4F]'}`} />
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Unread</span>
+            <Bell className={`w-4 h-4 ${unreadCount > 0 ? 'text-amber-500 animate-swing' : 'text-slate-400'}`} />
           </div>
           <div>
             <span className={`text-2xl font-black block leading-none ${unreadCount > 0 ? theme.accentText : ''}`}>
               {unreadCount}
             </span>
-            <span className="text-[9px] text-[#33473d] block mt-1">Not yet read</span>
+            <span className="text-[9px] text-slate-400 block mt-1">Not yet read</span>
           </div>
           {unreadCount > 0 && (
             <span className="absolute top-0 right-0 w-3 h-3 bg-amber-500 rounded-bl-xl" />
@@ -250,38 +250,38 @@ export default function AnnouncementDashboard({
         {/* Urgent Warnings block */}
         <div className={`p-4 rounded-2xl border ${theme.cardBg} flex flex-col space-y-1.5 shadow-sm relative overflow-hidden`}>
           <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">Urgent</span>
-            <AlertTriangle className={`w-4 h-4 ${highPriorityCount > 0 ? 'text-rose-600' : 'text-[#2D6A4F]'}`} />
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Urgent</span>
+            <AlertTriangle className={`w-4 h-4 ${highPriorityCount > 0 ? 'text-rose-500' : 'text-slate-400'}`} />
           </div>
           <div>
-            <span className={`text-2xl font-black block leading-none ${highPriorityCount > 0 ? 'text-rose-600' : ''}`}>
+            <span className={`text-2xl font-black block leading-none ${highPriorityCount > 0 ? 'text-rose-500' : ''}`}>
               {highPriorityCount}
             </span>
-            <span className="text-[9px] text-[#33473d] block mt-1">Needs attention</span>
+            <span className="text-[9px] text-slate-400 block mt-1">Needs attention</span>
           </div>
         </div>
 
         {/* Assistance programs block */}
         <div className={`p-4 rounded-2xl border ${theme.cardBg} flex flex-col space-y-1.5 shadow-sm relative overflow-hidden`}>
           <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">Assistance</span>
-            <Tag className="w-4 h-4 text-emerald-700" />
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Assistance</span>
+            <Tag className="w-4 h-4 text-emerald-500" />
           </div>
           <div>
-            <span className="text-2xl font-black text-emerald-700 block leading-none">{assistanceCount}</span>
-            <span className="text-[9px] text-[#33473d] block mt-1">Seeds, materials, support</span>
+            <span className="text-2xl font-black text-emerald-600 block leading-none">{assistanceCount}</span>
+            <span className="text-[9px] text-slate-400 block mt-1">Seeds, materials, support</span>
           </div>
         </div>
 
         {/* Price Advisories block */}
         <div className={`p-4 rounded-2xl border ${theme.cardBg} col-span-2 lg:col-span-1 flex flex-col space-y-1.5 shadow-sm relative overflow-hidden`}>
           <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">Market</span>
-            <DollarSign className="w-4 h-4 text-blue-700" />
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Market</span>
+            <DollarSign className="w-4 h-4 text-blue-500" />
           </div>
           <div>
-            <span className="text-2xl font-black text-blue-700 block leading-none">{priceAdvisoryCount}</span>
-            <span className="text-[9px] text-[#33473d] block mt-1">Price updates</span>
+            <span className="text-2xl font-black text-blue-600 block leading-none">{priceAdvisoryCount}</span>
+            <span className="text-[9px] text-slate-400 block mt-1">Price updates</span>
           </div>
         </div>
 
@@ -304,7 +304,7 @@ export default function AnnouncementDashboard({
 
         {/* Category Filter */}
         <div className="space-y-1 w-full md:w-52">
-          <label className="block text-[9px] font-black text-[#1B4332] uppercase">Kategorya (Category)</label>
+          <label className="block text-[9px] font-black text-slate-400 uppercase">Kategorya (Category)</label>
           <select
             id="category-filter-select"
             value={selectedCategory}
@@ -322,7 +322,7 @@ export default function AnnouncementDashboard({
 
         {/* Priority Filter */}
         <div className="space-y-1 w-full md:w-44">
-          <label className="block text-[9px] font-black text-[#1B4332] uppercase">Lebel sa Importansya (Priority)</label>
+          <label className="block text-[9px] font-black text-slate-400 uppercase">Lebel sa Importansya (Priority)</label>
           <select
             id="priority-filter-select"
             value={selectedPriority}
@@ -460,21 +460,21 @@ export default function AnnouncementDashboard({
                       : 'bg-white border-[#E9E4D9] hover:border-[#1B4332]'
                   }`}
                 >
-                  <Phone className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <Phone className="w-4 h-4 text-emerald-500 shrink-0" />
                   <div>
-                    <span className="block text-[8px] text-[#33473d] uppercase leading-none">Tap to Call (Mobile)</span>
-                    <span className="block text-[#1B4332] font-mono font-bold text-xs">0917-654-3210</span>
+                    <span className="block text-[8px] text-slate-400 uppercase leading-none">Pindota para Tawgan (Mobile)</span>
+                    <span className="block text-slate-700 dark:text-slate-200 font-mono">0917-654-3210</span>
                   </div>
                 </a>
 
-                <div
+                <div 
                   className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-[10px] ${
                     isOfficerMode ? 'bg-slate-900/50 border-slate-800' : 'bg-[#FFF8E1]/40 border-[#FFE082]'
                   }`}
                 >
                   <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-[#33473d] leading-normal">
-                    <strong className="text-[#1B4332]">Pahinumdom:</strong> Ang tinuod nga presyo sa Copra ug Mais mag-agad sa matag semana nga advisory gikan sa Departamento sa Agrikultura (DA).
+                  <p className="text-slate-500 dark:text-slate-400 leading-normal">
+                    <strong>Pahinumdom:</strong> Ang tinuod nga presyo sa Copra ug Mais mag-agad sa matag semana nga advisory gikan sa Departamento sa Agrikultura (DA).
                   </p>
                 </div>
               </div>
@@ -483,12 +483,12 @@ export default function AnnouncementDashboard({
 
           {/* Quick Association Help / Guidelines */}
           <div className={`p-5 rounded-3xl border ${theme.cardBg} space-y-4.5 shadow-sm`}>
-            <h3 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5 border-b border-[#D5CFC1] pb-2.5">
-              <Shield className="w-4.5 h-4.5 text-[#2D6A4F]" />
+            <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2.5">
+              <Shield className="w-4.5 h-4.5 text-slate-400" />
               <span>Giya sa Pag-angkon og Benepisyo</span>
             </h3>
 
-            <div className="space-y-3 text-[11px] text-[#33473d] leading-relaxed">
+            <div className="space-y-3 text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
               <div className="flex gap-2.5">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-600 font-black text-[10px] flex items-center justify-center shrink-0">1</div>
                 <p>
@@ -523,21 +523,22 @@ export default function AnnouncementDashboard({
           className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
         >
           <div 
-            className="w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border bg-white border-[#E9E4D9] text-[#1B4332]"
+            className={`w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border ${
+              isOfficerMode ? 'bg-slate-900 border-slate-750 text-white' : 'bg-white border-[#E9E4D9] text-[#2D3A22]'
+            }`}
           >
             {/* Modal Header */}
-            <div className="bg-[#EAF4EC] px-6 py-4.5 border-b border-[#D5CFC1] flex justify-between items-center text-left">
+            <div className="bg-slate-950/40 px-6 py-4.5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center text-left">
               <div className="flex items-center gap-2">
                 {getCategoryIcon(selectedAnnouncement.category, "w-5 h-5")}
-                <span className="text-[11px] font-black tracking-widest text-[#1B4332] uppercase">
+                <span className="text-[11px] font-black tracking-widest text-slate-400 uppercase">
                   {getCategoryLabel(selectedAnnouncement.category).en}
                 </span>
               </div>
-              <button
+              <button 
                 id="close-bulletin-modal-btn"
                 onClick={() => setSelectedAnnouncement(null)}
-                aria-label="Close bulletin"
-                className="text-black hover:text-rose-700 hover:bg-rose-100 rounded-lg w-8 h-8 flex items-center justify-center text-2xl font-bold border border-[#D5CFC1] bg-white transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-white dark:hover:text-slate-100 text-2xl font-bold p-1 cursor-pointer"
               >
                 &times;
               </button>
@@ -568,32 +569,32 @@ export default function AnnouncementDashboard({
                   {selectedAnnouncement.title}
                 </h2>
 
-                <div className="grid grid-cols-2 gap-4 p-3.5 rounded-2xl border text-[11px] font-medium bg-[#F7F4EF] border-[#D5CFC1] text-[#33473d]">
+                <div className={`grid grid-cols-2 gap-4 p-3.5 rounded-2xl border text-[11px] font-medium ${isOfficerMode ? 'bg-slate-950/40 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
                   <div>
-                    <p>Date Posted:</p>
-                    <strong className="block text-xs mt-0.5 text-[#1B4332]">{selectedAnnouncement.datePosted}</strong>
+                    <p>Adlaw nga Gi-post (Date Posted):</p>
+                    <strong className={`block text-xs mt-0.5 ${isOfficerMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedAnnouncement.datePosted}</strong>
                   </div>
                   <div>
-                    <p>Posted By:</p>
-                    <strong className="block text-xs mt-0.5 text-[#1B4332]">{selectedAnnouncement.postedBy}</strong>
+                    <p>Nag-post sa Bulletin (Posted By):</p>
+                    <strong className={`block text-xs mt-0.5 ${isOfficerMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedAnnouncement.postedBy}</strong>
                   </div>
                 </div>
               </div>
 
               {/* Real content */}
-              <div className="text-sm leading-relaxed whitespace-pre-line text-justify font-sans text-[#1B4332] p-1">
+              <div className={`text-sm leading-relaxed whitespace-pre-line text-justify font-sans ${theme.subText} p-1`}>
                 {selectedAnnouncement.content}
               </div>
 
               {/* Action Buttons */}
-              <div className="border-t border-[#D5CFC1] pt-5 flex flex-col sm:flex-row gap-3">
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-5 flex flex-col sm:flex-row gap-3">
                 <button
                   id="print-bulletin-btn"
                   onClick={() => handlePrintAnnouncement(selectedAnnouncement)}
-                  className="flex-1 py-3 px-4 rounded-xl text-xs font-black bg-white hover:bg-[#EAF4EC] text-[#1B4332] flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-[#D5CFC1]"
+                  className="flex-1 py-3 px-4 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-300"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Print Bulletin</span>
+                  <span>I-print kini nga Anunsyo (Print Bulletin)</span>
                 </button>
 
                 <button
@@ -601,7 +602,7 @@ export default function AnnouncementDashboard({
                   onClick={() => setSelectedAnnouncement(null)}
                   className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-colors cursor-pointer text-center ${theme.primaryButton}`}
                 >
-                  Understood / Close
+                  Nahibal-an Na / Sige (Understood / Close)
                 </button>
               </div>
             </div>

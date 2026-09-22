@@ -811,9 +811,11 @@ export default function OfficerReportModal({
             <div className="min-w-0">
               <h2 className="text-sm sm:text-base font-black text-[#1B4332] uppercase tracking-wider flex flex-wrap items-center gap-2">
                 <span className="truncate">{isPresident ? "President's Executive Summary & Export Center" : `${currentRole.replace('_', ' ')} Official Report Center`}</span>
+                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] px-2 py-0.5 rounded-full shrink-0 font-mono">
+                  AFA Tuburan                </span>
               </h2>
               <p className="text-xs text-[#4A5F57] font-medium truncate">
-                {isPresident
+                {isPresident 
                   ? "Generate and export the consolidated summary of all executive officer reports with budget origins."
                   : `Generate, export, or print the official ${currentRole.replace('_', ' ')} department report with full budget source traceability.`}
               </p>
@@ -836,28 +838,28 @@ export default function OfficerReportModal({
               <div className="flex items-center gap-2.5 min-w-0">
                 <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
                 <div className="min-w-0">
-                  <span className="font-extrabold text-[#1B4332] block">Official {currentRole.replace('_', ' ')} Department Report</span>
-                  <p className="text-[11px] text-[#3A4A42]">
+                  <span className="font-extrabold text-white block">Official {currentRole.replace('_', ' ')} Department Report</span>
+                  <p className="text-[11px] text-slate-300">
                     As {currentRole.replace('_', ' ')}, you can export or print your department's official records with verified budget source allocations.
                   </p>
                 </div>
               </div>
-              <span className="bg-[#1B4332] text-[#D8F3DC] font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#2D6A4F] font-bold shrink-0">
+              <span className="bg-emerald-500/20 text-emerald-300 font-mono text-[10px] px-2.5 py-1 rounded-lg border border-emerald-500/40 font-bold shrink-0">
                 {currentRole} Report Only
               </span>
             </div>
           ) : (
-            <div className="bg-[#F0EDE7] border border-[#D5CFC1] p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="bg-purple-950/40 border border-purple-500/30 p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
-                <FileText className="w-5 h-5 text-[#1B4332] shrink-0" />
+                <FileText className="w-5 h-5 text-purple-400 shrink-0" />
                 <div className="min-w-0">
-                  <span className="font-extrabold text-[#1B4332] block">President's Executive Consolidated Access</span>
-                  <p className="text-[11px] text-[#3A4A42]">
+                  <span className="font-extrabold text-white block">President's Executive Consolidated Access</span>
+                  <p className="text-[11px] text-slate-300">
                     Exporting consolidated executive summaries across all executive officers with full treasury and capital breakdown (DOLE, DSWD-SLP, ATI, FCCT, Dispersal Pool, CBU).
                   </p>
                 </div>
               </div>
-              <span className="bg-[#1B4332] text-[#D8F3DC] font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#2D6A4F] font-bold shrink-0">
+              <span className="bg-purple-500/20 text-purple-300 font-mono text-[10px] px-2.5 py-1 rounded-lg border border-purple-500/40 font-bold shrink-0">
                 President Mode
               </span>
             </div>
@@ -994,9 +996,9 @@ export default function OfficerReportModal({
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Net Fund</span>
                     <p className="text-sm font-mono font-bold text-emerald-700">PHP {netBalance.toLocaleString()}</p>
                   </div>
-                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
-                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Capital Allocation</span>
-                    <p className="text-sm font-mono font-bold text-amber-700">PHP {hogCapital.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>                  </div>
+                  <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold">Capital Allocation</span>
+                    <p className="text-sm font-mono font-bold text-amber-400">PHP {hogCapital.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>                  </div>
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Audit Rate</span>
                     <p className="text-sm font-mono font-bold text-emerald-700">{auditComplianceRate}%</p>
@@ -1051,18 +1053,30 @@ export default function OfficerReportModal({
                 value={customRemarks}
                 onChange={(e) => setCustomRemarks(e.target.value)}
                 placeholder="e.g., Reports compiled for Tuburan LGU Municipal Agriculture Audit & Annual AFA General Assembly."
-                className="w-full px-3 py-2 bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] text-xs focus:outline-none focus:border-emerald-500 font-sans"              />
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-white text-xs focus:outline-none focus:border-emerald-500 font-sans"              />
             </div>
           </div>
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="p-4 sm:p-5 bg-[#F0EDE7] border-t border-[#D5CFC1] flex flex-col sm:flex-row justify-between items-center gap-3 w-full">
-          <div className="text-[10px] text-[#4A5F57] font-mono text-center sm:text-left">
+        <div className="p-4 sm:p-5 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-3 w-full">
+          <div className="text-[10px] text-slate-500 font-mono text-center sm:text-left">
             Barangay Alegria Farmers Association • Tuburan, Cebu
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2.5 w-full sm:w-auto">
+            {currentRole === 'President' && onDownloadBackup && (
+              <button
+                type="button"
+                onClick={onDownloadBackup}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-200 text-xs font-black transition-all cursor-pointer shadow-sm whitespace-nowrap"
+                title="Download formatted JSON backup of all local association data"
+              >
+                <Download className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Download System Backup</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleExportCSV}
