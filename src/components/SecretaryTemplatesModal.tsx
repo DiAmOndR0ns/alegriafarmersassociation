@@ -292,15 +292,14 @@ export default function SecretaryTemplatesModal({
               <h3 className="text-base sm:text-xl font-black font-display tracking-wide">
                 Secretary Document & Letter Templates
               </h3>
-              <p className="text-xs sm:text-sm text-[#D8F3DC]">
+              <p className="text-xs text-emerald-200">
                 Official Letter of Intent, Board Resolution & Project Request Generator
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            aria-label="Close templates"
-            className="p-2 rounded-full transition-colors cursor-pointer text-[#D8F3DC] hover:text-white bg-white/5 border border-[#52B788]/60 hover:bg-white/15"
+            className="p-2 hover:bg-white/10 rounded-full transition-colors cursor-pointer text-slate-300 hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>
@@ -323,7 +322,7 @@ export default function SecretaryTemplatesModal({
               }`}
             >
               <span>{t.label}</span>
-              <span className={`text-[10px] font-semibold ${selectedTemplate === t.id ? 'text-[#D8F3DC]' : 'text-slate-600'}`}>{t.desc}</span>
+              <span className={`text-[10px] font-normal ${selectedTemplate === t.id ? 'text-emerald-200' : 'text-slate-500'}`}>{t.desc}</span>
             </button>
           ))}
         </div>

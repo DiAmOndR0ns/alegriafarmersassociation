@@ -33,14 +33,13 @@ export default function PioView({
   const [showAddModal, setShowAddModal] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState<string>('General');
-  const [customCategory, setCustomCategory] = useState('');
+  const [category, setCategory] = useState<'General' | 'Meeting' | 'Assistance' | 'Weather' | 'Price Advisory'>('General');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High'>('Low');
 
   // Activity State
   const [showAddActivityModal, setShowAddActivityModal] = useState(false);
   const [editingActivity, setEditingActivity] = useState<AssociationActivity | null>(null);
-
+  
   const [actTitle, setActTitle] = useState('');
   const [actCebTitle, setActCebTitle] = useState('');
   const [actCategory, setActCategory] = useState<AssociationActivity['category']>('Training / Workshop');
@@ -67,7 +66,7 @@ export default function PioView({
 
     onAddAnnouncement({
       title,
-      category: (category === 'Other' ? (customCategory.trim() || 'General') : category) as any,
+      category,
       content,
       priority,
       postedBy: 'PIO (Ida S. Manera)'
@@ -76,7 +75,6 @@ export default function PioView({
     setTitle('');
     setContent('');
     setCategory('General');
-    setCustomCategory('');
     setPriority('Low');
     setShowAddModal(false);
   };
@@ -418,53 +416,48 @@ export default function PioView({
       {/* CREATE ANNOUNCEMENT MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
-            <div className="bg-[#EAF4EC] px-5 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
-              <h3 className="font-bold text-[#1B4332] text-base">Post to Public Announcement Board</h3>
-              <button
+          <div className="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
+              <h3 className="font-bold text-white text-base">Post to Public Announcement Board</h3>
+              <button 
                 onClick={() => setShowAddModal(false)}
-                aria-label="Close announcement form"
-                className="text-black hover:text-rose-700 hover:bg-rose-100 rounded-lg w-8 h-8 flex items-center justify-center text-lg font-bold border border-[#D5CFC1] bg-white transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-white text-lg font-bold"
               >
                 &times;
               </button>
             </div>
             <form onSubmit={handlePostSubmit} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Bulletin Title</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Bulletin Title</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Schedule of Seeds & Fertilizer Distribution"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Category Type</label>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Category Type</label>
                   <select
                     value={category}
-                    onChange={(e) => {
-                      if (e.target.value === 'Other') setCustomCategory('');
-                      setCategory(e.target.value as any);
-                    }}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
+                    onChange={(e) => setCategory(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                   >
                     {CATEGORIES.map(cat => (
                       <option key={cat.value} value={cat.value}>{cat.label}</option>
                     ))}
-                    <option value="Other">Other (Iba pa — type your own)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Priority Badge</label>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Priority Badge</label>
                   <select
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                   >
                     <option value="Low">Low Priority</option>
                     <option value="Medium">Medium Priority</option>
@@ -473,29 +466,15 @@ export default function PioView({
                 </div>
               </div>
 
-              {category === 'Other' && (
-                <div>
-                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">New Category Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Livestock Advisory, Cooperative Notice"
-                    value={customCategory}
-                    onChange={(e) => setCustomCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
-                  />
-                </div>
-              )}
-
               <div>
-                <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Announcement Content</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Announcement Content</label>
                 <textarea
                   rows={5}
                   required
                   placeholder="Write clear, comprehensive details for the Barangay Alegria farming community..."
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] font-sans"
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500 font-sans"
                 />
               </div>
 
@@ -503,13 +482,13 @@ export default function PioView({
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2.5 text-sm font-semibold bg-white border border-[#B8CDBE] hover:bg-[#F5F8F4] text-[#1B4332] rounded-xl transition-all cursor-pointer"
+                  className="flex-1 py-2.5 text-sm font-semibold bg-slate-700 hover:bg-slate-650 text-slate-200 rounded-xl transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 text-sm font-black bg-[#2D6A4F] hover:bg-[#1B4332] text-white rounded-xl shadow-sm transition-all cursor-pointer"
+                  className="flex-1 py-2.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all cursor-pointer"
                 >
                   Publish Broadcast
                 </button>
