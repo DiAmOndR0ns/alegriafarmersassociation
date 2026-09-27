@@ -10,6 +10,13 @@ export const OFFICIAL_ALEGRIA_SITIOS = [
 
 export type AlegriaSitio = typeof OFFICIAL_ALEGRIA_SITIOS[number];
 
+export interface MemberAffiliation {
+  id: string; // Unique identifier for key
+  name: string; // e.g. "Senior Citizen ID", "PWD ID", "4Ps / DSWD", "FCCT Cooperative", "PCA Coconut Farmers (CFIDP)", "Tuburan Coffee Growers"
+  idNumber?: string; // e.g. "SC-2024-8819", "PWD-7712", "4PS-072251-01"
+  type?: 'Senior Citizen' | 'PWD' | '4Ps / DSWD' | 'Cooperative' | 'Farmers Association' | 'Government Agency' | 'Other' | string;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -29,6 +36,7 @@ export interface User {
   joinedDate?: string;
   status?: 'Active' | 'Inactive'; // for Member status
   resetRequested?: boolean; // True if they applied to reset their password
+  affiliations?: MemberAffiliation[]; // Other IDs or organizations aside from RSBSA
 }
 
 export interface Member {
@@ -46,6 +54,7 @@ export interface Member {
   avatarUrl?: string;
   gender?: 'Male' | 'Female' | 'Other';
   birthDate?: string;
+  affiliations?: MemberAffiliation[]; // Other IDs or organizations aside from RSBSA (e.g., Senior Citizen, PWD, 4Ps, Cooperative)
 }
 
 export interface Meeting {

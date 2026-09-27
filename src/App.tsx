@@ -28,7 +28,7 @@ import { buildAuditChain, hashPassword, sanitizeUserForStorage } from './utils/a
 import { 
   Building, ShieldCheck, Megaphone, Users, Coins, 
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
-  ChevronLeft, ChevronRight, Download
+  ChevronLeft, ChevronRight, Download, Trash2, Database
 } from 'lucide-react';
 
 export default function App() {
@@ -88,6 +88,8 @@ export default function App() {
   const [officerTab, setOfficerTab] = useState<'tasks' | 'hog-raising' | 'announcements' | 'member-view' | 'products'>('tasks');
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
+  const [showPurgeConfirmModal, setShowPurgeConfirmModal] = useState<boolean>(false);
+  const [showClearCacheConfirmModal, setShowClearCacheConfirmModal] = useState<boolean>(false);
 
   // Core App Data States (hydrated from localStorage or initials)
   const [members, setMembers] = useState<Member[]>([]);
@@ -723,10 +725,12 @@ export default function App() {
   };
 
   // Permanently Purge All Demo & Dummy Seed Records from Supabase and Local Storage
-  const handlePurgeAllDummyData = async () => {
-    if (!window.confirm("Are you sure you want to permanently delete all demo/seed data? This will clear all dummy records in Supabase and local browser cache so you can start inputting real data.")) {
-      return;
-    }
+  const handlePurgeAllDummyData = () => {
+    setShowPurgeConfirmModal(true);
+  };
+
+  const executePurgeAllDummyData = async () => {
+    setShowPurgeConfirmModal(false);
     setIsPurging(true);
     showToastMessage('Purging all demo and seed data from Supabase & local storage...', 'info');
 
@@ -781,20 +785,23 @@ export default function App() {
       showToastMessage('Cannot purge local browser cache while database is disconnected! Connect to Supabase first to prevent data loss.', 'error');
       return;
     }
-    if (window.confirm('Clear all local browser table caches? All association records are safely stored in your live Supabase database. Clearing local cache enforces Zero-Residual confidential storage on this computer.')) {
-      localStorage.removeItem('bafa_members');
-      localStorage.removeItem('bafa_meetings');
-      localStorage.removeItem('bafa_resolutions');
-      localStorage.removeItem('bafa_transactions');
-      localStorage.removeItem('bafa_announcements');
-      localStorage.removeItem('bafa_products');
-      localStorage.removeItem('bafa_activities');
-      localStorage.removeItem('bafa_funds');
-      localStorage.removeItem('bafa_hog_raising');
-      localStorage.removeItem('bafa_logs');
-      localStorage.removeItem('bafa_sync_queue');
-      showToastMessage('Local browser cache cleared! Operating in Zero-Residual Cloud Database mode.', 'success');
-    }
+    setShowClearCacheConfirmModal(true);
+  };
+
+  const executeClearLocalCache = () => {
+    setShowClearCacheConfirmModal(false);
+    localStorage.removeItem('bafa_members');
+    localStorage.removeItem('bafa_meetings');
+    localStorage.removeItem('bafa_resolutions');
+    localStorage.removeItem('bafa_transactions');
+    localStorage.removeItem('bafa_announcements');
+    localStorage.removeItem('bafa_products');
+    localStorage.removeItem('bafa_activities');
+    localStorage.removeItem('bafa_funds');
+    localStorage.removeItem('bafa_hog_raising');
+    localStorage.removeItem('bafa_logs');
+    localStorage.removeItem('bafa_sync_queue');
+    showToastMessage('Local browser cache cleared! Operating in Zero-Residual Cloud Database mode.', 'success');
   };
 
   const handleClearQueue = () => {
@@ -901,7 +908,8 @@ export default function App() {
         primaryCrops: newMember.primaryCrops,
         contactNumber: newMember.contactNumber,
         joinedDate: newMember.joinedDate,
-        status: newMember.status
+        status: newMember.status,
+        affiliations: newMember.affiliations
       };
 
       updatedUsers = [newMemberUser, ...users.filter(u => u.username.toLowerCase() !== cleanUsername && u.id !== newId)];
@@ -922,6 +930,42 @@ export default function App() {
     } else {
       addToSyncQueue('create', 'member', newMember);
       showToastMessage(`Registered ${newMember.name} offline. Ready to sync when connected.`);
+    }
+  };
+
+  const handleUpdateMember = (updatedMember: Member) => {
+    const updatedMembers = members.map(m => m.id === updatedMember.id ? updatedMember : m);
+    setMembers(updatedMembers);
+    updateStorage('bafa_members', updatedMembers);
+
+    // Also update linked user profile if exists
+    const updatedUsers = users.map(u => {
+      if (u.id === updatedMember.id || (updatedMember.memberIdNumber && u.memberIdNumber === updatedMember.memberIdNumber) || u.name.toLowerCase() === updatedMember.name.toLowerCase()) {
+        return {
+          ...u,
+          name: updatedMember.name,
+          memberIdNumber: updatedMember.memberIdNumber,
+          rsbsaNumber: updatedMember.rsbsaNumber,
+          isRsbsaRegistered: updatedMember.isRsbsaRegistered,
+          farmLocation: updatedMember.farmLocation,
+          primaryCrops: updatedMember.primaryCrops,
+          contactNumber: updatedMember.contactNumber,
+          status: updatedMember.status,
+          affiliations: updatedMember.affiliations
+        };
+      }
+      return u;
+    });
+    setUsers(updatedUsers);
+    updateStorage('bafa_users', updatedUsers);
+
+    if (isOnline) {
+      logAction('Updated Farmer Record', `Secretary updated details & IDs for: ${updatedMember.name}`);
+      showToastMessage(`Updated ${updatedMember.name}'s information and affiliations!`, 'success');
+      pushAllDataToCloud({ members: updatedMembers, users: updatedUsers }, { silent: true, source: 'Member Updated' });
+    } else {
+      addToSyncQueue('update', 'member', updatedMember);
+      showToastMessage(`Updated ${updatedMember.name} offline. Ready to sync when connected.`, 'warning');
     }
   };
 
@@ -1832,7 +1876,8 @@ export default function App() {
       primaryCrops: updatedUser.primaryCrops,
       contactNumber: updatedUser.contactNumber,
       status: updatedUser.status,
-      joinedDate: updatedUser.joinedDate
+      joinedDate: updatedUser.joinedDate,
+      affiliations: updatedUser.affiliations
     };
 
     const updatedUsers = users.map(u => u.id === owner.id ? ownedProfile : u);
@@ -1844,13 +1889,14 @@ export default function App() {
 
     // Sync member list details if they are a member
     if (ownedProfile.role === 'Member') {
-      const updatedMembers = members.map(m => m.id === ownedProfile.id ? {
+      const updatedMembers = members.map(m => (m.id === ownedProfile.id || (ownedProfile.memberIdNumber && m.memberIdNumber === ownedProfile.memberIdNumber) || m.name.toLowerCase() === ownedProfile.name.toLowerCase()) ? {
         ...m,
         name: ownedProfile.name,
         farmLocation: ownedProfile.farmLocation || m.farmLocation,
         primaryCrops: ownedProfile.primaryCrops || m.primaryCrops,
         contactNumber: ownedProfile.contactNumber || m.contactNumber,
-        avatarUrl: ownedProfile.avatarUrl
+        avatarUrl: ownedProfile.avatarUrl,
+        affiliations: ownedProfile.affiliations || m.affiliations
       } : m);
       setMembers(updatedMembers);
       updateStorage('bafa_members', updatedMembers);
@@ -2010,21 +2056,89 @@ export default function App() {
 
   if (currentUser.role === 'Member') {
     return (
-      <div id="member-screen-wrapper" className="min-h-screen bg-[#FAF8F5]">
-        <MemberDashboard
-          currentUser={currentUser}
-          onUpdateProfile={handleUpdateProfile}
-          onLogout={handleLogout}
-          toast={showToastMessage}
-          announcements={announcements}
-          hogRaisingState={hogRaising}
-          members={members}
-          onAddChoreLog={handleAddPigChore}
-          products={products}
-          activities={activities}
-        />
+      <div id="member-screen-wrapper" className="min-h-screen bg-[#F5F2EB] text-slate-900 flex flex-col font-sans">
+        {/* TOP HEADER NAVIGATION AND IDENTIFIER FOR MEMBER PORTAL */}
+        <header className="bg-[#1B4332] border-b-2 border-[#122E22] py-3 sm:py-4 px-3.5 sm:px-6 shrink-0 shadow-md text-white no-print">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 max-w-full">
+              <div className="bg-[#D8F3DC] rounded-2xl shadow-inner text-[#1B4332] shrink-0 overflow-hidden border border-[#a8d5b0]">
+                <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-10 h-10 sm:w-12 sm:h-12 object-cover block" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <h1 className="text-base sm:text-lg font-black tracking-tight text-white uppercase font-display break-words">Alegria Farmers Association</h1>
+                  <span className="text-[9px] sm:text-[10px] bg-bafa-600 text-bafa-100 px-2 py-0.5 rounded-full border border-bafa-500 font-black font-mono shrink-0">
+                    Member Portal
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-[#D8F3DC]/80 mt-0.5 font-medium truncate">Tuburan, Cebu Province • Official Member Suite</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 sm:gap-2.5 w-full sm:w-auto max-w-full">
+              {/* Active session bar with prominent Logout button */}
+              <div className="flex items-center justify-between gap-2.5 bg-[#081C15] px-3 py-1.5 rounded-2xl border-2 border-[#52B788] w-full sm:w-auto min-w-0 shrink-0 shadow-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-xl bg-[#D8F3DC] text-[#1B4332] font-mono font-black flex items-center justify-center text-xs shrink-0 uppercase shadow-xs">
+                    {currentUser?.name.substring(0, 2)}
+                  </div>
+                  <div className="text-left min-w-0">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] bg-[#2D6A4F] text-[#D8F3DC] font-mono font-black uppercase px-1.5 py-0.2 rounded shrink-0">
+                        Active Member
+                      </span>
+                      <span className="text-xs font-black text-white truncate max-w-[130px] sm:max-w-[160px]">{currentUser?.name}</span>
+                    </div>
+                    <span className="block text-[10px] text-[#D8F3DC] font-bold uppercase tracking-wide truncate">
+                      {currentUser?.farmLocation || 'Tuburan, Cebu'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  id="header-member-logout-btn"
+                  type="button"
+                  onClick={handleLogout}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-xs cursor-pointer transition-all shadow-sm flex items-center gap-1.5 shrink-0 border border-rose-500"
+                  title="Sign out of member portal"
+                >
+                  <LogOut className="w-4 h-4 shrink-0" />
+                  <span>Gawas (Logout)</span>
+                </button>
+              </div>
+
+              {/* Offline Switch & Sync Trigger */}
+              <OfflineIndicator
+                isOnline={isOnline}
+                queueCount={syncQueue.length}
+                onSync={handleSynchronize}
+                isSyncing={isSyncing}
+                dbStatus={dbStatus}
+                onCheckDb={checkDatabaseConnection}
+                onPurgeDb={handlePurgeAllDummyData}
+                isPurging={isPurging}
+                onClearLocalCache={handleClearLocalCache}
+              />
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-7xl w-full mx-auto p-3.5 sm:p-6">
+          <MemberDashboard
+            currentUser={currentUser}
+            onUpdateProfile={handleUpdateProfile}
+            onLogout={handleLogout}
+            toast={showToastMessage}
+            announcements={announcements}
+            hogRaisingState={hogRaising}
+            members={members}
+            onAddChoreLog={handleAddPigChore}
+            products={products}
+            activities={activities}
+          />
+        </main>
+
         {toast && (
-          <div className="fixed bottom-6 right-6 z-50">
+          <div className="fixed bottom-6 right-6 z-50 animate-bounce-short">
             <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${
               toast.type === 'success'
                 ? 'bg-[#1B4332] text-[#D8F3DC] border-[#2D6A4F]'
@@ -2104,11 +2218,14 @@ export default function App() {
                 </div>
               </div>
               <button
+                id="header-officer-logout-btn"
+                type="button"
                 onClick={handleLogout}
-                className="p-1.5 hover:bg-rose-900/50 hover:text-rose-200 rounded-xl text-slate-300 cursor-pointer transition-colors border border-transparent hover:border-rose-400/30 shrink-0 ml-1"
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-xs cursor-pointer transition-all shadow-sm flex items-center gap-1.5 shrink-0 border border-rose-500 ml-1"
                 title="Sign out of administration suite"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-4 h-4 shrink-0" />
+                <span>Gawas (Logout)</span>
               </button>
             </div>
 
@@ -2195,6 +2312,17 @@ export default function App() {
                 <span className="truncate">Download Backup</span>
               </button>
             )}
+
+            <button
+              id="sidebar-nav-logout"
+              type="button"
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-rose-950/40 text-rose-200 border border-rose-800/40 hover:bg-rose-900 hover:text-white hover:border-rose-700 transition-all cursor-pointer mt-2"
+              title="Sign out of administration suite"
+            >
+              <LogOut className="w-4.5 h-4.5 shrink-0 text-rose-400" />
+              <span className="truncate">Gawas (Logout)</span>
+            </button>
           </nav>
 
           {/* Footer status */}
@@ -2307,6 +2435,28 @@ export default function App() {
                     Officer as Member
                   </span>
                 </button>
+
+                <button
+                  id="officer-products-tab-btn"
+                  type="button"
+                  role="tab"
+                  aria-selected={officerTab === 'products'}
+                  onClick={() => {
+                    setOfficerTab('products');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl relative ${
+                    officerTab === 'products'
+                      ? 'border-[#1B4332] text-[#1B4332] bg-[#EAF4EC]'
+                      : 'border-transparent text-slate-700 hover:text-[#1B4332] hover:bg-[#F2EFE9]'
+                  }`}
+                >
+                  <ShoppingBag className="w-4 h-4 text-[#1B4332]" />
+                  <span>Products Catalog</span>
+                  <span className="bg-[#1B4332]/10 text-[#1B4332] border border-[#1B4332]/20 text-[9px] px-2 py-0.5 rounded-full font-black ml-1">
+                    Market
+                  </span>
+                </button>
               </div>
 
             </div>
@@ -2348,6 +2498,7 @@ export default function App() {
                 members={members}
                 users={users}
                 onAddMember={handleAddMember}
+                onUpdateMember={handleUpdateMember}
                 onUpdateMemberStatus={handleUpdateMemberStatus}
                 onDeleteMember={handleDeleteMember}
                 onManageMemberLogin={handleManageMemberLogin}
@@ -2535,6 +2686,92 @@ export default function App() {
           onDeleteProduct={handleDeleteProduct}
           onClose={() => setShowProductModal(false)}
         />
+      )}
+
+      {/* CONFIRM PURGE ALL DEMO DATA IN-MODAL DIALOG */}
+      {showPurgeConfirmModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in text-left">
+          <div className="bg-[#FAF8F5] border-2 border-rose-600/50 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3 border-b border-[#D5CFC1] pb-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-700 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-[#1B4332] text-base">I-delete ang Tanan nga Demo / Seed Data?</h3>
+                <p className="text-xs text-[#4A5F57]">Purge Demo Records from Database & Storage</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#D5CFC1] p-4 rounded-2xl space-y-2">
+              <p className="text-xs text-[#1B4332] leading-relaxed font-medium">
+                Sigurado ka ba nga gusto nimo papason ang tanang dummy/seed records sa Supabase ug local browser cache?
+              </p>
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold leading-relaxed">
+                ⚠️ Kini maglimpyo sa listahan aron makasugod na kamo sa pagpasulod sa tinuod nga opisyal nga mga records sa Alegria Farmers Association.
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowPurgeConfirmModal(false)}
+                className="flex-1 py-2.5 bg-white hover:bg-[#F0EDE7] text-[#4A5F57] rounded-xl text-xs font-bold border border-[#D5CFC1] transition-all cursor-pointer"
+              >
+                Kanselahon
+              </button>
+              <button
+                type="button"
+                onClick={executePurgeAllDummyData}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+              >
+                Oo, I-purge ang Demo Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM CLEAR LOCAL CACHE IN-MODAL DIALOG */}
+      {showClearCacheConfirmModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in text-left">
+          <div className="bg-[#FAF8F5] border-2 border-amber-600/50 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3 border-b border-[#D5CFC1] pb-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-800 shrink-0">
+                <Database className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-[#1B4332] text-base">Limpyohan ang Local Browser Cache?</h3>
+                <p className="text-xs text-[#4A5F57]">Enforce Zero-Residual Confidential Storage</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#D5CFC1] p-4 rounded-2xl space-y-2">
+              <p className="text-xs text-[#1B4332] leading-relaxed font-medium">
+                Limpyohan ang local browser table caches niini nga device? Ang tanang opisyal nga records luwas nga nakasulod ug naka-sync sa inyong live Supabase database.
+              </p>
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-semibold">
+                🔒 Ang paglimpyo sa cache magpatuman sa Zero-Residual confidential storage policy sa maong kompyuter.
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowClearCacheConfirmModal(false)}
+                className="flex-1 py-2.5 bg-white hover:bg-[#F0EDE7] text-[#4A5F57] rounded-xl text-xs font-bold border border-[#D5CFC1] transition-all cursor-pointer"
+              >
+                Kanselahon
+              </button>
+              <button
+                type="button"
+                onClick={executeClearLocalCache}
+                className="flex-1 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+              >
+                Oo, Limpyohan ang Cache
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

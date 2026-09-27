@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Announcement, HogRaisingState, IgpChoreLog, Member, Product, AssociationActivity } from '../types';
+import { User, Announcement, HogRaisingState, IgpChoreLog, Member, Product, AssociationActivity, MemberAffiliation } from '../types';
 import { 
   User as UserIcon, MapPin, Smartphone, Layers, Tag, Calendar, 
   Printer, Upload, LogOut, FileText, CheckCircle, CreditCard, 
   AlertCircle, Award, ShieldCheck, Trash2, Image as ImageIcon, Check, Sprout, Landmark, Building,
-  Megaphone, Search, Bell, ChevronDown, ChevronUp, Briefcase, ShoppingBag, Clock, Coffee,  ChevronLeft, ChevronRight
+  Megaphone, Search, Bell, ChevronDown, ChevronUp, Briefcase, ShoppingBag, Clock, Coffee,  ChevronLeft, ChevronRight, Plus
 } from 'lucide-react';
 import AnnouncementDashboard from './AnnouncementDashboard';
 import HogRaisingIgpTracker from './HogRaisingIgpTracker';
+import AffiliationManager from './AffiliationManager';
 
 interface MemberDashboardProps {
   currentUser: User;
@@ -65,9 +66,19 @@ export default function MemberDashboard({
   const [contact, setContact] = useState(currentUser.contactNumber || '');
   const [sitio, setSitio] = useState(currentUser.farmLocation || SITIOS[0]);
   const [selectedCrops, setSelectedCrops] = useState<string[]>(currentUser.primaryCrops || []);
+  const [affiliations, setAffiliations] = useState<MemberAffiliation[]>(currentUser.affiliations || []);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'announcements' | 'hog-raising' | 'products' | 'activities'>('profile');
+
+  // Sync state if currentUser changes
+  useEffect(() => {
+    setName(currentUser.name);
+    setContact(currentUser.contactNumber || '');
+    setSitio(currentUser.farmLocation || SITIOS[0]);
+    setSelectedCrops(currentUser.primaryCrops || []);
+    setAffiliations(currentUser.affiliations || []);
+  }, [currentUser]);
 
   // Announcement state hooks
   const [searchQuery, setSearchQuery] = useState('');
@@ -109,7 +120,8 @@ export default function MemberDashboard({
       name: name.trim(),
       contactNumber: contact.trim(),
       farmLocation: sitio,
-      primaryCrops: selectedCrops
+      primaryCrops: selectedCrops,
+      affiliations: affiliations
     });
 
     setIsEditing(false);
@@ -187,35 +199,126 @@ export default function MemberDashboard({
     });
   }, [products]);
 
+  const publishedProductsCount = products.filter(p => p.isPublished).length;
+  const unreadAnnouncementsCount = announcements.filter(ann => !readAnnouncements.includes(ann.id)).length;
+
   return (
-    <div id="member-dashboard-root" className="space-y-4 text-[#2D3A22]">
+    <div id="member-dashboard-root" className="space-y-4 sm:space-y-5 text-[#2D3A22]">
       
-      {/* HEADER ACTION AREA */}
-      <div className="bg-[#EAF4EC] text-[#1B4332] p-5 rounded-3xl border-2 border-[#2D6A4F]/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 no-print text-left shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
+      {/* HEADER GREETING BANNER */}
+      <div className="bg-[#EAF4EC] text-[#1B4332] p-5 sm:p-6 rounded-3xl border-2 border-[#2D6A4F]/30 no-print text-left shadow-sm">
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="bg-[#1B4332] text-[#D8F3DC] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              AFA Regular Member            </span>
+              AFA Regular Member
+            </span>
             <span className="bg-amber-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm">
               <ShieldCheck className="w-3 h-3" />
               Active Member
             </span>
+            <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">
+              📍 {currentUser.farmLocation || 'Tuburan, Cebu'}
+            </span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-black text-[#1B4332] mt-2 font-display">
-            Welcome, {currentUser.name}!
+          <h2 className="text-xl sm:text-2xl font-black text-[#1B4332] font-display break-words">
+            Maayong Pag-abot, {currentUser.name}!
           </h2>
-          <p className="text-xs sm:text-sm text-[#33473d] mt-1 max-w-xl font-medium">
-            This is your official member portal. You can update your profile photo, register farm parcels, view attendance dividends, and print your certified AFA membership ID.
+          <p className="text-xs sm:text-sm text-[#33473d] max-w-2xl font-semibold leading-relaxed">
+            Kini ang opisyal nga portal sa mga miyembro sa Alegria Farmers Association. Mahimo nimong usbon ang imong hulagway, susihon ang mga anunsyo ug baboyan, tan-awon ang mga abot, ug i-print ang imong opisyal nga AFA ID.
           </p>
         </div>
-
-        <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1 no-print" />
-
-        {/* Right Arrow Indicator */}
-        <div className="hidden sm:flex absolute right-0 z-10 p-1 bg-gradient-to-l from-[#FAF8F5] via-[#FAF8F5] to-transparent items-center text-[#1B4332]">
-          <ChevronRight className="w-5 h-5 text-[#BF360C] animate-bounce-x" />
-        </div>
       </div>
+
+      {/* MEMBER NAVIGATION TABS BAR (Senior Citizen Accessible) */}
+      <nav className="bg-white border-2 border-[#D5CFC1] p-1.5 sm:p-2 rounded-2xl shadow-sm no-print" aria-label="Member Navigation Tabs">
+        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab('profile')}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'profile'
+                ? 'bg-[#1B4332] text-white shadow-md'
+                : 'text-[#1B4332] hover:bg-[#EAF4EC]'
+            }`}
+          >
+            <UserIcon className="w-4 h-4 shrink-0" />
+            <span>Akong Profile & ID</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('announcements')}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'announcements'
+                ? 'bg-[#1B4332] text-white shadow-md'
+                : 'text-[#1B4332] hover:bg-[#EAF4EC]'
+            }`}
+          >
+            <Megaphone className="w-4 h-4 shrink-0" />
+            <span>Mga Pahibalo</span>
+            {unreadAnnouncementsCount > 0 && (
+              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
+                activeTab === 'announcements' ? 'bg-amber-400 text-slate-900' : 'bg-rose-600 text-white'
+              }`}>
+                {unreadAnnouncementsCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('hog-raising')}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'hog-raising'
+                ? 'bg-[#1B4332] text-white shadow-md'
+                : 'text-[#1B4332] hover:bg-[#EAF4EC]'
+            }`}
+          >
+            <Sprout className="w-4 h-4 shrink-0" />
+            <span>Baboyan IGP</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('products')}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'products'
+                ? 'bg-[#1B4332] text-white shadow-md'
+                : 'text-[#1B4332] hover:bg-[#EAF4EC]'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4 shrink-0" />
+            <span>Merkado / Abot</span>
+            {publishedProductsCount > 0 && (
+              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
+                activeTab === 'products' ? 'bg-[#D8F3DC] text-[#1B4332]' : 'bg-[#EAF4EC] text-[#1B4332]'
+              }`}>
+                {publishedProductsCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('activities')}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'activities'
+                ? 'bg-[#1B4332] text-white shadow-md'
+                : 'text-[#1B4332] hover:bg-[#EAF4EC]'
+            }`}
+          >
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>Kalihokan</span>
+            {activities.length > 0 && (
+              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
+                activeTab === 'activities' ? 'bg-[#D8F3DC] text-[#1B4332]' : 'bg-[#EAF4EC] text-[#1B4332]'
+              }`}>
+                {activities.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </nav>
 
       {activeTab === 'profile' && (
         /* DASHBOARD GRID */
@@ -389,6 +492,14 @@ export default function MemberDashboard({
                   </div>
                 </div>
 
+                {/* Other IDs & Organization Affiliations Manager */}
+                <div className="pt-2">
+                  <AffiliationManager
+                    affiliations={affiliations}
+                    onChange={setAffiliations}
+                  />
+                </div>
+
                 <div className="flex gap-2 pt-1.5">
                   <button
                     type="submit"
@@ -435,6 +546,53 @@ export default function MemberDashboard({
                       {currentUser.rsbsaNumber || (currentUser.isRsbsaRegistered ? 'RSBSA Enrolled' : 'Pending RSBSA')}
                     </span>
                   </div>
+                </div>
+
+                {/* Affiliations & Other IDs */}
+                <div className="bg-[#FAF8F5] p-4 rounded-2xl border border-[#D5CFC1] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="block text-xs text-[#2D3A22] uppercase font-black tracking-wider flex items-center gap-1">
+                      <Award className="w-3.5 h-3.5 text-[#1B4332]" />
+                      Ubang mga ID ug Organisasyon
+                    </span>
+                    {(!currentUser.affiliations || currentUser.affiliations.length === 0) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setName(currentUser.name);
+                          setContact(currentUser.contactNumber || '');
+                          setSitio(currentUser.farmLocation || SITIOS[0]);
+                          setSelectedCrops(currentUser.primaryCrops || []);
+                          setAffiliations(currentUser.affiliations || []);
+                          setIsEditing(true);
+                        }}
+                        className="text-[10px] font-black text-[#1B4332] hover:underline flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Magdugang (Add)</span>
+                      </button>
+                    )}
+                  </div>
+                  {currentUser.affiliations && currentUser.affiliations.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {currentUser.affiliations.map(aff => (
+                        <div key={aff.id} className="bg-white p-2.5 rounded-xl border border-[#D5CFC1] flex flex-col justify-between">
+                          <span className="text-xs font-black text-[#1B4332]">{aff.name}</span>
+                          {aff.idNumber ? (
+                            <span className="text-[11px] font-mono font-bold text-[#BF360C] mt-0.5">
+                              ID: {aff.idNumber}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 font-semibold mt-0.5">Miyembro / Rehistrado</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-600 italic font-medium">
+                      Wala pay dugang nga ID o organisasyon (e.g. Senior Citizen, PWD, 4Ps, FCCT Co-op). I-click ang "Usaba" aron makadugang.
+                    </p>
+                  )}
                 </div>
 
                 <div className="bg-[#FAF8F5] p-4 rounded-2xl border border-[#D5CFC1] space-y-2">

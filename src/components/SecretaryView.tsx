@@ -1,22 +1,24 @@
 import React, { useState } from 'react';
-import { Member, Meeting, Resolution, User } from '../types';
+import { Member, Meeting, Resolution, User, MemberAffiliation } from '../types';
 import { 
   Users, BookOpen, FileText, Plus, Search, 
   MapPin, CheckCircle, FilePlus, Calendar, 
   Trash2, UserPlus, Info, Tag, Printer, UserCheck,
   CheckCircle2, AlertCircle, XCircle, Award, Sparkles, ShieldCheck,
-  Key, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw
+  Key, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw, Edit3
 } from 'lucide-react';
 import PrintMinutesModal from './PrintMinutesModal';
 import PrintAttendanceModal from './PrintAttendanceModal';
 import RollCallModal from './RollCallModal';
 import SecretaryTemplatesModal from './SecretaryTemplatesModal';
 import MemberIdBadgeModal from './MemberIdBadgeModal';
+import AffiliationManager from './AffiliationManager';
 
 interface SecretaryViewProps {
   members: Member[];
   users?: User[];
   onAddMember: (member: Omit<Member, 'id' | 'joinedDate'>, loginCredentials?: { username: string; initialPassword?: string }) => void;
+  onUpdateMember?: (member: Member) => void;
   onUpdateMemberStatus: (id: string, status: 'Active' | 'Inactive') => void;
   onDeleteMember: (id: string) => void;
   onManageMemberLogin?: (memberId: string, username: string, initialPassword: string) => void;
@@ -39,6 +41,7 @@ export default function SecretaryView({
   members,
   users = [],
   onAddMember,
+  onUpdateMember,
   onUpdateMemberStatus,
   onDeleteMember,
   onManageMemberLogin,
@@ -92,7 +95,7 @@ export default function SecretaryView({
   const [showManagePassword, setShowManagePassword] = useState(false);
   const [copiedManageCreds, setCopiedManageCreds] = useState(false);
   
-  // Member Form State
+  // Member Form State (Registration)
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [memberName, setMemberName] = useState('');
   const [memberContact, setMemberContact] = useState('');
@@ -103,6 +106,20 @@ export default function SecretaryView({
   const [memberGender, setMemberGender] = useState<'Male' | 'Female' | 'Other'>('Male');
   const [memberBirthDate, setMemberBirthDate] = useState('');
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
+  const [memberAffiliations, setMemberAffiliations] = useState<MemberAffiliation[]>([]);
+
+  // Member Edit State
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editContact, setEditContact] = useState('');
+  const [editSitio, setEditSitio] = useState('Sitio Tapon');
+  const [editMemberIdNum, setEditMemberIdNum] = useState('');
+  const [editRsbsa, setEditRsbsa] = useState('');
+  const [editIsRsbsa, setEditIsRsbsa] = useState(true);
+  const [editGender, setEditGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [editBirthDate, setEditBirthDate] = useState('');
+  const [editSelectedCrops, setEditSelectedCrops] = useState<string[]>([]);
+  const [editAffiliations, setEditAffiliations] = useState<MemberAffiliation[]>([]);
   
   // Meeting Form State
   const [showMeetingModal, setShowMeetingModal] = useState(false);
@@ -112,6 +129,11 @@ export default function SecretaryView({
   const [meetingAttendance, setMeetingAttendance] = useState('15');
   const [meetingAgenda, setMeetingAgenda] = useState('');
   const [meetingMinutes, setMeetingMinutes] = useState('');
+
+  // Deletion confirmation modal states (avoid browser window.confirm in iframe)
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
+  const [meetingToDelete, setMeetingToDelete] = useState<Meeting | null>(null);
+  const [resolutionToDelete, setResolutionToDelete] = useState<Resolution | null>(null);
 
   // Resolution Form State
   const [showResModal, setShowResModal] = useState(false);
@@ -170,7 +192,8 @@ export default function SecretaryView({
       primaryCrops: selectedCrops.length > 0 ? selectedCrops : ['Vegetables (Utanon)'],
       gender: memberGender,
       birthDate: memberBirthDate || undefined,
-      status: 'Active'
+      status: 'Active',
+      affiliations: memberAffiliations.length > 0 ? memberAffiliations : undefined
     }, createLoginAccount ? {
       username: cleanUsername,
       initialPassword: cleanPassword
@@ -196,10 +219,57 @@ export default function SecretaryView({
     setMemberGender('Male');
     setMemberBirthDate('');
     setSelectedCrops([]);
+    setMemberAffiliations([]);
     setLoginUsername('');
     setLoginPassword('password123');
     setHasEditedUsernameManually(false);
     setShowMemberModal(false);
+  };
+
+  const handleOpenEditMember = (member: Member) => {
+    setEditingMember(member);
+    setEditName(member.name);
+    setEditContact(member.contactNumber || '');
+    setEditSitio(member.farmLocation || 'Sitio Tapon');
+    setEditMemberIdNum(member.memberIdNumber || '');
+    setEditRsbsa(member.rsbsaNumber || '');
+    setEditIsRsbsa(member.isRsbsaRegistered ?? true);
+    setEditGender(member.gender || 'Male');
+    setEditBirthDate(member.birthDate || '');
+    setEditSelectedCrops(member.primaryCrops || []);
+    setEditAffiliations(member.affiliations || []);
+  };
+
+  const handleEditCropToggle = (crop: string) => {
+    if (editSelectedCrops.includes(crop)) {
+      setEditSelectedCrops(editSelectedCrops.filter(c => c !== crop));
+    } else {
+      setEditSelectedCrops([...editSelectedCrops, crop]);
+    }
+  };
+
+  const handleSaveEditMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember || !editName.trim()) return;
+
+    const updated: Member = {
+      ...editingMember,
+      name: editName.trim(),
+      memberIdNumber: editMemberIdNum.trim() || editingMember.memberIdNumber,
+      rsbsaNumber: editRsbsa.trim() || undefined,
+      isRsbsaRegistered: editIsRsbsa,
+      contactNumber: editContact.trim() || 'None',
+      farmLocation: editSitio,
+      primaryCrops: editSelectedCrops.length > 0 ? editSelectedCrops : ['Vegetables (Utanon)'],
+      gender: editGender,
+      birthDate: editBirthDate || undefined,
+      affiliations: editAffiliations
+    };
+
+    if (onUpdateMember) {
+      onUpdateMember(updated);
+    }
+    setEditingMember(null);
   };
 
   const handleMeetingSubmit = (e: React.FormEvent) => {
@@ -346,10 +416,10 @@ export default function SecretaryView({
 
       {/* OFFLINE STATUS TIPS */}
       {!isOnline && (
-        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-xs text-amber-300">
-          <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-300 p-3.5 rounded-xl text-xs text-amber-950 shadow-xs">
+          <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
           <div>
-            <span className="font-semibold">Local Storage Enabled:</span> You are working in PWA Offline Mode. Newly added members, meetings, or resolutions will be stored securely on your device and queued to sync instantly once you go back online.
+            <span className="font-extrabold text-amber-900">Local Storage Enabled (Offline PWA):</span> You are working in offline mode. Newly added members, meetings, or resolutions are stored securely on your device and queued to sync automatically once your connection is restored.
           </div>
         </div>
       )}
@@ -425,16 +495,32 @@ export default function SecretaryView({
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          {member.isRsbsaRegistered ? (
-                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full" title={member.rsbsaNumber}>
-                              <ShieldCheck className="w-3 h-3 text-emerald-700" />
-                              <span>{member.rsbsaNumber ? member.rsbsaNumber.substring(0, 14) + '...' : 'RSBSA Reg.'}</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 bg-slate-100 text-[#1B4332] text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                              <span>Unregistered</span>
-                            </span>
-                          )}
+                          <div className="space-y-1">
+                            {member.isRsbsaRegistered ? (
+                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full" title={member.rsbsaNumber}>
+                                <ShieldCheck className="w-3 h-3 text-emerald-700" />
+                                <span>{member.rsbsaNumber ? member.rsbsaNumber.substring(0, 14) + '...' : 'RSBSA Reg.'}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-slate-100 text-[#1B4332] text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                                <span>Unregistered</span>
+                              </span>
+                            )}
+                            {member.affiliations && member.affiliations.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {member.affiliations.map(aff => (
+                                  <span
+                                    key={aff.id}
+                                    className="inline-flex items-center gap-1 text-[9px] font-bold bg-[#EAF4EC] text-[#1B4332] px-1.5 py-0.5 rounded border border-[#2D6A4F]/30"
+                                    title={`${aff.name}${aff.idNumber ? ` (${aff.idNumber})` : ''}`}
+                                  >
+                                    <span>{aff.name}</span>
+                                    {aff.idNumber && <span className="text-[#BF360C] font-mono font-black">#{aff.idNumber}</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-1">
@@ -504,21 +590,25 @@ export default function SecretaryView({
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
+                              id={`edit-member-${member.id}`}
+                              onClick={() => handleOpenEditMember(member)}
+                              className="text-[#1B4332] hover:text-[#143326] p-1.5 rounded-lg hover:bg-[#EAF4EC] border border-[#D5CFC1] transition-all inline-flex items-center justify-center cursor-pointer"
+                              title="Edit farmer details & other IDs"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
                               id={`badge-member-${member.id}`}
                               onClick={() => setSelectedMemberForBadge(member)}
-                              className="text-emerald-400 hover:text-emerald-300 p-1.5 rounded-lg hover:bg-emerald-500/10 transition-all inline-flex items-center justify-center cursor-pointer"
+                              className="text-[#1B4332] hover:text-[#143326] p-1.5 rounded-lg hover:bg-[#EAF4EC] border border-[#D5CFC1] transition-all inline-flex items-center justify-center cursor-pointer"
                               title="Print Member ID Badge"
                             >
                               <Award className="w-4 h-4" />
                             </button>
                             <button
                               id={`delete-member-${member.id}`}
-                              onClick={() => {
-                                if (window.confirm(`Are you sure you want to remove "${member.name}" from the member roster? This will also remove any linked portal login and synchronize immediately to the cloud database.`)) {
-                                  onDeleteMember(member.id);
-                                }
-                              }}
-                              className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-all inline-flex items-center justify-center cursor-pointer"
+                              onClick={() => setMemberToDelete(member)}
+                              className="text-rose-600 hover:text-rose-800 p-1.5 rounded-lg hover:bg-rose-50 border border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer"
                               title="Delete member from database"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -630,12 +720,8 @@ export default function SecretaryView({
                         {onDeleteMeeting && (
                           <button
                             id={`delete-meeting-btn-${meeting.id}`}
-                            onClick={() => {
-                              if (window.confirm(`Delete assembly meeting "${meeting.title}"? Changes will auto-sync to the database.`)) {
-                                onDeleteMeeting(meeting.id);
-                              }
-                            }}
-                            className="flex items-center justify-center p-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-xs font-bold rounded-lg transition-all cursor-pointer border border-rose-800/40"
+                            onClick={() => setMeetingToDelete(meeting)}
+                            className="flex items-center justify-center p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg transition-all cursor-pointer border border-rose-200"
                             title="Delete meeting record"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -697,11 +783,7 @@ export default function SecretaryView({
                       {onDeleteResolution && (
                         <button
                           id={`delete-resolution-btn-${res.id}`}
-                          onClick={() => {
-                            if (window.confirm(`Delete resolution "${res.resolutionNumber}: ${res.title}"? Changes will auto-sync to the database.`)) {
-                              onDeleteResolution(res.id);
-                            }
-                          }}
+                          onClick={() => setResolutionToDelete(res)}
                           className="p-1 text-[#4A5F57] hover:text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
                           title="Delete resolution"
                         >
@@ -904,6 +986,14 @@ export default function SecretaryView({
                   </div>
                 </div>
 
+                {/* Other IDs and Organizations Affiliations */}
+                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1]">
+                  <AffiliationManager
+                    affiliations={memberAffiliations}
+                    onChange={setMemberAffiliations}
+                  />
+                </div>
+
                 {/* Portal Login Credentials Section */}
                 <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1] space-y-2.5">
                   <div className="flex justify-between items-center">
@@ -1009,103 +1099,287 @@ export default function SecretaryView({
         </div>
       )}
 
-      {/* MEETING MINUTES MODAL */}
-      {showMeetingModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden">
-            <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="font-bold text-white text-base">Log Assembly / Meeting Minutes</h3>
+      {/* EDIT MEMBER MODAL */}
+      {editingMember && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 overflow-y-auto p-2 sm:p-4 flex items-center justify-center animate-fade-in">
+          <div className="bg-white border border-slate-300 w-full max-w-xl max-h-[88vh] sm:max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
+            <div className="bg-[#EAF4EC] px-4 py-2.5 sm:px-5 sm:py-3 border-b border-[#D5CFC1] flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#1B4332] flex items-center justify-center text-white shrink-0">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#1B4332] text-sm leading-tight">Edit Farmer Information & IDs</h3>
+                  <p className="text-[10px] text-[#3A4A42]">Update personal details, RSBSA, and other organizational affiliations</p>
+                </div>
+              </div>
               <button
-                onClick={() => setShowMeetingModal(false)}
-                className="text-slate-400 hover:text-white text-lg font-bold"
+                type="button"
+                onClick={() => setEditingMember(null)}
+                className="text-[#1B4332] hover:text-rose-600 text-lg font-bold p-1 rounded-lg hover:bg-rose-100 transition-colors cursor-pointer"
+                aria-label="Close"
               >
                 &times;
               </button>
             </div>
-            <form onSubmit={handleMeetingSubmit} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+
+            <form onSubmit={handleSaveEditMember} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3 text-left overscroll-contain scrollbar-thin scrollbar-thumb-slate-300">
+                {/* Farmer Name & Member ID */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Farmer Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Juan De la Cruz"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Member ID Code</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. AFA-2026-043"
+                      value={editMemberIdNum}
+                      onChange={(e) => setEditMemberIdNum(e.target.value)}
+                      className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-100 border border-[#D5CFC1] rounded-xl text-slate-900 font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Contact Number & Sitio Location */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Contact Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 0917-000-0000"
+                      value={editContact}
+                      onChange={(e) => setEditContact(e.target.value)}
+                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Sitio (Farm Location)</label>
+                    <select
+                      value={editSitio}
+                      onChange={(e) => setEditSitio(e.target.value)}
+                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    >
+                      {SITIOS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Gender & Birth Date */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Gender</label>
+                    <select
+                      value={editGender}
+                      onChange={(e) => setEditGender(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Birth Date</label>
+                    <input
+                      type="date"
+                      value={editBirthDate}
+                      onChange={(e) => setEditBirthDate(e.target.value)}
+                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    />
+                  </div>
+                </div>
+
+                {/* RSBSA Registration Field */}
+                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1] space-y-2">
+                  <div>
+                    <label className="text-xs font-bold text-[#1B4332] uppercase flex items-center gap-1.5 mb-2">
+                      <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
+                      <span>Basic Sectors in Agriculture</span>
+                    </label>
+                    <select
+                      value={editIsRsbsa ? 'Registered' : 'Not Registered'}
+                      onChange={(e) => setEditIsRsbsa(e.target.value === 'Registered')}
+                      className="px-2 py-1.5 text-xs border border-[#D5CFC1] rounded-lg bg-white text-[#1B4332] font-semibold focus:outline-none focus:border-[#2D6A4F] cursor-pointer"
+                    >
+                      <option value="Not Registered">Not Registered</option>
+                      <option value="Registered">Registered</option>
+                    </select>
+                  </div>
+                  {editIsRsbsa && (
+                    <input
+                      type="text"
+                      placeholder="RSBSA Control No. (e.g. 07-22-51-001-000542)"
+                      value={editRsbsa}
+                      onChange={(e) => setEditRsbsa(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
+                    />
+                  )}
+                </div>
+
+                {/* Crops & Livestock */}
+                <div>
+                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1.5 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-[#2D6A4F]" />
+                    Primary Crops & Livestock Products
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 bg-white p-2.5 rounded-xl border border-[#D5CFC1] max-h-28 overflow-y-auto">
+                    {CROPS.map((crop) => (
+                      <label key={crop} className="flex items-center gap-2 cursor-pointer text-[#1B4332] text-xs font-medium hover:text-[#2D6A4F]">
+                        <input
+                          type="checkbox"
+                          checked={editSelectedCrops.includes(crop)}
+                          onChange={() => handleEditCropToggle(crop)}
+                          className="rounded border-slate-300 bg-white text-[#2D6A4F] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span className="truncate">{crop}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Other IDs and Organizations Affiliations */}
+                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1]">
+                  <AffiliationManager
+                    affiliations={editAffiliations}
+                    onChange={setEditAffiliations}
+                  />
+                </div>
+              </div>
+
+              {/* Fixed Bottom Action Footer */}
+              <div className="shrink-0 bg-[#F7F4EF] px-4 py-2.5 sm:px-5 border-t border-[#D5CFC1] flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setEditingMember(null)}
+                  className="flex-1 py-2 text-xs sm:text-sm font-semibold bg-white border border-[#B8CDBE] hover:bg-[#F5F8F4] text-[#1B4332] rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 text-xs sm:text-sm font-semibold bg-[#2D6A4F] hover:bg-[#1B4332] text-white rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Update Farmer Record</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MEETING MINUTES MODAL */}
+      {showMeetingModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-[#EAF4EC] px-6 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
+              <div>
+                <h3 className="font-extrabold text-[#1B4332] text-base">Log Assembly / Meeting Minutes</h3>
+                <p className="text-xs text-[#4A5F57] font-medium">Rehistro sa Tigum ug Pag-ihap sa mga Nanambong</p>
+              </div>
+              <button
+                onClick={() => setShowMeetingModal(false)}
+                className="text-[#4A5F57] hover:text-[#1B4332] text-xl font-bold p-1 rounded-lg hover:bg-white/60 transition-all cursor-pointer"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleMeetingSubmit} className="p-6 space-y-4 overflow-y-auto">
               {/* Quick Link to Blank Attendance Printout */}
-              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-750 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-                <div className="text-[11px] text-slate-400">
-                  <span className="font-bold text-emerald-400 block">Need a physical attendance form first?</span>
-                  Generate, customize and print blank sign-in sheets or complete active member checklists.
+              <div className="bg-white p-3.5 rounded-2xl border border-[#D5CFC1] flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between shadow-xs">
+                <div className="text-xs text-[#3A4A42]">
+                  <span className="font-bold text-[#1B4332] block">Need a physical attendance sheet first?</span>
+                  Generate, customize, and print blank sign-in sheets or complete active member checklists.
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowAttendanceModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg border border-slate-700 transition-all shrink-0 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#EAF4EC] hover:bg-[#D8EAD9] text-[#1B4332] text-xs font-bold rounded-xl border border-[#B7D9BF] transition-all shrink-0 cursor-pointer"
                 >
-                  <Printer className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Download / Print Form</span>
+                  <Printer className="w-3.5 h-3.5 text-[#1B4332]" />
+                  <span>Download / Print Sheet</span>
                 </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Meeting Title</label>
+                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Meeting Title (Ulohan)</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Monthly General Assembly"
                     value={meetingTitle}
                     onChange={(e) => setMeetingTitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Date Held</label>
+                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Date Held (Petsa)</label>
                   <input
                     type="date"
                     required
                     value={meetingDate}
                     onChange={(e) => setMeetingDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Location</label>
+                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Location (Lugar)</label>
                   <input
                     type="text"
                     required
                     value={meetingLocation}
                     onChange={(e) => setMeetingLocation(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                   />
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-bold text-slate-300 uppercase">Attendance Count</label>
+                    <label className="block text-xs font-bold text-[#1B4332] uppercase">Attendance Count</label>
                     <button
                       type="button"
                       onClick={() => setShowCreateRollCall(true)}
-                      className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer"
+                      className="flex items-center gap-1 text-xs font-bold text-[#1B4332] hover:underline transition-all cursor-pointer"
                     >
-                      <UserCheck className="w-3.5 h-3.5" />
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
                       <span>{Object.keys(meetingAttendanceRecord).length > 0 ? 'Update Roll Call' : 'Take Digital Roll Call'}</span>
                     </button>
                   </div>
 
                   {Object.keys(meetingAttendanceRecord).length > 0 ? (
-                    <div className="bg-slate-900 border border-emerald-500/15 p-2.5 rounded-xl flex items-center justify-between text-xs font-sans">
-                      <div className="text-slate-300 flex items-center gap-1.5 min-w-0">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div className="bg-white border border-emerald-300 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                      <div className="text-[#1B4332] flex items-center gap-1.5 min-w-0">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span className="truncate">
                           Roll call recorded:{' '}
-                          <span className="font-bold text-emerald-400">
+                          <span className="font-extrabold text-emerald-800">
                             {Object.values(meetingAttendanceRecord).filter(v => v === 'Present').length} Present
                           </span>
-                          {' '}({Object.values(meetingAttendanceRecord).filter(v => v === 'Absent').length} A,{' '}
-                          {Object.values(meetingAttendanceRecord).filter(v => v === 'Excused').length} E)
+                          {' '}({Object.values(meetingAttendanceRecord).filter(v => v === 'Absent').length} Absent,{' '}
+                          {Object.values(meetingAttendanceRecord).filter(v => v === 'Excused').length} Excused)
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setMeetingAttendanceRecord({})}
-                        className="text-[10px] font-bold text-slate-400 hover:text-rose-400 transition-all cursor-pointer underline shrink-0"
+                        className="text-[10px] font-bold text-rose-700 hover:text-rose-900 transition-all cursor-pointer underline shrink-0"
                       >
-                        Reset to Manual
+                        Reset
                       </button>
                     </div>
                   ) : (
@@ -1115,7 +1389,7 @@ export default function SecretaryView({
                       required
                       value={meetingAttendance}
                       onChange={(e) => setMeetingAttendance(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F] font-sans"
+                      className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332] font-mono"
                     />
                   )}
                 </div>
@@ -1128,7 +1402,7 @@ export default function SecretaryView({
                   placeholder="1. Topic A&#10;2. Topic B&#10;3. Topic C"
                   value={meetingAgenda}
                   onChange={(e) => setMeetingAgenda(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F] font-sans"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                 />
               </div>
 
@@ -1140,7 +1414,7 @@ export default function SecretaryView({
                   placeholder="Record summary of what was discussed, agreed items, next action items..."
                   value={meetingMinutes}
                   onChange={(e) => setMeetingMinutes(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F] font-sans"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                 />
               </div>
 
@@ -1148,13 +1422,13 @@ export default function SecretaryView({
                 <button
                   type="button"
                   onClick={() => setShowMeetingModal(false)}
-                  className="flex-1 py-2.5 text-sm font-semibold bg-slate-700 hover:bg-slate-650 text-slate-200 rounded-xl transition-all"
+                  className="flex-1 py-2.5 text-sm font-bold bg-white hover:bg-[#F0EDE7] text-[#4A5F57] rounded-xl border border-[#D5CFC1] transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all"
+                  className="flex-1 py-2.5 text-sm font-extrabold bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl shadow-md transition-all cursor-pointer"
                 >
                   Save Meeting Log
                 </button>
@@ -1166,28 +1440,32 @@ export default function SecretaryView({
 
       {/* RESOLUTION MODAL */}
       {showResModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden">
-            <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="font-bold text-white text-base">Draft New Association Resolution</h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-[#EAF4EC] px-6 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
+              <div>
+                <h3 className="font-extrabold text-[#1B4332] text-base">Draft New Association Resolution</h3>
+                <p className="text-xs text-[#4A5F57] font-medium">Opisyal nga Resolusyon sa Kapunongan</p>
+              </div>
               <button
                 onClick={() => setShowResModal(false)}
-                className="text-slate-400 hover:text-white text-lg font-bold"
+                className="text-[#4A5F57] hover:text-[#1B4332] text-xl font-bold p-1 rounded-lg hover:bg-white/60 transition-all cursor-pointer"
+                aria-label="Close"
               >
                 &times;
               </button>
             </div>
-            <form onSubmit={handleResSubmit} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleResSubmit} className="p-6 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Resolution Number</label>
+                  <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Resolution No.</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. AFA-2026-003"
                     value={resNumber}
                     onChange={(e) => setResNumber(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F] font-mono"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332] font-mono font-bold"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -1198,7 +1476,7 @@ export default function SecretaryView({
                     placeholder="e.g. Request for corn seed assistance"
                     value={resTitle}
                     onChange={(e) => setResTitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                   />
                 </div>
               </div>
@@ -1211,7 +1489,7 @@ export default function SecretaryView({
                   placeholder="Whereas, the members agree that..."
                   value={resDesc}
                   onChange={(e) => setResDesc(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F] font-sans"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                 />
               </div>
 
@@ -1220,55 +1498,55 @@ export default function SecretaryView({
                   <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Moved By (Proponent)</label>
                   <input
                     type="text"
-                    placeholder="e.g. Nong Berting"
+                    placeholder="e.g. Anselna B. Arnado"
                     value={resMovedBy}
                     onChange={(e) => setResMovedBy(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Seconded By (Supporter)</label>
                   <input
                     type="text"
-                    placeholder="e.g. Nang Mary"
+                    placeholder="e.g. Maria Alcoser"
                     value={resSecondedBy}
                     onChange={(e) => setResSecondedBy(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1.5">Vote Tally (General Assembly)</label>
-                <div className="grid grid-cols-3 gap-3 bg-slate-900 p-3 rounded-xl border border-slate-750 text-center">
+                <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1.5">Vote Tally (General Assembly)</label>
+                <div className="grid grid-cols-3 gap-3 bg-white p-3.5 rounded-2xl border border-[#D5CFC1] text-center shadow-xs">
                   <div>
-                    <label className="block text-[10px] text-emerald-400 font-bold uppercase mb-1">In Favor (Yes)</label>
+                    <label className="block text-[10px] text-emerald-800 font-extrabold uppercase mb-1">In Favor (Yes)</label>
                     <input
                       type="number"
                       min="0"
                       value={resInFavor}
                       onChange={(e) => setResInFavor(e.target.value)}
-                      className="w-full text-center px-2 py-1.5 text-sm bg-slate-800 border border-slate-700 rounded-lg text-white font-mono focus:outline-none focus:border-emerald-500"
+                      className="w-full text-center px-2 py-1.5 text-sm bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#1B4332] font-mono font-bold focus:outline-none focus:border-[#1B4332]"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-red-400 font-bold uppercase mb-1">Against (No)</label>
+                    <label className="block text-[10px] text-rose-800 font-extrabold uppercase mb-1">Against (No)</label>
                     <input
                       type="number"
                       min="0"
                       value={resAgainst}
                       onChange={(e) => setResAgainst(e.target.value)}
-                      className="w-full text-center px-2 py-1.5 text-sm bg-slate-800 border border-slate-700 rounded-lg text-white font-mono focus:outline-none focus:border-emerald-500"
+                      className="w-full text-center px-2 py-1.5 text-sm bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#1B4332] font-mono font-bold focus:outline-none focus:border-[#1B4332]"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Abstain</label>
+                    <label className="block text-[10px] text-[#4A5F57] font-extrabold uppercase mb-1">Abstain</label>
                     <input
                       type="number"
                       min="0"
                       value={resAbstain}
                       onChange={(e) => setResAbstain(e.target.value)}
-                      className="w-full text-center px-2 py-1.5 text-sm bg-slate-800 border border-slate-700 rounded-lg text-white font-mono focus:outline-none focus:border-emerald-500"
+                      className="w-full text-center px-2 py-1.5 text-sm bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#1B4332] font-mono font-bold focus:outline-none focus:border-[#1B4332]"
                     />
                   </div>
                 </div>
@@ -1278,13 +1556,13 @@ export default function SecretaryView({
                 <button
                   type="button"
                   onClick={() => setShowResModal(false)}
-                  className="flex-1 py-2.5 text-sm font-semibold bg-slate-700 hover:bg-slate-650 text-slate-200 rounded-xl transition-all"
+                  className="flex-1 py-2.5 text-sm font-bold bg-white hover:bg-[#F0EDE7] text-[#4A5F57] rounded-xl border border-[#D5CFC1] transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all"
+                  className="flex-1 py-2.5 text-sm font-extrabold bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl shadow-md transition-all cursor-pointer"
                 >
                   Save Draft Resolution
                 </button>
@@ -1354,55 +1632,55 @@ export default function SecretaryView({
 
       {/* CREDENTIAL HANDOUT SLIP MODAL (Issued after member enrollment) */}
       {createdCredentials && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-850 border-2 border-emerald-500/60 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-5 text-left space-y-4">
-            <div className="flex items-center gap-3 border-b border-slate-750 pb-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border-2 border-[#1B4332] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-6 text-left space-y-4">
+            <div className="flex items-center gap-3 border-b border-[#D5CFC1] pb-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-[#EAF4EC] border border-[#B7D9BF] flex items-center justify-center text-[#1B4332] shrink-0">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-extrabold text-white text-base">Farmer Enrolled & Login Created!</h3>
-                <p className="text-xs text-slate-400">Official Portal Credentials issued by Secretary</p>
+                <h3 className="font-extrabold text-[#1B4332] text-base">Farmer Enrolled & Login Created!</h3>
+                <p className="text-xs text-[#4A5F57] font-medium">Official Portal Credentials issued by Secretary</p>
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-750 rounded-xl p-4 space-y-2.5">
+            <div className="bg-white border border-[#D5CFC1] rounded-2xl p-4 space-y-2.5 shadow-xs">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-bold uppercase">Farmer Name:</span>
-                <span className="text-white font-extrabold text-sm">{createdCredentials.name}</span>
+                <span className="text-[#4A5F57] font-bold uppercase">Farmer Name:</span>
+                <span className="text-[#1B4332] font-extrabold text-sm">{createdCredentials.name}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-bold uppercase">Member ID:</span>
-                <span className="text-emerald-400 font-mono font-bold">{createdCredentials.memberId}</span>
+                <span className="text-[#4A5F57] font-bold uppercase">Member ID:</span>
+                <span className="text-[#1B4332] font-mono font-bold bg-[#FAF8F5] px-2 py-0.5 rounded border border-[#D5CFC1]">{createdCredentials.memberId}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-bold uppercase">Sitio:</span>
-                <span className="text-slate-300 font-medium">{createdCredentials.sitio}</span>
+                <span className="text-[#4A5F57] font-bold uppercase">Sitio:</span>
+                <span className="text-[#3A4A42] font-medium">{createdCredentials.sitio}</span>
               </div>
 
-              <div className="border-t border-slate-800 pt-2.5 flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-bold uppercase flex items-center gap-1">
-                  <Key className="w-3.5 h-3.5 text-amber-400" />
+              <div className="border-t border-[#EAE6DF] pt-2.5 flex justify-between items-center text-xs">
+                <span className="text-[#4A5F57] font-bold uppercase flex items-center gap-1">
+                  <Key className="w-3.5 h-3.5 text-amber-700" />
                   <span>Portal Username:</span>
                 </span>
-                <code className="bg-slate-950 px-2.5 py-1 rounded-lg text-amber-300 font-mono font-bold text-xs border border-slate-800">
+                <code className="bg-[#FAF8F5] px-2.5 py-1 rounded-lg text-[#1B4332] font-mono font-extrabold text-xs border border-[#D5CFC1]">
                   {createdCredentials.username}
                 </code>
               </div>
 
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-bold uppercase flex items-center gap-1">
-                  <KeyRound className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[#4A5F57] font-bold uppercase flex items-center gap-1">
+                  <KeyRound className="w-3.5 h-3.5 text-[#1B4332]" />
                   <span>Initial Password:</span>
                 </span>
-                <code className="bg-slate-950 px-2.5 py-1 rounded-lg text-emerald-300 font-mono font-bold text-xs border border-slate-800">
+                <code className="bg-[#EAF4EC] px-2.5 py-1 rounded-lg text-[#1B4332] font-mono font-extrabold text-xs border border-[#B7D9BF]">
                   {createdCredentials.initialPassword}
                 </code>
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-300 leading-relaxed bg-emerald-950/30 p-3 rounded-xl border border-emerald-900/40 flex items-start gap-2">
-              <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-[#1B4332] leading-relaxed bg-[#EAF4EC] p-3 rounded-xl border border-[#B7D9BF] flex items-start gap-2">
+              <Info className="w-4 h-4 text-[#1B4332] shrink-0 mt-0.5" />
               <span>
                 Ihatag kini nga Username ug Password ngadto kang <strong>{createdCredentials.name}</strong>. Makasulod dayon siya sa iyang personal nga Member Portal.
               </span>
@@ -1418,15 +1696,15 @@ export default function SecretaryView({
                   setCopiedCredentials(true);
                   setTimeout(() => setCopiedCredentials(false), 2500);
                 }}
-                className="flex-1 py-2.5 bg-slate-750 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 py-2.5 bg-white hover:bg-[#F0EDE7] text-[#1B4332] border border-[#D5CFC1] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
               >
-                {copiedCredentials ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copiedCredentials ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                 <span>{copiedCredentials ? 'Koda Nakopya!' : 'Kopyaha ang Koda'}</span>
               </button>
               <button
                 type="button"
                 onClick={() => setCreatedCredentials(null)}
-                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all cursor-pointer text-center shadow-md"
+                className="flex-1 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all cursor-pointer text-center shadow-md"
               >
                 Nahuman (Done)
               </button>
@@ -1437,19 +1715,20 @@ export default function SecretaryView({
 
       {/* MANAGE / RESET PORTAL CREDENTIALS MODAL */}
       {loginManageMember && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-850 border border-slate-750 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-5 text-left space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-750 pb-3">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-6 text-left space-y-4">
+            <div className="flex justify-between items-center border-b border-[#D5CFC1] pb-3.5">
               <div>
-                <h3 className="font-bold text-white text-base flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-extrabold text-[#1B4332] text-base flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-[#1B4332]" />
                   <span>Manage Portal Credentials</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Farmer: <strong className="text-white">{loginManageMember.name}</strong> ({loginManageMember.memberIdNumber})</p>
+                <p className="text-xs text-[#4A5F57] mt-0.5">Farmer: <strong className="text-[#1B4332]">{loginManageMember.name}</strong> ({loginManageMember.memberIdNumber})</p>
               </div>
               <button 
                 onClick={() => setLoginManageMember(null)}
-                className="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer"
+                className="text-[#4A5F57] hover:text-[#1B4332] text-xl font-bold p-1 cursor-pointer rounded-lg hover:bg-white/60 transition-all"
+                aria-label="Close"
               >
                 &times;
               </button>
@@ -1467,26 +1746,26 @@ export default function SecretaryView({
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-300 uppercase">Portal Username</label>
+                <label className="block text-xs font-bold text-[#1B4332] uppercase">Portal Username</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs text-slate-500 font-mono">@</span>
+                  <span className="absolute left-3 top-2.5 text-xs text-[#4A5F57] font-mono">@</span>
                   <input
                     type="text"
                     required
                     value={manageUsername}
                     onChange={(e) => setManageUsername(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full pl-7 pr-3 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono focus:outline-none focus:border-[#1B4332]"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
-                  <label className="block text-xs font-bold text-slate-300 uppercase">Password</label>
+                  <label className="block text-xs font-bold text-[#1B4332] uppercase">Password</label>
                   <button
                     type="button"
                     onClick={() => setManagePassword(`Afa@${Math.floor(100 + Math.random() * 900)}`)}
-                    className="text-[10px] text-emerald-400 hover:underline font-bold cursor-pointer"
+                    className="text-xs text-[#1B4332] hover:underline font-bold cursor-pointer"
                   >
                     Generate Random
                   </button>
@@ -1497,19 +1776,19 @@ export default function SecretaryView({
                     required
                     value={managePassword}
                     onChange={(e) => setManagePassword(e.target.value)}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white font-mono pr-10 focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono pr-10 focus:outline-none focus:border-[#1B4332]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowManagePassword(!showManagePassword)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                    className="absolute right-3 top-2.5 text-[#4A5F57] hover:text-[#1B4332] cursor-pointer"
                   >
                     {showManagePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              <div className="text-[11px] text-slate-400 italic bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+              <div className="text-xs text-[#4A5F57] bg-white p-3 rounded-xl border border-[#D5CFC1]">
                 Ang pag-save niini mag-update o maghimo dayon sa account credentials niining maong miyembro.
               </div>
 
@@ -1517,18 +1796,147 @@ export default function SecretaryView({
                 <button
                   type="button"
                   onClick={() => setLoginManageMember(null)}
-                  className="flex-1 py-2.5 bg-slate-750 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="flex-1 py-2.5 bg-white hover:bg-[#F0EDE7] text-[#4A5F57] rounded-xl text-xs font-bold border border-[#D5CFC1] transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+                  className="flex-1 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
                 >
                   Save Credentials
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE MEMBER IN-MODAL DIALOG */}
+      {memberToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border-2 border-rose-600/40 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3 border-b border-[#D5CFC1] pb-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-700 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-[#1B4332] text-base">Tangtangon Kini nga Mag-uuma?</h3>
+                <p className="text-xs text-[#4A5F57]">Remove Member from Roster</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#D5CFC1] p-4 rounded-2xl space-y-2">
+              <p className="text-sm font-bold text-[#1B4332]">{memberToDelete.name}</p>
+              <p className="text-xs text-[#4A5F57]">ID: <strong className="text-[#1B4332]">{memberToDelete.memberIdNumber}</strong> • Sitio: <strong className="text-[#1B4332]">{memberToDelete.sitio}</strong></p>
+              <p className="text-xs text-rose-700 font-medium">Kini nga aksyon magtangtang usab sa bisan unsang konektadong portal login ug mag-auto-sync sa cloud database.</p>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setMemberToDelete(null)}
+                className="flex-1 py-2.5 bg-white hover:bg-[#F0EDE7] text-[#4A5F57] rounded-xl text-xs font-bold border border-[#D5CFC1] transition-all cursor-pointer"
+              >
+                Kanselahon
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteMember(memberToDelete.id);
+                  setMemberToDelete(null);
+                }}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+              >
+                Oo, I-tangtang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE MEETING IN-MODAL DIALOG */}
+      {meetingToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border-2 border-rose-600/40 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3 border-b border-[#D5CFC1] pb-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-700 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-[#1B4332] text-base">I-delete Kini nga Miting?</h3>
+                <p className="text-xs text-[#4A5F57]">Delete Assembly Meeting Record</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#D5CFC1] p-4 rounded-2xl space-y-2">
+              <p className="text-sm font-bold text-[#1B4332]">{meetingToDelete.title}</p>
+              <p className="text-xs text-[#4A5F57]">Petsa: <strong className="text-[#1B4332]">{meetingToDelete.date}</strong> • Lugar: <strong className="text-[#1B4332]">{meetingToDelete.location}</strong></p>
+              <p className="text-xs text-rose-700 font-medium">Ang pag-delete niini mag-sync dayon sa cloud database.</p>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setMeetingToDelete(null)}
+                className="flex-1 py-2.5 bg-white hover:bg-[#F0EDE7] text-[#4A5F57] rounded-xl text-xs font-bold border border-[#D5CFC1] transition-all cursor-pointer"
+              >
+                Kanselahon
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteMeeting) onDeleteMeeting(meetingToDelete.id);
+                  setMeetingToDelete(null);
+                }}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+              >
+                Oo, I-delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE RESOLUTION IN-MODAL DIALOG */}
+      {resolutionToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border-2 border-rose-600/40 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3 border-b border-[#D5CFC1] pb-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-700 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-[#1B4332] text-base">I-delete Kini nga Resolusyon?</h3>
+                <p className="text-xs text-[#4A5F57]">Delete Resolution Confirmation</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#D5CFC1] p-4 rounded-2xl space-y-2">
+              <p className="text-sm font-bold text-[#1B4332]">{resolutionToDelete.resolutionNumber}: {resolutionToDelete.title}</p>
+              <p className="text-xs text-[#4A5F57]">Status: <strong className="text-[#1B4332]">{resolutionToDelete.status}</strong> • Petsa: <strong className="text-[#1B4332]">{resolutionToDelete.dateAgreed}</strong></p>
+              <p className="text-xs text-rose-700 font-medium">Ang pagtangtang niini mag-sync dayon sa live database.</p>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setResolutionToDelete(null)}
+                className="flex-1 py-2.5 bg-white hover:bg-[#F0EDE7] text-[#4A5F57] rounded-xl text-xs font-bold border border-[#D5CFC1] transition-all cursor-pointer"
+              >
+                Kanselahon
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteResolution) onDeleteResolution(resolutionToDelete.id);
+                  setResolutionToDelete(null);
+                }}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-md cursor-pointer"
+              >
+                Oo, I-delete
+              </button>
+            </div>
           </div>
         </div>
       )}

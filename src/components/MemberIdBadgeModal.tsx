@@ -140,6 +140,15 @@ export default function MemberIdBadgeModal({
                         ${m.isRsbsaRegistered ? `✓ RSBSA: ${m.rsbsaNumber || 'REGISTERED'}` : '⚠ RSBSA PENDING'}
                       </span>
                     </div>
+                    ${m.affiliations && m.affiliations.length > 0 ? `
+                      <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px;">
+                        ${m.affiliations.map(a => `
+                          <span style="background: #EAF4EC; border: 1px solid #B7E4C7; color: #1B4332; font-size: 7.5px; font-weight: bold; padding: 1px 4px; border-radius: 3px;">
+                            ${a.name}${a.idNumber ? ` (${a.idNumber})` : ''}
+                          </span>
+                        `).join('')}
+                      </div>
+                    ` : ''}
                   </div>
                 </div>
                 <div class="id-footer">
@@ -255,6 +264,19 @@ export default function MemberIdBadgeModal({
                     {member.contactNumber}
                   </span>
                 </div>
+
+                {member.affiliations && member.affiliations.length > 0 && (
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 block uppercase">Other IDs & Organizations:</span>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {member.affiliations.map(aff => (
+                        <span key={aff.id} className="text-[9.5px] font-bold bg-[#EAF4EC] text-[#1B4332] px-2 py-0.5 rounded border border-[#2D6A4F]/30">
+                          {aff.name}{aff.idNumber ? ` (${aff.idNumber})` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
