@@ -37,6 +37,26 @@ interface SecretaryViewProps {
   onOpenReportModal?: () => void;
 }
 
+const splitBirthDate = (value: string) => {
+  const [year = '', month = '', day = ''] = value.split('-');
+  return { month, day, year };
+};
+
+const getBirthDateFromInputs = (month: string, day: string, year: string) => {
+  if (!month && !day && !year) return '';
+  if (!/^\d{1,2}$/.test(month) || !/^\d{1,2}$/.test(day) || !/^\d{4}$/.test(year)) return null;
+
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const yearNumber = Number(year);
+  const daysInMonth = new Date(yearNumber, monthNumber, 0).getDate();
+  if (monthNumber < 1 || monthNumber > 12 || dayNumber < 1 || dayNumber > daysInMonth || yearNumber < 1000 || yearNumber > new Date().getFullYear()) {
+    return null;
+  }
+
+  return `${year}-${String(monthNumber).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`;
+};
+
 export default function SecretaryView({
   members,
   users = [],
@@ -104,7 +124,10 @@ export default function SecretaryView({
   const [memberRsbsa, setMemberRsbsa] = useState('');
   const [isRsbsaRegistered, setIsRsbsaRegistered] = useState(true);
   const [memberGender, setMemberGender] = useState<'Male' | 'Female' | 'Other'>('Male');
-  const [memberBirthDate, setMemberBirthDate] = useState('');
+  const [memberBirthMonth, setMemberBirthMonth] = useState('');
+  const [memberBirthDay, setMemberBirthDay] = useState('');
+  const [memberBirthYear, setMemberBirthYear] = useState('');
+  const [birthDateError, setBirthDateError] = useState('');
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
   const [memberAffiliations, setMemberAffiliations] = useState<MemberAffiliation[]>([]);
 
@@ -117,7 +140,9 @@ export default function SecretaryView({
   const [editRsbsa, setEditRsbsa] = useState('');
   const [editIsRsbsa, setEditIsRsbsa] = useState(true);
   const [editGender, setEditGender] = useState<'Male' | 'Female' | 'Other'>('Male');
-  const [editBirthDate, setEditBirthDate] = useState('');
+  const [editBirthMonth, setEditBirthMonth] = useState('');
+  const [editBirthDay, setEditBirthDay] = useState('');
+  const [editBirthYear, setEditBirthYear] = useState('');
   const [editSelectedCrops, setEditSelectedCrops] = useState<string[]>([]);
   const [editAffiliations, setEditAffiliations] = useState<MemberAffiliation[]>([]);
   
@@ -178,6 +203,13 @@ export default function SecretaryView({
     e.preventDefault();
     if (!memberName.trim()) return;
 
+    const birthDate = getBirthDateFromInputs(memberBirthMonth, memberBirthDay, memberBirthYear);
+    if (birthDate === null) {
+      setBirthDateError('Enter a valid month, day, and year, or leave all three blank.');
+      return;
+    }
+    setBirthDateError('');
+
     const finalMemberId = memberIdNum || `AFA-2026-0${members.length + 1}`;
     const cleanUsername = (loginUsername.trim() || memberName.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '.')).toLowerCase();
     const cleanPassword = loginPassword.trim() || 'password123';
@@ -191,7 +223,7 @@ export default function SecretaryView({
       farmLocation: memberSitio,
       primaryCrops: selectedCrops.length > 0 ? selectedCrops : ['Vegetables (Utanon)'],
       gender: memberGender,
-      birthDate: memberBirthDate || undefined,
+      birthDate: birthDate || undefined,
       status: 'Active',
       affiliations: memberAffiliations.length > 0 ? memberAffiliations : undefined
     }, createLoginAccount ? {
@@ -217,7 +249,10 @@ export default function SecretaryView({
     setMemberRsbsa('');
     setIsRsbsaRegistered(true);
     setMemberGender('Male');
-    setMemberBirthDate('');
+    setMemberBirthMonth('');
+    setMemberBirthDay('');
+    setMemberBirthYear('');
+    setBirthDateError('');
     setSelectedCrops([]);
     setMemberAffiliations([]);
     setLoginUsername('');
@@ -235,7 +270,11 @@ export default function SecretaryView({
     setEditRsbsa(member.rsbsaNumber || '');
     setEditIsRsbsa(member.isRsbsaRegistered ?? true);
     setEditGender(member.gender || 'Male');
-    setEditBirthDate(member.birthDate || '');
+    const birthDateParts = splitBirthDate(member.birthDate || '');
+    setEditBirthMonth(birthDateParts.month);
+    setEditBirthDay(birthDateParts.day);
+    setEditBirthYear(birthDateParts.year);
+    setBirthDateError('');
     setEditSelectedCrops(member.primaryCrops || []);
     setEditAffiliations(member.affiliations || []);
   };
@@ -252,6 +291,13 @@ export default function SecretaryView({
     e.preventDefault();
     if (!editingMember || !editName.trim()) return;
 
+    const birthDate = getBirthDateFromInputs(editBirthMonth, editBirthDay, editBirthYear);
+    if (birthDate === null) {
+      setBirthDateError('Enter a valid month, day, and year, or leave all three blank.');
+      return;
+    }
+    setBirthDateError('');
+
     const updated: Member = {
       ...editingMember,
       name: editName.trim(),
@@ -262,7 +308,7 @@ export default function SecretaryView({
       farmLocation: editSitio,
       primaryCrops: editSelectedCrops.length > 0 ? editSelectedCrops : ['Vegetables (Utanon)'],
       gender: editGender,
-      birthDate: editBirthDate || undefined,
+      birthDate: birthDate || undefined,
       affiliations: editAffiliations
     };
 
@@ -914,7 +960,7 @@ export default function SecretaryView({
                 </div>
 
                 {/* Gender & Birth Date */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Gender</label>
                     <select
@@ -927,14 +973,20 @@ export default function SecretaryView({
                       <option value="Other">Other</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Birth Date</label>
-                    <input
-                      type="date"
-                      value={memberBirthDate}
-                      onChange={(e) => setMemberBirthDate(e.target.value)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
-                    />
+                  <div className="space-y-2">
+                    <label className="block text-sm font-bold text-[#1B4332]">Birth Date (Optional)</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="text-xs font-semibold text-[#3A4A42]">Month
+                        <input type="text" inputMode="numeric" maxLength={2} placeholder="MM" aria-label="Birth month" value={memberBirthMonth} onChange={(e) => { setMemberBirthMonth(e.target.value); setBirthDateError(''); }} className="mt-1 w-full min-w-0 px-3 py-3 text-base bg-white border border-[#D5CFC1] rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]" />
+                      </label>
+                      <label className="text-xs font-semibold text-[#3A4A42]">Day
+                        <input type="text" inputMode="numeric" maxLength={2} placeholder="DD" aria-label="Birth day" value={memberBirthDay} onChange={(e) => { setMemberBirthDay(e.target.value); setBirthDateError(''); }} className="mt-1 w-full min-w-0 px-3 py-3 text-base bg-white border border-[#D5CFC1] rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]" />
+                      </label>
+                      <label className="text-xs font-semibold text-[#3A4A42]">Year
+                        <input type="text" inputMode="numeric" maxLength={4} placeholder="YYYY" aria-label="Birth year" value={memberBirthYear} onChange={(e) => { setMemberBirthYear(e.target.value); setBirthDateError(''); }} className="mt-1 w-full min-w-0 px-3 py-3 text-base bg-white border border-[#D5CFC1] rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]" />
+                      </label>
+                    </div>
+                    {birthDateError && <p role="alert" className="text-sm text-red-700">{birthDateError}</p>}
                   </div>
                 </div>
 
@@ -1176,7 +1228,7 @@ export default function SecretaryView({
                 </div>
 
                 {/* Gender & Birth Date */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Gender</label>
                     <select
@@ -1189,14 +1241,20 @@ export default function SecretaryView({
                       <option value="Other">Other</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Birth Date</label>
-                    <input
-                      type="date"
-                      value={editBirthDate}
-                      onChange={(e) => setEditBirthDate(e.target.value)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
-                    />
+                  <div className="space-y-2">
+                    <label className="block text-sm font-bold text-[#1B4332]">Birth Date (Optional)</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="text-xs font-semibold text-[#3A4A42]">Month
+                        <input type="text" inputMode="numeric" maxLength={2} placeholder="MM" aria-label="Birth month" value={editBirthMonth} onChange={(e) => { setEditBirthMonth(e.target.value); setBirthDateError(''); }} className="mt-1 w-full min-w-0 px-3 py-3 text-base bg-white border border-[#D5CFC1] rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]" />
+                      </label>
+                      <label className="text-xs font-semibold text-[#3A4A42]">Day
+                        <input type="text" inputMode="numeric" maxLength={2} placeholder="DD" aria-label="Birth day" value={editBirthDay} onChange={(e) => { setEditBirthDay(e.target.value); setBirthDateError(''); }} className="mt-1 w-full min-w-0 px-3 py-3 text-base bg-white border border-[#D5CFC1] rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]" />
+                      </label>
+                      <label className="text-xs font-semibold text-[#3A4A42]">Year
+                        <input type="text" inputMode="numeric" maxLength={4} placeholder="YYYY" aria-label="Birth year" value={editBirthYear} onChange={(e) => { setEditBirthYear(e.target.value); setBirthDateError(''); }} className="mt-1 w-full min-w-0 px-3 py-3 text-base bg-white border border-[#D5CFC1] rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]" />
+                      </label>
+                    </div>
+                    {birthDateError && <p role="alert" className="text-sm text-red-700">{birthDateError}</p>}
                   </div>
                 </div>
 
