@@ -355,7 +355,6 @@ async function initDatabaseSchema(pool) {
         is_approved BOOLEAN DEFAULT TRUE,
         joined_date VARCHAR(50),
         farm_location TEXT,
-        farm_size NUMERIC,
         primary_crops TEXT[],
         contact_number VARCHAR(50),
         status VARCHAR(50),
@@ -370,7 +369,6 @@ async function initDatabaseSchema(pool) {
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
         farm_location TEXT,
-        farm_size NUMERIC,
         primary_crops TEXT[],
         contact_number VARCHAR(50),
         status VARCHAR(50) DEFAULT 'Active',
@@ -748,8 +746,8 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Saving", activeUsers.length, "users...");
       for (const u of activeUsers) {
         await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, farm_size, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           ON CONFLICT (id) DO UPDATE SET
             username = EXCLUDED.username,
             password = EXCLUDED.password,
@@ -758,7 +756,6 @@ async function saveFullStateToPostgres(pool, state) {
             is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
-            farm_size = EXCLUDED.farm_size,
             primary_crops = EXCLUDED.primary_crops,
             contact_number = EXCLUDED.contact_number,
             status = EXCLUDED.status,
@@ -775,7 +772,6 @@ async function saveFullStateToPostgres(pool, state) {
           u.isApproved,
           u.joinedDate || null,
           u.farmLocation || null,
-          u.farmSize || null,
           u.primaryCrops || [],
           u.contactNumber || null,
           u.status || "Active",
@@ -792,12 +788,11 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Saving", activeMembers.length, "members...");
       for (const m of activeMembers) {
         await client.query(`
-          INSERT INTO members (id, name, farm_location, farm_size, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          INSERT INTO members (id, name, farm_location, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             farm_location = EXCLUDED.farm_location,
-            farm_size = EXCLUDED.farm_size,
             primary_crops = EXCLUDED.primary_crops,
             contact_number = EXCLUDED.contact_number,
             status = EXCLUDED.status,
@@ -812,7 +807,6 @@ async function saveFullStateToPostgres(pool, state) {
           m.id,
           m.name,
           m.farmLocation || null,
-          m.farmSize || null,
           m.primaryCrops || [],
           m.contactNumber || null,
           m.status || "Active",

@@ -30,7 +30,6 @@ export interface User {
   rsbsaNumber?: string;
   isRsbsaRegistered?: boolean;
   farmLocation?: string; // for Member role (e.g. Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak)
-  farmSize?: number; // in hectares, for Member role
   primaryCrops?: string[]; // for Member role
   contactNumber?: string;
   joinedDate?: string;
@@ -46,7 +45,6 @@ export interface Member {
   rsbsaNumber?: string; // Registry System for Basic Sectors in Agriculture (e.g. 07-22-51-001-000123)
   isRsbsaRegistered?: boolean;
   farmLocation: string; // e.g. Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak
-  farmSize?: number; // in hectares (optional/not requested by AFA)
   primaryCrops: string[]; // e.g. Corn, Coconut, Banana, Cacao, Vegetables
   contactNumber: string;
   status: 'Active' | 'Inactive';
