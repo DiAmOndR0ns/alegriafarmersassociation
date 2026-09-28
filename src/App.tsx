@@ -2102,7 +2102,7 @@ export default function App() {
                   title="Sign out of member portal"
                 >
                   <LogOut className="w-4 h-4 shrink-0" />
-                  <span>Gawas (Logout)</span>
+                  <span>Logout</span>
                 </button>
               </div>
 
@@ -2225,7 +2225,7 @@ export default function App() {
                 title="Sign out of administration suite"
               >
                 <LogOut className="w-4 h-4 shrink-0" />
-                <span>Gawas (Logout)</span>
+                <span>Logout</span>
               </button>
             </div>
 
@@ -2321,7 +2321,7 @@ export default function App() {
               title="Sign out of administration suite"
             >
               <LogOut className="w-4.5 h-4.5 shrink-0 text-rose-400" />
-              <span className="truncate">Gawas (Logout)</span>
+              <span className="truncate">Logout</span>
             </button>
           </nav>
 
@@ -2599,7 +2599,7 @@ export default function App() {
                     <Users className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-[#1B4332]">My Member Dashboard & ID (Officer as Member)</h2>
+                    <h2 className="text-base font-black text-[#1B4332]">My Member Dashboard & ID </h2>
                     <p className="text-xs text-slate-600 font-bold">
                       View and manage your personal AFA member credentials, digital ID badge, and benefits ({currentUser?.role.replace('_', ' ')}).
                     </p>
