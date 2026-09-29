@@ -126,6 +126,8 @@
    */
 
   /* Pale body text (slate-300/400/500) is invisible on light surfaces. */
+  body .text-slate-100,
+  body .text-slate-200,
   body .text-slate-300,
   body .text-slate-400,
   body .text-slate-500,
@@ -243,14 +245,38 @@
     color: #ffffff !important;
   }
 
+  body [class*="bg-[#1B4332]"] .text-slate-100,
+  body [class*="bg-[#1B4332]"] .text-slate-200,
   body [class*="bg-[#1B4332]"] .text-slate-300,
   body [class*="bg-[#1B4332]"] .text-slate-400,
+  body [class*="bg-[#143326]"] .text-slate-100,
+  body [class*="bg-[#143326]"] .text-slate-200,
   body [class*="bg-[#143326]"] .text-slate-300,
   body [class*="bg-[#143326]"] .text-slate-400,
+  body [class*="bg-[#081C15]"] .text-slate-100,
+  body [class*="bg-[#081C15]"] .text-slate-200,
   body [class*="bg-[#081C15]"] .text-slate-300,
   body [class*="bg-[#081C15]"] .text-slate-400,
+  body [class*="bg-[#0F2D24]"] .text-slate-100,
+  body [class*="bg-[#0F2D24]"] .text-slate-200,
+  body [class*="bg-[#0F2D24]"] .text-slate-300,
+  body [class*="bg-[#0F2D24]"] .text-slate-400,
+  body [class*="bg-[#122E22]"] .text-slate-100,
+  body [class*="bg-[#122E22]"] .text-slate-200,
+  body [class*="bg-[#122E22]"] .text-slate-300,
+  body [class*="bg-[#122E22]"] .text-slate-400,
+  body [class*="bg-bafa-700"] .text-slate-100,
+  body [class*="bg-bafa-700"] .text-slate-200,
+  body [class*="bg-bafa-700"] .text-slate-300,
+  body [class*="bg-bafa-700"] .text-slate-400,
+  body [class*="bg-bafa-800"] .text-slate-100,
+  body [class*="bg-bafa-800"] .text-slate-200,
   body [class*="bg-bafa-800"] .text-slate-300,
-  body [class*="bg-bafa-800"] .text-slate-400 {
+  body [class*="bg-bafa-800"] .text-slate-400,
+  body [class*="bg-bafa-900"] .text-slate-100,
+  body [class*="bg-bafa-900"] .text-slate-200,
+  body [class*="bg-bafa-900"] .text-slate-300,
+  body [class*="bg-bafa-900"] .text-slate-400 {
     color: #d8f3dc !important;
   }
 
@@ -467,6 +493,63 @@
   /* Dark slate panels that were remapped to light keep their text dark. */
   body [class*="bg-emerald-9"].text-emerald-300 {
     color: #6ee7b7 !important;
+  }
+
+  /* Restore strong foreground contrast on solid accent controls. */
+  body [class*="bg-emerald-5"].text-white,
+  body [class*="bg-emerald-5"] .text-white,
+  body [class*="bg-emerald-6"].text-white,
+  body [class*="bg-emerald-6"] .text-white,
+  body [class*="bg-amber-5"].text-white,
+  body [class*="bg-amber-5"] .text-white,
+  body [class*="bg-amber-6"].text-white,
+  body [class*="bg-amber-6"] .text-white,
+  body .bg-bafa-coral-500.text-white,
+  body .bg-bafa-coral-500 .text-white {
+    color: #00140d !important;
+  }
+
+  body [class*="bg-emerald-7"].text-white,
+  body [class*="bg-emerald-7"] .text-white,
+  body [class*="bg-emerald-8"].text-white,
+  body [class*="bg-emerald-8"] .text-white,
+  body [class*="bg-emerald-9"].text-white,
+  body [class*="bg-emerald-9"] .text-white,
+  body [class*="bg-rose-6"].text-white,
+  body [class*="bg-rose-6"] .text-white,
+  body [class*="bg-rose-7"].text-white,
+  body [class*="bg-rose-7"] .text-white,
+  body [class*="bg-rose-8"].text-white,
+  body [class*="bg-rose-8"] .text-white,
+  body [class*="bg-rose-9"].text-white,
+  body [class*="bg-rose-9"] .text-white,
+  body [class*="bg-red-6"].text-white,
+  body [class*="bg-red-6"] .text-white,
+  body [class*="bg-red-7"].text-white,
+  body [class*="bg-red-7"] .text-white,
+  body [class*="bg-red-8"].text-white,
+  body [class*="bg-red-8"] .text-white,
+  body [class*="bg-red-9"].text-white,
+  body [class*="bg-red-9"] .text-white,
+  body [class*="bg-blue-6"].text-white,
+  body [class*="bg-blue-6"] .text-white,
+  body [class*="bg-blue-7"].text-white,
+  body [class*="bg-blue-7"] .text-white,
+  body [class*="bg-blue-8"].text-white,
+  body [class*="bg-blue-8"] .text-white,
+  body [class*="bg-blue-9"].text-white,
+  body [class*="bg-blue-9"] .text-white,
+  body [class*="bg-bafa-7"].text-white,
+  body [class*="bg-bafa-7"] .text-white,
+  body [class*="bg-bafa-8"].text-white,
+  body [class*="bg-bafa-8"] .text-white,
+  body [class*="bg-bafa-9"].text-white,
+  body [class*="bg-bafa-9"] .text-white,
+  body .bg-bafa-coral-600.text-white,
+  body .bg-bafa-coral-600 .text-white,
+  body [class*="bg-[#D32F2F]"].text-white,
+  body [class*="bg-[#D32F2F]"] .text-white {
+    color: #ffffff !important;
   }
 }
 

@@ -12,6 +12,7 @@ import {
 import OfflineIndicator from './components/OfflineIndicator';
 import SecretaryView from './components/SecretaryView';
 import TreasurerView from './components/TreasurerView';
+import AuditorView from './components/AuditorView';
 import PioView from './components/PioView';
 import ExecutiveView from './components/ExecutiveView';
 import AnnouncementDashboard from './components/AnnouncementDashboard';
@@ -2221,7 +2222,7 @@ export default function App() {
                 id="header-officer-logout-btn"
                 type="button"
                 onClick={handleLogout}
-                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-xs cursor-pointer transition-all shadow-sm flex items-center gap-1.5 shrink-0 border border-rose-500 ml-1"
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-xs cursor-pointer transition-all shadow-sm flex items-center gap-1.5 shrink-0 border border-rose-500 ml-1 lg:hidden"
                 title="Sign out of administration suite"
               >
                 <LogOut className="w-4 h-4 shrink-0" />
@@ -2515,19 +2516,24 @@ export default function App() {
               />
             )}
 
-            {/* Treasurer & Auditor View */}
-            {(currentRole === 'Treasurer' || currentRole === 'Auditor') && (
+            {currentRole === 'Treasurer' && (
               <TreasurerView
                 transactions={transactions}
                 funds={funds}
                 hogRaising={hogRaising}
                 onAddTransaction={handleAddTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
-                onAuditTransaction={handleAuditTransaction}
                 onUpdateCapitalGrant={handleUpdateCapitalGrant}
                 onAddFund={handleAddFund}
                 onDeleteFund={handleDeleteFund}
-                currentRole={currentRole}
+                onOpenReportModal={() => setShowReportModal(true)}
+              />
+            )}
+
+            {currentRole === 'Auditor' && (
+              <AuditorView
+                transactions={transactions}
+                onAuditTransaction={handleAuditTransaction}
                 onOpenReportModal={() => setShowReportModal(true)}
               />
             )}

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FinancialTransaction, OfficerRole, OrganizationFund, HogRaisingState } from '../types';
+import { FinancialTransaction, OrganizationFund, HogRaisingState } from '../types';
 import { INITIAL_FUNDS, INITIAL_HOG_RAISING } from '../initialData';
 import { 
   Coins, ArrowUpRight, ArrowDownRight, Plus, 
@@ -23,11 +23,9 @@ interface TreasurerViewProps {
   hogRaising?: HogRaisingState;
   onAddTransaction: (tx: Omit<FinancialTransaction, 'id' | 'auditedStatus'>) => void;
   onDeleteTransaction?: (id: string) => void;
-  onAuditTransaction: (id: string, status: 'Audited' | 'Flagged', notes: string) => void;
   onUpdateCapitalGrant?: (amount: number) => void;
   onAddFund?: (fund: Omit<OrganizationFund, 'id' | 'lastUpdated'>) => void;
   onDeleteFund?: (id: string) => void;
-  currentRole: OfficerRole;
   onOpenReportModal?: () => void;
 }
 
@@ -37,18 +35,14 @@ export default function TreasurerView({
   hogRaising = INITIAL_HOG_RAISING,
   onAddTransaction,
   onDeleteTransaction,
-  onAuditTransaction,
   onUpdateCapitalGrant,
   onAddFund,
   onDeleteFund,
-  currentRole,
   onOpenReportModal
 }: TreasurerViewProps) {
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterAudit, setFilterAudit] = useState<'all' | 'Unaudited' | 'Audited' | 'Flagged'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showAuditModal, setShowAuditModal] = useState(false);
-  const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
 
   // Hog IGP Chart Filter States
   const [chartYear, setChartYear] = useState<string>('all');
@@ -92,8 +86,6 @@ export default function TreasurerView({
   const [fundFormDescription, setFundFormDescription] = useState('');
 
   // Audit Form
-  const [auditStatus, setAuditStatus] = useState<'Audited' | 'Flagged'>('Audited');
-  const [auditNotes, setAuditNotes] = useState('');
 
   const CATEGORIES = {
     income: ['Membership Dues', 'Donation', 'Livelihood Assistance', 'Produce Sales', 'Coop Fee', 'Other Income'],
@@ -349,29 +341,12 @@ export default function TreasurerView({
     setShowAddModal(false);
   };
 
-  const handleAuditClick = (txId: string, defaultStatus: 'Audited' | 'Flagged') => {
-    setSelectedTxId(txId);
-    setAuditStatus(defaultStatus);
-    setAuditNotes('');
-    setShowAuditModal(true);
-  };
-
-  const handleAuditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTxId) return;
-    onAuditTransaction(selectedTxId, auditStatus, auditNotes.trim() || 'No audit comments.');
-    setSelectedTxId(null);
-    setShowAuditModal(false);
-  };
-
   // Filter Transactions
   const filteredTx = transactions.filter(t => {
     const matchesType = filterType === 'all' || t.type === filterType;
     const matchesAudit = filterAudit === 'all' || t.auditedStatus === filterAudit;
     return matchesType && matchesAudit;
   });
-
-  const isAuditor = currentRole === 'Auditor';
 
   return (
     <div id="treasurer-view-container" className="space-y-6">
@@ -434,7 +409,7 @@ export default function TreasurerView({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {(currentRole === 'Treasurer' || currentRole === 'Auditor') && (
+            {onAddFund && (
               <button
                 type="button"
                 onClick={() => setShowAddFundModal(true)}
@@ -481,7 +456,7 @@ export default function TreasurerView({
                     </div>
                     <p className="text-xs text-[#4A5F57] mt-1">{fund.description}</p>
                   </div>
-                  {onDeleteFund && (currentRole === 'Treasurer' || currentRole === 'Auditor') && (
+                  {onDeleteFund && (
                     <button
                       type="button"
                       title="Tangtangon kining pundo gikan sa database"
@@ -609,7 +584,7 @@ export default function TreasurerView({
           <div className="bg-slate-900/80 border border-slate-700/60 p-3.5 rounded-xl">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Capital Allocation</span>
-              {onUpdateCapitalGrant && (currentRole === 'Treasurer' || currentRole === 'Auditor') && !isEditingGrant && (
+              {onUpdateCapitalGrant && !isEditingGrant && (
                 <button
                   type="button"
                   onClick={() => setIsEditingGrant(true)}
@@ -829,12 +804,10 @@ export default function TreasurerView({
         <div>
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
             <Coins className="w-5 h-5 text-emerald-400" />
-            <span>{isAuditor ? 'Auditor Financial Oversight' : 'Treasurer Financial Ledger'}</span>
+            <span>Treasurer Financial Ledger</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            {isAuditor
-              ? 'Verify association transaction records and highlight any financial discrepancies.'
-              : 'Record all incoming payments, member dues, and association expenses.'}
+            Record all incoming payments, member dues, and association expenses.
           </p>
         </div>
 
@@ -847,25 +820,18 @@ export default function TreasurerView({
               className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold bg-slate-900 hover:bg-slate-850 text-emerald-400 border border-emerald-500/30 rounded-xl shadow-sm transition-all w-full md:w-auto cursor-pointer"
             >
               <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>{isAuditor ? 'Export Auditor Report' : 'Export Financial Report'}</span>
+              <span>Export Financial Report</span>
             </button>
           )}
 
-          {!isAuditor ? (
-            <button
-              id="record-tx-btn"
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all w-full md:w-auto"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Log Transaction</span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-1.5 bg-slate-900 px-3 py-2 rounded-xl border border-slate-700/60 text-xs text-emerald-400 font-semibold w-full md:w-auto justify-center">
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>Auditor Active Security Mode</span>
-            </div>
-          )}
+          <button
+            id="record-tx-btn"
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all w-full md:w-auto"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Log Transaction</span>
+          </button>
         </div>
       </div>
 
@@ -972,37 +938,6 @@ export default function TreasurerView({
                     {tx.type === 'income' ? '+' : '-'} PHP {tx.amount.toLocaleString()}
                   </div>
 
-                  {/* Audit Actions (Visible to Auditor) */}
-                  {isAuditor ? (
-                    tx.auditedStatus === 'Unaudited' ? (
-                      <div className="flex gap-2">
-                        <button
-                          id={`flag-btn-${tx.id}`}
-                          onClick={() => handleAuditClick(tx.id, 'Flagged')}
-                          className="flex items-center gap-1 text-[11px] font-bold text-red-400 bg-red-950/30 hover:bg-red-900/30 border border-red-500/20 px-2.5 py-1 rounded-lg transition-all"
-                        >
-                          <AlertTriangle className="w-3 h-3" />
-                          <span>Flag</span>
-                        </button>
-                        <button
-                          id={`verify-btn-${tx.id}`}
-                          onClick={() => handleAuditClick(tx.id, 'Audited')}
-                          className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/30 hover:bg-emerald-900/30 border border-emerald-500/20 px-2.5 py-1 rounded-lg transition-all"
-                        >
-                          <ShieldCheck className="w-3 h-3" />
-                          <span>Approve</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        id={`re-audit-${tx.id}`}
-                        onClick={() => handleAuditClick(tx.id, tx.auditedStatus === 'Audited' ? 'Audited' : 'Flagged')}
-                        className="text-[10px] text-slate-500 hover:text-slate-300 underline font-medium transition-colors"
-                      >
-                        Re-evaluate Audit
-                      </button>
-                    )
-                  ) : (
                   <div className="flex items-center gap-2">
                     {/* Display Audit Status Badge to Treasurer */}
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
@@ -1029,7 +964,6 @@ export default function TreasurerView({
                       </button>
                     )}
                   </div>
-                  )}
                 </div>
               </div>
             ))
@@ -1167,12 +1101,10 @@ export default function TreasurerView({
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
-                {currentRole === 'Treasurer' && (
-                  <button type="button" onClick={() => setShowCategoryModal(true)} className="shrink-0 inline-flex items-center gap-1 rounded-xl border-[#2D6A4F] bg-[#EAF6EE] px-3 py-2 text-sm font-bold text-[#1B4332] hover:bg-[#D6EFD9]" aria-label="Add a custom transaction category" title="Add a custom category">
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">Add category</span>
-                  </button>
-                )}
+                <button type="button" onClick={() => setShowCategoryModal(true)} className="shrink-0 inline-flex items-center gap-1 rounded-xl border-[#2D6A4F] bg-[#EAF6EE] px-3 py-2 text-sm font-bold text-[#1B4332] hover:bg-[#D6EFD9]" aria-label="Add a custom transaction category" title="Add a custom category">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Add category</span>
+                </button>
                 <p className="mt-1 text-xs text-[#4B6259]">Choose a category or add one for this role, such as Budget Source Allocation.</p>
               </div>
 
@@ -1540,85 +1472,6 @@ export default function TreasurerView({
         </div>
       )}
 
-      {/* AUDITOR REVIEW MODAL */}
-      {showAuditModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-            <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="font-bold text-white text-base">Conduct Financial Audit</h3>
-              <button 
-                onClick={() => { setSelectedTxId(null); setShowAuditModal(false); }}
-                className="text-slate-400 hover:text-white text-lg font-bold"
-              >
-                &times;
-              </button>
-            </div>
-            <form onSubmit={handleAuditSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-2">Audit Verdict</label>
-                <div className="grid grid-cols-2 gap-2 bg-slate-900 p-1 rounded-xl border border-slate-750">
-                  <button
-                    type="button"
-                    onClick={() => setAuditStatus('Audited')}
-                    className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
-                      auditStatus === 'Audited' 
-                        ? 'bg-emerald-600 text-white shadow-sm' 
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    <span>Verify & Approve</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuditStatus('Flagged')}
-                    className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
-                      auditStatus === 'Flagged' 
-                        ? 'bg-rose-700 text-white shadow-sm' 
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Flag / Action Req.</span>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Audit Explanatory Comments</label>
-                <textarea
-                  rows={4}
-                  required
-                  placeholder={
-                    auditStatus === 'Audited'
-                      ? 'e.g. Matched receipts and verified correct with cash-on-hand.'
-                      : 'e.g. Missing receipt or mismatch in totals. Please provide proof of payment.'
-                  }
-                  value={auditNotes}
-                  onChange={(e) => setAuditNotes(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500 font-sans"
-                />
-              </div>
-
-              <div className="pt-2 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => { setSelectedTxId(null); setShowAuditModal(false); }}
-                  className="flex-1 py-2.5 text-sm font-semibold bg-slate-700 hover:bg-slate-650 text-slate-200 rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all"
-                >
-                  Submit Audit Decision
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
