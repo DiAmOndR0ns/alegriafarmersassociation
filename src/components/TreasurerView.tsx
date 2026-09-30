@@ -837,8 +837,8 @@ export default function TreasurerView({
 
       {/* FILTER & LEDGER LIST */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-750">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase shrink-0">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 bg-[#EAF6EE] p-3 rounded-xl border border-[#D5CFC1]">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[#1B4332] uppercase shrink-0">
             <Filter className="w-3.5 h-3.5" />
             <span>Filters:</span>
           </div>
@@ -846,7 +846,7 @@ export default function TreasurerView({
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as any)}
-              className="px-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+              className="px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] focus:outline-none focus:border-[#2D6A4F]"
             >
               <option value="all">All Types</option>
               <option value="income">Income Only</option>
@@ -856,7 +856,7 @@ export default function TreasurerView({
             <select
               value={filterAudit}
               onChange={(e) => setFilterAudit(e.target.value as any)}
-              className="px-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+              className="px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] focus:outline-none focus:border-[#2D6A4F]"
             >
               <option value="all">All Audit Statuses</option>
               <option value="Unaudited">Unaudited</option>
