@@ -453,7 +453,6 @@ async function initDatabaseSchema(pool) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS hog_raising (
         id VARCHAR(100) PRIMARY KEY,
-        capital_grant NUMERIC,
         opening_hog_count INTEGER NOT NULL DEFAULT 0,
         produces TEXT[],
         expenses JSONB,
@@ -892,12 +891,10 @@ async function saveFullStateToPostgres(pool, state) {
     }
     if (state.hogRaising) {
       console.log("[DB DEBUG] Saving hog raising state...");
-      const grantAmount = typeof state.hogRaising.capitalGrant === "number" ? state.hogRaising.capitalGrant : Number(state.hogRaising.capitalGrant) || 0;
       await client.query(`
-        INSERT INTO hog_raising (id, capital_grant, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (id) DO UPDATE SET
-          capital_grant = EXCLUDED.capital_grant,
           opening_hog_count = EXCLUDED.opening_hog_count,
           produces = EXCLUDED.produces,
           expenses = EXCLUDED.expenses,
@@ -907,7 +904,6 @@ async function saveFullStateToPostgres(pool, state) {
           closed_years = EXCLUDED.closed_years;
       `, [
         "main_state",
-        grantAmount,
         Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
         state.hogRaising.produces || ["Hog Raising"],
         JSON.stringify(state.hogRaising.expenses || []),

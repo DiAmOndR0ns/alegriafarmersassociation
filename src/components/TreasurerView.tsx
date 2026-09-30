@@ -5,7 +5,7 @@ import {
   Coins, ArrowUpRight, ArrowDownRight, Plus, 
   Search, ShieldCheck, AlertTriangle, CheckCircle, 
   XCircle, Filter, FileText, Info, Building2, Wallet, Database,
-  Briefcase, TrendingUp, BarChart3, Calendar, Sparkles, Trash2} from 'lucide-react';
+  Briefcase, BarChart3, Calendar, Sparkles, Trash2} from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -23,7 +23,6 @@ interface TreasurerViewProps {
   hogRaising?: HogRaisingState;
   onAddTransaction: (tx: Omit<FinancialTransaction, 'id' | 'auditedStatus'>) => void;
   onDeleteTransaction?: (id: string) => void;
-  onUpdateCapitalGrant?: (amount: number) => void;
   onAddFund?: (fund: Omit<OrganizationFund, 'id' | 'lastUpdated'>) => void;
   onDeleteFund?: (id: string) => void;
   onOpenReportModal?: () => void;
@@ -35,7 +34,6 @@ export default function TreasurerView({
   hogRaising = INITIAL_HOG_RAISING,
   onAddTransaction,
   onDeleteTransaction,
-  onUpdateCapitalGrant,
   onAddFund,
   onDeleteFund,
   onOpenReportModal
@@ -47,17 +45,6 @@ export default function TreasurerView({
   // Hog IGP Chart Filter States
   const [chartYear, setChartYear] = useState<string>('all');
   const [chartProduce, setChartProduce] = useState<string>('Hog Raising');
-
-  // Dynamic Capital Grant State from DB
-  const liveCapitalGrant = typeof hogRaising?.capitalGrant === 'number'
-    ? hogRaising.capitalGrant
-    : (Number(hogRaising?.capitalGrant) || 0);
-  const [isEditingGrant, setIsEditingGrant] = useState(false);
-  const [grantInput, setGrantInput] = useState(liveCapitalGrant.toString());
-
-  useEffect(() => {
-    setGrantInput(liveCapitalGrant.toString());
-  }, [liveCapitalGrant]);
 
   // Add Transaction Form
   const [txType, setTxType] = useState<'income' | 'expense'>('income');
@@ -550,7 +537,7 @@ export default function TreasurerView({
         </div>
 
         {/* SUMMARY KPI CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
             <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total IGP Sales</span>
             <div className="text-lg font-black text-emerald-700 font-mono mt-0.5">
@@ -581,82 +568,6 @@ export default function TreasurerView({
             </span>
           </div>
 
-          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Capital Allocation</span>
-              {onUpdateCapitalGrant && !isEditingGrant && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingGrant(true)}
-                  className="text-[10px] font-bold text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded transition cursor-pointer"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
-
-            {isEditingGrant ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const val = parseFloat(grantInput);
-                  if (!isNaN(val) && val >= 0) {
-                    onUpdateCapitalGrant?.(val);
-                    setIsEditingGrant(false);
-                  }
-                }}
-                className="mt-1.5 space-y-1.5"
-              >
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono text-[#4A5F57]">₱</span>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={grantInput}
-                    onChange={(e) => setGrantInput(e.target.value)}
-                    className="w-full bg-white border border-amber-500 rounded-lg pl-6 pr-2 py-1 text-sm font-mono text-amber-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                    placeholder="0.00"
-                    autoFocus
-                  />
-                </div>
-                <div className="flex gap-1.5 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditingGrant(false);
-                      setGrantInput(liveCapitalGrant.toString());
-                    }}
-                    className="px-2 py-0.5 text-[10px] font-bold bg-bafa-neutral-100 hover:bg-bafa-neutral-200 text-[#1B4332] rounded cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-2.5 py-0.5 text-[10px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded cursor-pointer font-black"
-                  >
-                    Save DB
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <>
-                <div className="text-lg font-black text-amber-800 font-mono mt-0.5">
-                  PHP {liveCapitalGrant.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-[10px] text-emerald-700 mt-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" />
-                    <span>DOLE & DA Seed Capital</span>
-                  </span>
-                  <span className="text-[9px] text-[#4A5F57] font-mono flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Live DB</span>
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
         </div>
 
         {/* RECHARTS BAR CHART CANVAS */}

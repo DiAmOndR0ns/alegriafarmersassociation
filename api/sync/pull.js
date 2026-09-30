@@ -453,7 +453,6 @@ async function initDatabaseSchema(pool) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS hog_raising (
         id VARCHAR(100) PRIMARY KEY,
-        capital_grant NUMERIC,
         opening_hog_count INTEGER NOT NULL DEFAULT 0,
         produces TEXT[],
         expenses JSONB,
@@ -675,7 +674,6 @@ async function fetchAllDataFromPostgres(pool) {
     } catch {
     }
     let hogState = {
-      capitalGrant: 0,
       openingHogCount: 0,
       produces: ["Hog Raising", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"],
       expenses: [],
@@ -695,7 +693,6 @@ async function fetchAllDataFromPostgres(pool) {
         cleanProduces.push("Sacks Rental (Abang sa Sako)");
       }
       hogState = {
-        capitalGrant: Number(row.capital_grant || 0),
         openingHogCount: Number(row.opening_hog_count || 0),
         produces: cleanProduces,
         expenses: row.expenses || [],

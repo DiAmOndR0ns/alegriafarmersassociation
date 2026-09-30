@@ -12,8 +12,7 @@ import {
   deleteEntityFromPostgres,
   ensureDatabaseSchema,
   purgeAllDummyData,
-  getTableStats,
-  updateDatabaseCapitalGrant
+  getTableStats
 } from "./src/api/db";
 
 dotenv.config();
@@ -142,36 +141,6 @@ async function startServer() {
         success: false,
         message: `Failed to purge dummy data: ${err?.message || err}`,
       });
-    }
-  });
-
-  // Dedicated API to Get and Update Capital Grant directly in Cloud DB
-  app.get("/api/db/capital-grant", async (req, res) => {
-    if (!isDatabaseConfigured()) {
-      return res.json({ success: false, offlineMode: true, capitalGrant: 0 });
-    }
-    try {
-      const pool = getPool();
-      const queryRes = await pool.query("SELECT capital_grant FROM hog_raising WHERE id IN ('main_state', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
-      const capitalGrant = Number(queryRes.rows[0]?.capital_grant || 0);
-      return res.json({ success: true, capitalGrant });
-    } catch (err: any) {
-      return res.status(500).json({ success: false, error: err?.message || err });
-    }
-  });
-
-  app.post("/api/db/capital-grant", async (req, res) => {
-    if (!isDatabaseConfigured()) {
-      return res.json({ success: false, offlineMode: true, message: "Database not configured" });
-    }
-    try {
-      const { amount } = req.body;
-      const numAmount = typeof amount === 'number' ? amount : (parseFloat(amount) || 0);
-      const pool = getPool();
-      const updatedAmount = await updateDatabaseCapitalGrant(pool, numAmount);
-      return res.json({ success: true, capitalGrant: updatedAmount });
-    } catch (err: any) {
-      return res.status(500).json({ success: false, error: err?.message || err });
     }
   });
 

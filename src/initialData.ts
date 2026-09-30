@@ -228,7 +228,6 @@ export const INITIAL_AUDITOR_REPORTS: AuditorReport[] = [];
 export const INITIAL_DELEGATIONS: DelegationRequest[] = [];
 
 export const INITIAL_HOG_RAISING: HogRaisingState = {
-  capitalGrant: 0,
   openingHogCount: 0,
   produces: ['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'],
   expenses: [],

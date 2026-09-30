@@ -296,7 +296,6 @@ export async function initDatabaseSchema(pool: pg.Pool) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS hog_raising (
         id VARCHAR(100) PRIMARY KEY,
-        capital_grant NUMERIC,
         opening_hog_count INTEGER NOT NULL DEFAULT 0,
         produces TEXT[],
         expenses JSONB,
@@ -647,8 +646,8 @@ export async function purgeAllDummyData(pool: pg.Pool) {
     // Reset hog_raising to clean Association IGP state
     await client.query('DELETE FROM hog_raising');
     await client.query(`
-      INSERT INTO hog_raising (id, capital_grant, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
-      VALUES ('main_state', 0, 0, ARRAY['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'], '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, ARRAY[]::int[]);
+      INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
+      VALUES ('main_state', 0, ARRAY['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'], '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, ARRAY[]::int[]);
     `);
 
     // Remove all users except official 6 officers
@@ -729,7 +728,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     } catch {}
 
     let hogState = {
-      capitalGrant: 0,
       openingHogCount: 0,
       produces: ['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'],
       expenses: [],
@@ -750,7 +748,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
         cleanProduces.push('Sacks Rental (Abang sa Sako)');
       }
       hogState = {
-        capitalGrant: Number(row.capital_grant || 0),
         openingHogCount: Number(row.opening_hog_count || 0),
         produces: cleanProduces,
         expenses: row.expenses || [],
@@ -1188,15 +1185,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     // 5. Hog Raising IGP State
     if (state.hogRaising) {
       console.log('[DB DEBUG] Saving hog raising state...');
-      const grantAmount = typeof state.hogRaising.capitalGrant === 'number'
-        ? state.hogRaising.capitalGrant
-        : (Number(state.hogRaising.capitalGrant) || 0);
 
       await client.query(`
-        INSERT INTO hog_raising (id, capital_grant, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (id) DO UPDATE SET
-          capital_grant = EXCLUDED.capital_grant,
           opening_hog_count = EXCLUDED.opening_hog_count,
           produces = EXCLUDED.produces,
           expenses = EXCLUDED.expenses,
@@ -1206,7 +1199,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
           closed_years = EXCLUDED.closed_years;
       `, [
         'main_state',
-        grantAmount,
         Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
         state.hogRaising.produces || ['Hog Raising'],
         JSON.stringify(state.hogRaising.expenses || []),
@@ -1465,23 +1457,3 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
   }
 }
 
-/**
- * Directly and atomically updates the Capital Grant in PostgreSQL / Supabase
- */
-export async function updateDatabaseCapitalGrant(pool: pg.Pool, amount: number): Promise<number> {
-  await ensureDatabaseSchema(pool);
-  const client = await pool.connect();
-  try {
-    const numAmount = typeof amount === 'number' ? amount : (parseFloat(amount as any) || 0);
-    const res = await client.query(`
-      INSERT INTO hog_raising (id, capital_grant, produces, expenses, sales, groups, chore_logs, closed_years)
-      VALUES ('main_state', $1, ARRAY['Hog Raising'], '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, ARRAY[]::int[])
-      ON CONFLICT (id) DO UPDATE SET capital_grant = EXCLUDED.capital_grant
-      RETURNING capital_grant;
-    `, [numAmount]);
-    await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
-    return Number(res.rows[0]?.capital_grant || 0);
-  } finally {
-    client.release();
-  }
-}

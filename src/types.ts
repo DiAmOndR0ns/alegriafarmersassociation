@@ -178,7 +178,7 @@ export interface IgpExpense {
   amount: number;
   date: string;
   recordedBy: string;
-  fundSource?: string; // Where budget was taken from, e.g. "DOLE-DILP Capital Allocation", "5% Livestock Insurance Pool", "AFA General Fund"
+  fundSource?: string; // Where budget was taken from, e.g. "DOLE-DILP Program", "5% Livestock Insurance Pool", "AFA General Fund"
 }
 
 export interface IgpSale {
@@ -222,7 +222,6 @@ export interface OrganizationFund {
 }
 
 export interface HogRaisingState {
-  capitalGrant: number;
   openingHogCount?: number;
   produces?: string[]; // Dynamic list of produce projects, e.g. ["Hog Raising", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"]
   expenses: IgpExpense[];

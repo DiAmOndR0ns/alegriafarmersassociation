@@ -15,7 +15,6 @@ interface HogRaisingIgpTrackerProps {
   onAddExpense: (expense: Omit<IgpExpense, 'id' | 'recordedBy'>) => void;
   onAddSale: (sale: Omit<IgpSale, 'id' | 'recordedBy'>) => void;
   onAddChoreLog: (chore: Omit<IgpChoreLog, 'id'>) => void;
-  onUpdateCapitalGrant?: (amount: number) => void;
   onUpdateOpeningHogCount?: (count: number) => void;
   onAddProduce?: (produce: string) => void;
   isTreasurerOrOfficer: boolean;
@@ -32,7 +31,6 @@ export default function HogRaisingIgpTracker({
   onAddExpense,
   onAddSale,
   onAddChoreLog,
-  onUpdateCapitalGrant,
   onUpdateOpeningHogCount,
   onAddProduce,
   isTreasurerOrOfficer,
@@ -217,7 +215,7 @@ export default function HogRaisingIgpTracker({
           </div>
 
           <div style="background: #e6f4ea; border: 1px solid #a3cfbb; padding: 10px 14px; border-radius: 6px; margin-bottom: 20px; font-size: 11px; color: #0f5132;">
-            <strong>BUDGET & CAPITAL SOURCE (WHERE BUDGET WAS TAKEN FROM):</strong> Funded under the <strong>DOLE Integrated Livelihood Program (DILP) Capital Allocation (₱${(typeof state.capitalGrant === 'number' ? state.capitalGrant : (Number(state.capitalGrant) || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })})</strong> & Municipal Agriculture Assistance. All operating expenditures (feeds, piglets, vaccines) are disbursed directly from this approved livelihood allocation.
+            <strong>EXPENSE RECORDS:</strong> Operating expenses, including pig purchases, feeds, and medicines, are recorded in the IGP ledger.
           </div>
 
           <p style="font-size: 12px; margin-bottom: 20px;">
@@ -283,10 +281,6 @@ export default function HogRaisingIgpTracker({
     printWindow.document.close();
   };
 
-  // Calculations - directly reflect live database value without falling back to static 1M
-  const capitalGrant = typeof state.capitalGrant === 'number'
-    ? state.capitalGrant
-    : (Number(state.capitalGrant) || 0);
   const openingHogCount = Math.max(0, Math.floor(Number(state.openingHogCount) || 0));
   const purchasedPiglets = state.expenses.reduce((sum, expense) => (
     (expense.produce || 'Hog Raising') === 'Hog Raising' && expense.category === 'Piglets'
@@ -300,16 +294,8 @@ export default function HogRaisingIgpTracker({
   ), 0);
   const currentHogCount = Math.max(0, openingHogCount + purchasedPiglets - hogsSold);
 
-  // Grant editing state
-  const [isEditingGrant, setIsEditingGrant] = useState(false);
-  const [newGrantAmount, setNewGrantAmount] = useState(capitalGrant.toString());
   const [isEditingOpeningHogCount, setIsEditingOpeningHogCount] = useState(false);
   const [openingHogCountInput, setOpeningHogCountInput] = useState(openingHogCount.toString());
-
-  // Keep input field strictly synchronized whenever data arrives from PostgreSQL Cloud DB
-  useEffect(() => {
-    setNewGrantAmount(capitalGrant.toString());
-  }, [capitalGrant]);
 
   useEffect(() => {
     setOpeningHogCountInput(openingHogCount.toString());
@@ -319,10 +305,6 @@ export default function HogRaisingIgpTracker({
   const totalExpenses = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
   const totalSales = filteredSales.reduce((sum, item) => sum + item.revenue, 0);
 
-  // Overall expenditures across ALL projects (to correctly deduct from overall capital allocation)
-  const overallExpensesTotal = state.expenses.reduce((sum, item) => sum + item.amount, 0);
-  const remainingGrant = capitalGrant - overallExpensesTotal;
-
   // Profits/Interest generated for the selected project
   const netProfit = totalSales - totalExpenses;
 
@@ -330,9 +312,6 @@ export default function HogRaisingIgpTracker({
   const activeMembers = members.filter(m => m.status === 'Active');
   const activeCount = activeMembers.length || 1;
   const individualDividend = netProfit > 0 ? netProfit / activeCount : 0;
-
-  // Visual percentages of total capital used across ALL projects (safe against 0 division)
-  const percentUsed = capitalGrant > 0 ? Math.min((overallExpensesTotal / capitalGrant) * 100, 100) : 0;
 
   // Dynamic categories list based on produce
   const getDynamicExpenseCategories = (produce: string) => {
@@ -753,7 +732,7 @@ export default function HogRaisingIgpTracker({
       )}
 
       {/* METRIC CARDS FOR FINANCIAL BREAKDOWN */}
-      <div className={`grid grid-cols-2 ${selectedProduce === 'Hog Raising' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3.5 text-left`}>
+      <div className={`grid grid-cols-2 ${selectedProduce === 'Hog Raising' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-3.5 text-left`}>
 
         {selectedProduce === 'Hog Raising' && (
           <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm`}>
@@ -799,109 +778,13 @@ export default function HogRaisingIgpTracker({
           </div>
         )}
 
-        {/* Capital Allocation Card */}
+        {/* IGP Expenses Card */}
         <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm relative overflow-hidden`}>
           <div>
-            <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Capital Allocation</span>
-            {isEditingGrant ? (
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const amt = parseFloat(newGrantAmount);
-                if (!isNaN(amt) && amt >= 0) {
-                  onUpdateCapitalGrant?.(amt);
-                  setIsEditingGrant(false);
-                }
-              }} className="mt-2 space-y-2 relative z-10">
-                <input
-                  type="number"
-                  value={newGrantAmount}
-                  onChange={(e) => setNewGrantAmount(e.target.value)}
-                  className={`w-full px-3 py-1.5 text-sm rounded-lg border ${theme.inputBg} font-mono focus:outline-none focus:ring-1 focus:ring-[#1B4332]`}
-                  placeholder="Isulat ang kantidad"
-                  required
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-lg cursor-pointer shadow-sm"
-                  >
-                    I-save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditingGrant(false);
-                      setNewGrantAmount(capitalGrant.toString());
-                    }}
-                    className="px-3 py-1 bg-slate-500 hover:bg-slate-400 text-white text-xs font-black rounded-lg cursor-pointer"
-                  >
-                    Kansela
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="flex items-center justify-between mt-1 gap-2">
-                <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 block font-mono">
-                  PHP {capitalGrant.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                {isTreasurerOrOfficer && (
-                  <button
-                    onClick={() => {
-                      setNewGrantAmount(capitalGrant.toString());
-                      setIsEditingGrant(true);
-                    }}
-                    className="p-1.5 text-[#1B4332] hover:bg-[#F0EDE7] rounded-lg cursor-pointer border border-[#D5CFC1] bg-white shrink-0"
-                    title="Edit capital allocation"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between text-xs font-bold text-slate-700 dark:text-slate-350">
-            <span>Sumpay sa Database:</span>
-            <span className="font-extrabold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Live Database Value</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Expenses (Capital Used) Card */}
-        <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm relative overflow-hidden`}>
-          <div>
-            <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Capital Spent (Gasto sa {selectedProduceLocalName})</span>
+            <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Total Expenses ({selectedProduceLocalName})</span>
             <span className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 block mt-1 font-mono">
               - PHP {totalExpenses.toLocaleString()}
             </span>
-          </div>
-          {/* Progress Bar of Capital Spent */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-[#1B4332] font-bold">
-              <span>Nagamit na nga Kapital:</span>
-              <span className="font-mono">{percentUsed.toFixed(1)}%</span>
-            </div>
-            <div className="w-full bg-[#D5CFC1] h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-rose-600 h-full transition-all duration-500"
-                style={{ width: `${percentUsed}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Remaining Capital Card */}
-        <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm relative overflow-hidden`}>
-          <div>
-            <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Sobra sa Kapital (Remaining)</span>
-            <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 block mt-1 font-mono">
-              PHP {remainingGrant.toLocaleString()}
-            </span>
-          </div>
-          <div className="pt-2 border-t border-[#D5CFC1] flex justify-between text-xs font-bold text-[#1B4332]">
-            <span>Para sa {selectedProduceLocalName} operations</span>
-            <span className="font-extrabold text-blue-700">Balido</span>
           </div>
         </div>
 

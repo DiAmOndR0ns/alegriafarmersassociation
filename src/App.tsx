@@ -1528,29 +1528,6 @@ export default function App() {
     }
   };
 
-  const handleUpdateCapitalGrant = (amount: number) => {
-    const numAmount = typeof amount === 'number' ? amount : (parseFloat(amount as any) || 0);
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
-      capitalGrant: numAmount
-    };
-    setHogRaising(updatedState);
-    updateStorage('bafa_hog_raising', updatedState);
-
-    if (isOnline) {
-      logAction('Updated Capital Allocation', `Modified Hog Raising IGP capital allocation to PHP ${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
-      showToastMessage(`Successfully updated Capital Allocation to PHP ${numAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}!`, 'success');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true });
-      fetch('/api/db/capital-grant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: numAmount })
-      }).catch(e => console.warn('[Capital Allocation direct DB update error]:', e));
-    } else {
-      addToSyncQueue('update', 'hog_expense', { id: 'capital-grant', amount: numAmount });
-    }
-  };
-
   const handleUpdateOpeningHogCount = (count: number) => {
     const openingHogCount = Math.max(0, Math.floor(Number(count) || 0));
     const updatedState: HogRaisingState = { ...hogRaising, openingHogCount };
@@ -2540,7 +2517,6 @@ export default function App() {
                 hogRaising={hogRaising}
                 onAddTransaction={handleAddTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
-                onUpdateCapitalGrant={handleUpdateCapitalGrant}
                 onAddFund={handleAddFund}
                 onDeleteFund={handleDeleteFund}
                 onOpenReportModal={() => setShowReportModal(true)}
@@ -2581,7 +2557,6 @@ export default function App() {
                 onAddExpense={handleAddPigExpense}
                 onAddSale={handleAddHogSale}
                 onAddChoreLog={handleAddPigChore}
-                onUpdateCapitalGrant={handleUpdateCapitalGrant}
                 onUpdateOpeningHogCount={handleUpdateOpeningHogCount}
                 onAddProduce={handleAddProduce}
                 isTreasurerOrOfficer={currentRole === 'Treasurer' || currentRole === 'Auditor' || currentRole === 'President'}

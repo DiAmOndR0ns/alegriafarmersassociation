@@ -69,10 +69,6 @@ export default function OfficerReportModal({
   const unauditedCount = transactions.filter(t => !t.auditedStatus || t.auditedStatus === 'Unaudited').length;
   const auditComplianceRate = transactions.length > 0 ? ((auditedCount / transactions.length) * 100).toFixed(1) : '100.0';
 
-  // Total Capital and Expenses across IGP Projects
-  const hogCapital = typeof hogRaising?.capitalGrant === 'number'
-    ? hogRaising.capitalGrant
-    : (Number(hogRaising?.capitalGrant) || 0);
   const hogExpensesTotal = (hogRaising?.expenses || []).reduce((sum, e) => sum + e.amount, 0);
   const hogSalesTotal = (hogRaising?.sales || []).reduce((sum, s) => sum + s.revenue, 0);
   const hogNet = hogSalesTotal - hogExpensesTotal;
@@ -358,7 +354,6 @@ export default function OfficerReportModal({
           <tr><th>Executive Key Performance Indicator</th><th>Current Status Outcome</th></tr>
           <tr><td>Total Registered Farmer Roster</td><td><strong>${members.length} Members (${activeMembers.length} Active, ${inactiveMembers.length} Inactive)</strong></td></tr>
           <tr><td>General Fund Financial Cash Balance</td><td><strong>PHP ${netBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong></td></tr>
-          <tr><td>DOLE Assistance Capital Allocation</td><td><strong>PHP ${hogCapital.toLocaleString('en-US', { minimumFractionDigits: 2 })} Dedicated Livelihood Capital</strong></td></tr>
           <tr><td>Passed Legislative Resolutions</td><td>${resolutions.filter(r => r.status === 'Approved').length} Approved Resolution(s) out of ${resolutions.length} Total</td></tr>
           <tr><td>Financial Audit Integrity Rate</td><td><strong>${auditComplianceRate}% Verified Compliance (Auditor: Lorena B. Pinote)</strong></td></tr>
           <tr><td>Public Announcements Broadcasted</td><td>${announcements.length} Published Advisories (${announcements.filter(a => a.priority === 'High').length} High Priority)</td></tr>
@@ -427,10 +422,9 @@ export default function OfficerReportModal({
         </table>
 
         ${hogRaising ? `
-          <div class="section-title">7. HOG RAISING & LIVELIHOOD IGP PROJECT (DOLE-DILP CAPITAL ALLOCATION)</div>
+          <div class="section-title">7. HOG RAISING & LIVELIHOOD IGP PROJECT</div>
           <table>
             <tr><th>IGP Metric</th><th>Outcome Details</th></tr>
-            <tr><td><strong>Capital Allocation Budget Origin</strong></td><td><strong>DOLE Integrated Livelihood Program (DILP) (PHP ${hogCapital.toLocaleString('en-US', { minimumFractionDigits: 2 })})</strong></td></tr>
             <tr><td>Total Operating Expenses Recorded</td><td>PHP ${hogExpensesTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })} (Feeds, Piglets, Vaccines)</td></tr>
             <tr><td>Active Volunteer Chore Groups</td><td>${hogRaising.groups?.length || 0} Member Caretaker Teams</td></tr>
             <tr><td>Total Batch Sales Revenue Collected</td><td>PHP ${hogSalesTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td></tr>
@@ -740,7 +734,6 @@ export default function OfficerReportModal({
       csvRows.push(`Total Registered Farmer Members,${members.length}`);
       csvRows.push(`Active Farmer Members,${activeMembers.length}`);
       csvRows.push(`Net General Cash Fund Balance (PHP),${netBalance.toFixed(2)}`);
-      csvRows.push(`DOLE-DILP Capital Allocation (PHP),${hogCapital.toFixed(2)}`);
       csvRows.push(`Approved Legislative Resolutions,${resolutions.filter(r => r.status === 'Approved').length}`);
       csvRows.push(`Financial Audit Compliance Rate (%),${auditComplianceRate}`);
       csvRows.push('');
@@ -780,9 +773,7 @@ export default function OfficerReportModal({
       csvRows.push(`High Priority Advisories,${announcements.filter(a => a.priority === 'High').length}`);
       if (hogRaising) {
         csvRows.push('');
-        csvRows.push('7. HOG RAISING IGP LIVELIHOOD SUMMARY (DOLE-DILP CAPITAL ALLOCATION)');
-        csvRows.push(`Capital Allocation Origin,DOLE Integrated Livelihood Program (DILP)`);
-        csvRows.push(`Capital Allocation Amount (PHP),${hogCapital.toFixed(2)}`);
+        csvRows.push('7. HOG RAISING IGP LIVELIHOOD SUMMARY');
         csvRows.push(`Total Operating Expenses (PHP),${hogExpensesTotal.toFixed(2)}`);
         csvRows.push(`Active Volunteer Chore Groups,${hogRaising.groups?.length || 0}`);
         csvRows.push(`Total Batch Sales Revenue (PHP),${hogSalesTotal.toFixed(2)}`);
@@ -994,9 +985,6 @@ export default function OfficerReportModal({
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Net Fund</span>
                     <p className="text-sm font-mono font-bold text-emerald-700">PHP {netBalance.toLocaleString()}</p>
                   </div>
-                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
-                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Capital Allocation</span>
-                    <p className="text-sm font-mono font-bold text-amber-700">PHP {hogCapital.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>                  </div>
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Audit Rate</span>
                     <p className="text-sm font-mono font-bold text-emerald-700">{auditComplianceRate}%</p>
