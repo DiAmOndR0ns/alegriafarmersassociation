@@ -1360,13 +1360,14 @@ export default function App() {
       category: 'Hog Raising Project',
       amount: expData.amount,
       date: expData.date,
-      description: `[Hog Raising IGP] ${expData.category}: ${expData.description}`,
+      description: `[Hog Raising IGP] ${expData.category}${expData.quantity ? ` (${expData.quantity} head)` : ''}: ${expData.description}`,
       recordedBy: currentUser ? `Treasurer (${currentUser.name})` : 'Treasurer (Rodolfo Climaco)'
     });
 
     if (isOnline) {
       logAction('Recorded Pig Expense', `Logged PHP ${newExp.amount.toLocaleString()} piggery expense for "${newExp.category}"`);
       showToastMessage('Hog raising expense recorded and linked to general ledger.');
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Hog Purchase or Expense' });
     } else {
       addToSyncQueue('create', 'hog_expense', newExp);
     }
@@ -1398,6 +1399,7 @@ export default function App() {
     if (isOnline) {
       logAction('Recorded Hog Sale', `Sold ${newSale.hogsCount} mature hogs for PHP ${newSale.revenue.toLocaleString()}`);
       showToastMessage(`Hog sale of PHP ${newSale.revenue.toLocaleString()} recorded and linked to general ledger.`);
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Hog Sale' });
     } else {
       addToSyncQueue('create', 'hog_sale', newSale);
     }
@@ -1546,6 +1548,21 @@ export default function App() {
       }).catch(e => console.warn('[Capital Allocation direct DB update error]:', e));
     } else {
       addToSyncQueue('update', 'hog_expense', { id: 'capital-grant', amount: numAmount });
+    }
+  };
+
+  const handleUpdateOpeningHogCount = (count: number) => {
+    const openingHogCount = Math.max(0, Math.floor(Number(count) || 0));
+    const updatedState: HogRaisingState = { ...hogRaising, openingHogCount };
+    setHogRaising(updatedState);
+    updateStorage('bafa_hog_raising', updatedState);
+
+    if (isOnline) {
+      logAction('Updated Opening Hog Inventory', `Set opening herd count to ${openingHogCount} hogs.`);
+      showToastMessage(`Opening herd count saved: ${openingHogCount} hogs.`);
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Opening Hog Inventory' });
+    } else {
+      addToSyncQueue('update', 'hog_expense', { id: 'opening-hog-count', quantity: openingHogCount });
     }
   };
 
@@ -2565,6 +2582,7 @@ export default function App() {
                 onAddSale={handleAddHogSale}
                 onAddChoreLog={handleAddPigChore}
                 onUpdateCapitalGrant={handleUpdateCapitalGrant}
+                onUpdateOpeningHogCount={handleUpdateOpeningHogCount}
                 onAddProduce={handleAddProduce}
                 isTreasurerOrOfficer={currentRole === 'Treasurer' || currentRole === 'Auditor' || currentRole === 'President'}
                 currentUser={currentUser!}

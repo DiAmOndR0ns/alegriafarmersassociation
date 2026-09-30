@@ -16,6 +16,7 @@ interface HogRaisingIgpTrackerProps {
   onAddSale: (sale: Omit<IgpSale, 'id' | 'recordedBy'>) => void;
   onAddChoreLog: (chore: Omit<IgpChoreLog, 'id'>) => void;
   onUpdateCapitalGrant?: (amount: number) => void;
+  onUpdateOpeningHogCount?: (count: number) => void;
   onAddProduce?: (produce: string) => void;
   isTreasurerOrOfficer: boolean;
   currentUser: User;
@@ -32,6 +33,7 @@ export default function HogRaisingIgpTracker({
   onAddSale,
   onAddChoreLog,
   onUpdateCapitalGrant,
+  onUpdateOpeningHogCount,
   onAddProduce,
   isTreasurerOrOfficer,
   currentUser,
@@ -87,6 +89,7 @@ export default function HogRaisingIgpTracker({
 
   // New Expense Form
   const [expCategory, setExpCategory] = useState<string>('Feeds');
+  const [expQuantity, setExpQuantity] = useState('');
   const [customExpCategory, setCustomExpCategory] = useState('');
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
@@ -284,15 +287,33 @@ export default function HogRaisingIgpTracker({
   const capitalGrant = typeof state.capitalGrant === 'number'
     ? state.capitalGrant
     : (Number(state.capitalGrant) || 0);
+  const openingHogCount = Math.max(0, Math.floor(Number(state.openingHogCount) || 0));
+  const purchasedPiglets = state.expenses.reduce((sum, expense) => (
+    (expense.produce || 'Hog Raising') === 'Hog Raising' && expense.category === 'Piglets'
+      ? sum + Math.max(0, Math.floor(Number(expense.quantity) || 0))
+      : sum
+  ), 0);
+  const hogsSold = state.sales.reduce((sum, sale) => (
+    (sale.produce || 'Hog Raising') === 'Hog Raising'
+      ? sum + Math.max(0, Math.floor(Number(sale.produceCount || sale.hogsCount) || 0))
+      : sum
+  ), 0);
+  const currentHogCount = Math.max(0, openingHogCount + purchasedPiglets - hogsSold);
 
   // Grant editing state
   const [isEditingGrant, setIsEditingGrant] = useState(false);
   const [newGrantAmount, setNewGrantAmount] = useState(capitalGrant.toString());
+  const [isEditingOpeningHogCount, setIsEditingOpeningHogCount] = useState(false);
+  const [openingHogCountInput, setOpeningHogCountInput] = useState(openingHogCount.toString());
 
   // Keep input field strictly synchronized whenever data arrives from PostgreSQL Cloud DB
   useEffect(() => {
     setNewGrantAmount(capitalGrant.toString());
   }, [capitalGrant]);
+
+  useEffect(() => {
+    setOpeningHogCountInput(openingHogCount.toString());
+  }, [openingHogCount]);
 
   // Calculations filtered by selected produce
   const totalExpenses = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
@@ -438,6 +459,8 @@ export default function HogRaisingIgpTracker({
   const handleExpenseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!expAmount || parseFloat(expAmount) <= 0 || !expDesc.trim()) return;
+    const pigletQuantity = Number.parseInt(expQuantity, 10);
+    if (selectedProduce === 'Hog Raising' && expCategory === 'Piglets' && (!Number.isInteger(pigletQuantity) || pigletQuantity < 1)) return;
     const yr = parseInt(expDate.substring(0, 4));
     if (closedYears.includes(yr)) {
       setExpenseDateError(`Sirado ang Libro: Ang financial book sa ${yr} gisirado na niadtong Disyembre.`);
@@ -446,12 +469,14 @@ export default function HogRaisingIgpTracker({
     onAddExpense({
       produce: selectedProduce,
       category: expCategory === 'Other' ? (customExpCategory.trim() || 'Other') : expCategory,
+      quantity: selectedProduce === 'Hog Raising' && expCategory === 'Piglets' ? pigletQuantity : undefined,
       description: expDesc,
       amount: parseFloat(expAmount),
       date: expDate
     });
     setExpDesc('');
     setExpAmount('');
+    setExpQuantity('');
     setCustomExpCategory('');
     setExpenseDateError('');
     setShowExpenseModal(false);
@@ -460,6 +485,12 @@ export default function HogRaisingIgpTracker({
   const handleSaleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!saleRevenue || parseFloat(saleRevenue) <= 0 || !saleHogsCount) return;
+    const quantitySold = Number.parseInt(saleHogsCount, 10);
+    if (!Number.isInteger(quantitySold) || quantitySold < 1) return;
+    if (selectedProduce === 'Hog Raising' && quantitySold > currentHogCount) {
+      setSaleDateError(`Only ${currentHogCount} hogs are currently recorded in inventory.`);
+      return;
+    }
     const yr = parseInt(saleDate.substring(0, 4));
     if (closedYears.includes(yr)) {
       setSaleDateError(`Sirado ang Libro: Ang financial book sa ${yr} gisirado na niadtong Disyembre.`);
@@ -722,7 +753,51 @@ export default function HogRaisingIgpTracker({
       )}
 
       {/* METRIC CARDS FOR FINANCIAL BREAKDOWN */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 text-left">
+      <div className={`grid grid-cols-2 ${selectedProduce === 'Hog Raising' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3.5 text-left`}>
+
+        {selectedProduce === 'Hog Raising' && (
+          <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm`}>
+            <div>
+              <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Current Hog Inventory</span>
+              <span className="text-xl sm:text-2xl font-black text-[#1B4332] block mt-1 font-mono">{currentHogCount} hogs</span>
+              <span className="text-[10px] text-slate-500 block mt-1">Opening {openingHogCount} + purchased {purchasedPiglets} - sold {hogsSold}</span>
+            </div>
+            {isTreasurerOrOfficer && onUpdateOpeningHogCount && (
+              <div>
+                {isEditingOpeningHogCount ? (
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const count = Number(openingHogCountInput);
+                      if (Number.isInteger(count) && count >= 0) {
+                        onUpdateOpeningHogCount(count);
+                        setIsEditingOpeningHogCount(false);
+                      }
+                    }}
+                    className="flex gap-1.5"
+                  >
+                    <input
+                      aria-label="Opening hog count"
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                      value={openingHogCountInput}
+                      onChange={(event) => setOpeningHogCountInput(event.target.value)}
+                      className={`min-w-0 flex-1 px-2 py-1 text-xs rounded-lg border ${theme.inputBg} font-mono`}
+                    />
+                    <button type="submit" className="px-2 py-1 rounded-lg bg-[#1B4332] text-white text-xs font-bold cursor-pointer">Save</button>
+                    <button type="button" onClick={() => { setOpeningHogCountInput(openingHogCount.toString()); setIsEditingOpeningHogCount(false); }} className="px-2 py-1 rounded-lg border border-[#D5CFC1] bg-white text-[#1B4332] text-xs font-bold cursor-pointer">Cancel</button>
+                  </form>
+                ) : (
+                  <button type="button" onClick={() => setIsEditingOpeningHogCount(true)} className="inline-flex items-center gap-1 text-xs font-bold text-[#1B4332] hover:underline cursor-pointer">
+                    <Pencil className="w-3 h-3" /> Set opening count
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Capital Allocation Card */}
         <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm relative overflow-hidden`}>
@@ -1378,7 +1453,7 @@ export default function HogRaisingIgpTracker({
                   <tbody className="divide-y divide-[#E9E4D9] font-semibold text-[#1B4332]">
                     {/* Combine Expenses and Sales sorted by date descending */}
                     {[
-                      ...state.expenses.map(e => ({ ...e, type: 'expense' as const, qty: undefined })),
+                      ...state.expenses.map(e => ({ ...e, type: 'expense' as const, qty: e.quantity })),
                       ...state.sales.map(s => ({ ...s, type: 'income' as const, category: s.produce || 'IGP Income', description: s.notes || (s.produce?.includes('Rental') || s.produce?.includes('Lingkoranan') || s.produce?.includes('Sako') ? `Abang sa ${s.produceCount || s.hogsCount} ka buok.` : `Sold ${s.hogsCount} mature units.`), amount: s.revenue, qty: s.produceCount || s.hogsCount }))
                     ]
                     .sort((a, b) => b.date.localeCompare(a.date))
@@ -1613,6 +1688,23 @@ export default function HogRaisingIgpTracker({
                     onChange={(e) => setCustomExpCategory(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500"
                   />
+                </div>
+              )}
+
+              {selectedProduce === 'Hog Raising' && expCategory === 'Piglets' && (
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-[#1B4332] uppercase" htmlFor="piglet-purchase-quantity">Piglets Purchased (Head)</label>
+                  <input
+                    id="piglet-purchase-quantity"
+                    type="number"
+                    min="1"
+                    step="1"
+                    required
+                    value={expQuantity}
+                    onChange={(event) => setExpQuantity(event.target.value)}
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                  <p className="text-[10px] text-[#4A5F57]">This quantity updates the current herd total.</p>
                 </div>
               )}
 

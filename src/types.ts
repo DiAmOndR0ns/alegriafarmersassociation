@@ -173,6 +173,7 @@ export interface IgpExpense {
   id: string;
   produce?: string; // e.g., "Hog Raising", "Poultry Raising"
   category: 'Piglets' | 'Feeds' | 'Vitamins/Medicines' | 'Other' | string;
+  quantity?: number;
   description: string;
   amount: number;
   date: string;
@@ -222,6 +223,7 @@ export interface OrganizationFund {
 
 export interface HogRaisingState {
   capitalGrant: number;
+  openingHogCount?: number;
   produces?: string[]; // Dynamic list of produce projects, e.g. ["Hog Raising", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"]
   expenses: IgpExpense[];
   sales: IgpSale[];
