@@ -873,7 +873,7 @@ export default function TreasurerView({
                 key={tx.id}
                 className={`bg-slate-800 border rounded-2xl p-4.5 transition-all shadow-sm flex flex-col md:flex-row justify-between gap-4 ${
                   tx.auditedStatus === 'Flagged'
-                    ? 'border-red-500/30 bg-gradient-to-r from-slate-800 to-red-950/10'
+                    ? 'border-rose-300 bg-rose-50'
                     : tx.auditedStatus === 'Audited'
                     ? 'border-emerald-500/10'
                     : 'border-slate-700/50'
@@ -910,7 +910,7 @@ export default function TreasurerView({
                     {tx.auditedStatus !== 'Unaudited' && (
                       <div className={`mt-3 p-2.5 rounded-xl text-xs border ${
                         tx.auditedStatus === 'Flagged'
-                          ? 'bg-red-500/5 border-red-500/20 text-red-300'
+                          ? 'bg-rose-100 border-rose-200 text-rose-900'
                           : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-300'
                       }`}>
                         <div className="flex items-center gap-1.5 font-bold mb-0.5">
