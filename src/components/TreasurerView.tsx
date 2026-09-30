@@ -507,7 +507,7 @@ export default function TreasurerView({
                     Interactive Recharts
                   </span>
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-[#4A5F57]">
                   Visualizing monthly feeds, stock purchases, veterinary care vs. mature hog sales revenue
                 </p>
               </div>
@@ -517,32 +517,32 @@ export default function TreasurerView({
           {/* Interactive Filters */}
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
             {availableProduces.length > 1 && (
-              <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-slate-700/60 text-xs">
-                <span className="text-slate-400 font-semibold text-[11px]">Project:</span>
+              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-[#D5CFC1] text-xs">
+                <span className="text-[#4A5F57] font-semibold text-[11px]">Project:</span>
                 <select
                   value={chartProduce}
                   onChange={(e) => setChartProduce(e.target.value)}
-                  className="bg-transparent text-emerald-300 font-bold focus:outline-none cursor-pointer"
+                  className="bg-transparent text-[#1B4332] font-bold focus:outline-none cursor-pointer"
                 >
-                  <option value="all" className="bg-slate-800 text-white">All IGP Projects</option>
+                  <option value="all" className="bg-white text-[#1B4332]">All IGP Projects</option>
                   {availableProduces.map(p => (
-                    <option key={p} value={p} className="bg-slate-800 text-white">{p}</option>
+                    <option key={p} value={p} className="bg-white text-[#1B4332]">{p}</option>
                   ))}
                 </select>
               </div>
             )}
 
-            <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-slate-700/60 text-xs">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-400 font-semibold text-[11px]">Cycle Year:</span>
+            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-[#D5CFC1] text-xs">
+              <Calendar className="w-3.5 h-3.5 text-[#4A5F57]" />
+              <span className="text-[#4A5F57] font-semibold text-[11px]">Cycle Year:</span>
               <select
                 value={chartYear}
                 onChange={(e) => setChartYear(e.target.value)}
-                className="bg-transparent text-emerald-300 font-bold focus:outline-none cursor-pointer"
+                className="bg-transparent text-[#1B4332] font-bold focus:outline-none cursor-pointer"
               >
-                <option value="all" className="bg-slate-800 text-white">All Years</option>
+                <option value="all" className="bg-white text-[#1B4332]">All Years</option>
                 {availableYears.map(y => (
-                  <option key={y} value={y} className="bg-slate-800 text-white">{y}</option>
+                  <option key={y} value={y} className="bg-white text-[#1B4332]">{y}</option>
                 ))}
               </select>
             </div>
@@ -551,44 +551,44 @@ export default function TreasurerView({
 
         {/* SUMMARY KPI CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-slate-900/80 border border-slate-700/60 p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Total IGP Sales</span>
-            <div className="text-lg font-black text-emerald-400 font-mono mt-0.5">
+          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
+            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total IGP Sales</span>
+            <div className="text-lg font-black text-emerald-700 font-mono mt-0.5">
               PHP {chartTotals.totalIncome.toLocaleString('en-US')}
             </div>
-            <span className="text-[10px] text-slate-500 mt-1 block">
+            <span className="text-[10px] text-[#4A5F57] mt-1 block">
               {chartTotals.totalHogs} mature hogs sold
             </span>
           </div>
 
-          <div className="bg-slate-900/80 border border-slate-700/60 p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Total IGP Expenses</span>
-            <div className="text-lg font-black text-rose-400 font-mono mt-0.5">
+          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
+            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total IGP Expenses</span>
+            <div className="text-lg font-black text-rose-700 font-mono mt-0.5">
               PHP {chartTotals.totalExpenses.toLocaleString('en-US')}
             </div>
-            <span className="text-[10px] text-slate-500 mt-1 block">
+            <span className="text-[10px] text-[#4A5F57] mt-1 block">
               Feeds, piglets & veterinary
             </span>
           </div>
 
-          <div className="bg-slate-900/80 border border-slate-700/60 p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Net IGP Cash Flow</span>
-            <div className={`text-lg font-black font-mono mt-0.5 ${chartTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
+            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Net IGP Cash Flow</span>
+            <div className={`text-lg font-black font-mono mt-0.5 ${chartTotals.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
               {chartTotals.net >= 0 ? '+' : ''}PHP {chartTotals.net.toLocaleString('en-US')}
             </div>
-            <span className="text-[10px] text-slate-500 mt-1 block">
+            <span className="text-[10px] text-[#4A5F57] mt-1 block">
               {chartTotals.margin > 0 ? `${chartTotals.margin.toFixed(1)}% profit margin` : 'Ongoing rearing cycle'}
             </span>
           </div>
 
-          <div className="bg-slate-900/80 border border-slate-700/60 p-3.5 rounded-xl">
+          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Capital Allocation</span>
+              <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Capital Allocation</span>
               {onUpdateCapitalGrant && !isEditingGrant && (
                 <button
                   type="button"
                   onClick={() => setIsEditingGrant(true)}
-                  className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/60 px-2 py-0.5 rounded transition cursor-pointer"
+                  className="text-[10px] font-bold text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded transition cursor-pointer"
                 >
                   Edit
                 </button>
@@ -608,14 +608,14 @@ export default function TreasurerView({
                 className="mt-1.5 space-y-1.5"
               >
                 <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-400">₱</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono text-[#4A5F57]">₱</span>
                   <input
                     type="number"
                     step="any"
                     min="0"
                     value={grantInput}
                     onChange={(e) => setGrantInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-amber-500/70 rounded-lg pl-6 pr-2 py-1 text-sm font-mono text-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    className="w-full bg-white border border-amber-500 rounded-lg pl-6 pr-2 py-1 text-sm font-mono text-amber-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                     placeholder="0.00"
                     autoFocus
                   />
@@ -627,7 +627,7 @@ export default function TreasurerView({
                       setIsEditingGrant(false);
                       setGrantInput(liveCapitalGrant.toString());
                     }}
-                    className="px-2 py-0.5 text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                    className="px-2 py-0.5 text-[10px] font-bold bg-bafa-neutral-100 hover:bg-bafa-neutral-200 text-[#1B4332] rounded cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -641,15 +641,15 @@ export default function TreasurerView({
               </form>
             ) : (
               <>
-                <div className="text-lg font-black text-amber-400 font-mono mt-0.5">
+                <div className="text-lg font-black text-amber-800 font-mono mt-0.5">
                   PHP {liveCapitalGrant.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div className="text-[10px] text-emerald-400 mt-1 flex items-center justify-between">
+                <div className="text-[10px] text-emerald-700 mt-1 flex items-center justify-between">
                   <span className="flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" />
                     <span>DOLE & DA Seed Capital</span>
                   </span>
-                  <span className="text-[9px] text-slate-400 font-mono flex items-center gap-1">
+                  <span className="text-[9px] text-[#4A5F57] font-mono flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span>Live DB</span>
                   </span>
@@ -662,23 +662,23 @@ export default function TreasurerView({
         {/* RECHARTS BAR CHART CANVAS */}
         {monthlyChartData.length > 0 ? (
           <div className="space-y-4">
-            <div className="h-[300px] w-full bg-slate-900/50 p-2 sm:p-4 rounded-xl border border-slate-700/50">
+            <div className="h-[300px] w-full bg-white p-2 sm:p-4 rounded-xl border border-[#D5CFC1]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={monthlyChartData}
                   margin={{ top: 15, right: 20, left: 10, bottom: 5 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} opacity={0.6} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#D5CFC1" vertical={false} opacity={0.8} />
                   <XAxis
                     dataKey="shortMonth"
-                    stroke="#94a3b8"
-                    tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }}
-                    tickLine={{ stroke: '#475569' }}
+                    stroke="#647A6E"
+                    tick={{ fill: '#4A5F57', fontSize: 12, fontWeight: 600 }}
+                    tickLine={{ stroke: '#B8CDBE' }}
                   />
                   <YAxis
-                    stroke="#94a3b8"
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    tickLine={{ stroke: '#475569' }}
+                    stroke="#647A6E"
+                    tick={{ fill: '#4A5F57', fontSize: 11 }}
+                    tickLine={{ stroke: '#B8CDBE' }}
                     tickFormatter={(val) => `₱${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
                   />
                   <Tooltip
@@ -686,58 +686,58 @@ export default function TreasurerView({
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
                         return (
-                          <div className="bg-slate-900 border border-slate-700 p-3.5 rounded-xl shadow-2xl text-xs space-y-2.5 min-w-[210px]">
+                          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl shadow-lg text-xs space-y-2.5 min-w-[210px]">
                             <div className="flex items-center justify-between border-b border-slate-700/80 pb-1.5">
-                              <span className="font-bold text-white text-sm">{data.monthLabel}</span>
-                              <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                              <span className="font-bold text-[#1B4332] text-sm">{data.monthLabel}</span>
+                              <span className="text-[10px] font-mono text-emerald-800 font-bold bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200">
                                 {chartProduce === 'all' ? 'All IGP' : chartProduce}
                               </span>
                             </div>
 
                             <div className="space-y-1.5">
                               <div className="flex justify-between items-center gap-4">
-                                <span className="text-emerald-400 flex items-center gap-1.5 font-medium">
+                                <span className="text-emerald-800 flex items-center gap-1.5 font-medium">
                                   <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" />
                                   Sales (Income):
                                 </span>
-                                <span className="font-mono font-bold text-emerald-300">
+                                <span className="font-mono font-bold text-emerald-800">
                                   PHP {Number(data.income).toLocaleString('en-US')}
                                 </span>
                               </div>
 
                               <div className="flex justify-between items-center gap-4">
-                                <span className="text-rose-400 flex items-center gap-1.5 font-medium">
+                                <span className="text-rose-800 flex items-center gap-1.5 font-medium">
                                   <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />
                                   Total Expenses:
                                 </span>
-                                <span className="font-mono font-bold text-rose-300">
+                                <span className="font-mono font-bold text-rose-800">
                                   PHP {Number(data.expenses).toLocaleString('en-US')}
                                 </span>
                               </div>
 
                               {data.feedExpenses > 0 && (
-                                <div className="pl-4 text-[11px] text-slate-400 flex justify-between">
+                                <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
                                   <span>• Feeds:</span>
                                   <span className="font-mono">PHP {data.feedExpenses.toLocaleString('en-US')}</span>
                                 </div>
                               )}
                               {data.pigletExpenses > 0 && (
-                                <div className="pl-4 text-[11px] text-slate-400 flex justify-between">
+                                <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
                                   <span>• Piglets / Stock:</span>
                                   <span className="font-mono">PHP {data.pigletExpenses.toLocaleString('en-US')}</span>
                                 </div>
                               )}
                               {data.medExpenses > 0 && (
-                                <div className="pl-4 text-[11px] text-slate-400 flex justify-between">
+                                <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
                                   <span>• Vitamins / Meds:</span>
                                   <span className="font-mono">PHP {data.medExpenses.toLocaleString('en-US')}</span>
                                 </div>
                               )}
                             </div>
 
-                            <div className="pt-2 border-t border-slate-800 flex justify-between items-center gap-4">
-                              <span className="text-slate-300 font-semibold">Net Cash Flow:</span>
-                              <span className={`font-mono font-bold ${data.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            <div className="pt-2 border-t border-[#D5CFC1] flex justify-between items-center gap-4">
+                              <span className="text-[#1B4332] font-semibold">Net Cash Flow:</span>
+                              <span className={`font-mono font-bold ${data.net >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
                                 {data.net >= 0 ? '+' : ''}PHP {Number(data.net).toLocaleString('en-US')}
                               </span>
                             </div>
@@ -752,7 +752,7 @@ export default function TreasurerView({
                     align="right"
                     iconType="circle"
                     wrapperStyle={{ paddingBottom: '10px', fontSize: '12px' }}
-                    formatter={(value) => <span className="text-slate-300 font-medium text-xs mr-3">{value}</span>}
+                    formatter={(value) => <span className="text-[#1B4332] font-medium text-xs mr-3">{value}</span>}
                   />
                   <Bar
                     dataKey="income"
@@ -775,14 +775,14 @@ export default function TreasurerView({
             {/* MONTHLY SUMMARY CHIPS */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-1">
               {monthlyChartData.map((m) => (
-                <div key={m.monthKey} className="bg-slate-900/60 border border-slate-700/60 p-2.5 rounded-xl space-y-1 text-xs">
-                  <span className="font-bold text-slate-300 block">{m.shortMonth}</span>
+                <div key={m.monthKey} className="bg-white border border-[#D5CFC1] p-2.5 rounded-xl space-y-1 text-xs">
+                  <span className="font-bold text-[#1B4332] block">{m.shortMonth}</span>
                   <div className="flex justify-between text-[11px]">
                     <span className="text-emerald-400 font-mono">+{m.income >= 1000 ? `${(m.income/1000).toFixed(0)}k` : m.income}</span>
                     <span className="text-rose-400 font-mono">-{m.expenses >= 1000 ? `${(m.expenses/1000).toFixed(0)}k` : m.expenses}</span>
                   </div>
                   <div className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded text-center ${
-                    m.net >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                    m.net >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                   }`}>
                     {m.net >= 0 ? '+' : ''}₱{Math.abs(m.net).toLocaleString('en-US')}
                   </div>
@@ -791,10 +791,10 @@ export default function TreasurerView({
             </div>
           </div>
         ) : (
-          <div className="bg-slate-900/60 border border-slate-700/60 p-8 rounded-xl text-center space-y-2">
-            <BarChart3 className="w-8 h-8 text-slate-500 mx-auto" />
-            <p className="text-sm font-bold text-slate-300">Walay natala nga transaksyon sa napili nga tuig o proyekto.</p>
-            <p className="text-xs text-slate-500">I-adjust ang filters o mag-log og bag-ong expenses/sales sa Hog Raising tab.</p>
+          <div className="bg-[#EAF6EE] border border-[#B6E3C0] p-8 rounded-xl text-center space-y-2">
+            <BarChart3 className="w-8 h-8 text-[#2D6A4F] mx-auto" />
+            <p className="text-sm font-bold text-[#1B4332]">Walay natala nga transaksyon sa napili nga tuig o proyekto.</p>
+            <p className="text-xs text-[#2B3D33]">I-adjust ang filters o mag-log og bag-ong expenses/sales sa Hog Raising tab.</p>
           </div>
         )}
       </div>
