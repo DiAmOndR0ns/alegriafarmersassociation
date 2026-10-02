@@ -56,6 +56,7 @@ export default function TreasurerView({
   const [txAmount, setTxAmount] = useState('');
   const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
   const [txDesc, setTxDesc] = useState('');
+  const [txPurpose, setTxPurpose] = useState('');
 
   // Custom / Different Fund Source Option in Transaction Modal
   const [isCustomFundSource, setIsCustomFundSource] = useState(false);
@@ -249,6 +250,7 @@ export default function TreasurerView({
     setTxType(type);
     setTxCategory(CATEGORIES[type][0]);
     setIsCustomFundSource(false);
+    setTxPurpose('');
   };
 
   const handleAddFundSubmit = (e: React.FormEvent) => {
@@ -288,6 +290,12 @@ export default function TreasurerView({
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!txAmount || parseFloat(txAmount) <= 0 || !txDesc.trim()) return;
+    if (txType === 'expense' && !txPurpose.trim()) return;
+
+    const effectivePurpose = txPurpose.trim() || txDesc.trim();
+    const liquidationDeadline = txType === 'expense'
+      ? new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      : undefined;
 
     let finalFundSource = txFundSource;
     if (isCustomFundSource) {
@@ -304,7 +312,7 @@ export default function TreasurerView({
           allocatedAmount: txType === 'income' ? parseFloat(txAmount) : 0,
           currentBalance: txType === 'income' ? parseFloat(txAmount) : 0,
           custodian: 'Treasurer Gracelyn P. Asendiente',
-          description: `Tinubdan sa pundo nga gi-rekord ni Treasurer alang sa ${txType === 'income' ? 'nadawat nga kita' : 'gasto'}: ${txDesc}`
+          description: `Tinubdan sa pundo nga gi-rehistro ni Treasurer alang sa ${txType === 'income' ? 'nadawat nga kita' : 'gasto'}: ${effectivePurpose}`
         });
       }
     }
@@ -315,12 +323,15 @@ export default function TreasurerView({
       amount: parseFloat(txAmount),
       date: txDate,
       description: txDesc,
+      purpose: effectivePurpose,
+      liquidationDeadline,
       fundSource: finalFundSource,
       recordedBy: 'Treasurer (Gracelyn P Asendiente)'
     });
 
     setTxAmount('');
     setTxDesc('');
+    setTxPurpose('');
     setCustomFundName('');
     setCustomFundCode('');
     setIsCustomFundSource(false);
@@ -815,6 +826,16 @@ export default function TreasurerView({
                       </span>
                     </div>
                     <p className="text-sm font-semibold text-white mt-1.5">{tx.description}</p>
+                    {tx.purpose && (
+                      <p className="text-[11px] text-amber-200 mt-1.5">
+                        <span className="font-semibold text-amber-300">Purpose:</span> {tx.purpose}
+                      </p>
+                    )}
+                    {tx.liquidationDeadline && (
+                      <p className="text-[10px] text-amber-300 mt-1">
+                        Liquidation due by {tx.liquidationDeadline} • 20-day rule
+                      </p>
+                    )}
                     <p className="text-[10px] text-slate-500 mt-1">Logged by: {tx.recordedBy}</p>
 
                     {/* Audit Details Sub-Block */}
@@ -1171,6 +1192,32 @@ export default function TreasurerView({
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Purpose of Funds */}
+              <div>
+                <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                  {txType === 'income'
+                    ? 'Purpose of funds / official note'
+                    : 'Purpose of funds / cash advance purpose'}
+                </label>
+                <textarea
+                  rows={2}
+                  required={txType === 'expense'}
+                  placeholder={
+                    txType === 'income'
+                      ? 'e.g. Membership dues remittance, project capital deposit, donation from LGU partner...'
+                      : 'e.g. Cash advance for hog feeds, purchase of seedlings for distribution, travel and logistics for field activity...'
+                  }
+                  value={txPurpose}
+                  onChange={(e) => setTxPurpose(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500 font-sans"
+                />
+                <p className="mt-1 text-[11px] text-[#33473d]">
+                  {txType === 'expense'
+                    ? 'Cash advances must be liquidated within 20 calendar days from release. Attach receipts and supporting documents before the deadline.'
+                    : 'Describe the purpose of the funds received or deposited for clear audit trail and accountability.'}
+                </p>
               </div>
 
               {/* Description */}

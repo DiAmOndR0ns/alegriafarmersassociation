@@ -88,6 +88,8 @@ export interface FinancialTransaction {
   amount: number;
   date: string;
   description: string;
+  purpose?: string; // Purpose of the funds or cash advance; required for expense/disbursement logs
+  liquidationDeadline?: string; // Deadline when an officer must liquidate funds with receipts
   recordedBy: string; // Treasurer
   fundSource?: string; // Where the budget was taken from, e.g. "GF-SLP (General Fund / DSWD-SLP)", "DOLE-IGP (DOLE Livelihood Program)", "ATI-TRG (ATI Training Fund)", "DISP-5% (Dispersal Risk Pool)", "CBU (Member Equity)"
   auditedStatus: 'Unaudited' | 'Audited' | 'Flagged';
