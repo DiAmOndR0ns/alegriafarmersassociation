@@ -118,7 +118,7 @@ export default function AuthScreen({
                   <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
                     <ShieldCheck className="w-3.5 h-3.5" />
                   </div>
-                  <span><strong className="font-extrabold text-white">Bona fide Membership:</strong> Ang tanang opisyal kinahanglan miyembro una sa dili pa mamahimong kwalipikado sa eleksyon.</span>
+                  <span><strong className="font-extrabold text-white">Membership verification:</strong> Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema antes magamit ang ilang access.</span>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
                   <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
@@ -161,7 +161,7 @@ export default function AuthScreen({
                 }`}
               >
                 <Info className="w-3.5 h-3.5" />
-                <span>{showMemberGuide ? 'Balik sa Log In' : 'Polisa sa Pagpasakop & Eleksyon'}</span>
+                <span>{showMemberGuide ? 'Balik sa Log In' : 'Membership Policy'}</span>
               </button>
             </div>
 
@@ -326,7 +326,7 @@ export default function AuthScreen({
                 <div className="mt-4 p-3.5 bg-[#FAF8F5] rounded-2xl border border-[#E8E3D8] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-[#5D6B54]">
                   <div className="flex items-center gap-2.5">
                     <Shield className="w-4 h-4 text-[#1B4332] shrink-0" />
-                    <span>Walay public sign-up. Ang tanang opisyal kinahanglan miyembro una ug pilion pinaagi sa eleksyon.</span>
+                    <span>Walay public sign-up. Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema.</span>
                   </div>
                   <button
                     type="button"
@@ -336,7 +336,7 @@ export default function AuthScreen({
                     }}
                     className="text-[11px] font-extrabold text-[#1B4332] hover:underline cursor-pointer shrink-0 ml-auto sm:ml-0"
                   >
-                    Polisa sa Eleksyon →
+                    Membership Policy →
                   </button>
                 </div>
               </div>
