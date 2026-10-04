@@ -1881,7 +1881,7 @@ export default function SecretaryView({
 
             <div className="bg-white border border-[#D5CFC1] p-4 rounded-2xl space-y-2">
               <p className="text-sm font-bold text-[#1B4332]">{memberToDelete.name}</p>
-              <p className="text-xs text-[#4A5F57]">ID: <strong className="text-[#1B4332]">{memberToDelete.memberIdNumber}</strong> • Sitio: <strong className="text-[#1B4332]">{memberToDelete.sitio}</strong></p>
+              <p className="text-xs text-[#4A5F57]">ID: <strong className="text-[#1B4332]">{memberToDelete.memberIdNumber}</strong> • Sitio: <strong className="text-[#1B4332]">{memberToDelete.farmLocation}</strong></p>
               <p className="text-xs text-rose-700 font-medium">Kini nga aksyon magtangtang usab sa bisan unsang konektadong portal login ug mag-auto-sync sa cloud database.</p>
             </div>
 

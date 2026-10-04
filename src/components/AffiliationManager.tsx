@@ -69,7 +69,7 @@ export default function AffiliationManager({
       {!disabled && (
         <div className="space-y-1.5 bg-[#FAF8F5] p-2.5 rounded-xl border border-[#D5CFC1]">
           <span className="text-[10px] font-black text-slate-600 uppercase tracking-wide block">
-            Daling Pagpili:
+            Quick Selection:
           </span>
           <div className="flex flex-wrap gap-1.5">
             {PRESET_AFFILIATIONS.map((preset) => {
@@ -98,7 +98,7 @@ export default function AffiliationManager({
       )}
 
       {/* Current Affiliations List */}
-      {affiliations.length > 0 ? (
+      {affiliations.length > 0 && (
         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
           {affiliations.map((aff, index) => (
             <div
@@ -112,7 +112,7 @@ export default function AffiliationManager({
               {/* Organization / ID Name */}
               <div className="flex-1 w-full sm:w-auto">
                 <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5 sm:hidden">
-                  Ngalan sa ID / Organisasyon
+                  Organization Name
                 </label>
                 <input
                   type="text"
@@ -128,7 +128,7 @@ export default function AffiliationManager({
               {/* ID / Control Number */}
               <div className="flex-1 w-full sm:w-auto">
                 <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5 sm:hidden">
-                  Koda / ID Number (Optional)
+             ID Number
                 </label>
                 <input
                   type="text"
@@ -162,24 +162,9 @@ export default function AffiliationManager({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#EAF4EC] hover:bg-[#D8F3DC] text-[#1B4332] text-xs font-black rounded-xl border border-[#2D6A4F]/30 transition-all cursor-pointer shadow-xs"
             >
               <Plus className="w-3.5 h-3.5 text-[#1B4332]" />
-              <span>Idugang Pa</span>
+              <span>Add More</span>
             </button>
           </div>
-        </div>
-      ) : (
-        <div className="p-4 bg-[#FAF8F5] border-2 border-dashed border-[#D5CFC1] rounded-xl text-center space-y-2">
-          <p className="text-xs text-slate-600 font-semibold">
-            Wala pay laing ID o organisasyon nga narehistro gawas sa RSBSA.
-          </p>
-          <button
-            type="button"
-            onClick={() => handleAddAffiliation('', 'Other')}
-            disabled={disabled}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Idugang ang Unang ID</span>
-          </button>
         </div>
       )}
     </div>
