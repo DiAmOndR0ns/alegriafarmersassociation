@@ -1,6 +1,6 @@
 import React from 'react';
 import { MemberAffiliation } from '../types';
-import { Plus, Trash2, Shield, Building, Award, Check } from 'lucide-react';
+import { Plus, Trash2, Award, Check } from 'lucide-react';
 
 interface AffiliationManagerProps {
   affiliations: MemberAffiliation[];
@@ -58,33 +58,18 @@ export default function AffiliationManager({
 
   return (
     <div className="space-y-3 text-left">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-[#D5CFC1] pb-2">
-        <div>
-          <label className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
-            <Award className="w-4 h-4 text-[#2D6A4F]" />
-            <span>Ubang mga ID ug Organisasyon (Other IDs & Organizations)</span>
-          </label>
-          <p className="text-[10px] sm:text-[11px] text-slate-600 font-medium">
-            Gawas sa RSBSA, idugang ang mga ID ug kapunongan nga gisakopan sa mag-uuma (Senior Citizen, PWD, 4Ps, FCCT Co-op, PCA, ubp.)
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => handleAddAffiliation('', 'Other')}
-          disabled={disabled}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0 self-start sm:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>+ Magdugang og ID / Organisasyon (Add More)</span>
-        </button>
+      <div className="border-b border-[#D5CFC1] pb-2">
+        <label className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
+          <Award className="w-4 h-4 text-[#2D6A4F]" />
+          <span>Ubang mga ID ug Organisasyon</span>
+        </label>
       </div>
 
       {/* Quick Select Preset Pills */}
       {!disabled && (
         <div className="space-y-1.5 bg-[#FAF8F5] p-2.5 rounded-xl border border-[#D5CFC1]">
           <span className="text-[10px] font-black text-slate-600 uppercase tracking-wide block">
-            Daling Pagpili (Quick Select Suggestions):
+            Daling Pagpili:
           </span>
           <div className="flex flex-wrap gap-1.5">
             {PRESET_AFFILIATIONS.map((preset) => {
@@ -177,7 +162,7 @@ export default function AffiliationManager({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#EAF4EC] hover:bg-[#D8F3DC] text-[#1B4332] text-xs font-black rounded-xl border border-[#2D6A4F]/30 transition-all cursor-pointer shadow-xs"
             >
               <Plus className="w-3.5 h-3.5 text-[#1B4332]" />
-              <span>+ Idugang Pa (Add More)</span>
+              <span>Idugang Pa</span>
             </button>
           </div>
         </div>
@@ -193,7 +178,7 @@ export default function AffiliationManager({
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Idugang ang Unang ID / Organisasyon (Add ID/Org)</span>
+            <span>Idugang ang Unang ID</span>
           </button>
         </div>
       )}
