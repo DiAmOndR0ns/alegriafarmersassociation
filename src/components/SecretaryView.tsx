@@ -990,13 +990,14 @@ export default function SecretaryView({
                   </div>
                 </div>
 
-                {/* RSBSA Registration Field */}
-                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1] space-y-2">
+                {/* Farmer IDs and Affiliations */}
+                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1] space-y-3">
+                  <h4 className="text-xs font-bold text-[#1B4332] uppercase flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
+                    <span>Farmer IDs & Affiliations</span>
+                  </h4>
                   <div>
-                    <label className="text-xs font-bold text-[#1B4332] uppercase flex items-center gap-1.5 mb-2">
-                      <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
-                      <span>Basic Sectors in Agriculture</span>
-                    </label>
+                    <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">RSBSA Registration</label>
                     <select
                       value={isRsbsaRegistered ? 'Registered' : 'Not Registered'}
                       onChange={(e) => setIsRsbsaRegistered(e.target.value === 'Registered')}
@@ -1015,6 +1016,10 @@ export default function SecretaryView({
                       className="w-full px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
                     />
                   )}
+                  <AffiliationManager
+                    affiliations={memberAffiliations}
+                    onChange={setMemberAffiliations}
+                  />
                 </div>
 
                 {/* Crops & Livestock */}
@@ -1036,14 +1041,6 @@ export default function SecretaryView({
                       </label>
                     ))}
                   </div>
-                </div>
-
-                {/* Other IDs and Organizations Affiliations */}
-                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1]">
-                  <AffiliationManager
-                    affiliations={memberAffiliations}
-                    onChange={setMemberAffiliations}
-                  />
                 </div>
 
                 {/* Portal Login Credentials Section */}
@@ -1258,13 +1255,14 @@ export default function SecretaryView({
                   </div>
                 </div>
 
-                {/* RSBSA Registration Field */}
-                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1] space-y-2">
+                {/* Farmer IDs and Affiliations */}
+                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1] space-y-3">
+                  <h4 className="text-xs font-bold text-[#1B4332] uppercase flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
+                    <span>Farmer IDs & Affiliations</span>
+                  </h4>
                   <div>
-                    <label className="text-xs font-bold text-[#1B4332] uppercase flex items-center gap-1.5 mb-2">
-                      <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
-                      <span>Basic Sectors in Agriculture</span>
-                    </label>
+                    <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">RSBSA Registration</label>
                     <select
                       value={editIsRsbsa ? 'Registered' : 'Not Registered'}
                       onChange={(e) => setEditIsRsbsa(e.target.value === 'Registered')}
@@ -1283,6 +1281,10 @@ export default function SecretaryView({
                       className="w-full px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
                     />
                   )}
+                  <AffiliationManager
+                    affiliations={editAffiliations}
+                    onChange={setEditAffiliations}
+                  />
                 </div>
 
                 {/* Crops & Livestock */}
@@ -1306,13 +1308,6 @@ export default function SecretaryView({
                   </div>
                 </div>
 
-                {/* Other IDs and Organizations Affiliations */}
-                <div className="p-3 bg-[#EAF4EC] rounded-xl border border-[#D5CFC1]">
-                  <AffiliationManager
-                    affiliations={editAffiliations}
-                    onChange={setEditAffiliations}
-                  />
-                </div>
               </div>
 
               {/* Fixed Bottom Action Footer */}
