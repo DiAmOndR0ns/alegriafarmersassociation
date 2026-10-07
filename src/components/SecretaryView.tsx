@@ -1339,7 +1339,6 @@ export default function SecretaryView({
             <div className="bg-[#EAF4EC] px-6 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
               <div>
                 <h3 className="font-extrabold text-[#1B4332] text-base">Log Assembly / Meeting Minutes</h3>
-                <p className="text-xs text-[#4A5F57] font-medium">Rehistro sa Tigum ug Pag-ihap sa mga Nanambong</p>
               </div>
               <button
                 onClick={() => setShowMeetingModal(false)}

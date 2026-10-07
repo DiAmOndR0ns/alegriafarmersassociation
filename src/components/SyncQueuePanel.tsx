@@ -120,7 +120,7 @@ export default function SyncQueuePanel({
       ) : (
         <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-2.5 text-xs text-slate-300">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span><strong className="text-emerald-300">All data synchronized.</strong> Real-time changes auto-sync to the PostgreSQL cloud database continuously.</span>
+          <span><strong className="text-emerald-300">All data synchronized.</strong></span>
         </div>
       )}
     </div>
