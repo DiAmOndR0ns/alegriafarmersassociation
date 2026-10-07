@@ -402,9 +402,6 @@ export default function TreasurerView({
               <Wallet className="w-4 h-4 text-emerald-600" />
               <span>Registered Organization Fund Accounts & Database Audits</span>
             </h3>
-            <p className="text-xs text-[#4A5F57] mt-0.5">
-              Live organizational treasury allocations & capital accounts recorded in PostgreSQL Cloud Database
-            </p>
           </div>
           <div className="flex items-center gap-2">
             {onAddFund && (
@@ -728,9 +725,6 @@ export default function TreasurerView({
             <Coins className="w-5 h-5 text-emerald-400" />
             <span>Treasurer Financial Ledger</span>
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Record all incoming payments, member dues, and association expenses.
-          </p>
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -739,9 +733,9 @@ export default function TreasurerView({
               id="treasurer-report-btn"
               type="button"
               onClick={onOpenReportModal}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold bg-slate-900 hover:bg-slate-850 text-emerald-400 border border-emerald-500/30 rounded-xl shadow-sm transition-all w-full md:w-auto cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 hover:border-emerald-400 rounded-xl shadow-sm transition-all w-full md:w-auto cursor-pointer"
             >
-              <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+              <FileText className="w-4 h-4 shrink-0" />
               <span>Export Financial Report</span>
             </button>
           )}
@@ -1305,7 +1299,6 @@ export default function TreasurerView({
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">Pagdugang og Tinubdan sa Pundo (Add Fund Source)</h3>
-                  <p className="text-xs text-[#33473d] font-semibold">Rehistro sa bag-ong pundo o kapital nga account sa asosasyon</p>
                 </div>
               </div>
               <button

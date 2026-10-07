@@ -223,9 +223,6 @@ export default function MemberDashboard({
           <h2 className="text-xl sm:text-2xl font-black text-[#1B4332] font-display break-words">
             Maayong Pag-abot, {currentUser.name}!
           </h2>
-          <p className="text-xs sm:text-sm text-[#33473d] max-w-2xl font-semibold leading-relaxed">
-            Kini ang opisyal nga portal sa mga miyembro sa Alegria Farmers Association. Mahimo nimong usbon ang imong hulagway, susihon ang mga anunsyo ug baboyan, tan-awon ang mga abot, ug i-print ang imong opisyal nga AFA ID.
-          </p>
         </div>
       </div>
 
@@ -323,10 +320,10 @@ export default function MemberDashboard({
       {activeTab === 'profile' && (
         /* DASHBOARD GRID */
         <div id="member-profile-panel" className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start no-print text-left">
-        
+
         {/* LEFT COLUMN: PROFILE MANAGEMENT (5 columns) */}
         <div className="lg:col-span-5 space-y-4">
-          
+
           {/* PROFILE PHOTO UPLOADER */}
           <div className="bg-white border border-[#E9E4D9] hover:border-[#1B4332] hover:shadow-md transition-all duration-200 rounded-3xl p-5 space-y-4 shadow-sm">
             <h3 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5 border-b border-[#F0EBE1] pb-2">
@@ -339,9 +336,9 @@ export default function MemberDashboard({
               <div className="relative shrink-0">
                 <div className="w-24 h-24 rounded-2xl bg-[#FAF8F5] border-2 border-[#D5CFC1] overflow-hidden flex items-center justify-center">
                   {currentUser.avatarUrl ? (
-                    <img 
-                      src={currentUser.avatarUrl} 
-                      alt={currentUser.name} 
+                    <img
+                      src={currentUser.avatarUrl}
+                      alt={currentUser.name}
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -366,7 +363,7 @@ export default function MemberDashboard({
 
               {/* Drag n Drop Upload box */}
               <div className="flex-1 w-full space-y-2">
-                <div 
+                <div
                   onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={(e) => {
@@ -376,12 +373,12 @@ export default function MemberDashboard({
                   }}
                   onClick={() => fileInputRef.current?.click()}
                   className={`py-3 px-3 border-2 border-dashed rounded-xl text-center cursor-pointer transition-all ${
-                    isDragging 
-                      ? 'border-[#1B4332] bg-[#EAF4EC]' 
+                    isDragging
+                      ? 'border-[#1B4332] bg-[#EAF4EC]'
                       : 'border-[#D5CFC1] bg-[#FAF8F5] hover:border-[#1B4332] hover:bg-white'
                   }`}
                 >
-                  <input 
+                  <input
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileChange}
@@ -631,7 +628,7 @@ export default function MemberDashboard({
 
         {/* RIGHT COLUMN: DIGITAL CREDENTIALS PREVIEW & SUITE ACTIONS (7 columns) */}
         <div className="lg:col-span-7 space-y-4">
-          
+
           {/* MEMBERSHIP VALIDITY WARNING */}
           <div className="bg-[#FFF8E1] border border-[#FFE082] p-4 rounded-2xl flex gap-3 text-left">
             <AlertCircle className="w-5.5 h-5.5 text-[#FFB300] shrink-0 mt-0.5" />
@@ -655,9 +652,6 @@ export default function MemberDashboard({
                   <Megaphone className="w-5.5 h-5.5 text-[#BF360C]" />
                   <span>Mga Anunsyo ug Balita alang sa Mag-uuma</span>
                 </h3>
-                <p className="text-xs sm:text-sm text-[#2D3A22] mt-1 font-bold">
-                  Mga balita, apod-apod og liso sa semento, ug presyo sa merkado gikan sa atong PIO.
-                </p>
               </div>
 
               {/* Unread Counter */}
@@ -704,7 +698,7 @@ export default function MemberDashboard({
             <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
               {(() => {
                 const filteredAnnouncements = announcements.filter(ann => {
-                  const matchesSearch = ann.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  const matchesSearch = ann.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                                         ann.content.toLowerCase().includes(searchQuery.toLowerCase());
                   const matchesCategory = selectedCategory === 'All' || ann.category === selectedCategory;
                   return matchesSearch && matchesCategory;
@@ -714,7 +708,7 @@ export default function MemberDashboard({
                   return filteredAnnouncements.map((ann) => {
                     const isRead = readAnnouncements.includes(ann.id);
                     const isExpanded = expandedAnnouncementId === ann.id;
-                    
+
                     // Category Badge Colors (highly readable for senior citizens)
                     const categoryColors: Record<string, string> = {
                       'Price Advisory': 'bg-teal-100 text-teal-900 border-teal-300 font-bold',
@@ -725,8 +719,8 @@ export default function MemberDashboard({
                     };
 
                     return (
-                      <div 
-                        key={ann.id} 
+                      <div
+                        key={ann.id}
                         onClick={() => {
                           if (!isExpanded) {
                             setExpandedAnnouncementId(ann.id);
@@ -756,7 +750,7 @@ export default function MemberDashboard({
                               {ann.title}
                             </h4>
                           </div>
-                          
+
                           <span className="text-xs text-slate-700 font-black font-mono shrink-0">
                             {ann.datePosted}
                           </span>
@@ -769,7 +763,7 @@ export default function MemberDashboard({
                         {isExpanded && (
                           <div className="border-t border-[#D5CFC1] pt-3 flex justify-between items-center text-xs text-slate-700 font-extrabold">
                             <span>Gisulat ni: <strong className="text-[#1B4332] text-sm font-black">{ann.postedBy || 'PIO'}</strong></span>
-                            <button 
+                            <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setExpandedAnnouncementId(null);
@@ -810,7 +804,6 @@ export default function MemberDashboard({
                   <Award className="w-4.5 h-4.5 text-[#1B4332]" />
                   <span>Imong Opisyal nga ID ug Sertipiko</span>
                 </h3>
-                <p className="text-[10px] text-[#85947E] font-semibold mt-0.5">I-print kini alang sa pamatuod sa imong pagka-miyembro sa gobyerno.</p>
               </div>
 
               <button
@@ -824,12 +817,12 @@ export default function MemberDashboard({
 
             {/* PREVIEW CONTAINER WINDOW (Tailored to warm earth tones) */}
             <div className="bg-[#FAF8F5] border border-[#E9E4D9] p-4 rounded-2xl grid grid-cols-1 xl:grid-cols-12 gap-4 select-none">
-              
+
               <div className="xl:col-span-7 space-y-2 text-left">
                 <span className="text-[9px] font-black text-[#85947E] uppercase tracking-wider block">ID Card Preview:</span>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  
+
                   {/* FRONT OF THE ID CARD */}
                   <div className="bg-gradient-to-br from-[#1B4332] via-[#24543F] to-[#143326] border-2 border-[#D8F3DC]/30 rounded-2xl p-4 relative overflow-hidden h-[54mm] flex flex-col justify-between shadow-md text-white">
                     {/* Background seal */}
@@ -920,9 +913,9 @@ export default function MemberDashboard({
                       <h4 className="text-[11px] font-black tracking-wide uppercase text-[#1B4332] font-sans leading-none">Alegria Farmers Association</h4>
                       <p className="text-[5px] tracking-wider uppercase font-sans text-slate-500 mt-0.5">Tuburan, Cebu • Giumo 2024</p>
                     </div>
-                    
+
                     <h5 className="text-[9px] uppercase font-bold text-[#E65100] underline font-sans leading-none pt-1">Certificate of Good Standing</h5>
-                    
+
                     <p className="text-[8px] px-2 leading-relaxed">
                       Kini nagpamatuod nga si <strong className="text-black uppercase font-sans font-black">{currentUser.name}</strong> usa ka aktibong miyembro sa **Alegria Farmers Association (AFA)**, nga nag-uma sa **{currentUser.farmLocation}**.
                     </p>
@@ -950,8 +943,8 @@ export default function MemberDashboard({
 
       {activeTab === 'announcements' && (
         <div id="member-announcements-panel" className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print">
-          <AnnouncementDashboard 
-            announcements={announcements} 
+          <AnnouncementDashboard
+            announcements={announcements}
             isOfficerMode={false}
           />
         </div>
@@ -981,9 +974,6 @@ export default function MemberDashboard({
                 <ShoppingBag className="w-6 h-6 text-[#1B4332]" />
                 <span>Mga Produkto ug Abot sa Asosasyon (Association Produce & Products)</span>
               </h3>
-              <p className="text-xs text-slate-600 mt-1 font-semibold">
-                Kini ang opisyal nga listahan sa mga abot ug produkto nga gibaligya sa AFA ug sa atong mga kaubang mag-uuma sa Tuburan.
-              </p>
             </div>
             <div className="bg-[#D8F3DC] text-[#1B4332] px-3.5 py-1.5 rounded-xl text-xs font-black border border-[#1B4332]/20">
               {products.filter(p => p.isPublished).length} Ka Produkto

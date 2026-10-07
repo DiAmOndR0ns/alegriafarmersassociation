@@ -611,8 +611,6 @@ export default function HogRaisingIgpTracker({
               {getProduceProjectName(selectedProduce)}
             </span>
           </h2>
-          <p className={`text-xs ${theme.subText} mt-1 font-medium`}>
-            Track the initial capital, expenses, rental & sales logs, and member dividends for <strong>{selectedProduce}</strong>.          </p>
         </div>
 
         {/* Dynamic Badge */}
@@ -836,16 +834,15 @@ export default function HogRaisingIgpTracker({
 
       {/* TAB CONTENT PANELS */}
       <div className="text-left">
-        
+
         {/* TAB 1: SUMMARY & CAPITAL USED BREAKDOWN */}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
+
             {/* Breakdown graph / details */}
             <div className={`lg:col-span-7 p-6 rounded-3xl border ${theme.cardBg} space-y-6`}>
               <div>
                 <h3 className="font-extrabold text-base text-[#1B4332]">Breakdown sa Gastos sa IGP Capital</h3>
-                <p className="text-xs text-[#33473d] mt-1 font-semibold">Giunsa paggamit ang pundo para sa {selectedProduce} sumpay sa kagamitan, supplies, ug operating budget.</p>
               </div>
 
               {/* Graphical Visual Bars */}
@@ -889,7 +886,7 @@ export default function HogRaisingIgpTracker({
 
             {/* General Project Info / Quick Status */}
             <div className="lg:col-span-5 space-y-6">
-              
+
               {/* Project Status */}
               <div className={`p-5 rounded-3xl border ${theme.cardBg} space-y-4`}>
                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider border-b border-slate-150 dark:border-slate-850 pb-2 flex items-center gap-2">
@@ -945,9 +942,6 @@ export default function HogRaisingIgpTracker({
             <div className={`p-5 rounded-3xl border ${theme.cardBg} space-y-4`}>
               <div>
                 <h3 className="font-extrabold text-base text-[#1B4332]">Schedule sa Pag-alaga sa Baboy (Group Schedule)</h3>
-                <p className="text-xs text-[#1B4332] mt-1 font-semibold">
-                  Kini ang listahan sa mga batch ug mga mag-uuma nga gitahasan sa pagpakaon, pag-ayo, ug pagpabakuna sa mga baboy matag adlaw sa semana.
-                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1009,7 +1003,7 @@ export default function HogRaisingIgpTracker({
         {/* TAB 3: DAILY CHORE AND FEEDING LOGS */}
         {activeTab === 'chores' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
+
             {/* LHS: Log chore check-in form */}
             <div className={`lg:col-span-5 p-5 rounded-3xl border ${theme.cardBg} space-y-4`}>
               <div>
@@ -1108,14 +1102,13 @@ export default function HogRaisingIgpTracker({
             <div className={`lg:col-span-7 p-5 rounded-3xl border ${theme.cardBg} space-y-4`}>
               <div>
                 <h3 className="font-extrabold text-base text-[#1B4332]">Lista sa bag-ong Pag-atiman (Daily Care Logs)</h3>
-                <p className="text-xs text-[#3A4A42] mt-1">Kini ang real-time feed nga nagpakita kon kinsa ang mi-alaga sa {selectedProduce}.</p>
               </div>
 
               <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
                 {filteredChoreLogs.length > 0 ? (
                   filteredChoreLogs.map((log) => (
-                    <div 
-                      key={log.id} 
+                    <div
+                      key={log.id}
                       className="p-3.5 bg-[#F7F4EF] rounded-2xl border border-[#D5CFC1] space-y-2 text-xs shadow-sm"
                     >
                       <div className="flex justify-between items-start">
@@ -1131,8 +1124,8 @@ export default function HogRaisingIgpTracker({
                       {/* Activities badges */}
                       <div className="flex flex-wrap gap-1">
                         {log.activities.map((act, i) => (
-                          <span 
-                            key={i} 
+                          <span
+                            key={i}
                             className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[9px] font-black px-1.5 py-0.5 rounded"
                           >
                             ✓ {dynamicChoreList.find(d => d.id === act)?.label || act}
@@ -1164,7 +1157,7 @@ export default function HogRaisingIgpTracker({
         {activeTab === 'dividends' && (
           <div className="space-y-6">
             <div className={`p-6 rounded-3xl border ${theme.cardBg} space-y-6`}>
-              
+
               {/* Header inside */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-150 dark:border-slate-850 pb-4">
                 <div>
@@ -1300,7 +1293,7 @@ export default function HogRaisingIgpTracker({
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                   <h3 className="font-extrabold text-base text-[#1B4332]">IGP Financial Ledger (Gasto, Abang ug Halin)</h3>
-                  <p className="text-xs text-[#1B4332] mt-1 font-semibold">Isulat ang mga gasto sa {selectedProduce}, lakip ang kita o halin gikan sa abang ug benta.</p>                </div>
+                </div>
 
                 <div className="flex gap-2 w-full sm:w-auto shrink-0 font-bold">
                   <button
@@ -1374,7 +1367,7 @@ export default function HogRaisingIgpTracker({
         {activeTab === 'reports' && (
           <div className="space-y-6 animate-fade-in text-left">
             <div className={`p-6 rounded-3xl border ${theme.cardBg} space-y-6`}>
-              
+
               {/* Header inside reports tab */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-150 dark:border-slate-850 pb-4">
                 <div>
@@ -1382,9 +1375,6 @@ export default function HogRaisingIgpTracker({
                     <ShieldCheck className="w-5 h-5 text-emerald-700" />
                     <span>Quarterly Proceeds & December Book Closing</span>
                   </h3>
-                  <p className="text-xs text-[#1B4332] mt-1 font-semibold">
-                    Bilingual summary of project proceeds per quarter, with year-end closing controls.
-                  </p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1439,10 +1429,10 @@ export default function HogRaisingIgpTracker({
                       </div>
                     </div>
                   ) : (
-                    <div className="p-4 bg-amber-500/5 border border-amber-500/25 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="p-4 bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="text-left space-y-0.5 flex-1">
-                        <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest block font-mono">KASAMTANGANG ABLI (ACTIVE & UNLOCKED)</span>
-                        <p className="text-xs text-[#1B4332] font-semibold leading-relaxed">
+                        <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest block font-mono">KASAMTANGANG ABLI (ACTIVE & UNLOCKED)</span>
+                        <p className="text-xs text-amber-900 font-semibold leading-relaxed">
                           Ang financial books sa {reportYear} kasamtangang abli ug aktibo. Mahimo pang magtala og mga gasto ug halin sa baboy.
                         </p>
                       </div>
@@ -1454,7 +1444,7 @@ export default function HogRaisingIgpTracker({
                               onCloseDecemberBook(reportYear);
                             }
                           }}
-                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-[#1B4332] hover:bg-[#143326] text-white shadow-md border border-[#2D6A4F] flex items-center gap-1.5 cursor-pointer shrink-0 transition-all self-start sm:self-center"
+                          className="px-3.5 py-2 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-700 text-white shadow-md border border-amber-700 flex items-center gap-1.5 cursor-pointer shrink-0 transition-all self-start sm:self-center"
                         >
                           <span>Close Books (Sirad-an ang Libro)</span>
                         </button>

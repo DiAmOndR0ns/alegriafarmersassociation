@@ -288,9 +288,6 @@ export default function ExecutiveView({
               <Users className="w-5.5 h-5.5 text-[#1B4332]" />
               <span>New Registration Desk</span>
             </h3>
-            <p className="text-xs text-[#5D6B54] mt-0.5 font-medium leading-snug">
-              Susiha ug aprobahi ang mga nagpalista nga miyembro o opisyal sa Barangay Alegria.
-            </p>
           </div>
 
           {/* Pending Requests List */}
@@ -309,8 +306,8 @@ export default function ExecutiveView({
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-extrabold text-[#1B4332] text-sm">{user.name}</span>
                           <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider ${
-                            user.role === 'Member' 
-                              ? 'bg-[#EAF4EC] text-[#1B4332] border-[#2D6A4F]/25' 
+                            user.role === 'Member'
+                              ? 'bg-[#EAF4EC] text-[#1B4332] border-[#2D6A4F]/25'
                               : 'bg-[#E3F2FD] text-[#0D47A1] border-[#0D47A1]/25'
                           }`}>
                             Gitinguha: {user.role.replace('_', ' ')}
@@ -372,9 +369,6 @@ export default function ExecutiveView({
                 <ShieldAlert className="w-5.5 h-5.5 text-[#1B4332]" />
                 <span>Officer Governance & Role Management (Delete Officer & Revoke Role)</span>
               </h3>
-              <p className="text-xs text-[#5D6B54] mt-1 font-medium">
-                Enforce officer access, reassign governance roles, and delete officers when relieved of duties. All changes made offline are automatically synced to the database without requiring manual button clicks.
-              </p>
             </div>
             <div className="inline-flex items-center gap-1.5 bg-[#EAF4EC] border border-[#2D6A4F]/30 text-[#1B4332] px-3 py-1 rounded-full text-xs font-bold shrink-0 self-start sm:self-center">
               <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -395,8 +389,8 @@ export default function ExecutiveView({
                 const isPresident = officer.role === 'President';
 
                 return (
-                  <div 
-                    key={officer.id} 
+                  <div
+                    key={officer.id}
                     className="p-4 rounded-2xl border border-[#E9E4D9] bg-[#FAF8F5] text-left transition-all space-y-3 flex flex-col justify-between"
                   >
                     <div className="space-y-2">
@@ -419,7 +413,7 @@ export default function ExecutiveView({
                       {isEditingRole && !isPresident && (
                         <div className="bg-white p-2.5 rounded-xl border border-[#D5CFC1] space-y-2 animate-fade-in">
                           <label className="block text-[10px] font-bold text-[#4F5E46] uppercase">Select New Governance Role:</label>
-                          <select 
+                          <select
                             value={selectedNewRole}
                             onChange={(e) => setSelectedNewRole(e.target.value as any)}
                             className="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800"
@@ -459,8 +453,8 @@ export default function ExecutiveView({
                       {isEditingPass && (
                         <form onSubmit={(e) => handleResetPasswordSubmit(e, officer.id)} className="bg-white p-2.5 rounded-xl border border-[#E9E4D9] space-y-2 animate-fade-in">
                           <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">New Officer Password:</label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             required
                             placeholder="e.g. afa2026"
                             value={newPassword}
@@ -548,11 +542,11 @@ export default function ExecutiveView({
               {users.filter(u => u.role === 'Member').map((user) => {
                 const isEditing = editingUserId === user.id;
                 return (
-                  <div 
-                    key={user.id} 
+                  <div
+                    key={user.id}
                     className={`p-3 rounded-2xl border text-left transition-all text-xs space-y-2 ${
-                      user.resetRequested 
-                        ? 'bg-[#FFF3E0] border-[#FFE082] ring-1 ring-[#FFB300]' 
+                      user.resetRequested
+                        ? 'bg-[#FFF3E0] border-[#FFE082] ring-1 ring-[#FFB300]'
                         : 'bg-[#FAF8F5] border-[#E9E4D9]'
                     }`}
                   >
@@ -578,8 +572,8 @@ export default function ExecutiveView({
                             setNewPassword('afa2026');
                           }}
                           className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border ${
-                            user.resetRequested 
-                              ? 'bg-[#E65100] text-white border-[#E65100]' 
+                            user.resetRequested
+                              ? 'bg-[#E65100] text-white border-[#E65100]'
                               : 'bg-white text-[#1B4332] border-[#D5CFC1] hover:bg-white'
                           }`}
                           title="Reset password"
@@ -587,7 +581,7 @@ export default function ExecutiveView({
                           <KeyRound className="w-3.5 h-3.5" />
                           <span>Reset</span>
                         </button>
-                        
+
                         <button
                           onClick={() => onDeleteUser && onDeleteUser(user.id)}
                           className="p-1.5 text-[#85947E] hover:text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg transition-all cursor-pointer"
@@ -603,8 +597,8 @@ export default function ExecutiveView({
                       <form onSubmit={(e) => handleResetPasswordSubmit(e, user.id)} className="bg-white p-3 rounded-xl border border-[#E9E4D9] space-y-2.5">
                         <div className="space-y-1">
                           <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">New Password:</label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             required
                             placeholder="e.g. afa2026"
                             value={newPassword}
@@ -640,7 +634,7 @@ export default function ExecutiveView({
 
       {/* SECTION: RESOLUTIONS REVIEW & ASSEMBLY RECORDS */}
       <div className="order-1 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
-        
+
         {/* LEFT COLUMN: RESOLUTIONS WAITLIST (7 Columns) */}
         <div className="lg:col-span-7 self-start bg-white border border-[#E9E4D9] rounded-3xl p-5 shadow-sm space-y-3">
           <div className="border-b border-[#F0EBE1] pb-3 text-left">
@@ -648,9 +642,6 @@ export default function ExecutiveView({
               <FileCheck className="w-5.5 h-5.5 text-[#1B4332]" />
               <span>Resolutions for Signing</span>
             </h3>
-            <p className="text-xs text-[#5D6B54] mt-1 font-medium">
-              Susiha ang gikasabutan nga mga draft sa asembliya sa dili pa kini opisyal nga ipatuman sa barangay.
-            </p>
           </div>
 
           {pendingResolutions.length > 0 ? (
@@ -663,7 +654,7 @@ export default function ExecutiveView({
                     </span>
                     <span className="text-[10px] text-[#85947E] font-medium">Gibuhat niadtong: {res.dateAgreed}</span>
                   </div>
-                  
+
                   <div className="space-y-1">
                     <h4 className="text-sm font-extrabold text-[#1B4332]">{res.title}</h4>
                     <p className="text-xs text-[#5D6B54] leading-relaxed bg-white p-3 rounded-xl border border-[#E9E4D9] italic">
@@ -704,16 +695,13 @@ export default function ExecutiveView({
               <Activity className="w-5.5 h-5.5 text-[#1B4332]" />
               <span>System Audit Trail</span>
             </h3>
-            <p className="text-xs text-[#5D6B54] mt-1 font-medium">
-              Usa ka yano ug daling basahon nga rekord sa tanang aksyon sa sistema (Who did what, and when).
-            </p>
           </div>
 
           {/* Search bar & Year Filter inside logs */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-left">
             <div className="relative sm:col-span-8">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#85947E]" />
-              <input 
+              <input
                 type="text"
                 placeholder="Pangitaa sa logs (e.g. Approved, Secretary)..."
                 value={logSearch}
@@ -773,8 +761,8 @@ export default function ExecutiveView({
           <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
             {filteredLogs.length > 0 ? (
               filteredLogs.map((log) => (
-                <div 
-                  key={log.id} 
+                <div
+                  key={log.id}
                   className="text-xs bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-3.5 text-left space-y-1.5 transition-all hover:border-[#85947E]"
                 >
                   <div className="flex justify-between items-center text-[10px] text-[#85947E] font-semibold">
@@ -786,11 +774,11 @@ export default function ExecutiveView({
                       {log.role.replace('_', ' ')}
                     </span>
                   </div>
-                  
+
                   <div className="font-extrabold text-[#2D3A22]">
                     {log.user} • <span className="text-[#2E7D32] font-black">{log.action}</span>
                   </div>
-                  
+
                   <p className="text-[#5D6B54] leading-relaxed text-[11px] font-sans break-words bg-white p-2.5 rounded-xl border border-[#F0EBE1]">
                     {log.details}
                   </p>
@@ -818,9 +806,6 @@ export default function ExecutiveView({
               <ShieldCheck className="w-5.5 h-5.5 text-[#BF360C]" />
               <span>Election & Presidential Turnover Desk</span>
             </h3>
-            <p className="text-xs text-[#5D6B54] mt-1 font-medium">
-              Upon conclusion of democratic elections, utilize this certified turnover protocol to formally transfer system authority, financial books, and organizational archives to the newly elected President.
-            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -996,7 +981,6 @@ export default function ExecutiveView({
                 <BookOpen className="w-5.5 h-5.5 text-[#D8F3DC]" />
                 <div>
                   <h3 className="font-extrabold text-white text-sm">Mga Agi sa Asembliya ug Miting</h3>
-                  <p className="text-[10px] text-[#B7E4C7] font-medium">Susiha ang gihisgutan sa miaging asembliya ug ipatik kini.</p>
                 </div>
               </div>
               <button 

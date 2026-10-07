@@ -194,9 +194,6 @@ export default function AnnouncementDashboard({
             <Megaphone className={`w-6 h-6 ${isOfficerMode ? 'text-emerald-400' : 'text-[#E65100]'}`} />
             <span>Announcements</span>
           </h2>
-          <p className={`text-xs ${theme.subText} mt-1 font-medium`}>
-            View official updates, assistance notices, and market information from the Public Information Officer.
-          </p>
         </div>
 
         {unreadCount > 0 && (

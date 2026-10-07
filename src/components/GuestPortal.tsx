@@ -201,16 +201,13 @@ export default function GuestPortal({
           <h2 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight leading-tight font-display break-words max-w-3xl mx-auto px-2 text-white">
             Magkauban sa Pag-uma ug Pagpalambo sa Atong Yutang Natawhan
           </h2>
-          <p className="text-xs sm:text-sm md:text-base text-[#D8F3DC] max-w-2xl mx-auto font-medium leading-relaxed break-words px-2">
-            Kini ang public portal sa Alegria Farmers Association (AFA). 
-            Gidisenyo kini aron sayon ug daling matan-aw ang atong kasaysayan, mga kalamposan, ug ang lab-as nga mga produkto.          </p>
         </div>
       </section>
 
       {/* TABS NAVIGATION WITH SCROLL INDICATOR ARROWS */}
       <div className="bg-[#FAF8F5] border-b-2 border-[#D5CFC1] static md:sticky md:top-[73px] z-20 shadow-sm no-print">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 flex flex-col items-center">
-          
+
           {/* Mobile Phone Scroll Hint Indicator */}
           <div className="flex sm:hidden items-center justify-between w-full px-2.5 py-1 text-[11px] font-black text-[#1B4332] bg-[#EAF4EC] rounded-lg mb-1.5 border border-emerald-800/20 shadow-xs">
             <span className="flex items-center gap-1">
@@ -264,14 +261,14 @@ export default function GuestPortal({
 
       {/* CORE CONTENT SWITCHER */}
       <main className="flex-1 p-3.5 sm:p-6 max-w-7xl mx-auto w-full space-y-6 sm:space-y-8 min-w-0">
-        
+
         {/* TAB 1: OVERVIEW & DASHBOARD */}
         {activeTab === 'home' && (
           <div className="space-y-6 sm:space-y-8 text-left min-w-0">
-            
+
             {/* Dynamic Statistics Grid with Hover Functions */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-              
+
               <div className="bg-white rounded-3xl p-4 sm:p-6 flex items-center gap-4 sm:gap-5 shadow-sm min-w-0">
                 <div className="p-3 sm:p-4 rounded-2xl bg-[#EAF4EC] text-[#1B4332] shrink-0">
                   <Users className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -303,8 +300,8 @@ export default function GuestPortal({
                   Mahitungod sa Alegria Farmers Association
                 </h3>
                 <p className="text-xs sm:text-sm md:text-base text-slate-700 leading-relaxed font-semibold break-words">
-                  Ang AFA gilusad aron tagaan og gahum, modernong tabang, ug dugang kita ang atong mga lokal nga mag-uuma. 
-                  Gikan sa atong iladong <strong className="text-[#BF360C]">Kape sa Tuburan</strong>, saging, mais, hangtod sa mga proyekto sa komunidad sama sa <strong className="text-[#1B4332]">Abang sa Lingkoranan ug Sako</strong>, 
+                  Ang AFA gilusad aron tagaan og gahum, modernong tabang, ug dugang kita ang atong mga lokal nga mag-uuma.
+                  Gikan sa atong iladong <strong className="text-[#BF360C]">Kape sa Tuburan</strong>, saging, mais, hangtod sa mga proyekto sa komunidad sama sa <strong className="text-[#1B4332]">Abang sa Lingkoranan ug Sako</strong>,
                   atong paningkamotan nga mapalambo ang agrikultura pinaagi sa kooperasyon.
                 </p>
                 <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 sm:gap-4 pt-2">
@@ -355,7 +352,7 @@ export default function GuestPortal({
                     <Megaphone className="w-4 h-4 sm:w-5 sm:h-5 text-[#BF360C]" />
                     <span>Announcements</span>
                   </h4>
-                  <button 
+                  <button
                     onClick={() => setActiveTab('announcements')}
                     className="text-xs font-black text-[#BF360C] hover:underline cursor-pointer flex items-center gap-1"
                   >
@@ -394,7 +391,7 @@ export default function GuestPortal({
                     <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" />
                     <span>Activities</span>
                   </h4>
-                  <button 
+                  <button
                     onClick={() => setActiveTab('activities')}
                     className="text-xs font-black text-emerald-800 hover:underline cursor-pointer flex items-center gap-1"
                   >
@@ -459,9 +456,6 @@ export default function GuestPortal({
                  Official Bulletins
                 </h3>
               </div>
-              <p className="text-xs sm:text-sm md:text-base text-slate-700 font-semibold leading-relaxed break-words">
-                Kini ang opisyal nga mga pahibalo nga gipagawas sa Public Information Officer (PIO) ug mga Opisyales sa AFA alang sa tanang miyembro ug komunidad sa Barangay Alegria.
-              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
@@ -514,9 +508,6 @@ export default function GuestPortal({
                   Community Activities
                 </h3>
               </div>
-              <p className="text-xs sm:text-sm md:text-base text-slate-700 font-semibold leading-relaxed break-words">
-                Subaya ang mga umaabot ug nangaging mga seminar, training, distribution sa liso ug abono, ug mga miting sa mag-uuma sa Alegria.
-              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
@@ -580,14 +571,14 @@ export default function GuestPortal({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start pt-2 min-w-0">
               <div className="lg:col-span-8 space-y-4 sm:space-y-6 text-xs sm:text-sm md:text-base text-slate-700 leading-relaxed font-semibold min-w-0 break-words">
                 <p>
-                  Ang <strong className="text-[#1B4332]">Alegria Farmers Association (AFA)</strong> nagsugod isip usa ka gamay nga grupo sa mga mag-uuma sa Barangay Alegria, Tuburan, Cebu. 
+                  Ang <strong className="text-[#1B4332]">Alegria Farmers Association (AFA)</strong> nagsugod isip usa ka gamay nga grupo sa mga mag-uuma sa Barangay Alegria, Tuburan, Cebu.
                   Sa wala pa matukod ang opisayl nga asosasyon, ang mga mag-uuma nag-atubang ug dakong kalisod sa pagbaligya sa ilang abot tungod sa kalayo sa merkado ug sa ubos kaayo nga presyo nga gitanyag sa mga middlemen.
                 </p>
                 <p>
-                  Tungod niini, niadtong tuig 2022, sa tabang sa atong lider nga si <strong className="text-[#1B4332]">Presidente Zenaida A. Elbiña</strong> kauban ang suporta sa Lokal nga Kagamhanan (LGU) ug Department of Agriculture (DA), 
+                  Tungod niini, niadtong tuig 2022, sa tabang sa atong lider nga si <strong className="text-[#1B4332]">Presidente Zenaida A. Elbiña</strong> kauban ang suporta sa Lokal nga Kagamhanan (LGU) ug Department of Agriculture (DA),
                   ang asosasyon opisyal nga na-rehistro ug natukod. Ang panguna nga katuyoan mao ang paghiusa sa upat (4) ka opisyal nga Sitio sa Alegria (Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak) aron adunay usa ka tingog ug hiniusang kusog.
                 </p>
-                
+
                 <div className="bg-[#FAF8F5] border-l-4 border-[#1B4332] p-4 sm:p-5 rounded-r-2xl space-y-2 min-w-0 break-words">
                   <h4 className="font-black text-[#1B4332] text-sm sm:text-base uppercase tracking-wider">Atong Misyon (Our Mission)</h4>
                   <p className="text-xs sm:text-sm text-slate-800 leading-relaxed italic">
@@ -596,7 +587,7 @@ export default function GuestPortal({
                 </div>
 
                 <p>
-                  Karon, ang AFA nagserbisyo na sa daghang aktibong pamilya sa mag-uuma. Mapasigarbohon kami nga nakatukod og mga programa sama sa collective selling sa <strong className="text-[#BF360C]">Kape sa Tuburan</strong>, 
+                  Karon, ang AFA nagserbisyo na sa daghang aktibong pamilya sa mag-uuma. Mapasigarbohon kami nga nakatukod og mga programa sama sa collective selling sa <strong className="text-[#BF360C]">Kape sa Tuburan</strong>,
                   fertilizer distribution sessions, ug ang mga livelihood projects ug <strong className="text-[#1B4332]">Kagamitan nga Abangan (Chairs & Sacks Rentals)</strong> nga bukas para sa tanan nga gipaluyohan sa Asosasyon.
                 </p>
               </div>
@@ -674,9 +665,6 @@ export default function GuestPortal({
                   Key Milestones
                 </h3>
               </div>
-              <p className="text-xs sm:text-sm md:text-base text-slate-700 font-semibold leading-relaxed break-words">
-                Kini ang listahan sa mga dagkong dungog ug kalamposan nga nakab-ot sa atong asosasyon pinaagi sa pagtinabangay sa matag miyembro, opisyales, ug lokal nga kagamhanan sa Tuburan.
-              </p>
             </div>
 
             {/* Timeline View */}
@@ -689,7 +677,7 @@ export default function GuestPortal({
                     <div className="absolute -left-[17px] sm:-left-[22px] top-5 sm:top-6 bg-[#1B4332] text-white p-1.5 sm:p-2 rounded-full border-2 sm:border-4 border-[#FAF7F2] shadow-md z-10 flex items-center justify-center">
                       <Icon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                     </div>
-                    
+
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 flex-wrap min-w-0">
                       <span className="text-base sm:text-lg font-mono font-black text-[#BF360C]">{item.year}</span>
                       <span className="bg-[#EAF4EC] text-[#1B4332] px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-black border border-[#2D6A4F]/20 font-display break-words max-w-full inline-block">
@@ -700,7 +688,7 @@ export default function GuestPortal({
                     <h4 className="text-sm sm:text-base md:text-lg font-black text-[#1B4332] font-display break-words leading-tight">
                       {item.cebTitle}
                     </h4>
-                    
+
                     <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed break-words">
                       {item.desc}
                     </p>
@@ -717,7 +705,7 @@ export default function GuestPortal({
                 </span>
                 <h4 className="text-base sm:text-lg font-black text-[#1B4332] break-words">100% Secured LGU Coordination</h4>
                 <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed break-words">
-                  Ang tanang pundo nga nadawat sa asosasyon direkta nga narekord ug gisubay sa atong Tesorero ug Auditor para masiguro nga walay mausik. 
+                  Ang tanang pundo nga nadawat sa asosasyon direkta nga narekord ug gisubay sa atong Tesorero ug Auditor para masiguro nga walay mausik.
                   Ang LGU sa Tuburan naghatag kanato og commendation isip usa sa labing transparent ug aktibo nga farmers association sa probinsya.
                 </p>
               </div>
@@ -728,7 +716,7 @@ export default function GuestPortal({
                 </span>
                 <h4 className="text-base sm:text-lg font-black text-orange-950 break-words">Miyembro nga Adunay Sumpay nga Kita</h4>
                 <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed break-words">
-                  Pinaagi sa mga Livelihood Projects ug Rental IGP (sama sa abang sa mga lingkoranan ug sako nga bukas alang sa tanan), ang matag miyembro makadawat og bahin o dividends gikan sa halin ug abot sa asosasyon. 
+                  Pinaagi sa mga Livelihood Projects ug Rental IGP (sama sa abang sa mga lingkoranan ug sako nga bukas alang sa tanan), ang matag miyembro makadawat og bahin o dividends gikan sa halin ug abot sa asosasyon.
                   Kini naghatag og sigurado ug kasaligan nga dugang kwarta nga magamit sa pamilya para sa pagpa-skwela sa mga anak o medisina sa mga senior citizen.
                 </p>
               </div>
@@ -746,9 +734,6 @@ export default function GuestPortal({
                   Our Agriculture Produce
                 </h3>
               </div>
-              <p className="text-xs sm:text-sm md:text-base text-slate-700 font-semibold leading-relaxed break-words">
-                Garbo sa Barangay Alegria! Ang mosunod mao ang mga pang-unang produkto nga gitanom, gibuhi, ug ginama sa mga kamot sa atong kugihan nga mga mag-uuma.
-              </p>
             </div>
 
             {/* Products Grid */}
