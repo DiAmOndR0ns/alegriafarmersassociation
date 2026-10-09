@@ -23,11 +23,12 @@ import MemberDashboard from './components/MemberDashboard';
 import GuestPortal from './components/GuestPortal';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import OfficerReportModal from './components/OfficerReportModal';
+import PresidentReport, { buildReportData } from './components/PresidentReport';
 import ProductManagementModal from './components/ProductManagementModal';
 import DashboardSkeleton from './components/DashboardSkeleton';
 import { buildAuditChain, hashPassword, sanitizeUserForStorage } from './utils/audit';
-import { 
-  Building, ShieldCheck, Megaphone, Users, Coins, 
+import {
+  Building, ShieldCheck, Megaphone, Users, Coins,
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
   ChevronLeft, ChevronRight, Download, Trash2, Database
 } from 'lucide-react';
@@ -88,6 +89,7 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<OfficerRole>('President');
   const [officerTab, setOfficerTab] = useState<'tasks' | 'hog-raising' | 'announcements' | 'member-view' | 'products'>('tasks');
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
+  const [showPresidentReport, setShowPresidentReport] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
   const [showPurgeConfirmModal, setShowPurgeConfirmModal] = useState<boolean>(false);
   const [showClearCacheConfirmModal, setShowClearCacheConfirmModal] = useState<boolean>(false);
@@ -2241,7 +2243,7 @@ export default function App() {
       </header>
 
       {/* PERMANENT LEFT SIDEBAR NAVIGATION (Desktop) */}
-      {!guestMode && currentUser && currentUser.role !== 'Member' && (
+      {!guestMode && currentUser && (currentUser.role as string) !== 'Member' && (
         <aside
           id="officer-left-sidebar"
           className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-72 flex-col bg-[#0F2D24] border-r-2 border-[#1B4332] shadow-2xl text-white"
@@ -2295,6 +2297,18 @@ export default function App() {
                 </span>
               )}
             </button>
+
+            {currentRole === 'President' && (
+              <button
+                id="sidebar-president-report-btn"
+                type="button"
+                onClick={() => setShowPresidentReport(true)}
+                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
+              >
+                <FileText className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
+                <span className="truncate">President's Report (PDF)</span>
+              </button>
+            )}
 
             {currentRole === 'President' && (
               <button
@@ -2673,6 +2687,30 @@ export default function App() {
           onClose={() => setShowReportModal(false)}
           onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
         />
+      )}
+
+      {/* PRESIDENT'S LETTERHEAD REPORT (print / save as PDF) */}
+      {showPresidentReport && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
+          <div className="mx-auto max-w-[210mm]">
+            <button
+              type="button"
+              onClick={() => setShowPresidentReport(false)}
+              className="mb-3 w-full rounded-xl bg-white px-4 py-2 text-sm font-black text-[#1B4332] shadow hover:bg-slate-100 cursor-pointer print:hidden"
+            >
+              ✕ Close Report
+            </button>
+            <PresidentReport
+              data={buildReportData({
+                year: new Date().getFullYear(),
+                members,
+                funds,
+                transactions,
+                users,
+              })}
+            />
+          </div>
+        </div>
       )}
 
       {/* PRODUCT MANAGEMENT MODAL */}

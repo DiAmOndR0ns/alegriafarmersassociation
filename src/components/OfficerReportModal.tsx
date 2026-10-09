@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement, HogRaisingState, OfficerRole, OrganizationFund } from '../types';
 import { INITIAL_FUNDS } from '../initialData';
-import { 
-  Printer, Download, X, FileText, ShieldCheck, Coins, 
+import {  getSurname } from '../utils/names';
+import {
+  Printer, Download, X, FileText, ShieldCheck, Coins,
   Users, Megaphone, Wallet, Database, Layers, CheckCircle2, AlertCircle
 } from 'lucide-react';
 
@@ -81,6 +82,12 @@ export default function OfficerReportModal({
     const s = m.farmLocation || 'Unassigned';
     sitioCounts[s] = (sitioCounts[s] || 0) + 1;
   });
+
+  // Consolidated report of the members: take the SURNAME from each farmer's stored
+  // full name and order the roster alphabetically by surname.
+  const membersBySurname = [...members].sort((a, b) =>
+    getSurname(a.name).localeCompare(getSurname(b.name)) || a.name.localeCompare(b.name)
+  );
 
   // Officer names
   const getOfficerNameByRole = (r: OfficerRole) => {
@@ -446,6 +453,35 @@ export default function OfficerReportModal({
             <tr><td>PIO</td><td>Ida S. Manera</td><td>Public Information Officer</td></tr>
           </tbody>
         </table>
+
+        <div class="section-title">9. CONSOLIDATED ROSTER OF MEMBERS (BY SURNAME)</div>
+        <p style="font-size: 10px; color: #475569; margin-bottom: 8px;">
+          Surname is taken from each registered farmer's official record and listed alphabetically for the consolidated report of the members.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Surname</th>
+              <th>Full Name</th>
+              <th>Member ID</th>
+              <th>Sitio Location</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${membersBySurname.map((m, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td><strong>${getSurname(m.name)}</strong></td>
+                <td>${m.name}</td>
+                <td>${m.memberIdNumber || 'Pending'}</td>
+                <td>${m.farmLocation || 'Unassigned'}</td>
+                <td>${m.status}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="6">No members on record.</td></tr>'}
+          </tbody>
+        </table>
       `;
     } else if (activeReportRole === 'PIO') {
       contentHtml = `
@@ -669,10 +705,11 @@ export default function OfficerReportModal({
       csvRows.push(`Secretary,${getOfficerNameByRole('Secretary')}`);
       csvRows.push('');
       csvRows.push('MEMBERSHIP ROSTER');
-      csvRows.push('ID,Name,Member ID,RSBSA Number,Sitio Location,Primary Crops,Status,Joined Date');
-      members.forEach(m => {
+      csvRows.push('ID,Surname,Name,Member ID,RSBSA Number,Sitio Location,Primary Crops,Status,Joined Date');
+      membersBySurname.forEach(m => {
         csvRows.push([
           m.id,
+          `"${getSurname(m.name).replace(/"/g, '""')}"`,
           `"${m.name.replace(/"/g, '""')}"`,
           `"${m.memberIdNumber || 'Pending'}"`,
           `"${m.rsbsaNumber || 'Pending'}"`,
@@ -779,6 +816,19 @@ export default function OfficerReportModal({
         csvRows.push(`Total Batch Sales Revenue (PHP),${hogSalesTotal.toFixed(2)}`);
         csvRows.push(`Net Livelihood Tubo (PHP),${hogNet.toFixed(2)}`);
       }
+      csvRows.push('');
+      csvRows.push('8. CONSOLIDATED ROSTER OF MEMBERS (BY SURNAME)');
+      csvRows.push('No.,Surname,Full Name,Member ID,Sitio Location,Status');
+      membersBySurname.forEach((m, i) => {
+        csvRows.push([
+          (i + 1).toString(),
+          `"${getSurname(m.name).replace(/"/g, '""')}"`,
+          `"${m.name.replace(/"/g, '""')}"`,
+          `"${(m.memberIdNumber || 'Pending')}"`,
+          `"${(m.farmLocation || 'Unassigned').replace(/"/g, '""')}"`,
+          m.status
+        ].join(','));
+      });
     }
 
     const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvRows.join('\n'));

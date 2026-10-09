@@ -13,6 +13,7 @@ import RollCallModal from './RollCallModal';
 import SecretaryTemplatesModal from './SecretaryTemplatesModal';
 import MemberIdBadgeModal from './MemberIdBadgeModal';
 import AffiliationManager from './AffiliationManager';
+import { splitName } from '../utils/names';
 
 interface SecretaryViewProps {
   members: Member[];
@@ -23,16 +24,16 @@ interface SecretaryViewProps {
   onDeleteMember: (id: string) => void;
   onManageMemberLogin?: (memberId: string, username: string, initialPassword: string) => void;
   onResetMemberPassword?: (userId: string, newPass: string) => void;
-  
+
   meetings: Meeting[];
   onAddMeeting: (meeting: Omit<Meeting, 'id'>) => void;
   onUpdateMeeting: (meeting: Meeting) => void;
   onDeleteMeeting?: (id: string) => void;
-  
+
   resolutions: Resolution[];
   onAddResolution: (resolution: Omit<Resolution, 'id' | 'status'>) => void;
   onDeleteResolution?: (id: string) => void;
-  
+
   isOnline: boolean;
   onOpenReportModal?: () => void;
 }
@@ -55,6 +56,20 @@ const getBirthDateFromInputs = (month: string, day: string, year: string) => {
   }
 
   return `${year}-${String(monthNumber).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`;
+};
+
+/**
+ * Compose a stored member full name from the separate personal-data inputs.
+ * Follows the FAMS convention "Surname, First M." so reports can extract the
+ * surname with `getSurname`/`splitName`.
+ */
+const buildFullName = (first: string, middle: string, surname: string) => {
+  const f = first.trim();
+  const m = middle.trim().replace(/\.$/, '');
+  const s = surname.trim();
+  if (!s) return f;
+  const forename = m ? `${f} ${m[0].toUpperCase()}.` : f;
+  return forename ? `${s}, ${forename}` : s;
 };
 
 export default function SecretaryView({
@@ -81,11 +96,11 @@ export default function SecretaryView({
   const [selectedSitio, setSelectedSitio] = useState('All');
   const [selectedMeetingForPrint, setSelectedMeetingForPrint] = useState<Meeting | null>(null);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
-  
+
   // Secretary Templates and Member Badge Modals
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [selectedMemberForBadge, setSelectedMemberForBadge] = useState<Member | null>(null);
-  
+
   // Roll Call States
   const [meetingAttendanceRecord, setMeetingAttendanceRecord] = useState<Record<string, 'Present' | 'Absent' | 'Excused'>>({});
   const [rollCallMeeting, setRollCallMeeting] = useState<Meeting | null>(null);
@@ -114,10 +129,12 @@ export default function SecretaryView({
   const [managePassword, setManagePassword] = useState('password123');
   const [showManagePassword, setShowManagePassword] = useState(false);
   const [copiedManageCreds, setCopiedManageCreds] = useState(false);
-  
+
   // Member Form State (Registration)
   const [showMemberModal, setShowMemberModal] = useState(false);
-  const [memberName, setMemberName] = useState('');
+  const [memberFirstName, setMemberFirstName] = useState('');
+  const [memberMiddleName, setMemberMiddleName] = useState('');
+  const [memberSurname, setMemberSurname] = useState('');
   const [memberContact, setMemberContact] = useState('');
   const [memberSitio, setMemberSitio] = useState('Sitio Tapon');
   const [memberIdNum, setMemberIdNum] = useState(`AFA-2026-0${members.length + 1}`);
@@ -133,7 +150,9 @@ export default function SecretaryView({
 
   // Member Edit State
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const [editName, setEditName] = useState('');
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editMiddleName, setEditMiddleName] = useState('');
+  const [editSurname, setEditSurname] = useState('');
   const [editContact, setEditContact] = useState('');
   const [editSitio, setEditSitio] = useState('Sitio Tapon');
   const [editMemberIdNum, setEditMemberIdNum] = useState('');
@@ -201,7 +220,8 @@ export default function SecretaryView({
 
   const handleMemberSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!memberName.trim()) return;
+    const assembledName = buildFullName(memberFirstName, memberMiddleName, memberSurname);
+    if (!assembledName || !memberSurname.trim()) return;
 
     const birthDate = getBirthDateFromInputs(memberBirthMonth, memberBirthDay, memberBirthYear);
     if (birthDate === null) {
@@ -211,11 +231,11 @@ export default function SecretaryView({
     setBirthDateError('');
 
     const finalMemberId = memberIdNum || `AFA-2026-0${members.length + 1}`;
-    const cleanUsername = (loginUsername.trim() || memberName.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '.')).toLowerCase();
+    const cleanUsername = (loginUsername.trim() || assembledName.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '.')).toLowerCase();
     const cleanPassword = loginPassword.trim() || 'password123';
 
     onAddMember({
-      name: memberName,
+      name: assembledName,
       memberIdNumber: finalMemberId,
       rsbsaNumber: memberRsbsa || undefined,
       isRsbsaRegistered: isRsbsaRegistered,
@@ -233,7 +253,7 @@ export default function SecretaryView({
 
     if (createLoginAccount) {
       setCreatedCredentials({
-        name: memberName,
+        name: assembledName,
         memberId: finalMemberId,
         username: cleanUsername,
         initialPassword: cleanPassword,
@@ -242,7 +262,9 @@ export default function SecretaryView({
     }
 
     // Reset Form
-    setMemberName('');
+    setMemberFirstName('');
+    setMemberMiddleName('');
+    setMemberSurname('');
     setMemberContact('');
     setMemberSitio('Sitio Tapon');
     setMemberIdNum(`AFA-2026-0${members.length + 2}`);
@@ -263,7 +285,10 @@ export default function SecretaryView({
 
   const handleOpenEditMember = (member: Member) => {
     setEditingMember(member);
-    setEditName(member.name);
+    const parsed = splitName(member.name || '');
+    setEditFirstName(parsed.first || '');
+    setEditMiddleName(parsed.mi || '');
+    setEditSurname(parsed.surname || '');
     setEditContact(member.contactNumber || '');
     setEditSitio(member.farmLocation || 'Sitio Tapon');
     setEditMemberIdNum(member.memberIdNumber || '');
@@ -289,7 +314,8 @@ export default function SecretaryView({
 
   const handleSaveEditMember = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingMember || !editName.trim()) return;
+    const assembledName = buildFullName(editFirstName, editMiddleName, editSurname);
+    if (!editingMember || !assembledName || !editSurname.trim()) return;
 
     const birthDate = getBirthDateFromInputs(editBirthMonth, editBirthDay, editBirthYear);
     if (birthDate === null) {
@@ -300,7 +326,7 @@ export default function SecretaryView({
 
     const updated: Member = {
       ...editingMember,
-      name: editName.trim(),
+      name: assembledName,
       memberIdNumber: editMemberIdNum.trim() || editingMember.memberIdNumber,
       rsbsaNumber: editRsbsa.trim() || undefined,
       isRsbsaRegistered: editIsRsbsa,
@@ -904,23 +930,47 @@ export default function SecretaryView({
               <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3 text-left overscroll-contain scrollbar-thin scrollbar-thumb-slate-300">
                 {/* Farmer Name & Member ID */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Farmer Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Juan De la Cruz"
-                      value={memberName}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setMemberName(val);
-                        if (!hasEditedUsernameManually) {
-                          const generated = val.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '.');
-                          setLoginUsername(generated);
-                        }
-                      }}
-                      className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
-                    />
+                  <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">First Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Juan"
+                        value={memberFirstName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMemberFirstName(val);
+                          if (!hasEditedUsernameManually) {
+                            const assembled = buildFullName(val, memberMiddleName, memberSurname);
+                            const generated = assembled.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '.');
+                            setLoginUsername(generated);
+                          }
+                        }}
+                        className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Middle Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Santos"
+                        value={memberMiddleName}
+                        onChange={(e) => setMemberMiddleName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Surname</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. De la Cruz"
+                        value={memberSurname}
+                        onChange={(e) => setMemberSurname(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Member ID Code</label>
@@ -1176,16 +1226,39 @@ export default function SecretaryView({
               <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3 text-left overscroll-contain scrollbar-thin scrollbar-thumb-slate-300">
                 {/* Farmer Name & Member ID */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Farmer Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Juan De la Cruz"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
-                    />
+                  <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">First Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Juan"
+                        value={editFirstName}
+                        onChange={(e) => setEditFirstName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Middle Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Santos"
+                        value={editMiddleName}
+                        onChange={(e) => setEditMiddleName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Surname</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. De la Cruz"
+                        value={editSurname}
+                        onChange={(e) => setEditSurname(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Member ID Code</label>
