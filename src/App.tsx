@@ -1702,6 +1702,20 @@ export default function App() {
   const handleResetPassword = (userId: string, newPass: string) => {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return;
+
+    // Authority guard: the President and Vice President may reset passwords,
+    // but the President's own account can never be reset from this desk.
+    const canResetPasswords =
+      !!currentUser && (currentUser.role === 'President' || currentUser.role === 'Vice_President');
+    if (!canResetPasswords) {
+      showToastMessage('Wala kay katungod sa pag-reset og password. Ang Presidente ug Bise-Presidente lamang ang makahimo niini. (Only the President and Vice President may reset passwords.)', 'error');
+      return;
+    }
+    if (targetUser.role === 'President') {
+      showToastMessage('Dili ma-reset ang password sa Presidente. (The President\'s password cannot be reset.)', 'error');
+      return;
+    }
+
     const newHash = hashPassword(newPass.trim());
     const updated = users.map(u => {
       if (u.id === userId) {
@@ -1775,6 +1789,12 @@ export default function App() {
     const targetUser = users.find(u => u.id === id);
     if (!targetUser) return;
 
+    // Authority guard: only the President (system admin) may delete users/officers.
+    if (!currentUser || currentUser.role !== 'President') {
+      showToastMessage('Wala kay katungod sa pagtangtang og account. Ang Presidente lamang ang makahimo niini. (Only the President may delete accounts.)', 'error');
+      return;
+    }
+
     const roleName = targetUser.role.replace('_', ' ');
     const isOfficer = ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Auditor', 'PIO'].includes(targetUser.role);
 
@@ -1824,6 +1844,12 @@ export default function App() {
   const handleUpdateUserRole = (id: string, newRole: OfficerRole | 'Member') => {
     const targetUser = users.find(u => u.id === id);
     if (!targetUser) return;
+
+    // Authority guard: only the President (system admin) may appoint or reassign officers.
+    if (!currentUser || currentUser.role !== 'President') {
+      showToastMessage('Wala kay katungod sa pag-appoint o pag-usab og role. Ang Presidente lamang ang makahimo niini. (Only the President may appoint or reassign officers.)', 'error');
+      return;
+    }
 
     const oldRoleName = targetUser.role.replace('_', ' ');
     const newRoleName = newRole.replace('_', ' ');
@@ -2597,10 +2623,25 @@ export default function App() {
 
           {officerTab === 'announcements' && (
             <div id="officer-announcements-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
-              <AnnouncementDashboard
-                announcements={announcements}
-                isOfficerMode={false}
-              />
+              {/* The President (system admin) can publish and manage announcements. */}
+              {currentRole === 'President' ? (
+                <PioView
+                  announcements={announcements}
+                  activities={activities}
+                  onAddAnnouncement={handleAddAnnouncement}
+                  onDeleteAnnouncement={handleDeleteAnnouncement}
+                  onAddActivity={handleAddActivity}
+                  onUpdateActivity={handleUpdateActivity}
+                  onDeleteActivity={handleDeleteActivity}
+                  onOpenReportModal={() => setShowReportModal(true)}
+                  postedByName={`President (${currentUser?.name || 'AFA President'})`}
+                />
+              ) : (
+                <AnnouncementDashboard
+                  announcements={announcements}
+                  isOfficerMode={false}
+                />
+              )}
             </div>
           )}
 

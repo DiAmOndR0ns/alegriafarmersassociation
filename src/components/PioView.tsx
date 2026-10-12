@@ -15,6 +15,8 @@ interface PioViewProps {
   onUpdateActivity: (activity: AssociationActivity) => void;
   onDeleteActivity: (id: string) => void;
   onOpenReportModal?: () => void;
+  /** Name credited as the author of new announcements (defaults to the PIO). */
+  postedByName?: string;
 }
 
 export default function PioView({
@@ -25,7 +27,8 @@ export default function PioView({
   onAddActivity,
   onUpdateActivity,
   onDeleteActivity,
-  onOpenReportModal
+  onOpenReportModal,
+  postedByName = 'PIO (Ida S. Manera)'
 }: PioViewProps) {
   const [activeTab, setActiveTab] = useState<'bulletins' | 'activities'>('bulletins');
 
@@ -70,7 +73,7 @@ export default function PioView({
       category: (category === 'Other' ? (customCategory.trim() || 'General') : category) as any,
       content,
       priority,
-      postedBy: 'PIO (Ida S. Manera)'
+      postedBy: postedByName
     });
 
     setTitle('');

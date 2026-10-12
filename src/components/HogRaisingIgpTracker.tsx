@@ -294,6 +294,13 @@ export default function HogRaisingIgpTracker({
   ), 0);
   const currentHogCount = Math.max(0, openingHogCount + purchasedPiglets - hogsSold);
 
+  // Number of unique registered farmers assigned across all rotational care groups (DB-backed)
+  const rotationalCaretakerCount = Array.from(
+    new Set(
+      state.groups.flatMap((grp) => grp.members || [])
+    )
+  ).length;
+
   const [isEditingOpeningHogCount, setIsEditingOpeningHogCount] = useState(false);
   const [openingHogCountInput, setOpeningHogCountInput] = useState(openingHogCount.toString());
 
@@ -897,11 +904,11 @@ export default function HogRaisingIgpTracker({
                 <div className="grid grid-cols-2 gap-4 text-xs font-medium text-[#3A4A42]">
                   <div className="p-3 rounded-xl border bg-[#F5FAF6] border-[#E9E4D9]">
                     <span>Active Projects in Pen</span>
-                    <strong className="block text-lg font-extrabold mt-1 text-[#1B4332]">17 Baboy</strong>
+                    <strong className="block text-lg font-extrabold mt-1 text-[#1B4332]">{currentHogCount} Baboy</strong>
                   </div>
                   <div className="p-3 rounded-xl border bg-[#F5FAF6] border-[#E9E4D9]">
                     <span>Projects Sold (Nahalin)</span>
-                    <strong className="block text-lg font-extrabold mt-1 text-[#2D6A4F]">8 Baboy</strong>
+                    <strong className="block text-lg font-extrabold mt-1 text-[#2D6A4F]">{hogsSold} Baboy</strong>
                   </div>
                 </div>
 
@@ -913,7 +920,7 @@ export default function HogRaisingIgpTracker({
                     <strong>Project Site:</strong> Communal Piggery Facility, Barangay Alegria (Duol sa Barangay Hall).
                   </p>
                   <p>
-                    <strong>Rotational Caretakers:</strong> 6 ka mga rehistradong mag-uuma ang napa-ilalom sa schedule sa pag-alaga.
+                    <strong>Rotational Caretakers:</strong> {rotationalCaretakerCount} ka mga rehistradong mag-uuma ang napa-ilalom sa schedule sa pag-alaga.
                   </p>
                 </div>
               </div>

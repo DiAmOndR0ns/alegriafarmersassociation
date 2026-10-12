@@ -64,6 +64,24 @@ export default function ExecutiveView({
   const [editingRoleOfficerId, setEditingRoleOfficerId] = useState<string | null>(null);
   const [selectedNewRole, setSelectedNewRole] = useState<OfficerRole | 'Member'>('Secretary');
   
+  // Member Portal -> Appoint as Officer state
+  const [appointingMemberId, setAppointingMemberId] = useState<string | null>(null);
+  const [appointRole, setAppointRole] = useState<OfficerRole>('Secretary');
+
+  // Only the President (system admin) may appoint members into officer roles
+  const canAppointOfficers = currentRole === 'President';
+
+  // The President and Vice President may reset passwords (never the President's own).
+  const canResetPasswords = currentRole === 'President' || currentRole === 'Vice_President';
+
+  const handleAppointMember = (memberId: string) => {
+    if (!canAppointOfficers) return;
+    if (onUpdateUserRole) {
+      onUpdateUserRole(memberId, appointRole);
+    }
+    setAppointingMemberId(null);
+  };
+
   // Search query for logs/roster
   const [logSearch, setLogSearch] = useState<string>('');
 
@@ -144,7 +162,7 @@ export default function ExecutiveView({
 
   const handleSealLogYear = (yearToSeal: number) => {
     if (closedLogYears.includes(yearToSeal)) return;
-    
+
     const updatedClosed = [...closedLogYears, yearToSeal];
     setClosedLogYears(updatedClosed);
     localStorage.setItem('bafa_closed_log_years', JSON.stringify(updatedClosed));
@@ -179,15 +197,15 @@ export default function ExecutiveView({
 
   return (
     <div id="executive-view-container" className="flex flex-col space-y-5 text-[#2D3A22]">
-      
+
       {/* EXECUTIVE HEADER */}
       <div className="bg-[#1B4332] text-[#F4EFE6] p-4 sm:p-5 rounded-3xl border border-[#143326] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-md w-full max-w-full overflow-hidden">
         <div className="text-left min-w-0 w-full sm:w-auto">
           <h2 className="text-lg sm:text-2xl font-black font-display text-white flex flex-wrap items-center gap-2 leading-tight">
             <ShieldCheck className="w-6 h-6 text-[#D8F3DC] shrink-0" />
             <span className="break-words">
-              {currentRole === 'President' 
-                ? 'President\'s Suite' 
+              {currentRole === 'President'
+                ? 'President\'s Suite'
                 : 'Vice President\'s Desk'}
             </span>
           </h2>
@@ -248,7 +266,7 @@ export default function ExecutiveView({
         </div>
 
         {/* Assemblies */}
-        <div 
+        <div
           onClick={() => setShowMeetingsModal(true)}
           className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-[#1B4332] hover:bg-[#FAF9F5] transition-all group select-none"
         >
@@ -280,7 +298,7 @@ export default function ExecutiveView({
 
       {/* SECTION: CREDENTIALS DESK & NEW REGISTRATIONS (UCSD Core focus) */}
       <div className="order-2 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
-        
+
         {/* LEFT CARD: PENDING SIGNUPS & ROSTER REVIEW (7 columns) */}
         <div className="order-2 lg:col-span-12 self-start bg-white border border-[#E9E4D9] rounded-3xl p-4.5 shadow-sm space-y-2.5">
           <div className="border-b border-[#F0EBE1] pb-2.5 text-left">
@@ -386,7 +404,15 @@ export default function ExecutiveView({
               {users.filter(u => ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Auditor', 'PIO'].includes(u.role)).map((officer) => {
                 const isEditingRole = editingRoleOfficerId === officer.id;
                 const isEditingPass = editingUserId === officer.id;
-                const isPresident = officer.role === 'President';
+                // Whether THIS officer row is the President (protected account)
+                const isTargetPresident = officer.role === 'President';
+
+                // Authority rules:
+                //  - The President and Vice President may reset another officer's password.
+                //  - Nobody may reset the President's own password from this desk.
+                //  - Only the President may reassign roles or delete officers.
+                const canResetThisOfficer = canResetPasswords && !isTargetPresident;
+                const canManageThisOfficer = canAppointOfficers && !isTargetPresident;
 
                 return (
                   <div
@@ -402,7 +428,7 @@ export default function ExecutiveView({
                           <h4 className="font-extrabold text-sm text-[#1B4332] mt-1.5">{officer.name}</h4>
                           <p className="text-[11px] text-[#5D6B54] font-mono">@{officer.username}</p>
                         </div>
-                        {isPresident && (
+                        {isTargetPresident && (
                           <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
                             Chief Executive
                           </span>
@@ -410,7 +436,7 @@ export default function ExecutiveView({
                       </div>
 
                       {/* Inline Role Changer */}
-                      {isEditingRole && !isPresident && (
+                      {isEditingRole && canManageThisOfficer && (
                         <div className="bg-white p-2.5 rounded-xl border border-[#D5CFC1] space-y-2 animate-fade-in">
                           <label className="block text-[10px] font-bold text-[#4F5E46] uppercase">Select New Governance Role:</label>
                           <select
@@ -483,20 +509,22 @@ export default function ExecutiveView({
                     {/* Action Buttons for Officer */}
                     <div className="pt-2 border-t border-[#E9E4D9] flex flex-wrap items-center gap-1.5 justify-between">
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingUserId(officer.id);
-                            setNewPassword('afa2026');
-                          }}
-                          className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
-                          title="Reset password"
-                        >
-                          <KeyRound className="w-3 h-3 text-[#E65100]" />
-                          <span>Reset</span>
-                        </button>
+                        {canResetThisOfficer && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingUserId(officer.id);
+                              setNewPassword('afa2026');
+                            }}
+                            className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
+                            title="Reset password"
+                          >
+                            <KeyRound className="w-3 h-3 text-[#E65100]" />
+                            <span>Reset</span>
+                          </button>
+                        )}
 
-                        {!isPresident && (
+                        {canManageThisOfficer && (
                           <button
                             type="button"
                             onClick={() => {
@@ -512,7 +540,7 @@ export default function ExecutiveView({
                         )}
                       </div>
 
-                      {!isPresident ? (
+                      {canManageThisOfficer ? (
                         <button
                           type="button"
                           onClick={() => setOfficerToDelete(officer)}
@@ -523,7 +551,9 @@ export default function ExecutiveView({
                           <span>Delete Officer</span>
                         </button>
                       ) : (
-                        <span className="text-[10px] text-slate-400 font-medium italic">Turnover only</span>
+                        <span className="text-[10px] text-slate-400 font-medium italic">
+                          {isTargetPresident ? 'Protected account' : 'Turnover only'}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -541,6 +571,8 @@ export default function ExecutiveView({
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {users.filter(u => u.role === 'Member').map((user) => {
                 const isEditing = editingUserId === user.id;
+                const isAppointing = appointingMemberId === user.id;
+                const canAppointThisMember = canAppointOfficers && user.isApproved;
                 return (
                   <div
                     key={user.id}
@@ -566,31 +598,85 @@ export default function ExecutiveView({
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => {
-                            setEditingUserId(user.id);
-                            setNewPassword('afa2026');
-                          }}
-                          className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border ${
-                            user.resetRequested
-                              ? 'bg-[#E65100] text-white border-[#E65100]'
-                              : 'bg-white text-[#1B4332] border-[#D5CFC1] hover:bg-white'
-                          }`}
-                          title="Reset password"
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                          <span>Reset</span>
-                        </button>
+                        {canAppointThisMember && (
+                          <button
+                            onClick={() => {
+                              setAppointingMemberId(isAppointing ? null : user.id);
+                              setAppointRole('Secretary');
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border bg-[#1B4332] text-white border-[#1B4332] hover:bg-[#2D6A4F]"
+                            title="Appoint this member as an association officer"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>Appoint</span>
+                          </button>
+                        )}
 
-                        <button
-                          onClick={() => onDeleteUser && onDeleteUser(user.id)}
-                          className="p-1.5 text-[#85947E] hover:text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg transition-all cursor-pointer"
-                          title="Remove user account"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canResetPasswords && (
+                          <button
+                            onClick={() => {
+                              setEditingUserId(user.id);
+                              setNewPassword('afa2026');
+                            }}
+                            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border ${
+                              user.resetRequested
+                                ? 'bg-[#E65100] text-white border-[#E65100]'
+                                : 'bg-white text-[#1B4332] border-[#D5CFC1] hover:bg-white'
+                            }`}
+                            title="Reset password"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            <span>Reset</span>
+                          </button>
+                        )}
+
+                        {canAppointOfficers && (
+                          <button
+                            onClick={() => onDeleteUser && onDeleteUser(user.id)}
+                            className="p-1.5 text-[#85947E] hover:text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg transition-all cursor-pointer"
+                            title="Remove user account"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
+
+                    {/* Inline Appoint-as-Officer panel (President / system admin only) */}
+                    {canAppointThisMember && isAppointing && (
+                      <div className="bg-white p-3 rounded-xl border border-[#1B4332]/30 space-y-2.5 animate-fade-in">
+                        <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">
+                          Appoint {user.name} as Officer:
+                        </label>
+                        <select
+                          value={appointRole}
+                          onChange={(e) => setAppointRole(e.target.value as OfficerRole)}
+                          className="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800"
+                        >
+                          <option value="Vice_President">Vice President</option>
+                          <option value="Secretary">Secretary</option>
+                          <option value="Treasurer">Treasurer</option>
+                          <option value="Auditor">Auditor</option>
+                          <option value="PIO">PIO</option>
+                        </select>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setAppointingMemberId(null)}
+                            className="flex-1 py-1.5 bg-white border border-[#D5CFC1] text-[#85947E] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAppointMember(user.id)}
+                            className="flex-1 py-1.5 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
+                          >
+                            Confirm Appointment
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Inline password edit form */}
                     {isEditing && (
