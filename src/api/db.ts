@@ -56,7 +56,10 @@ export function getPool(): pg.Pool {
     if (poolInstance) {
       poolInstance.end().catch(() => {});
     }
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    // NOTE: Do not set process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0' here.
+    // Supabase's certificate is accepted per-connection via the `ssl` option below,
+    // which is scoped to this pool. The global env flag disabled certificate
+    // verification process-wide (triggering a Node security warning) and was redundant.
     poolInstance = new PgPool({
       connectionString,
       ssl: { 
