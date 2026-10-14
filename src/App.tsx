@@ -401,6 +401,7 @@ export default function App() {
       case 'Vice_President': return 'Anselna B Arnado';
       case 'Secretary': return 'Jennylyn S Lumactao';
       case 'Treasurer': return 'Gracelyn P Asendiente';
+      case 'Assistant_Treasurer': return 'Assistant Treasurer';
       case 'Auditor': return 'Lorena B Pinote';
       case 'PIO': return 'Ida S Manera';
       default: return 'AFA Officer';
@@ -1178,7 +1179,9 @@ export default function App() {
   const handleAddMeeting = (meetingData: Omit<Meeting, 'id'>) => {
     const newMeeting: Meeting = {
       ...meetingData,
-      id: `meet-${Date.now()}`
+      id: `meet-${Date.now()}`,
+      // Secretary drafts minutes → they await President approval before becoming official.
+      minutesApprovalStatus: meetingData.minutesApprovalStatus ?? 'Pending Approval'
     };
     const updated = [newMeeting, ...meetings];
     setMeetings(updated);
@@ -1638,6 +1641,104 @@ export default function App() {
     }
   };
 
+  // PRESIDENT APPROVAL WORKFLOW FOR SECRETARY MINUTES OF MEETING
+  const handleApproveMeetingMinutes = (id: string, remarks?: string) => {
+    const targetMeeting = meetings.find(m => m.id === id);
+    const updated = meetings.map(m => m.id === id
+      ? {
+          ...m,
+          minutesApprovalStatus: 'Approved' as const,
+          approvedBy: `President (${getOfficerName('President')})`,
+          approvedDate: new Date().toISOString().split('T')[0],
+          approvalRemarks: remarks
+        }
+      : m);
+    setMeetings(updated);
+    updateStorage('bafa_meetings', updated);
+
+    if (isOnline) {
+      logAction('Approved Minutes of Meeting', `President approved the minutes for: "${targetMeeting?.title || 'Meeting'}"${remarks ? `. Remarks: "${remarks}"` : ''}`);
+      showToastMessage(`Minutes for "${targetMeeting?.title || 'Meeting'}" approved by the President.`, 'success');
+      pushAllDataToCloud({ meetings: updated }, { silent: true });
+    } else {
+      addToSyncQueue('update', 'meeting', { id, minutesApprovalStatus: 'Approved', remarks });
+    }
+  };
+
+  const handleReturnMeetingMinutes = (id: string, remarks: string) => {
+    const targetMeeting = meetings.find(m => m.id === id);
+    const updated = meetings.map(m => m.id === id
+      ? {
+          ...m,
+          minutesApprovalStatus: 'Returned' as const,
+          approvedBy: `President (${getOfficerName('President')})`,
+          approvedDate: new Date().toISOString().split('T')[0],
+          approvalRemarks: remarks
+        }
+      : m);
+    setMeetings(updated);
+    updateStorage('bafa_meetings', updated);
+
+    if (isOnline) {
+      logAction('Returned Minutes of Meeting', `President returned the minutes for revision: "${targetMeeting?.title || 'Meeting'}". Remarks: "${remarks}"`);
+      showToastMessage(`Minutes returned to the Secretary for revision.`, 'warning');
+      pushAllDataToCloud({ meetings: updated }, { silent: true });
+    } else {
+      addToSyncQueue('update', 'meeting', { id, minutesApprovalStatus: 'Returned', remarks });
+    }
+  };
+
+  // PRESIDENT APPROVAL WORKFLOW FOR AUDITED FINANCIAL REPORTS / RECORDS (Auditor → President)
+  const handlePresidentApproveTransaction = (id: string, remarks?: string) => {
+    const targetTx = transactions.find(t => t.id === id);
+    const updated = transactions.map(t => t.id === id
+      ? {
+          ...t,
+          presidentApprovalStatus: 'Approved' as const,
+          presidentApprovedBy: `President (${getOfficerName('President')})`,
+          presidentApprovedDate: new Date().toISOString().split('T')[0],
+          presidentApprovalRemarks: remarks
+        }
+      : t);
+    setTransactions(updated);
+    updateStorage('bafa_transactions', updated);
+
+    const txDescStr = targetTx ? `PHP ${targetTx.amount.toLocaleString()} (${targetTx.category})` : 'Transaction';
+
+    if (isOnline) {
+      logAction('President Approved Financial Record', `President approved the audited financial record: ${txDescStr}${remarks ? `. Remarks: "${remarks}"` : ''}`);
+      showToastMessage(`Financial record approved by the President.`, 'success');
+      pushAllDataToCloud({ financialTransactions: updated }, { silent: true });
+    } else {
+      addToSyncQueue('update', 'transaction', { id, presidentApprovalStatus: 'Approved', remarks });
+    }
+  };
+
+  const handlePresidentReturnTransaction = (id: string, remarks: string) => {
+    const targetTx = transactions.find(t => t.id === id);
+    const updated = transactions.map(t => t.id === id
+      ? {
+          ...t,
+          presidentApprovalStatus: 'Returned' as const,
+          presidentApprovedBy: `President (${getOfficerName('President')})`,
+          presidentApprovedDate: new Date().toISOString().split('T')[0],
+          presidentApprovalRemarks: remarks
+        }
+      : t);
+    setTransactions(updated);
+    updateStorage('bafa_transactions', updated);
+
+    const txDescStr = targetTx ? `PHP ${targetTx.amount.toLocaleString()} (${targetTx.category})` : 'Transaction';
+
+    if (isOnline) {
+      logAction('President Returned Financial Record', `President returned the financial record for revision: ${txDescStr}. Remarks: "${remarks}"`);
+      showToastMessage(`Financial record returned for revision.`, 'warning');
+      pushAllDataToCloud({ financialTransactions: updated }, { silent: true });
+    } else {
+      addToSyncQueue('update', 'transaction', { id, presidentApprovalStatus: 'Returned', remarks });
+    }
+  };
+
   // USER AUTHENTICATION & MANAGEMENT ACTIONS
   const handleLogin = (user: User) => {
     // Sanitize user object: strip password from local session to protect credentials
@@ -1796,7 +1897,7 @@ export default function App() {
     }
 
     const roleName = targetUser.role.replace('_', ' ');
-    const isOfficer = ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Auditor', 'PIO'].includes(targetUser.role);
+    const isOfficer = ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(targetUser.role);
 
     const updatedUsers = users.filter(u => u.id !== id);
     setUsers(updatedUsers);
@@ -1933,7 +2034,7 @@ export default function App() {
     newPresidentId: string,
     electionDate: string,
     turnoverNotes: string,
-    outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Auditor' | 'PIO' | 'None'
+    outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'
   ) => {
     const currentPresident = users.find(u => u.role === 'President');
     if (!currentPresident) {
@@ -2324,15 +2425,15 @@ export default function App() {
               )}
             </button>
 
-            {currentRole === 'President' && (
+            {(currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer') && (
               <button
-                id="sidebar-president-report-btn"
+                id="sidebar-treasurer-report-btn"
                 type="button"
                 onClick={() => setShowPresidentReport(true)}
                 className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
               >
                 <FileText className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
-                <span className="truncate">President's Report (PDF)</span>
+                <span className="truncate">Financial Report (PDF)</span>
               </button>
             )}
 
@@ -2524,6 +2625,10 @@ export default function App() {
                 onPresidentTurnover={handlePresidentTurnover}
                 onOpenReportModal={() => setShowReportModal(true)}
                 onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
+                onApproveMeetingMinutes={handleApproveMeetingMinutes}
+                onReturnMeetingMinutes={handleReturnMeetingMinutes}
+                onPresidentApproveTransaction={handlePresidentApproveTransaction}
+                onPresidentReturnTransaction={handlePresidentReturnTransaction}
               />
             )}
 
@@ -2550,7 +2655,7 @@ export default function App() {
               />
             )}
 
-            {currentRole === 'Treasurer' && (
+            {(currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer') && (
               <TreasurerView
                 transactions={transactions}
                 funds={funds}
@@ -2599,7 +2704,7 @@ export default function App() {
                 onAddChoreLog={handleAddPigChore}
                 onUpdateOpeningHogCount={handleUpdateOpeningHogCount}
                 onAddProduce={handleAddProduce}
-                isTreasurerOrOfficer={currentRole === 'Treasurer' || currentRole === 'Auditor' || currentRole === 'President'}
+                isTreasurerOrOfficer={currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer' || currentRole === 'Auditor' || currentRole === 'President'}
                 currentUser={currentUser!}
                 isOfficerMode={true}
                 closedYears={hogRaising.closedYears || [2025]}

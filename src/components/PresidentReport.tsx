@@ -199,7 +199,7 @@ function MemberPages({ d, sex }: { d: ReportData; sex: "F" | "M" }) {
 export default function PresidentReport({ data }: { data: ReportData }) {
   const exportPdf = () => {
     const prev = document.title;
-    document.title = `${data.org.abbr}-President-Report-${data.year}`; // becomes the PDF filename
+    document.title = `${data.org.abbr}-Financial-Report-${data.year}`; // becomes the PDF filename
     const restore = () => {
       document.title = prev;
       window.removeEventListener("afterprint", restore);

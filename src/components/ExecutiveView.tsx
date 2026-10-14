@@ -27,10 +27,16 @@ interface ExecutiveViewProps {
     newPresidentId: string,
     electionDate: string,
     turnoverNotes: string,
-    outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Auditor' | 'PIO' | 'None'
+    outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'
   ) => void;
   onOpenReportModal?: () => void;
   onDownloadBackup?: () => void;
+  // President approval workflow: Secretary Minutes of Meeting (Secretary drafts → President approves)
+  onApproveMeetingMinutes?: (id: string, remarks?: string) => void;
+  onReturnMeetingMinutes?: (id: string, remarks: string) => void;
+  // President approval workflow: audited financial records (Auditor → President)
+  onPresidentApproveTransaction?: (id: string, remarks?: string) => void;
+  onPresidentReturnTransaction?: (id: string, remarks: string) => void;
 }
 
 export default function ExecutiveView({
@@ -50,11 +56,24 @@ export default function ExecutiveView({
   onResetPassword,
   onPresidentTurnover,
   onOpenReportModal,
-  onDownloadBackup
+  onDownloadBackup,
+  onApproveMeetingMinutes,
+  onReturnMeetingMinutes,
+  onPresidentApproveTransaction,
+  onPresidentReturnTransaction
 }: ExecutiveViewProps) {
   const [showMeetingsModal, setShowMeetingsModal] = useState<boolean>(false);
   const [selectedMeetingForPrint, setSelectedMeetingForPrint] = useState<Meeting | null>(null);
-  
+
+  // President approval workflow for Secretary Minutes of Meeting
+  const [minutesApprovalTarget, setMinutesApprovalTarget] = useState<Meeting | null>(null);
+  const [minutesApprovalRemarks, setMinutesApprovalRemarks] = useState<string>('');
+
+  // President approval workflow for audited financial records (Auditor → President)
+  const [financialApprovalTarget, setFinancialApprovalTarget] = useState<FinancialTransaction | null>(null);
+  const [financialApprovalRemarks, setFinancialApprovalRemarks] = useState<string>('');
+  const [showFinancialApprovalsModal, setShowFinancialApprovalsModal] = useState<boolean>(false);
+
   // Credentials edit state
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState<string>('');
@@ -63,7 +82,7 @@ export default function ExecutiveView({
   const [officerToDelete, setOfficerToDelete] = useState<User | null>(null);
   const [editingRoleOfficerId, setEditingRoleOfficerId] = useState<string | null>(null);
   const [selectedNewRole, setSelectedNewRole] = useState<OfficerRole | 'Member'>('Secretary');
-  
+
   // Member Portal -> Appoint as Officer state
   const [appointingMemberId, setAppointingMemberId] = useState<string | null>(null);
   const [appointRole, setAppointRole] = useState<OfficerRole>('Secretary');
@@ -88,7 +107,7 @@ export default function ExecutiveView({
   // Presidential Turnover Form State
   const [turnoverNewPresId, setTurnoverNewPresId] = useState<string>('');
   const [turnoverDate, setTurnoverDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [turnoverOutgoingRole, setTurnoverOutgoingRole] = useState<'Member' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Auditor' | 'PIO' | 'None'>('Member');
+  const [turnoverOutgoingRole, setTurnoverOutgoingRole] = useState<'Member' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'>('Member');
   const [turnoverNotes, setTurnoverNotes] = useState<string>(
     '1. Formal turnover of the AFA general registry and resolutions book.\n2. Turned over bank accounts and the PHP balance.\n3. Turned over community keys and the hog-raising IGP ledger.'
   );
@@ -116,6 +135,14 @@ export default function ExecutiveView({
     setShowTurnoverConfirm(false);
     setTurnoverNewPresId('');
   };
+
+  // Meetings whose Secretary minutes are awaiting President approval.
+  const pendingMinutesMeetings = meetings.filter(m => m.minutesApprovalStatus === 'Pending Approval');
+
+  // Audited financial records awaiting the President's final approval (Auditor → President).
+  const auditedPendingTx = transactions.filter(
+    t => t.auditedStatus === 'Audited' && t.presidentApprovalStatus !== 'Approved' && t.presidentApprovalStatus !== 'Returned'
+  );
 
   // Calculate cooperative financial balance
   let currentBalance = 0;
@@ -294,6 +321,36 @@ export default function ExecutiveView({
             Drafts nagpaabot sa imong Pirma
           </div>
         </div>
+
+        {/* Minutes of Meeting Awaiting President Approval (Secretary drafts → President approves) */}
+        <div
+          onClick={() => setShowMeetingsModal(true)}
+          className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-[#1B4332] hover:bg-[#FAF9F5] transition-all group select-none"
+        >
+          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider group-hover:text-[#1B4332]">Minutes for Approval</span>
+            <BookOpen className="w-5 h-5 text-purple-700 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="text-3xl font-black font-display text-purple-700">{pendingMinutesMeetings.length}</div>
+          <div className="text-[10px] sm:text-xs text-[#5D6B54] mt-1">
+            Secretary minutes awaiting your signature
+          </div>
+        </div>
+
+        {/* Audited Financial Records Awaiting President Approval (Auditor → President) */}
+        <div
+          onClick={() => setShowFinancialApprovalsModal(true)}
+          className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-emerald-700 hover:bg-[#FAF9F5] transition-all group select-none"
+        >
+          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider group-hover:text-emerald-700">Financial Approvals</span>
+            <Coins className="w-5 h-5 text-emerald-700 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="text-3xl font-black font-display text-emerald-700">{auditedPendingTx.length}</div>
+          <div className="text-[10px] sm:text-xs text-[#5D6B54] mt-1">
+            Audited records awaiting final approval
+          </div>
+        </div>
       </div>
 
       {/* SECTION: CREDENTIALS DESK & NEW REGISTRATIONS (UCSD Core focus) */}
@@ -397,11 +454,11 @@ export default function ExecutiveView({
           {/* Officers Roster List */}
           <div className="space-y-3">
             <h4 className="text-xs font-extrabold text-[#4F5E46] uppercase tracking-wider">
-              Association Officers ({users.filter(u => ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Auditor', 'PIO'].includes(u.role)).length})
+              Association Officers ({users.filter(u => ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(u.role)).length})
             </h4>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {users.filter(u => ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Auditor', 'PIO'].includes(u.role)).map((officer) => {
+              {users.filter(u => ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(u.role)).map((officer) => {
                 const isEditingRole = editingRoleOfficerId === officer.id;
                 const isEditingPass = editingUserId === officer.id;
                 // Whether THIS officer row is the President (protected account)
@@ -447,6 +504,7 @@ export default function ExecutiveView({
                             <option value="Vice_President">Vice President</option>
                             <option value="Secretary">Secretary</option>
                             <option value="Treasurer">Treasurer</option>
+                            <option value="Assistant_Treasurer">Assistant Treasurer</option>
                             <option value="Auditor">Auditor</option>
                             <option value="PIO">PIO</option>
                             <option value="Member">Demote to Member</option>
@@ -656,6 +714,7 @@ export default function ExecutiveView({
                           <option value="Vice_President">Vice President</option>
                           <option value="Secretary">Secretary</option>
                           <option value="Treasurer">Treasurer</option>
+                          <option value="Assistant_Treasurer">Assistant Treasurer</option>
                           <option value="Auditor">Auditor</option>
                           <option value="PIO">PIO</option>
                         </select>
@@ -937,6 +996,7 @@ export default function ExecutiveView({
                     <option value="Member">Miyembro (Regular Member)</option>
                     <option value="Secretary">Secretary</option>
                     <option value="Treasurer">Treasurer</option>
+                    <option value="Assistant_Treasurer">Assistant Treasurer</option>
                     <option value="Auditor">Auditor</option>
                     <option value="PIO">PIO</option>
                     <option value="None">Step Down / Member</option>
@@ -1082,7 +1142,22 @@ export default function ExecutiveView({
                 meetings.map((meeting) => (
                   <div key={meeting.id} className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-[#85947E] transition-all">
                     <div>
-                      <h4 className="font-extrabold text-[#1B4332] text-sm">{meeting.title}</h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-extrabold text-[#1B4332] text-sm">{meeting.title}</h4>
+                        {meeting.minutesApprovalStatus === 'Approved' ? (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <Check className="w-2.5 h-2.5" /> Approved
+                          </span>
+                        ) : meeting.minutesApprovalStatus === 'Returned' ? (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                            <X className="w-2.5 h-2.5" /> Returned
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                            <Clock className="w-2.5 h-2.5" /> Pending
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#5D6B54] mt-1 font-medium">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-[#85947E]" />
@@ -1098,13 +1173,35 @@ export default function ExecutiveView({
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => setSelectedMeetingForPrint(meeting)}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-sm"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>Print Minutes</span>
-                    </button>
+                    <div className="flex flex-col items-stretch sm:items-end gap-2">
+                      <button
+                        onClick={() => setSelectedMeetingForPrint(meeting)}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-sm"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>Print Minutes</span>
+                      </button>
+                      {(meeting.minutesApprovalStatus ?? 'Pending Approval') === 'Pending Approval' && onApproveMeetingMinutes && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setMinutesApprovalTarget(meeting); setMinutesApprovalRemarks(''); }}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition-all cursor-pointer shadow-sm"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Approve</span>
+                          </button>
+                          {onReturnMeetingMinutes && (
+                            <button
+                              onClick={() => { setMinutesApprovalTarget(meeting); setMinutesApprovalRemarks(''); }}
+                              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-700 text-[11px] font-bold rounded-lg transition-all cursor-pointer border border-rose-200"
+                            >
+                              <X className="w-3 h-3" />
+                              <span>Return</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))
               ) : (
@@ -1116,6 +1213,203 @@ export default function ExecutiveView({
           </div>
         </div>
       )}
+
+      {/* MINUTES OF MEETING APPROVAL MODAL (Secretary → President) */}
+      {minutesApprovalTarget && (
+        <div className="fixed inset-0 bg-[#1B4332]/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in no-print text-left">
+          <div className="bg-white border border-[#E9E4D9] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-[#1B4332] text-[#F4EFE6] px-6 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-[#D8F3DC]" />
+                <h3 className="font-extrabold text-white text-sm">Review Minutes of Meeting</h3>
+              </div>
+              <button
+                onClick={() => setMinutesApprovalTarget(null)}
+                className="text-[#B7E4C7] hover:text-white text-lg font-bold p-1 bg-[#2D6A4F] hover:bg-[#40916C] rounded-xl transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-4 space-y-1">
+                <p className="text-xs font-black text-[#1B4332]">{minutesApprovalTarget.title}</p>
+                <p className="text-[11px] text-[#5D6B54] font-medium">{minutesApprovalTarget.date} • {minutesApprovalTarget.location}</p>
+                <p className="text-[11px] text-[#5D6B54] font-medium whitespace-pre-line leading-relaxed max-h-28 overflow-y-auto">{minutesApprovalTarget.minutes}</p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-[#5D6B54] uppercase tracking-wider mb-1">Remarks (optional)</label>
+                <textarea
+                  value={minutesApprovalRemarks}
+                  onChange={(e) => setMinutesApprovalRemarks(e.target.value)}
+                  rows={3}
+                  placeholder="Add remarks or reason for return..."
+                  className="w-full px-3.5 py-2.5 bg-[#FAF8F5] border border-[#D5CFC1] rounded-xl text-xs font-medium text-[#1B4332] focus:outline-none focus:border-[#2D6A4F]"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (minutesApprovalTarget && onReturnMeetingMinutes) {
+                      onReturnMeetingMinutes(minutesApprovalTarget.id, minutesApprovalRemarks.trim() || 'Returned for revision.');
+                    }
+                    setMinutesApprovalTarget(null);
+                    setMinutesApprovalRemarks('');
+                  }}
+                  className="flex-1 py-2.5 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold rounded-xl cursor-pointer text-center"
+                >
+                  Return to Secretary
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (minutesApprovalTarget && onApproveMeetingMinutes) {
+                      onApproveMeetingMinutes(minutesApprovalTarget.id, minutesApprovalRemarks.trim() || undefined);
+                    }
+                    setMinutesApprovalTarget(null);
+                    setMinutesApprovalRemarks('');
+                  }}
+                  className="flex-1 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl cursor-pointer text-center"
+                >
+                              Approve Minutes
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AUDITED FINANCIAL RECORDS LIST MODAL (Auditor → President) */}
+                  {showFinancialApprovalsModal && (
+                    <div className="fixed inset-0 bg-[#1B4332]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in no-print text-left">
+                      <div className="bg-white border-[#E9E4D9] w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="bg-[#1B4332] text-[#F4EFE6] px-6 py-4 flex justify-between items-center">
+                   <div className="flex items-center gap-2">
+                            <Coins className="w-5 h-5 text-[#D8F3DC]" />
+                            <h3 className="font-extrabold text-white text-sm">Audited Financial Records for Approval</h3>
+                          </div>
+                          <button
+                            onClick={() => setShowFinancialApprovalsModal(false)}
+                            className="text-[#B7E4C7] hover:text-white text-lg font-bold p-1 bg-[#2D6A4F] hover:bg-[#40916C] rounded-xl transition-all cursor-pointer"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                        <div className="p-6 space-y-3 overflow-y-auto">
+                          {auditedPendingTx.length > 0 ? (
+                     auditedPendingTx.map((tx) => (
+                       <div key={tx.id} className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-[#85947E] transition-all">
+                         <div className="space-y-1">
+                           <div className="flex flex-wrap items-center gap-2">
+                             <span className={`text-sm font-black font-mono ${tx.type === 'income' ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {tx.type === 'income' ? '+' : '-'} PHP {tx.amount.toLocaleString()}
+                      </span>
+                             <span className="text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
+                        Audited
+                      </span>
+                           </div>
+                           <p className="text-xs font-extrabold text-[#1B4332]">{tx.category}</p>
+                           <p className="text-[11px] text-[#5D6B54] font-medium">{tx.description}</p>
+                           <p className="text-[10px] text-[#5D6B54] font-medium">
+                      {tx.date} • Recorded by {tx.recordedBy}{tx.auditedBy ? ` • Audited by ${tx.auditedBy}` : ''}
+                    </p>
+                         </div>
+                         {onPresidentApproveTransaction && (
+                    <button
+                             onClick={() => { setFinancialApprovalTarget(tx); setFinancialApprovalRemarks(''); }}
+                             className="flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-sm shrink-0"
+                    >
+                      <FileCheck className="w-3.5 h-3.5" />
+                      <span>Review</span>
+                           </button>
+                         )}
+                       </div>
+                            ))
+                   ) : (
+                     <p className="text-center text-xs text-[#5D6B54] font-medium py-8">
+                       No audited financial records are awaiting approval.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FINANCIAL RECORD APPROVAL MODAL (Auditor → President) */}
+                  {financialApprovalTarget && (
+                    <div className="fixed inset-0 bg-[#1B4332]/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in no-print text-left">
+                      <div className="bg-white border-[#E9E4D9] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="bg-[#1B4332] text-[#F4EFE6] px-6 py-4 flex justify-between items-center">
+                   <div className="flex items-center gap-2">
+                            <FileCheck className="w-5 h-5 text-[#D8F3DC]" />
+                            <h3 className="font-extrabold text-white text-sm">Review Audited Financial Record</h3>
+                          </div>
+                          <button
+                     onClick={() => setFinancialApprovalTarget(null)}
+                            className="text-[#B7E4C7] hover:text-white text-lg font-bold p-1 bg-[#2D6A4F] hover:bg-[#40916C] rounded-xl transition-all cursor-pointer"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                          <div className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-4 space-y-1">
+                     <p className={`text-sm font-black font-mono ${financialApprovalTarget.type === 'income' ? 'text-emerald-700' : 'text-rose-600'}`}>
+                       {financialApprovalTarget.type === 'income' ? 'Income' : 'Expense'}: PHP {financialApprovalTarget.amount.toLocaleString()}
+                     </p>
+                            <p className="text-xs font-black text-[#1B4332]">{financialApprovalTarget.category}</p>
+                            <p className="text-[11px] text-[#5D6B54] font-medium">{financialApprovalTarget.description}</p>
+                     {financialApprovalTarget.fundSource && (
+                              <p className="text-[11px] text-[#5D6B54] font-medium">Fund: {financialApprovalTarget.fundSource}</p>
+                            )}
+                            <p className="text-[11px] text-[#5D6B54] font-medium">
+                       {financialApprovalTarget.date} • Recorded by {financialApprovalTarget.recordedBy}
+                            </p>
+                            {financialApprovalTarget.auditNotes && (
+                       <p className="text-[11px] text-[#5D6B54] font-medium italic">Audit notes: {financialApprovalTarget.auditNotes}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-[#5D6B54] uppercase tracking-wider mb-1">Remarks (optional)</label>
+                            <textarea
+                       value={financialApprovalRemarks}
+                       onChange={(e) => setFinancialApprovalRemarks(e.target.value)}
+                       rows={3}
+                       placeholder="Add remarks or reason for return..."
+                              className="w-full px-3.5 py-2.5 bg-[#FAF8F5] border border-[#D5CFC1] rounded-xl text-xs font-medium text-[#1B4332] focus:outline-none focus:border-[#2D6A4F]"
+                     />
+                          </div>
+                          <div className="flex gap-3">
+                            {onPresidentReturnTransaction && (
+                       <button
+                         type="button"
+                         onClick={() => {
+                           onPresidentReturnTransaction(financialApprovalTarget.id, financialApprovalRemarks.trim() || 'Returned for revision.');
+                           setFinancialApprovalTarget(null);
+                           setFinancialApprovalRemarks('');
+                         }}
+                         className="flex-1 py-2.5 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold rounded-xl cursor-pointer text-center"
+                              >
+                         Return for Revision
+                       </button>
+                            )}
+                     <button
+                       type="button"
+                       onClick={() => {
+                         if (onPresidentApproveTransaction) {
+                    onPresidentApproveTransaction(financialApprovalTarget.id, financialApprovalRemarks.trim() || undefined);
+                         }
+                         setFinancialApprovalTarget(null);
+                         setFinancialApprovalRemarks('');
+                              }}
+                              className="flex-1 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl cursor-pointer text-center"
+                     >
+                       Approve Record
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
       {/* CONFIRM SEAL LOG YEAR MODAL */}
       {showSealConfirm && (

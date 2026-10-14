@@ -1,4 +1,4 @@
-export type OfficerRole = 'President' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Auditor' | 'PIO';
+export type OfficerRole = 'President' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO';
 
 // The 4 Official Sitios of Barangay Alegria, Tuburan, Cebu (based on the official Barangay Profile of Tuburan)
 export const OFFICIAL_ALEGRIA_SITIOS = [
@@ -65,6 +65,11 @@ export interface Meeting {
   minutes: string;
   officerInCharge: string;
   attendanceRecord?: Record<string, 'Present' | 'Absent' | 'Excused'>;
+  // Secretary Minutes of Meeting approval workflow (Secretary drafts → President approves)
+  minutesApprovalStatus?: 'Pending Approval' | 'Approved' | 'Returned';
+  approvedBy?: string;
+  approvedDate?: string;
+  approvalRemarks?: string;
 }
 
 export interface Resolution {
@@ -96,6 +101,11 @@ export interface FinancialTransaction {
   auditedBy?: string; // Auditor
   auditedDate?: string;
   auditNotes?: string;
+  // Auditor → President approval workflow for financial reports/records
+  presidentApprovalStatus?: 'Pending Approval' | 'Approved' | 'Returned';
+  presidentApprovedBy?: string;
+  presidentApprovedDate?: string;
+  presidentApprovalRemarks?: string;
 }
 
 export interface AssociationActivity {

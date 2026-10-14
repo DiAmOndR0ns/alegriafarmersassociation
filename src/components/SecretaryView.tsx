@@ -4,7 +4,7 @@ import {
   Users, BookOpen, FileText, Plus, Search, 
   MapPin, CheckCircle, FilePlus, Calendar, 
   Trash2, UserPlus, Info, Tag, Printer, UserCheck,
-  CheckCircle2, AlertCircle, XCircle, Award, Sparkles, ShieldCheck,
+  CheckCircle2, AlertCircle, XCircle, Award, Sparkles, ShieldCheck, Clock,
   Key, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw, Edit3
 } from 'lucide-react';
 import PrintMinutesModal from './PrintMinutesModal';
@@ -741,7 +741,22 @@ export default function SecretaryView({
                 <div key={meeting.id} className="bg-[#F7F4EF] border border-[#D5CFC1] rounded-2xl p-5 hover:border-[#2D6A4F] transition-all shadow-md">
                   <div className="flex flex-col sm:flex-row justify-between gap-3 border-b border-[#D5CFC1] pb-3 mb-4">
                     <div>
-                      <h4 className="text-base font-bold text-[#1B4332]">{meeting.title}</h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-base font-bold text-[#1B4332]">{meeting.title}</h4>
+                        {meeting.minutesApprovalStatus === 'Approved' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3" /> President Approved
+                          </span>
+                        ) : meeting.minutesApprovalStatus === 'Returned' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                            <AlertCircle className="w-3 h-3" /> Returned
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                            <Clock className="w-3 h-3" /> Pending President Approval
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[#3A4A42] mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-[#4A5F57]" />

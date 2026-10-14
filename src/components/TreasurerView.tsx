@@ -1072,7 +1072,7 @@ export default function TreasurerView({
                       <optgroup label={txType === 'income' ? 'Narehistro nga mga Pundo (Deposit Destination)' : 'Narehistro nga mga Pundo (Budget Source)'}>
                         {funds.map(f => (
                           <option key={f.id} value={`${f.code} (${f.name})`}>
-                            {txType === 'income' ? 'Ideosito sa: ' : 'Kuhaon sa: '} {f.code} - {f.name} (Bal: ₱{f.currentBalance.toLocaleString()})
+                            {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} {f.code} - {f.name} (Bal: ₱{f.currentBalance.toLocaleString()})
                           </option>
                         ))}
                       </optgroup>
@@ -1081,25 +1081,25 @@ export default function TreasurerView({
                     {/* Standard Statutory & Partner Accounts */}
                     <optgroup label="Standard Co-op & Partner Allocations">
                       <option value="GF-SLP (General Fund / DSWD-SLP Operational Buffer)">
-                        {txType === 'income' ? 'Ideosito sa: ' : 'Kuhaon sa: '} GF-SLP (General Fund / DSWD-SLP Operational Buffer)
+                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} GF-SLP (General Fund / DSWD-SLP Operational Buffer)
                       </option>
                       <option value="DOLE Integrated Livelihood Program (DILP) Capital Allocation">
-                        {txType === 'income' ? 'Ideosito sa: ' : 'Kuhaon sa: '} DOLE Integrated Livelihood Program (DILP) Capital Allocation
+                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} DOLE Integrated Livelihood Program (DILP) Capital Allocation
                       </option>
                       <option value="CBU (Member Capital Build-Up & Equity Fund)">
-                        {txType === 'income' ? 'Ideosito sa: ' : 'Kuhaon sa: '} CBU (Member Capital Build-Up & Equity Fund)
+                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} CBU (Member Capital Build-Up & Equity Fund)
                       </option>
                       <option value="FCCT-SAVINGS (FCCT Cooperative Bank Deposit)">
-                        {txType === 'income' ? 'Ideosito sa: ' : 'Kuhaon sa: '} FCCT-SAVINGS (FCCT Cooperative Bank Deposit)
+                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} FCCT-SAVINGS (FCCT Cooperative Bank Deposit)
                       </option>
                       <option value="ATI-TRG (ATI Training & Capacity Building Fund)">
-                        {txType === 'income' ? 'Ideosito sa: ' : 'Kuhaon sa: '} ATI-TRG (ATI Training & Capacity Building Fund)
+                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} ATI-TRG (ATI Training & Capacity Building Fund)
                       </option>
                       <option value="DISP-5% (Dispersal & Livestock Insurance Risk Pool)">
-                        {txType === 'income' ? 'Ideosito sa: ' : 'Kuhaon sa: '} DISP-5% (Dispersal & Livestock Insurance Risk Pool)
+                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} DISP-5% (Dispersal & Livestock Insurance Risk Pool)
                       </option>
                       <option value="LGU Tuburan Agriculture Assistance Fund">
-                        {txType === 'income' ? 'Ideosito sa: ' : 'Kuhaon sa: '} LGU Tuburan Agriculture Assistance Fund
+                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} LGU Tuburan Agriculture Assistance Fund
                       </option>
                     </optgroup>
 

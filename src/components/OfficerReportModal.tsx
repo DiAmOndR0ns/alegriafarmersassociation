@@ -96,6 +96,7 @@ export default function OfficerReportModal({
       case 'Vice_President': return 'Anselna B. Arnado';
       case 'Secretary': return 'Jennylyn S. Lumactao';
       case 'Treasurer': return 'Gracelyn P. Asendiente';
+      case 'Assistant_Treasurer': return 'Assistant Treasurer';
       case 'Auditor': return 'Lorena B. Pinote';
       case 'PIO': return 'Ida S. Manera';
       default: return 'AFA Officer';
@@ -112,6 +113,7 @@ export default function OfficerReportModal({
 
     const titleMap: Record<OfficerRole, string> = {
       Treasurer: "TREASURER'S OFFICIAL FINANCIAL & CASH FLOW REPORT",
+      Assistant_Treasurer: "ASSISTANT TREASURER'S FINANCIAL & CASH FLOW REPORT",
       Auditor: "AUDITOR'S FINANCIAL OVERSIGHT & COMPLIANCE REPORT",
       Secretary: "SECRETARY'S MEMBERSHIP & LEGISLATIVE MINUTES REPORT",
       President: "PRESIDENT'S CONSOLIDATED EXECUTIVE SUMMARY OF ALL OFFICER REPORTS",
@@ -123,7 +125,7 @@ export default function OfficerReportModal({
 
     let contentHtml = '';
 
-    if (activeReportRole === 'Treasurer') {
+    if (activeReportRole === 'Treasurer' || activeReportRole === 'Assistant_Treasurer') {
       contentHtml = `
         <div class="section-title">1. FINANCIAL OVERVIEW & GENERAL CASH BALANCE</div>
         <table>
@@ -616,7 +618,7 @@ export default function OfficerReportModal({
   const handleExportCSV = () => {
     const csvRows: string[] = [];
 
-    if (activeReportRole === 'Treasurer') {
+    if (activeReportRole === 'Treasurer' || activeReportRole === 'Assistant_Treasurer') {
       csvRows.push('AFA OFFICIAL TREASURER FINANCIAL REPORT');
       csvRows.push(`Date Generated,${reportDate}`);
       csvRows.push(`Prepared By,${getOfficerNameByRole('Treasurer')}`);
@@ -947,6 +949,7 @@ export default function OfficerReportModal({
                 <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Official Document Preview</span>
                 <h3 className="text-sm font-black text-[#1B4332] mt-0.5">
                   {activeReportRole === 'Treasurer' && "Treasurer's Official Financial & Cash Flow Statement (With Budget Sources)"}
+                  {activeReportRole === 'Assistant_Treasurer' && "Assistant Treasurer's Financial & Cash Flow Statement (With Budget Sources)"}
                   {activeReportRole === 'Auditor' && "Auditor's Financial Oversight & Allocation Compliance Inspection Report"}
                   {activeReportRole === 'Secretary' && "Secretary's Membership Roster & Legislative Assembly Report"}
                   {activeReportRole === 'President' && "President's Executive Consolidated Summary of All Officer Reports & Capital Portfolios"}
@@ -963,6 +966,27 @@ export default function OfficerReportModal({
             {/* QUICK PREVIEW METRICS */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
               {activeReportRole === 'Treasurer' && (
+                <>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Total Income</span>
+                    <p className="text-sm font-mono font-bold text-emerald-700">PHP {totalIncome.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Total Expenses</span>
+                    <p className="text-sm font-mono font-bold text-rose-600">PHP {totalExpense.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Net Fund</span>
+                    <p className="text-sm font-mono font-bold text-[#1B4332]">PHP {netBalance.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Fund Accounts</span>
+                    <p className="text-sm font-mono font-bold text-emerald-700">{funds.length} Active Budgets</p>
+                  </div>
+                </>
+              )}
+
+              {activeReportRole === 'Assistant_Treasurer' && (
                 <>
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Total Income</span>
