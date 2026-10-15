@@ -2,24 +2,15 @@ import "./president-report.css";
 import { useMemo } from "react";
 
 import type {
-  Member,
-  OrganizationFund,
-  FinancialTransaction,
   User,
   OfficerRole,
 } from "../types";
-import { splitName } from "../utils/names";
 
-/* ---------- Data shape (fill from FAMS state/API, not hardcoded) ---------- */
-export interface Money { label: string; amount: number; note?: string }
-export interface FundSection { heading?: string; rows: Money[]; totalLabel?: string }
-export interface Fund { name: string; balance: number; sections: FundSection[] }
+/* ---------- Data shape (fill from FAMS state/API, not hardcoded) ----------
+   Segregation of duties: the President's letterhead report carries the EXECUTIVE
+   SUMMARY only — highlights, plans, and the officers directory. Financial
+   statements are the Treasurer's report; member rosters are the Secretary's. */
 export interface Officer { position: string; name: string; contact?: string }
-/** One row of the printed member roster (split from the FAMS `Member`). */
-export interface MemberRow {
-  surname: string; first: string; mi?: string;
-  sex: "F" | "M"; dob?: string /* ISO yyyy-mm-dd */; contact?: string;
-}
 export interface ReportData {
   year: number;
   org: {
@@ -29,25 +20,10 @@ export interface ReportData {
   highlights: string[];
   plans: string[];
   closingLine?: string;
-  funds: Fund[];
   officers: Officer[];
-  members: MemberRow[];
   secretary: string; // signs "Certified True and Correct". Take from the Secretary account.
   president: string; // signs "Attested by". Take from the President account.
 }
-
-/* ---------- Helpers ---------- */
-const peso = (n: number) =>
-  n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtDob = (iso?: string) => {
-  if (!iso) return "";
-  const dt = new Date(iso + "T00:00:00");
-  return Number.isNaN(dt.getTime())
-    ? ""
-    : dt.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
-};
-const chunk = <T,>(a: T[], n: number): T[][] =>
-  Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
 /* ---------- Page shell: letterhead + title + signature block on every page ---------- */
 function Page({ d, title, children }: { d: ReportData; title?: string; children: React.ReactNode }) {
@@ -106,44 +82,10 @@ function Plans({ d }: { d: ReportData }) {
   );
 }
 
-function Financials({ d }: { d: ReportData }) {
-  const total = d.funds.reduce((s, f) => s + f.balance, 0); // computed, never typed in
-  return (
-    <>
-      <Page d={d} title={`FINANCIAL STATEMENT (Year Ended: Dec. 31, ${d.year})`}>
-        <div className="pr-fund">
-          <h3>Summary</h3>
-          {d.funds.map((f) => (
-            <div className="pr-row" key={f.name}><span>{f.name}</span><span>:</span><span className="amt">{peso(f.balance)}</span></div>
-          ))}
-          <div className="pr-row total"><span>Total</span><span>:</span><span className="amt">{peso(total)}</span></div>
-        </div>
-        {d.funds.map((f) => (
-          <div className="pr-fund" key={f.name}>
-            <h3>{f.name}</h3>
-            {f.sections.map((s, i) => {
-              const sum = s.rows.reduce((t, r) => t + r.amount, 0);
-              return (
-                <div key={i}>
-                  {s.heading && <div className="pr-sub">{s.heading}</div>}
-                  {s.rows.map((r) => (
-                    <div key={r.label}>
-                      <div className="pr-row"><span>{r.label}</span><span>:</span><span className="amt">{peso(r.amount)}</span></div>
-                      {r.note && <div className="pr-note">{r.note}</div>}
-                    </div>
-                  ))}
-                  {s.totalLabel && (
-                    <div className="pr-row total"><span>{s.totalLabel}</span><span>:</span><span className="amt">{peso(sum)}</span></div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </Page>
-    </>
-  );
-}
+/* Segregation of duties: the President's letterhead report is an EXECUTIVE SUMMARY only.
+   - All financial statements belong to the Treasurer's report (OfficerReportModal → Treasurer).
+   - All member roster pages belong to the Secretary's report (OfficerReportModal → Secretary).
+   The President signs/attests; each department exports its own detailed report. */
 
 function Officers({ d }: { d: ReportData }) {
   return (
@@ -162,44 +104,12 @@ function Officers({ d }: { d: ReportData }) {
   );
 }
 
-const ROWS_PER_PAGE = 26;
-function MemberPages({ d, sex }: { d: ReportData; sex: "F" | "M" }) {
-  const list = d.members
-    .filter((m) => m.sex === sex)
-    .sort((a, b) => a.surname.localeCompare(b.surname));
-  return (
-    <>
-      {list.length === 0 ? (
-        <Page d={d} title={`Updated List of Members: ${sex === "F" ? "Female" : "Male"}`}>
-          <p className="pr-empty">No {sex === "F" ? "female" : "male"} members on record.</p>
-        </Page>
-      ) : chunk(list, ROWS_PER_PAGE).map((rows, p) => (
-        <Page d={d} key={p} title={`Updated List of Members: ${sex === "F" ? "Female" : "Male"}`}>
-          <table className="pr-table">
-            <thead>
-              <tr><th className="num" /><th>Surname</th><th>First name</th><th className="mi">MI</th><th>Date of Birth</th><th>Contact Number</th></tr>
-            </thead>
-            <tbody>
-              {rows.map((m, i) => (
-                <tr key={i}>
-                  <td className="num">{p * ROWS_PER_PAGE + i + 1}.</td>
-                  <td>{m.surname}</td><td>{m.first}</td><td>{m.mi}</td>
-                  <td>{fmtDob(m.dob)}</td><td>{m.contact ?? ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Page>
-      ))}
-    </>
-  );
-}
 
 /* ---------- Report ---------- */
 export default function PresidentReport({ data }: { data: ReportData }) {
   const exportPdf = () => {
     const prev = document.title;
-    document.title = `${data.org.abbr}-Financial-Report-${data.year}`; // becomes the PDF filename
+    document.title = `${data.org.abbr}-Executive-Report-${data.year}`; // becomes the PDF filename
     const restore = () => {
       document.title = prev;
       window.removeEventListener("afterprint", restore);
@@ -215,10 +125,7 @@ export default function PresidentReport({ data }: { data: ReportData }) {
       <div className="pr-toolbar"><button onClick={exportPdf}>Export PDF</button></div>
       <Highlights d={data} />
       <Plans d={data} />
-      <Financials d={data} />
       <Officers d={data} />
-      <MemberPages d={data} sex="F" />
-      <MemberPages d={data} sex="M" />
     </div>
   );
 }
@@ -228,9 +135,6 @@ const DOLE_REG_NO = "2315"; // TODO: move to org settings once it's a configurab
 
 export function buildReportData(input: {
   year: number;
-  members: Member[];
-  funds?: OrganizationFund[];
-  transactions?: FinancialTransaction[];
   users?: User[];
   highlights?: string[];
   plans?: string[];
@@ -239,11 +143,9 @@ export function buildReportData(input: {
   doleRegNo?: string;
 }): ReportData {
   const {
-    year, members, funds = [], transactions = [], users = [],
+    year, users = [],
     highlights = [], plans = [], closingLine, logoSrc, doleRegNo = DOLE_REG_NO,
   } = input;
-
-  const activeMembers = members.filter((m) => (m.status ?? "Active") === "Active");
 
   // Never leave Officer signatories blank: prefer the live account, fall back to the role title.
   const signatory = (role: OfficerRole, fallback: string) =>
@@ -263,17 +165,6 @@ export function buildReportData(input: {
     highlights,
     plans,
     closingLine,
-    funds: funds.map((f) => ({
-      name: f.name,
-      balance: f.currentBalance,
-      sections: [
-        { heading: "Allocations (Year to Date)", rows: [
-          { label: "Allocated Amount", amount: f.allocatedAmount },
-          { label: "Transactions Logged", amount: transactions.filter((t) => t.fundSource === f.code).length },
-          { label: "Current Balance", amount: f.currentBalance, note: `Custodian: ${f.custodian}` },
-        ] },
-      ],
-    })),
     officers: users
       .filter((u) => u.role !== "Member")
       .map((u) => ({
@@ -281,18 +172,6 @@ export function buildReportData(input: {
         name: u.name,
         contact: u.contactNumber,
       })),
-    members: activeMembers.map((m) => {
-      const { surname, first, mi } = splitName(m.name);
-      return {
-        surname,
-        first,
-        mi,
-        // Report has only binary columns; "Other"/unset falls back to Female list.
-        sex: m.gender === "Male" ? ("M" as const) : ("F" as const),
-        dob: m.birthDate,
-        contact: m.contactNumber,
-      };
-    }),
     secretary: signatory("Secretary", "Jennylyn S. Lumactao"),
     president: signatory("President", "Zenaida A. Elbiña"),
   };
@@ -301,9 +180,6 @@ export function buildReportData(input: {
 /* ---------- Ready-to-use wiring component (maps FAMS state → report) ---------- */
 export function PresidentReportContainer(props: {
   year: number;
-  members: Member[];
-  funds?: OrganizationFund[];
-  transactions?: FinancialTransaction[];
   users?: User[];
   highlights?: string[];
   plans?: string[];
@@ -327,25 +203,9 @@ export const sampleReport: ReportData = {
     "Strengthen the bond of the members of the association.",
   ],
   closingLine: "MABUHAY ANG MGA MAG-UUMA, Welcome 2026!",
-  funds: [
-    { name: "DILEEP / DOLE", balance: 512935.85, sections: [
-      { rows: [
-        { label: "Gross Sales", amount: 1191865 }, { label: "Expenses", amount: 1153374 },
-      ] },
-      { heading: "Breakdown:", totalLabel: "Total", rows: [
-        { label: "Savings Deposit (FCCT)", amount: 367441.95 },
-        { label: "Cash on Hand", amount: 41947 },
-        { label: "Collectibles", amount: 103547 },
-      ] },
-    ] },
-  ],
   officers: [
     { position: "President", name: "Zenaida A. Elbina", contact: "09358282315" },
     { position: "Vice President", name: "Anselma B. Arnado", contact: "09193969362" },
-  ],
-  members: [
-    { surname: "Arnado", first: "Anselma", mi: "B", sex: "F", dob: "1962-06-01", contact: "09193969362" },
-    { surname: "Balen", first: "Jeffrey", mi: "D", sex: "M", dob: "1968-06-03" },
   ],
   secretary: "Joan A. Cebas",
   president: "Zenaida A. Elbina",

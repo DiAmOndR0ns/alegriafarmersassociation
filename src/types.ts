@@ -285,4 +285,20 @@ export interface DelegationRequest {
   remarks?: string;
 }
 
+// ASSOCIATION INVENTORY REGISTRY (custodial duty assigned to the Auditor,
+// since the association has no separate Property Custodian officer)
+export interface InventoryItem {
+  id: string;
+  name: string; // e.g. "IGP Plastic Chairs", "Harvest Sacks", "Sprayer"
+  category: 'IGP Equipment' | 'Farm Tools' | 'Office Supplies' | 'Rental Assets' | 'Livestock' | 'Other' | string;
+  quantity: number;
+  unit: string; // e.g. "pieces", "sacks", "units"
+  condition: 'Good' | 'Needs Repair' | 'Damaged' | 'Lost' | string;
+  location?: string; // e.g. "Barangay Alegria Covered Court Storage"
+  notes?: string; // Auditor's custody / inventory notes
+  recordedBy: string; // Auditor
+  dateRecorded: string;
+  lastUpdated: string;
+}
+
 

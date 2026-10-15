@@ -1,19 +1,45 @@
 import React, { useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, AlertTriangle, CheckCircle, FileText, Filter, ShieldCheck, Wallet } from 'lucide-react';
-import { FinancialTransaction } from '../types';
+import { ArrowDownRight, ArrowUpRight, AlertTriangle, CheckCircle, FileText, Filter, ShieldCheck, Wallet, Package, Plus, Trash2, Pencil, Boxes } from 'lucide-react';
+import { FinancialTransaction, InventoryItem } from '../types';
 
 interface AuditorViewProps {
   transactions: FinancialTransaction[];
   onAuditTransaction: (id: string, status: 'Audited' | 'Flagged', notes: string) => void;
   onOpenReportModal?: () => void;
+  inventory?: InventoryItem[];
+  onAddInventory?: (item: Omit<InventoryItem, 'id' | 'dateRecorded' | 'lastUpdated'>) => void;
+  onUpdateInventory?: (item: InventoryItem) => void;
+  onDeleteInventory?: (id: string) => void;
+  auditorName?: string;
 }
 
-export default function AuditorView({ transactions, onAuditTransaction, onOpenReportModal }: AuditorViewProps) {
+export default function AuditorView({
+  transactions,
+  onAuditTransaction,
+  onOpenReportModal,
+  inventory = [],
+  onAddInventory,
+  onUpdateInventory,
+  onDeleteInventory,
+  auditorName = 'Auditor (Lorena B. Pinote)'
+}: AuditorViewProps) {
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterAudit, setFilterAudit] = useState<'all' | 'Unaudited' | 'Audited' | 'Flagged'>('all');
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransaction | null>(null);
   const [auditStatus, setAuditStatus] = useState<'Audited' | 'Flagged'>('Audited');
   const [auditNotes, setAuditNotes] = useState('');
+
+  // Inventory registry state (custodial duty of the Auditor — no Property Custodian exists)
+  const [inventoryTab, setInventoryTab] = useState<'audit' | 'inventory'>('audit');
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
+  const [invName, setInvName] = useState('');
+  const [invCategory, setInvCategory] = useState<InventoryItem['category']>('IGP Equipment');
+  const [invQuantity, setInvQuantity] = useState(1);
+  const [invUnit, setInvUnit] = useState('pieces');
+  const [invCondition, setInvCondition] = useState<InventoryItem['condition']>('Good');
+  const [invLocation, setInvLocation] = useState('');
+  const [invNotes, setInvNotes] = useState('');
 
   const unauditedCount = transactions.filter(transaction => transaction.auditedStatus === 'Unaudited').length;
   const auditedCount = transactions.filter(transaction => transaction.auditedStatus === 'Audited').length;
@@ -29,6 +55,62 @@ export default function AuditorView({ transactions, onAuditTransaction, onOpenRe
     setAuditNotes('');
   };
 
+  const openAddInventory = () => {
+    setEditingInventoryItem(null);
+    setInvName('');
+    setInvCategory('IGP Equipment');
+    setInvQuantity(1);
+    setInvUnit('pieces');
+    setInvCondition('Good');
+    setInvLocation('');
+    setInvNotes('');
+    setShowInventoryModal(true);
+  };
+
+  const openEditInventory = (item: InventoryItem) => {
+    setEditingInventoryItem(item);
+    setInvName(item.name);
+    setInvCategory(item.category);
+    setInvQuantity(item.quantity);
+    setInvUnit(item.unit);
+    setInvCondition(item.condition as InventoryItem['condition']);
+    setInvLocation(item.location || '');
+    setInvNotes(item.notes || '');
+    setShowInventoryModal(true);
+  };
+
+  const handleSaveInventory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!invName.trim()) return;
+    if (editingInventoryItem) {
+      onUpdateInventory?.({
+        ...editingInventoryItem,
+        name: invName.trim(),
+        category: invCategory,
+        quantity: Math.max(0, Number(invQuantity)),
+        unit: invUnit.trim() || 'pieces',
+        condition: invCondition,
+        location: invLocation.trim() || undefined,
+        notes: invNotes.trim() || undefined,
+        lastUpdated: new Date().toISOString().split('T')[0]
+      });
+    } else {
+      onAddInventory?.({
+        name: invName.trim(),
+        category: invCategory,
+        quantity: Math.max(0, Number(invQuantity)),
+        unit: invUnit.trim() || 'pieces',
+        condition: invCondition,
+        location: invLocation.trim() || undefined,
+        notes: invNotes.trim() || undefined,
+        recordedBy: auditorName
+      });
+    }
+    setShowInventoryModal(false);
+  };
+
+  const inventoryNeedsAttention = inventory.filter(i => i.condition === 'Needs Repair' || i.condition === 'Damaged' || i.condition === 'Lost').length;
+
   const submitAudit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedTransaction) return;
@@ -38,6 +120,140 @@ export default function AuditorView({ transactions, onAuditTransaction, onOpenRe
 
   return (
     <div id="auditor-view-container" className="space-y-6">
+      {/* MODULE TABS: Financial Audit vs Inventory Registry (Auditor is the custodian of inventory notes) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#D5CFC1] pb-3">
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setInventoryTab('audit')}
+            className={`flex items-center gap-2 border-b-2 pb-2.5 text-sm font-bold transition-all cursor-pointer ${
+              inventoryTab === 'audit'
+                ? 'border-[#1B4332] text-[#1B4332]'
+                : 'border-transparent text-[#6A7F72] hover:text-[#1B4332]'
+            }`}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span>Financial Audit ({transactions.length})</span>
+          </button>
+          <button
+            onClick={() => setInventoryTab('inventory')}
+            className={`flex items-center gap-2 border-b-2 pb-2.5 text-sm font-bold transition-all cursor-pointer ${
+              inventoryTab === 'inventory'
+                ? 'border-[#2D6A4F] text-[#2D6A4F]'
+                : 'border-transparent text-[#6A7F72] hover:text-[#1B4332]'
+            }`}
+          >
+            <Boxes className="h-4 w-4" />
+            <span>Inventory Registry ({inventory.length})</span>
+          </button>
+        </div>
+
+        {inventoryTab === 'inventory' && (
+          <button
+            type="button"
+            onClick={openAddInventory}
+            className="flex items-center gap-1.5 rounded-xl bg-[#1B4332] px-4 py-2 text-xs font-black text-white shadow-sm transition-all hover:bg-[#143326] cursor-pointer"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Record Inventory Item</span>
+          </button>
+        )}
+      </div>
+
+      {inventoryTab === 'inventory' ? (
+        <section className="space-y-4" aria-label="Association inventory registry">
+          <div className="rounded-2xl border border-[#B7D9BF] bg-[#EAF4EC] p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl border border-emerald-700/15 bg-white p-2.5">
+                <Package className="h-5 w-5 text-emerald-800" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-[#1B4332]">Association Inventory & Custodial Notes</h2>
+                <p className="mt-1 text-xs text-[#4A5F57]">
+                  Since there is no Property Custodian, the Auditor keeps the official notes of all association inventory — equipment, tools, rental assets, and supplies.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-[#D5CFC1] bg-white p-3">
+                <p className="text-[10px] font-bold uppercase text-[#4A5F57]">Total Items</p>
+                <p className="text-lg font-black text-[#1B4332]">{inventory.length}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-[10px] font-bold uppercase text-emerald-800">Good Condition</p>
+                <p className="text-lg font-black text-emerald-900">{inventory.filter(i => i.condition === 'Good').length}</p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[10px] font-bold uppercase text-amber-800">Needs Repair</p>
+                <p className="text-lg font-black text-amber-900">{inventory.filter(i => i.condition === 'Needs Repair').length}</p>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <p className="text-[10px] font-bold uppercase text-rose-800">Damaged / Lost</p>
+                <p className="text-lg font-black text-rose-900">{inventory.filter(i => i.condition === 'Damaged' || i.condition === 'Lost').length}</p>
+              </div>
+            </div>
+          </div>
+
+          {inventory.length ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {inventory.map(item => (
+                <article
+                  key={item.id}
+                  className={`rounded-2xl border bg-white p-4 shadow-sm ${
+                    item.condition === 'Damaged' || item.condition === 'Lost'
+                      ? 'border-rose-300'
+                      : item.condition === 'Needs Repair'
+                        ? 'border-amber-300'
+                        : 'border-[#D5CFC1]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="rounded-lg border border-[#D5CFC1] bg-[#F7F4EF] px-2 py-0.5 text-[10px] font-bold uppercase text-[#4A5F57]">{item.category}</span>
+                      <h3 className="mt-1 break-words text-sm font-black text-[#1B4332]">{item.name}</h3>
+                      <p className="font-mono text-xs text-[#4A5F57]">{item.quantity} {item.unit}</p>
+                      {item.location && <p className="mt-0.5 text-[10px] text-[#4A5F57]">Location: {item.location}</p>}
+                    </div>
+                    <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-black uppercase ${
+                      item.condition === 'Good'
+                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : item.condition === 'Needs Repair'
+                          ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                          : 'border border-rose-200 bg-rose-50 text-rose-800'
+                    }`}>
+                      {item.condition}
+                    </span>
+                  </div>
+                  {item.notes && (
+                    <div className="mt-2.5 rounded-xl border border-[#D5CFC1] bg-[#F7F4EF] p-2.5">
+                      <span className="flex items-center gap-1 text-[10px] font-black uppercase text-emerald-700">
+                        <FileText className="h-3 w-3" />
+                        Auditor's Custodial Notes:
+                      </span>
+                      <p className="mt-1 break-words text-xs italic text-[#33473D]">{item.notes}</p>
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center justify-between border-t border-[#E9E4D9] pt-2.5">
+                    <span className="font-mono text-[10px] text-[#4A5F57]">By: {item.recordedBy} • Updated: {item.lastUpdated}</span>
+                    <div className="flex gap-1.5">
+                      <button type="button" onClick={() => openEditInventory(item)} className="rounded-lg bg-[#F5FAF6] p-1.5 text-[#4B6259] transition-all hover:text-[#1B4332] cursor-pointer" title="Edit inventory item">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button type="button" onClick={() => { if (confirm(`Sigurado ka nga gusto nimong idelete ang inventory item "${item.name}"?`)) onDeleteInventory?.(item.id); }} className="rounded-lg bg-rose-500/10 p-1.5 text-rose-600 transition-all hover:bg-rose-500/20 cursor-pointer" title="Delete inventory item">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-[#D5CFC1] bg-white p-8 text-center text-sm text-[#4A5F57]">
+              No inventory items recorded yet. Use "Record Inventory Item" to start the association's official inventory registry.
+            </div>
+          )}
+        </section>
+      ) : (
+      <>
       <section className="space-y-4" aria-label="Auditor dashboard">
         <div className="flex flex-col gap-4 rounded-2xl border border-bafa-neutral-300 bg-[#F7F4EF] p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
@@ -195,7 +411,71 @@ export default function AuditorView({ transactions, onAuditTransaction, onOpenRe
           )}
         </div>
       </section>
+      </>
+      )}
 
+      {/* ADD / EDIT INVENTORY ITEM MODAL */}
+      {showInventoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="presentation">
+          <div role="dialog" aria-modal="true" className="w-full max-w-md overflow-hidden rounded-2xl border border-[#D5CFC1] bg-[#F7F4EF] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#D5CFC1] bg-[#EAF4EC] px-5 py-4">
+              <h2 className="text-base font-bold text-[#1B4332]">{editingInventoryItem ? 'Edit Inventory Item & Notes' : 'Record Inventory Item & Notes'}</h2>
+              <button type="button" onClick={() => setShowInventoryModal(false)} className="text-xl font-bold text-[#4A5F57] hover:text-[#1B4332]" aria-label="Close inventory dialog">&times;</button>
+            </div>
+            <form onSubmit={handleSaveInventory} className="space-y-3.5 p-5">
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Item Name</label>
+                <input type="text" required value={invName} onChange={e => setInvName(e.target.value)} placeholder="e.g. IGP Plastic Chairs, Harvest Sacks, Knapsack Sprayer" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Category</label>
+                  <select value={invCategory} onChange={e => setInvCategory(e.target.value as InventoryItem['category'])} className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none">
+                    <option value="IGP Equipment">IGP Equipment</option>
+                    <option value="Farm Tools">Farm Tools</option>
+                    <option value="Office Supplies">Office Supplies</option>
+                    <option value="Rental Assets">Rental Assets</option>
+                    <option value="Livestock">Livestock</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Condition</label>
+                  <select value={invCondition} onChange={e => setInvCondition(e.target.value as InventoryItem['condition'])} className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none">
+                    <option value="Good">Good</option>
+                    <option value="Needs Repair">Needs Repair</option>
+                    <option value="Damaged">Damaged</option>
+                    <option value="Lost">Lost</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Quantity</label>
+                  <input type="number" min={0} required value={invQuantity} onChange={e => setInvQuantity(Number(e.target.value))} className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 font-mono text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Unit</label>
+                  <input type="text" required value={invUnit} onChange={e => setInvUnit(e.target.value)} placeholder="e.g. pieces, sacks, units" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Storage Location (Optional)</label>
+                <input type="text" value={invLocation} onChange={e => setInvLocation(e.target.value)} placeholder="e.g. Barangay Alegria Covered Court Storage" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Custodial / Inventory Notes (Optional)</label>
+                <textarea rows={3} value={invNotes} onChange={e => setInvNotes(e.target.value)} placeholder="e.g. Counted 120 pieces during quarterly physical inventory; 8 chairs returned broken by renters." className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setShowInventoryModal(false)} className="flex-1 rounded-xl border border-[#D5CFC1] px-3 py-2.5 text-sm font-semibold text-[#1B4332] hover:bg-[#EAF4EE]">Cancel</button>
+                <button type="submit" className="flex-1 rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Save Inventory Record</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* AUDIT VERDICT MODAL */}
       {selectedTransaction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="auditor-modal-title" className="w-full max-w-md overflow-hidden rounded-2xl border border-bafa-neutral-300 bg-white shadow-2xl">

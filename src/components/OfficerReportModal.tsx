@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement, HogRaisingState, OfficerRole, OrganizationFund } from '../types';
+import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement, AssociationActivity, InventoryItem, HogRaisingState, OfficerRole, OrganizationFund } from '../types';
 import { INITIAL_FUNDS } from '../initialData';
 import {  getSurname } from '../utils/names';
 import {
@@ -14,6 +14,8 @@ interface OfficerReportModalProps {
   resolutions: Resolution[];
   transactions: FinancialTransaction[];
   announcements: Announcement[];
+  activities?: AssociationActivity[];
+  inventory?: InventoryItem[];
   logs: SystemLog[];
   funds?: OrganizationFund[];
   hogRaising?: HogRaisingState;
@@ -28,6 +30,8 @@ export default function OfficerReportModal({
   resolutions,
   transactions,
   announcements,
+  activities = [],
+  inventory = [],
   funds = INITIAL_FUNDS,
   hogRaising,
   onClose,
@@ -77,6 +81,31 @@ export default function OfficerReportModal({
   // Calculations for Members
   const activeMembers = members.filter(m => m.status === 'Active');
   const inactiveMembers = members.filter(m => m.status === 'Inactive');
+
+  // Calculations for PIO Activities
+  const activitiesByStatus: Record<string, number> = {};
+  activities.forEach(a => {
+    const s = a.status || 'Scheduled';
+    activitiesByStatus[s] = (activitiesByStatus[s] || 0) + 1;
+  });
+  const activitiesByCategory: Record<string, number> = {};
+  activities.forEach(a => {
+    const c = a.category || 'Other';
+    activitiesByCategory[c] = (activitiesByCategory[c] || 0) + 1;
+  });
+  const completedActivities = activities.filter(a => a.status === 'Completed');
+  const upcomingActivities = activities.filter(a => a.status === 'Scheduled' || a.status === 'In Progress');
+  const totalActivityAttendees = completedActivities.reduce((sum, a) => sum + (a.attendeesCount || 0), 0);
+
+  // Calculations for Auditor Inventory Registry (Auditor holds inventory custody — no Property Custodian)
+  const inventoryGood = inventory.filter(i => i.condition === 'Good').length;
+  const inventoryNeedsRepair = inventory.filter(i => i.condition === 'Needs Repair').length;
+  const inventoryDamagedLost = inventory.filter(i => i.condition === 'Damaged' || i.condition === 'Lost').length;
+  const inventoryByCategory: Record<string, number> = {};
+  inventory.forEach(i => {
+    const c = i.category || 'Other';
+    inventoryByCategory[c] = (inventoryByCategory[c] || 0) + i.quantity;
+  });
   const sitioCounts: Record<string, number> = {};
   members.forEach(m => {
     const s = m.farmLocation || 'Unassigned';
@@ -118,7 +147,7 @@ export default function OfficerReportModal({
       Secretary: "SECRETARY'S MEMBERSHIP & LEGISLATIVE MINUTES REPORT",
       President: "PRESIDENT'S CONSOLIDATED EXECUTIVE SUMMARY OF ALL OFFICER REPORTS",
       Vice_President: "VICE PRESIDENT'S EXECUTIVE ADMINISTRATION REPORT",
-      PIO: "PUBLIC INFORMATION OFFICER (PIO) COMMUNITY COMMUNICATIONS REPORT"
+      PIO: "PUBLIC INFORMATION OFFICER (PIO) COMMUNICATIONS & ACTIVITIES REPORT"
     };
 
     const docTitle = titleMap[activeReportRole] || 'AFA OFFICIAL OFFICER REPORT';
@@ -275,7 +304,40 @@ export default function OfficerReportModal({
           </tbody>
         </table>
 
-        <div class="section-title">3. FLAGGED ITEMS & ACTION REQUIRED (WITH BUDGET SOURCE CHARGED)</div>
+        <div class="section-title">3. ASSOCIATION INVENTORY & CUSTODIAL NOTES REGISTRY</div>
+        <p style="font-size: 10px; color: #475569; margin-bottom: 8px;">
+          Since the association has no Property Custodian, the Auditor keeps the official notes of all association inventory (equipment, tools, rental assets, supplies):
+        </p>
+        <table>
+          <tr><th>Inventory Metric</th><th>Count</th></tr>
+          <tr><td>Total Registered Inventory Items</td><td>${inventory.length} Item(s)</td></tr>
+          <tr><td>Good Condition</td><td style="color: green; font-weight: bold;">${inventoryGood} Item(s)</td></tr>
+          <tr><td>Needs Repair</td><td style="color: orange; font-weight: bold;">${inventoryNeedsRepair} Item(s)</td></tr>
+          <tr><td>Damaged / Lost</td><td style="color: red; font-weight: bold;">${inventoryDamagedLost} Item(s)</td></tr>
+        </table>
+
+        <div class="section-title">4. DETAILED INVENTORY REGISTRY (AUDITOR'S CUSTODY)</div>
+        <table>
+          <thead>
+            <tr><th>Item Name</th><th>Category</th><th>Quantity</th><th>Condition</th><th>Location</th><th>Custodial Notes</th><th>Recorded By</th><th>Last Updated</th></tr>
+          </thead>
+          <tbody>
+            ${inventory.map(i => `
+              <tr>
+                <td><strong>${i.name}</strong></td>
+                <td>${i.category}</td>
+                <td>${i.quantity} ${i.unit}</td>
+                <td>${i.condition}</td>
+                <td>${i.location || '—'}</td>
+                <td>${i.notes || '—'}</td>
+                <td>${i.recordedBy}</td>
+                <td>${i.lastUpdated}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="8">No inventory items recorded.</td></tr>'}
+          </tbody>
+        </table>
+
+        <div class="section-title">5. FLAGGED ITEMS & ACTION REQUIRED (WITH BUDGET SOURCE CHARGED)</div>
         <table>
           <thead>
             <tr>
@@ -511,6 +573,73 @@ export default function OfficerReportModal({
             `).join('') || '<tr><td colspan="5">No announcements recorded.</td></tr>'}
           </tbody>
         </table>
+
+        <div class="section-title">3. ASSOCIATION ACTIVITIES & EVENTS SUMMARY</div>
+        <table>
+          <tr><th>Activity Metric</th><th>Count</th></tr>
+          <tr><td>Total Activities Documented</td><td>${activities.length} Activity/ies</td></tr>
+          <tr><td>Completed Activities</td><td>${completedActivities.length} Event(s)</td></tr>
+          <tr><td>Upcoming / In-Progress Activities</td><td>${upcomingActivities.length} Event(s)</td></tr>
+          <tr><td>Total Attendees (Completed Activities)</td><td>${totalActivityAttendees} Participants</td></tr>
+        </table>
+
+        <div class="section-title">4. ACTIVITIES BY STATUS & CATEGORY</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <h4 style="font-size: 10px; margin: 0 0 4px 0; color: #065f46; text-transform: uppercase;">By Status</h4>
+            <table>
+              <tr><th>Status</th><th>Count</th></tr>
+              ${Object.entries(activitiesByStatus).map(([st, cnt]) => `
+                <tr><td>${st}</td><td>${cnt} Event(s)</td></tr>
+              `).join('') || '<tr><td colspan="2">No activities recorded.</td></tr>'}
+            </table>
+          </div>
+          <div>
+            <h4 style="font-size: 10px; margin: 0 0 4px 0; color: #065f46; text-transform: uppercase;">By Category</h4>
+            <table>
+              <tr><th>Category</th><th>Count</th></tr>
+              ${Object.entries(activitiesByCategory).map(([cat, cnt]) => `
+                <tr><td>${cat}</td><td>${cnt} Event(s)</td></tr>
+              `).join('') || '<tr><td colspan="2">No activities recorded.</td></tr>'}
+            </table>
+          </div>
+        </div>
+
+        <div class="section-title">5. COMPLETE ASSOCIATION ACTIVITIES LOG</div>
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Time</th><th>Title</th><th>Category</th><th>Location</th><th>Status</th><th>Organizer</th><th>Attendees</th></tr>
+          </thead>
+          <tbody>
+            ${activities.map(a => `
+              <tr>
+                <td>${a.scheduledDate}</td>
+                <td>${a.scheduledTime}</td>
+                <td><strong>${a.title}</strong>${a.cebTitle ? `<br/><span style="font-size: 8.5px; color:#64748b;">${a.cebTitle}</span>` : ''}</td>
+                <td>${a.category}</td>
+                <td>${a.location}</td>
+                <td>${a.status}</td>
+                <td>${a.organizer}</td>
+                <td>${a.attendeesCount ?? 0}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="8">No activities recorded.</td></tr>'}
+          </tbody>
+        </table>
+
+        <div class="section-title">6. DOCUMENTED ACTIVITY OUTCOMES & NOTES</div>
+        <table>
+          <thead>
+            <tr><th>Activity</th><th>Documented Outcome / Notes</th></tr>
+          </thead>
+          <tbody>
+            ${activities.filter(a => a.documentedNotes).map(a => `
+              <tr>
+                <td><strong>${a.title}</strong></td>
+                <td>${a.documentedNotes}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="2">No documented activity outcomes recorded.</td></tr>'}
+          </tbody>
+        </table>
       `;
     } else if (activeReportRole === 'Vice_President') {
       contentHtml = `
@@ -688,7 +817,29 @@ export default function OfficerReportModal({
         ].join(','));
       });
       csvRows.push('');
-      csvRows.push('3. FLAGGED TRANSACTIONS REQUIRING ATTENTION');
+      csvRows.push('3. ASSOCIATION INVENTORY & CUSTODIAL NOTES REGISTRY (AUDITOR CUSTODY)');
+      csvRows.push(`Total Inventory Items,${inventory.length}`);
+      csvRows.push(`Good Condition,${inventoryGood}`);
+      csvRows.push(`Needs Repair,${inventoryNeedsRepair}`);
+      csvRows.push(`Damaged / Lost,${inventoryDamagedLost}`);
+      csvRows.push('');
+      csvRows.push('DETAILED INVENTORY REGISTRY');
+      csvRows.push('Item Name,Category,Quantity,Unit,Condition,Location,Custodial Notes,Recorded By,Last Updated');
+      inventory.forEach(i => {
+        csvRows.push([
+          `"${i.name.replace(/"/g, '""')}"`,
+          `"${(i.category || '').replace(/"/g, '""')}"`,
+          i.quantity.toString(),
+          `"${(i.unit || '').replace(/"/g, '""')}"`,
+          i.condition,
+          `"${(i.location || '').replace(/"/g, '""')}"`,
+          `"${(i.notes || '').replace(/"/g, '""')}"`,
+          `"${(i.recordedBy || '').replace(/"/g, '""')}"`,
+          i.lastUpdated
+        ].join(','));
+      });
+      csvRows.push('');
+      csvRows.push('4. FLAGGED TRANSACTIONS REQUIRING ATTENTION');
       csvRows.push('ID,Date,Category,Budget Source Charged,Description,Amount (PHP),Audit Notes');
       transactions.filter(t => t.auditedStatus === 'Flagged').forEach(t => {
         csvRows.push([
@@ -737,7 +888,7 @@ export default function OfficerReportModal({
         ].join(','));
       });
     } else if (activeReportRole === 'PIO') {
-      csvRows.push('AFA OFFICIAL PIO COMMUNITY COMMUNICATIONS REPORT');
+      csvRows.push('AFA OFFICIAL PIO COMMUNICATIONS & ACTIVITIES REPORT');
       csvRows.push(`Date Generated,${reportDate}`);
       csvRows.push(`PIO,${getOfficerNameByRole('PIO')}`);
       csvRows.push('');
@@ -751,6 +902,30 @@ export default function OfficerReportModal({
           `"${a.title.replace(/"/g, '""')}"`,
           a.priority,
           `"${a.postedBy.replace(/"/g, '""')}"`
+        ].join(','));
+      });
+      csvRows.push('');
+      csvRows.push('ACTIVITIES SUMMARY');
+      csvRows.push(`Total Activities,${activities.length}`);
+      csvRows.push(`Completed Activities,${completedActivities.length}`);
+      csvRows.push(`Upcoming / In-Progress Activities,${upcomingActivities.length}`);
+      csvRows.push(`Total Attendees (Completed),${totalActivityAttendees}`);
+      csvRows.push('');
+      csvRows.push('COMPLETE ASSOCIATION ACTIVITIES LOG');
+      csvRows.push('ID,Date,Time,Title,Cebuano Title,Category,Location,Status,Organizer,Attendees,Documented Notes');
+      activities.forEach(a => {
+        csvRows.push([
+          a.id,
+          a.scheduledDate,
+          `"${(a.scheduledTime || '').replace(/"/g, '""')}"`,
+          `"${a.title.replace(/"/g, '""')}"`,
+          `"${(a.cebTitle || '').replace(/"/g, '""')}"`,
+          `"${(a.category || '').replace(/"/g, '""')}"`,
+          `"${(a.location || '').replace(/"/g, '""')}"`,
+          a.status,
+          `"${(a.organizer || '').replace(/"/g, '""')}"`,
+          (a.attendeesCount ?? 0).toString(),
+          `"${(a.documentedNotes || '').replace(/"/g, '""')}"`
         ].join(','));
       });
     } else if (activeReportRole === 'Vice_President') {
@@ -857,8 +1032,8 @@ export default function OfficerReportModal({
               </h2>
               <p className="text-xs text-[#4A5F57] font-medium truncate">
                 {isPresident
-                  ? "Generate and export the consolidated summary of all executive officer reports with budget origins."
-                  : `Generate, export, or print the official ${currentRole.replace('_', ' ')} department report with full budget source traceability.`}
+                  ? "Generate the consolidated executive summary. Financial reports are the Treasurer's task; member reports the Secretary's; activities the PIO's."
+                  : `Generate, the official ${currentRole.replace('_', ' ')} department report.`}
               </p>
             </div>
           </div>
@@ -912,13 +1087,16 @@ export default function OfficerReportModal({
               <label className="block text-xs font-black text-[#4A5F57] uppercase tracking-wider">
                 Select View / Report Scope:
               </label>
+              <p className="text-[10px] text-[#4A5F57] font-medium">
+                Report segregation of duties: the President issues the consolidated executive summary; all financial reports belong to the Treasurer; all member reports belong to the Secretary; all activities belong to the PIO.
+              </p>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 {[
-                  { role: 'President' as OfficerRole, label: 'Consolidated Summary', icon: FileText, color: 'text-purple-600' },
-                  { role: 'Treasurer' as OfficerRole, label: 'Treasurer (Funds)', icon: Coins, color: 'text-amber-700' },
-                  { role: 'Auditor' as OfficerRole, label: 'Auditor (Oversight)', icon: ShieldCheck, color: 'text-emerald-700' },
-                  { role: 'Secretary' as OfficerRole, label: 'Secretary', icon: Users, color: 'text-blue-700' },
-                  { role: 'PIO' as OfficerRole, label: 'PIO Board', icon: Megaphone, color: 'text-pink-700' }
+                  { role: 'President' as OfficerRole, label: 'President (Executive Summary)', icon: FileText, color: 'text-purple-600' },
+                  { role: 'Treasurer' as OfficerRole, label: 'Treasurer (Financial)', icon: Coins, color: 'text-amber-700' },
+                  { role: 'Auditor' as OfficerRole, label: 'Auditor (Financial Oversight)', icon: ShieldCheck, color: 'text-emerald-700' },
+                  { role: 'Secretary' as OfficerRole, label: 'Secretary (Members)', icon: Users, color: 'text-blue-700' },
+                  { role: 'PIO' as OfficerRole, label: 'PIO (Activities)', icon: Megaphone, color: 'text-pink-700' }
                 ].map((item) => {
                   const Icon = item.icon;
                   const isSelected = activeReportRole === item.role;
@@ -954,7 +1132,7 @@ export default function OfficerReportModal({
                   {activeReportRole === 'Secretary' && "Secretary's Membership Roster & Legislative Assembly Report"}
                   {activeReportRole === 'President' && "President's Executive Consolidated Summary of All Officer Reports & Capital Portfolios"}
                   {activeReportRole === 'Vice_President' && "Vice President's Administration & Oversight Report"}
-                  {activeReportRole === 'PIO' && "Public Information Officer Community Communications Report"}
+                  {activeReportRole === 'PIO' && "Public Information Officer Communications & Activities Report"}
                 </h3>
               </div>
               <div className="text-right">
@@ -1025,6 +1203,10 @@ export default function OfficerReportModal({
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Compliance Rate</span>
                     <p className="text-sm font-mono font-bold text-emerald-700">{auditComplianceRate}%</p>
                   </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Inventory Items</span>
+                    <p className="text-sm font-mono font-bold text-emerald-700">{inventory.length} ({inventoryDamagedLost > 0 ? `${inventoryDamagedLost} issue(s)` : 'all good'})</p>
+                  </div>
                 </>
               )}
 
@@ -1083,6 +1265,27 @@ export default function OfficerReportModal({
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Bulletins Published</span>
                     <p className="text-sm font-mono font-bold text-pink-700">{announcements.length}</p>
+                  </div>
+                </>
+              )}
+
+              {activeReportRole === 'PIO' && (
+                <>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Bulletins Published</span>
+                    <p className="text-sm font-mono font-bold text-pink-700">{announcements.length}</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Total Activities</span>
+                    <p className="text-sm font-mono font-bold text-blue-700">{activities.length} Events</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Completed</span>
+                    <p className="text-sm font-mono font-bold text-emerald-700">{completedActivities.length} Done</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Attendees Logged</span>
+                    <p className="text-sm font-mono font-bold text-amber-700">{totalActivityAttendees}</p>
                   </div>
                 </>
               )}

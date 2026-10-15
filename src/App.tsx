@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   OfficerRole, Member, Meeting, Resolution, 
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState,
-  IgpExpense, IgpSale, IgpChoreLog, Product, AssociationActivity, OrganizationFund, DatabaseStatus
+  IgpExpense, IgpSale, IgpChoreLog, Product, AssociationActivity, OrganizationFund, DatabaseStatus, InventoryItem
 } from './types';
-import { 
-  INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS, 
+import {
+  INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
   INITIAL_TRANSACTIONS, INITIAL_ANNOUNCEMENTS, INITIAL_LOGS, INITIAL_HOG_RAISING,
   INITIAL_PRODUCTS, INITIAL_ACTIVITIES, OFFICIAL_OFFICERS, INITIAL_FUNDS
 } from './initialData';
@@ -104,6 +104,8 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [activities, setActivities] = useState<AssociationActivity[]>([]);
   const [funds, setFunds] = useState<OrganizationFund[]>([]);
+  // Association inventory registry — custodial duty of the Auditor (no Property Custodian officer exists)
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [isHydrating, setIsHydrating] = useState(true);
 
@@ -120,6 +122,7 @@ export default function App() {
     activities: [] as AssociationActivity[],
     hogRaising: INITIAL_HOG_RAISING,
     funds: [] as OrganizationFund[],
+    inventory: [] as InventoryItem[],
     logs: [] as SystemLog[]
   });
 
@@ -136,9 +139,10 @@ export default function App() {
       activities,
       hogRaising,
       funds,
+      inventory,
       logs
     };
-  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, hogRaising, funds, logs]);
+  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, hogRaising, funds, inventory, logs]);
 
   // Feedback State (Toasts)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' | 'error' } | null>(null);
@@ -164,6 +168,7 @@ export default function App() {
       const storedProducts = localStorage.getItem('bafa_products');
       const storedActivities = localStorage.getItem('bafa_activities');
       const storedFunds = localStorage.getItem('bafa_funds');
+      const storedInventory = localStorage.getItem('bafa_inventory');
       const storedQueue = localStorage.getItem('bafa_sync_queue');
       const storedLogs = localStorage.getItem('bafa_logs');
       const storedUsers = localStorage.getItem('bafa_users');
@@ -200,6 +205,7 @@ export default function App() {
         setProducts(storedProducts ? JSON.parse(storedProducts) : INITIAL_PRODUCTS);
         setActivities(storedActivities ? JSON.parse(storedActivities) : INITIAL_ACTIVITIES);
         setFunds(storedFunds ? JSON.parse(storedFunds) : INITIAL_FUNDS);
+        setInventory(storedInventory ? JSON.parse(storedInventory) : []);
       }
 
       setSyncQueue(storedQueue ? JSON.parse(storedQueue) : []);
@@ -273,6 +279,7 @@ export default function App() {
             const delProducts = new Set(bootDeletedIds.products || []);
             const delActivities = new Set(bootDeletedIds.activities || []);
             const delFunds = new Set(bootDeletedIds.funds || []);
+            const delInventory = new Set(bootDeletedIds.inventory || []);
 
             const cleanMembers = Array.isArray(res.data.members) ? res.data.members.filter((m: any) => !delMembers.has(m.id)) : [];
             const cleanMeetings = Array.isArray(res.data.meetings) ? res.data.meetings.filter((m: any) => !delMeetings.has(m.id)) : [];
@@ -282,6 +289,7 @@ export default function App() {
             const cleanProducts = Array.isArray(res.data.products) ? res.data.products.filter((p: any) => !delProducts.has(p.id)) : [];
             const cleanActivities = Array.isArray(res.data.activities) ? res.data.activities.filter((a: any) => !delActivities.has(a.id)) : [];
             const cleanFunds = Array.isArray(res.data.funds) ? res.data.funds.filter((f: any) => !delFunds.has(f.id)) : [];
+            const cleanInventory = Array.isArray(res.data.inventory) ? res.data.inventory.filter((i: any) => !delInventory.has(i.id)) : [];
 
             if (Array.isArray(res.data.members)) { setMembers(cleanMembers); updateStorage('bafa_members', cleanMembers); }
             if (Array.isArray(res.data.meetings)) { setMeetings(cleanMeetings); updateStorage('bafa_meetings', cleanMeetings); }
@@ -291,6 +299,7 @@ export default function App() {
             if (Array.isArray(res.data.products)) { setProducts(cleanProducts); updateStorage('bafa_products', cleanProducts); }
             if (Array.isArray(res.data.activities)) { setActivities(cleanActivities); updateStorage('bafa_activities', cleanActivities); }
             if (Array.isArray(res.data.funds)) { setFunds(cleanFunds); updateStorage('bafa_funds', cleanFunds); }
+            if (Array.isArray(res.data.inventory)) { setInventory(cleanInventory); updateStorage('bafa_inventory', cleanInventory); }
             if (res.data.hogRaising) { setHogRaising(res.data.hogRaising); updateStorage('bafa_hog_raising', res.data.hogRaising); }
             if (Array.isArray(res.data.users) && res.data.users.length > 0) {
               const officersOnly = res.data.users.filter((u: any) => !delUsers.has(u.id) && (u.role !== 'Member' || !u.id.startsWith('user-m')));
@@ -326,6 +335,7 @@ export default function App() {
                     products: cleanProducts,
                     activities: cleanActivities,
                     funds: cleanFunds,
+                    inventory: cleanInventory,
                     hogRaising: res.data.hogRaising || INITIAL_HOG_RAISING,
                     systemLogs: activeLogs,
                     deletedIds: bootDeletedIds
@@ -356,6 +366,7 @@ export default function App() {
       setAnnouncements(INITIAL_ANNOUNCEMENTS);
       setHogRaising(INITIAL_HOG_RAISING);
       setFunds(INITIAL_FUNDS);
+      setInventory([]);
       setSyncQueue([]);
       setLogs(INITIAL_LOGS);
       setUsers(OFFICIAL_OFFICERS);
@@ -420,6 +431,7 @@ export default function App() {
     products?: string[];
     activities?: string[];
     funds?: string[];
+    inventory?: string[];
   }
 
   const getStoredDeletedIds = (): StoredDeletedIds => {
@@ -453,6 +465,7 @@ export default function App() {
               else if (entity === 'product') result.products = Array.from(new Set([...(result.products || []), id]));
               else if (entity === 'activity') result.activities = Array.from(new Set([...(result.activities || []), id]));
               else if (entity === 'fund') result.funds = Array.from(new Set([...(result.funds || []), id]));
+              else if (entity === 'inventory') result.inventory = Array.from(new Set([...(result.inventory || []), id]));
             }
           }
         }
@@ -523,6 +536,7 @@ export default function App() {
       activities: 'activities',
       fund: 'funds',
       funds: 'funds',
+      inventory: 'inventory',
     };
     const mappedKey = entityKeyMap[entity] || (entity as keyof StoredDeletedIds);
     ids.forEach(id => storeDeletedId(mappedKey, id));
@@ -640,6 +654,7 @@ export default function App() {
       activities?: AssociationActivity[];
       hogRaising?: HogRaisingState;
       funds?: OrganizationFund[];
+      inventory?: InventoryItem[];
       systemLogs?: SystemLog[];
       deletedIds?: StoredDeletedIds;
     },
@@ -668,6 +683,7 @@ export default function App() {
         activities: overrides?.activities || snap.activities,
         hogRaising: overrides?.hogRaising || snap.hogRaising,
         funds: overrides?.funds || snap.funds,
+        inventory: overrides?.inventory || snap.inventory,
         systemLogs: overrides?.systemLogs || snap.logs,
         deletedIds: currentDeletedIds
       };
@@ -1509,6 +1525,56 @@ export default function App() {
       pushAllDataToCloud({ activities: updated }, { silent: true, source: 'Activity Deletion' });
     } else {
       addToSyncQueue('delete', 'activity', { id });
+    }
+  };
+
+  // AUDITOR INVENTORY HANDLERS (inventory custody assigned to the Auditor — no Property Custodian exists)
+  const handleAddInventoryItem = (itemData: Omit<InventoryItem, 'id' | 'dateRecorded' | 'lastUpdated'>) => {
+    const today = new Date().toISOString().split('T')[0];
+    const newItem: InventoryItem = { ...itemData, id: `inv-${Date.now()}`, dateRecorded: today, lastUpdated: today };
+    const updated = [newItem, ...inventory];
+    setInventory(updated);
+    updateStorage('bafa_inventory', updated);
+
+    if (isOnline) {
+      logAction('Recorded Inventory Item', `Auditor recorded inventory: "${newItem.name}" (${newItem.quantity} ${newItem.unit}, ${newItem.condition})`);
+      showToastMessage(`Inventory item "${newItem.name}" recorded!`, 'success');
+      pushAllDataToCloud({ inventory: updated }, { silent: true, source: 'Inventory Recorded' });
+    } else {
+      addToSyncQueue('create', 'inventory', newItem);
+    }
+  };
+
+  const handleUpdateInventoryItem = (updatedItem: InventoryItem) => {
+    const updated = inventory.map(i => i.id === updatedItem.id ? updatedItem : i);
+    setInventory(updated);
+    updateStorage('bafa_inventory', updated);
+
+    if (isOnline) {
+      logAction('Updated Inventory Item', `Auditor updated inventory record for "${updatedItem.name}" (${updatedItem.condition})`);
+      showToastMessage(`Inventory item "${updatedItem.name}" updated!`, 'success');
+      pushAllDataToCloud({ inventory: updated }, { silent: true, source: 'Inventory Updated' });
+    } else {
+      addToSyncQueue('update', 'inventory', updatedItem);
+    }
+  };
+
+  const handleDeleteInventoryItem = (id: string) => {
+    const target = inventory.find(i => i.id === id);
+    const updated = inventory.filter(i => i.id !== id);
+    setInventory(updated);
+    updateStorage('bafa_inventory', updated);
+    storeDeletedId('inventory', id);
+
+    // Direct and permanent removal from PostgreSQL Cloud Database
+    deleteFromDatabase('inventory', id);
+
+    if (isOnline) {
+      logAction('Deleted Inventory Item', `Removed inventory record: "${target?.name || id}"`);
+      showToastMessage('Inventory item removed!', 'info');
+      pushAllDataToCloud({ inventory: updated }, { silent: true, source: 'Inventory Deletion' });
+    } else {
+      addToSyncQueue('delete', 'inventory', { id });
     }
   };
 
@@ -2673,6 +2739,11 @@ export default function App() {
                 transactions={transactions}
                 onAuditTransaction={handleAuditTransaction}
                 onOpenReportModal={() => setShowReportModal(true)}
+                inventory={inventory}
+                onAddInventory={handleAddInventoryItem}
+                onUpdateInventory={handleUpdateInventoryItem}
+                onDeleteInventory={handleDeleteInventoryItem}
+                auditorName={`Auditor (${getOfficerName('Auditor')})`}
               />
             )}
 
@@ -2827,6 +2898,8 @@ export default function App() {
           resolutions={resolutions}
           transactions={transactions}
           announcements={announcements}
+          activities={activities}
+          inventory={inventory}
           logs={logs}
           funds={funds}
           hogRaising={hogRaising}
@@ -2849,9 +2922,6 @@ export default function App() {
             <PresidentReport
               data={buildReportData({
                 year: new Date().getFullYear(),
-                members,
-                funds,
-                transactions,
                 users,
               })}
             />
