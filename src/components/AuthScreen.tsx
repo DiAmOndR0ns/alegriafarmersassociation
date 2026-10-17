@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { User, OfficerRole } from '../types';
-import { verifyPassword, hashPassword } from '../utils/audit';
-import { 
-  Building, Lock, Shield, Sprout, Smartphone, CheckCircle, 
+import { verifyPassword, hashPassword, getPasswordPolicyError } from '../utils/audit';
+import {
+  Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
   UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
   User as UserIcon, HelpCircle, AlertTriangle, KeyRound, Eye, EyeOff,
   ShieldCheck, Phone, Check, Info, FileText
@@ -17,17 +17,16 @@ interface AuthScreenProps {
   onBackToGuest?: () => void;
 }
 
-export default function AuthScreen({ 
-  users, 
-  onLogin, 
+export default function AuthScreen({
+  users,
+  onLogin,
   toast,
   onRequestPasswordReset,
   onBackToGuest
 }: AuthScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  
-  // Password reset request modal/form state
+
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetUsername, setResetUsername] = useState('');
   const [showMemberGuide, setShowMemberGuide] = useState(false);
@@ -36,6 +35,12 @@ export default function AuthScreen({
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       toast('Palihug isulod ang imong username ug password (Please enter username and password).', 'error');
+      return;
+    }
+
+    const policyError = getPasswordPolicyError(password);
+    if (policyError) {
+      toast(policyError, 'error');
       return;
     }
 
@@ -49,7 +54,7 @@ export default function AuthScreen({
     }
 
     if (!verifyPassword(password, matchedUser.passwordHash, matchedUser.password)) {
-      toast('Sayo ang password. Sulayi ang "password123" o ipangutana sa Presidente (Incorrect password).', 'error');
+      toast('Sayo ang password. Palihug gamita ang lig-on nga password sa imong account. (Incorrect password).', 'error');
       return;
     }
 
@@ -78,7 +83,6 @@ export default function AuthScreen({
     }
   };
 
-  // Demo users for quick-login grid (makes testing very easy for non-tech users)
   const approvedUsers = users.filter(u => u.isApproved);
 
   return (
@@ -118,7 +122,7 @@ export default function AuthScreen({
                   <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
                     <ShieldCheck className="w-3.5 h-3.5" />
                   </div>
-                  <span><strong className="font-extrabold text-white">Membership verification:</strong> Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema antes magamit ang ilang access.</span>
+                  <span><strong className="font-extrabold text-white">Membership verification:</strong> Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema antes magamit ang portal.</span>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
                   <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
@@ -187,7 +191,7 @@ export default function AuthScreen({
                       <select
                         value={resetUsername}
                         onChange={(e) => setResetUsername(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 text-sm bg-bafa-neutral-50 border border-bafa-neutral-300 rounded-xl text-bafa-neutral-800 focus:outline-none focus:border-bafa-700 font-semibold appearance-none"
+                        className="w-full pl-10 pr-4 py-3 text-sm bg-bafa-neutral-50 border border-bafa-neutral-300 rounded-xl text-bafa-neutral-800 focus:outline-none focus:border-bafa-700 font-medium"
                         required
                       >
                         <option value="">-- Pili og Username / Select --</option>
@@ -204,13 +208,13 @@ export default function AuthScreen({
                     <button
                       type="button"
                       onClick={() => setShowResetForm(false)}
-                      className="flex-1 py-3 bg-bafa-neutral-50 border border-bafa-neutral-300 hover:bg-bafa-neutral-100 text-bafa-neutral-700 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer text-center"
+                      className="flex-1 py-3 bg-bafa-neutral-50 border border-bafa-neutral-300 hover:bg-bafa-neutral-100 text-bafa-neutral-700 rounded-xl font-bold text-xs sm:text-sm transition-all"
                     >
                       I-kansela (Cancel)
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-3 bg-bafa-coral-600 hover:bg-bafa-coral-500 text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer text-center"
+                      className="flex-1 py-3 bg-bafa-coral-600 hover:bg-bafa-coral-500 text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2"
                     >
                       <KeyRound className="w-4 h-4" />
                       <span>Ipadala Hangyo (Send)</span>
@@ -233,8 +237,8 @@ export default function AuthScreen({
                         type="button"
                         onClick={() => {
                           setUsername(user.username);
-                          setPassword('password123');
-                          toast(`Nahi-select si ${user.name}! Pindota ang "Mosulod sa Portal" sa ubos aron makasulod.`, 'info');
+                          setPassword('');
+                          toast(`Nahi-select si ${user.name}! Palihug isulat ang lig-on nga password para sa account niini.`, 'info');
                         }}
                         className={`p-2.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between min-h-[76px] h-20 relative group overflow-hidden ${
                           username.toLowerCase() === user.username.toLowerCase()
@@ -269,10 +273,10 @@ export default function AuthScreen({
                       <input
                         type="text"
                         required
-                        placeholder="e.g. roberto"
+                        placeholder="e.g. president"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC] font-semibold transition-all font-sans"
+                        className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC]"
                       />
                     </div>
                   </div>
@@ -295,17 +299,21 @@ export default function AuthScreen({
                       <input
                         type="password"
                         required
-                        placeholder="Ipapilit ang imong koda (e.g. password123)"
+                        placeholder="Use a strong password with letters, numbers, and symbols"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC] font-semibold transition-all font-sans"
+                        className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC]"
                       />
                     </div>
                   </div>
 
+                  <div className="rounded-xl border border-[#D8E7D9] bg-[#F4FBF6] px-3 py-2 text-[11px] text-[#214B38]">
+                    Password policy: at least 12 characters, includes uppercase, lowercase, number, and symbol; avoid common passwords.
+                  </div>
+
                   <button
                     type="submit"
-                    className="w-full py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-2xl font-black text-sm transition-all shadow-[0_12px_28px_rgba(27,67,50,0.25)] flex items-center justify-center gap-2 cursor-pointer mt-3"
+                    className="w-full py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-2xl font-black text-sm transition-all shadow-[0_12px_28px_rgba(27,67,50,0.25)] flex items-center justify-center gap-2"
                   >
                     <span>Log In</span>
                     <ArrowRight className="w-4 h-4" />
@@ -315,7 +323,7 @@ export default function AuthScreen({
                     <button
                       type="button"
                       onClick={onBackToGuest}
-                      className="w-full py-3 bg-[#FAF8F5] border-2 border-[#9E9785] text-[#1B4332] hover:bg-[#D8F3DC] rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-2.5"
+                      className="w-full py-3 bg-[#FAF8F5] border-2 border-[#9E9785] text-[#1B4332] hover:bg-[#D8F3DC] rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2"
                     >
                       <Sprout className="w-4.5 h-4.5 text-[#1B4332]" />
                       <span className="font-display">Back to Public Portal</span>
@@ -355,7 +363,7 @@ export default function AuthScreen({
                         Pagpasakop sa Miyembro: Pinaagi sa Kalihim Lamang
                       </h4>
                       <p className="text-xs text-[#2D5A43] leading-relaxed mt-1">
-                        Aron masiguro ang husto nga RSBSA verification ug audit trails, ang mga regular nga mag-uuma <strong>dili kinahanglan mag-sign up sa online form</strong>. Ang <strong>Kalihim (Jennylyn S. Lumactao)</strong> lamang ang awtorisado nga mopasakop ug mohatag og Login Slip credentials.
+                        Aron masiguro ang husto nga RSBSA verification ug audit trails, ang mga regular nga mag-uuma <strong>dili kinahanglan mag-sign up sa online form</strong>. Ang <strong>Kalihim</strong> ang responsable sa pag-issue og username ug secure nga password.
                       </p>
                     </div>
                   </div>
@@ -394,7 +402,7 @@ export default function AuthScreen({
                         <strong className="text-[#123326] font-bold">Dawat og Login Slip</strong>
                       </div>
                       <p className="text-[11px] text-[#556551] pl-7">
-                        Direkta nga i-isyu sa Kalihim ang imong opisyal nga Username ug Koda (Password).
+                        Direkta nga i-isyu sa Kalihim ang imong opisyal nga Username ug secure nga Password.
                       </p>
                     </div>
 
@@ -404,7 +412,7 @@ export default function AuthScreen({
                         <strong className="text-[#123326] font-bold">Diretsong Pagsulod</strong>
                       </div>
                       <p className="text-[11px] text-[#556551] pl-7">
-                        Gamita ang imong koda aron makasulod sa Member Portal ug makita ang imong tinigom.
+                        Gamita ang imong secure nga password aron makasulod sa Member Portal ug makita ang imong tinigom.
                       </p>
                     </div>
                   </div>
@@ -427,7 +435,7 @@ export default function AuthScreen({
                   <button
                     type="button"
                     onClick={() => setShowMemberGuide(false)}
-                    className="w-full py-3 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-3 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2"
                   >
                     <span>Balik sa Pagsulod (Back to Log In)</span>
                     <ArrowRight className="w-4 h-4" />
