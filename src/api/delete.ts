@@ -3,18 +3,13 @@ import { sendResponse, parseRequestBody } from './helper';
 
 export default async function handler(req: any, res: any) {
   try {
-    if (typeof res.setHeader === 'function') {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'POST, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    }
+    return sendResponse(res, 503, {
+      success: false,
+      offlineMode: true,
+      message: 'Remote deletion is temporarily disabled until server-side authentication and authorization are configured.',
+    });
 
-    if (req.method === 'OPTIONS') {
-      if (typeof res.status === 'function') return res.status(200).end();
-      res.statusCode = 200;
-      return res.end();
-    }
-
+    /* Disabled until authenticated replacement.
     if (!isDatabaseConfigured()) {
       return sendResponse(res, 200, {
         success: false,
@@ -72,11 +67,15 @@ export default async function handler(req: any, res: any) {
       table: result.table,
       message: `Successfully deleted ${result.deletedCount} record(s) from database table "${result.table}".`,
     });
-  } catch (error: any) {
-    console.error('[Cloud DB Delete API Error]:', error?.message || error);
-    return sendResponse(res, 500, {
-      success: false,
-      message: `Failed to delete from database: ${error?.message || 'Internal server error'}`,
-    });
+    } catch (error: any) {
+      console.error('[Cloud DB Delete API Error]:', error?.message || error);
+      return sendResponse(res, 500, {
+        success: false,
+        message: `Failed to delete from database: ${error?.message || 'Internal server error'}`,
+      });
+    }
+    */
+  } catch {
+    return sendResponse(res, 503, { success: false, message: 'Remote deletion is disabled.' });
   }
 }

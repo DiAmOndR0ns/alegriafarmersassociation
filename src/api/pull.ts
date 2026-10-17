@@ -3,15 +3,11 @@ import { sendResponse } from './helper';
 
 export default async function handler(req: any, res: any) {
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-    if (req.method === 'OPTIONS') {
-      if (typeof res.status === 'function') return res.status(200).end();
-      res.statusCode = 200;
-      return res.end();
-    }
+    return sendResponse(res, 503, {
+      success: false,
+      offlineMode: true,
+      message: 'Cloud data access is temporarily disabled until server-side authentication and authorization are configured.',
+    });
 
     if (!isDatabaseConfigured()) {
       return sendResponse(res, 200, {

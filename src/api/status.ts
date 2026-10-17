@@ -86,11 +86,7 @@ async function getLiveTableStats(pool: pg.Pool) {
 
 export default async function handler(req: any, res: any) {
   try {
-    if (req.method === 'OPTIONS') {
-      if (typeof res.status === 'function') return res.status(200).end();
-      res.statusCode = 200;
-      return res.end();
-    }
+    if (req.method !== 'GET') return sendResponse(res, 405, { error: 'Method not allowed' });
 
     const rawUrl = (process.env.DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');
 

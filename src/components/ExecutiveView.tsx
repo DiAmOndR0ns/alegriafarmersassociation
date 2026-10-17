@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User } from '../types';
-import { 
+import {
   ShieldCheck, Users, Coins, BookOpen, FileCheck, Activity, Check, X,
   KeyRound, Trash2, Clock, Smartphone, AlertTriangle, Printer, Calendar,
   Sprout, MapPin, Search, Lock, Download, ShieldAlert, Shield
@@ -157,10 +158,14 @@ export default function ExecutiveView({
 
   // Digital Trail (Audit Logs) Year Ending and Filtering
   const [selectedLogYear, setSelectedLogYear] = useState<string>('All');
-  const [closedLogYears, setClosedLogYears] = useState<number[]>(() => {
-    const saved = localStorage.getItem('bafa_closed_log_years');
-    return saved ? JSON.parse(saved) : [2024]; // default 2024 is closed
-  });
+  const [closedLogYears, setClosedLogYears] = useState<number[]>([2024]);
+  useEffect(() => {
+    let active = true;
+    void getSecureItem<number[]>('bafa_closed_log_years').then((saved) => {
+      if (active && Array.isArray(saved)) setClosedLogYears(saved);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   const [showSealConfirm, setShowSealConfirm] = useState<boolean>(false);
   const [sealYearInput, setSealYearInput] = useState<string>('');
 
@@ -192,7 +197,7 @@ export default function ExecutiveView({
 
     const updatedClosed = [...closedLogYears, yearToSeal];
     setClosedLogYears(updatedClosed);
-    localStorage.setItem('bafa_closed_log_years', JSON.stringify(updatedClosed));
+    void setSecureItem('bafa_closed_log_years', updatedClosed).catch(() => undefined);
 
     const newLog: SystemLog = {
       id: `log-seal-${Date.now()}`,

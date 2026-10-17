@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { FinancialTransaction, OrganizationFund, HogRaisingState } from '../types';
+import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { INITIAL_FUNDS, INITIAL_HOG_RAISING } from '../initialData';
 import { 
   Coins, ArrowUpRight, ArrowDownRight, Plus, 
@@ -81,12 +82,13 @@ export default function TreasurerView({
   };
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('bafa_treasurer_categories');
-      if (stored) setCustomCategories(JSON.parse(stored));
-    } catch {
-      setCustomCategories([]);
-    }
+    let active = true;
+    void getSecureItem<string[]>('bafa_treasurer_categories').then((stored) => {
+      if (active && Array.isArray(stored)) setCustomCategories(stored);
+    }).catch(() => {
+      if (active) setCustomCategories([]);
+    });
+    return () => { active = false; };
   }, []);
 
   const availableCategories = [...CATEGORIES[txType], ...customCategories.filter(category => !CATEGORIES[txType].includes(category))];
@@ -97,7 +99,7 @@ export default function TreasurerView({
     if (!category || availableCategories.some(existing => existing.toLowerCase() === category.toLowerCase())) return;
     const nextCategories = [...customCategories, category];
     setCustomCategories(nextCategories);
-    localStorage.setItem('bafa_treasurer_categories', JSON.stringify(nextCategories));
+    void setSecureItem('bafa_treasurer_categories', nextCategories).catch(() => undefined);
     setTxCategory(category);
     setNewCategoryName('');
     setShowCategoryModal(false);

@@ -9,7 +9,6 @@ import {
   saveFullStateToPostgres,
   deleteEntityFromPostgres,
   ensureDatabaseSchema,
-  purgeAllDummyData,
   getTableStats
 } from "./src/api/db";
 
@@ -114,186 +113,16 @@ async function startServer() {
     }
   });
 
-  // Dedicated API to Purge All Seed and Dummy Data from Supabase
-  app.post("/api/db/purge", async (req, res) => {
-    if (!isDatabaseConfigured()) {
-      return res.status(400).json({
-        success: false,
-        message: "DATABASE_URL is not configured.",
-      });
-    }
+  app.get("/api/sync/pull", async (_req, res) => res.status(503).json({ success: false, offlineMode: true, message: 'Cloud data access is disabled pending server-side authentication and authorization.' }));
 
-    try {
-      const pool = getPool();
-      const purgeRes = await purgeAllDummyData(pool);
-      const stats = await getTableStats(pool);
-      return res.json({
-        success: true,
-        message: purgeRes.message,
-        tableCounts: stats.tableCounts,
-        totalRecords: stats.totalRecords,
-      });
-    } catch (err: any) {
-      console.error("[Cloud DB Purge Error]:", err);
-      return res.status(500).json({
-        success: false,
-        message: `Failed to purge dummy data: ${err?.message || err}`,
-      });
-    }
-  });
+  app.post("/api/sync/push", async (_req, res) => res.status(503).json({ success: false, offlineMode: true, message: 'Cloud sync is disabled pending server-side authentication and authorization.' }));
 
-  // API to Pull Full Data from Cloud Database (PostgreSQL / Supabase)
-  app.get("/api/sync/pull", async (req, res) => {
-    if (!isDatabaseConfigured()) {
-      return res.json({
-        success: false,
-        offlineMode: true,
-        message: "DATABASE_URL is not configured. Running in offline/local storage mode.",
-      });
-    }
+  // Direct database deletion disabled until server-side authorization is implemented.
+  app.post(["/api/db/delete", "/api/sync/delete"], async (_req, res) => res.status(503).json({ success: false, message: 'Remote deletion is disabled pending server-side authentication and authorization.' }));
 
-    try {
-      const pool = getPool();
-      const pullPromise = fetchAllDataFromPostgres(pool);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Cloud DB query timed out after 12 seconds.')), 12000)
-      );
-      const data = await Promise.race([pullPromise, timeoutPromise]);
-      return res.json({
-        success: true,
-        data,
-      });
-    } catch (error: any) {
-      console.warn("[Cloud DB Pull Warning]:", error?.message || error);
-      return res.status(200).json({
-        success: false,
-        offlineMode: true,
-        message: `Offline fallback: ${error.message}`,
-      });
-    }
-  });
+  // RESTful deletion disabled until server-side authorization is implemented.
+  app.delete("/api/db/:entity/:id", async (_req, res) => res.status(503).json({ success: false, message: 'Remote deletion is disabled pending server-side authentication and authorization.' }));
 
-  // API to Push Full State / Sync Updates to Cloud Database (PostgreSQL / Supabase)
-  app.post("/api/sync/push", async (req, res) => {
-    if (!isDatabaseConfigured()) {
-      return res.json({
-        success: false,
-        offlineMode: true,
-        message: "DATABASE_URL is not configured. Saved in local offline browser storage.",
-      });
-    }
-
-    try {
-      const pool = getPool();
-      const savePromise = saveFullStateToPostgres(pool, req.body);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Cloud DB push timed out after 30 seconds.')), 30000)
-      );
-      await Promise.race([savePromise, timeoutPromise]);
-      return res.json({
-        success: true,
-        offlineMode: false,
-        message: "State successfully synced to PostgreSQL Cloud DB!",
-      });
-    } catch (error: any) {
-      console.warn("[Cloud DB Push Warning]:", error?.message || error);
-      return res.status(200).json({
-        success: false,
-        offlineMode: true,
-        message: `Saved locally. Cloud sync pending reconnection: ${error?.message || 'Database unavailable'}`,
-      });
-    }
-  });
-
-  // API to Directly Delete One or Multiple Items from PostgreSQL Cloud DB
-  app.post(["/api/db/delete", "/api/sync/delete"], async (req, res) => {
-    if (!isDatabaseConfigured()) {
-      return res.json({
-        success: false,
-        offlineMode: true,
-        message: "DATABASE_URL is not configured. Stored in local offline deletion queue.",
-      });
-    }
-
-    try {
-      const pool = getPool();
-      const body = req.body || {};
-      let totalDeleted = 0;
-
-      // Handle batch deletedIds object e.g. { deletedIds: { members: ['id1'], products: ['id2'] } }
-      if (body.deletedIds && typeof body.deletedIds === 'object') {
-        for (const [entityKey, ids] of Object.entries(body.deletedIds)) {
-          if (Array.isArray(ids) && ids.length > 0) {
-            try {
-              const result = await deleteEntityFromPostgres(pool, entityKey, ids);
-              totalDeleted += result.deletedCount;
-            } catch (delErr: any) {
-              console.warn(`[Delete Batch Warning for ${entityKey}]:`, delErr?.message);
-            }
-          }
-        }
-        return res.json({
-          success: true,
-          deletedCount: totalDeleted,
-          message: `Successfully deleted ${totalDeleted} record(s) from database.`,
-        });
-      }
-
-      // Handle single or multiple entity deletion e.g. { entity: 'member', id: 'm-1' } or { entity: 'product', ids: ['p-1', 'p-2'] }
-      const entity = body.entity;
-      const ids = body.ids || (body.id ? [body.id] : []);
-
-      if (!entity || !ids || ids.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Missing 'entity' or 'id'/'ids' parameter in request body.",
-        });
-      }
-
-      const result = await deleteEntityFromPostgres(pool, entity, ids);
-      return res.json({
-        success: true,
-        deletedCount: result.deletedCount,
-        table: result.table,
-        message: `Successfully deleted ${result.deletedCount} record(s) from database table "${result.table}".`,
-      });
-    } catch (error: any) {
-      console.error("[Cloud DB Delete Error]:", error?.message || error);
-      return res.status(500).json({
-        success: false,
-        message: `Failed to delete from database: ${error?.message || 'Internal server error'}`,
-      });
-    }
-  });
-
-  // RESTful DELETE API endpoint: /api/db/:entity/:id
-  app.delete("/api/db/:entity/:id", async (req, res) => {
-    if (!isDatabaseConfigured()) {
-      return res.json({
-        success: false,
-        offlineMode: true,
-        message: "DATABASE_URL is not configured. Queued locally.",
-      });
-    }
-
-    try {
-      const pool = getPool();
-      const { entity, id } = req.params;
-      const result = await deleteEntityFromPostgres(pool, entity, id);
-      return res.json({
-        success: true,
-        deletedCount: result.deletedCount,
-        table: result.table,
-        message: `Successfully deleted ${result.deletedCount} record(s) from database table "${result.table}".`,
-      });
-    } catch (error: any) {
-      console.error(`[Cloud DB DELETE ${req.params.entity}/${req.params.id} Error]:`, error?.message || error);
-      return res.status(500).json({
-        success: false,
-        message: error?.message || "Failed to delete item from database.",
-      });
-    }
-  });
 
   // Vite middleware for development vs static serve for production
   if (process.env.NODE_ENV !== "production") {

@@ -208,6 +208,23 @@ var OFFICIAL_OFFICERS = [
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
 var poolInstance = null;
 var lastUsedConnectionString = null;
+var poolCache = /* @__PURE__ */ new Map();
+var poolIdleTimers = /* @__PURE__ */ new Map();
+var POOL_IDLE_TTL_MS = 6e4;
+function scheduleIdleEviction(connectionString) {
+  const existing = poolIdleTimers.get(connectionString);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    poolIdleTimers.delete(connectionString);
+    const cached = poolCache.get(connectionString);
+    if (!cached) return;
+    poolCache.delete(connectionString);
+    cached.end().catch(() => {
+    });
+  }, POOL_IDLE_TTL_MS);
+  if (typeof timer?.unref === "function") timer.unref();
+  poolIdleTimers.set(connectionString, timer);
+}
 function isDatabaseConfigured() {
   const dbUrl = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, "");
   return Boolean(
@@ -238,26 +255,30 @@ function getPool() {
     throw new Error("DATABASE_URL environment variable is not configured");
   }
   const { connectionString } = cleanDatabaseUrl(rawDbUrl);
-  if (!poolInstance || lastUsedConnectionString !== connectionString) {
-    if (poolInstance) {
-      poolInstance.end().catch(() => {
-      });
-    }
-    poolInstance = new PgPool({
-      connectionString,
-      ssl: {
-        rejectUnauthorized: false
-      },
-      connectionTimeoutMillis: 7e3,
-      idleTimeoutMillis: 1e4,
-      max: 6
-    });
-    poolInstance.on("error", (err) => {
-      console.warn("[PostgreSQL Pool Client Error]:", err?.message || err);
-    });
+  const cached = poolCache.get(connectionString);
+  if (cached) {
+    scheduleIdleEviction(connectionString);
+    poolInstance = cached;
     lastUsedConnectionString = connectionString;
+    return cached;
   }
-  return poolInstance;
+  const pool = new PgPool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false
+    },
+    connectionTimeoutMillis: 7e3,
+    idleTimeoutMillis: 1e4,
+    max: 6
+  });
+  pool.on("error", (err) => {
+    console.warn("[PostgreSQL Pool Client Error]:", err?.message || err);
+  });
+  poolCache.set(connectionString, pool);
+  scheduleIdleEviction(connectionString);
+  poolInstance = pool;
+  lastUsedConnectionString = connectionString;
+  return pool;
 }
 async function runSchemaMigrations(client) {
   const statements = [
@@ -333,12 +354,20 @@ async function runSchemaMigrations(client) {
       status VARCHAR(50) DEFAULT 'synced'
     );`
   ];
+  const failures = [];
   for (const stmt of statements) {
     try {
       await client.query(stmt);
-    } catch (e) {
-      console.warn("[Schema Migration Warning]:", e?.message || e);
+    } catch (error) {
+      const message = error?.message || String(error);
+      failures.push({ statement: stmt, error: message });
+      console.error("[Schema Migration Failure]:", message, "\nStatement:", stmt);
     }
+  }
+  if (failures.length > 0) {
+    const details = failures.map(({ statement, error }) => `- ${error}: ${statement}`).join("\n");
+    throw new Error(`Schema migration failed for ${failures.length} statement(s):
+${details}`);
   }
 }
 async function initDatabaseSchema(pool) {
@@ -546,6 +575,16 @@ async function initDatabaseSchema(pool) {
         remarks TEXT
       );
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id VARCHAR(100) PRIMARY KEY,
+        timestamp VARCHAR(100),
+        action VARCHAR(50),
+        entity_type VARCHAR(50),
+        payload JSONB,
+        status VARCHAR(50) DEFAULT 'synced'
+      );
+    `);
     await client.query("COMMIT");
     console.log("[DB DEBUG] Database schema initialized successfully");
   } catch (err) {
@@ -557,6 +596,53 @@ async function initDatabaseSchema(pool) {
   }
 }
 var schemaInitialized = false;
+var ENTITY_TABLE_MAP = {
+  user: "users",
+  users: "users",
+  officer: "users",
+  officers: "users",
+  member: "members",
+  members: "members",
+  meeting: "meetings",
+  meetings: "meetings",
+  resolution: "resolutions",
+  resolutions: "resolutions",
+  transaction: "financial_transactions",
+  transactions: "financial_transactions",
+  financialtransaction: "financial_transactions",
+  financialtransactions: "financial_transactions",
+  financial_transaction: "financial_transactions",
+  financial_transactions: "financial_transactions",
+  announcement: "announcements",
+  announcements: "announcements",
+  product: "products",
+  products: "products",
+  activity: "activities",
+  activities: "activities",
+  fund: "organization_funds",
+  funds: "organization_funds",
+  organizationfund: "organization_funds",
+  organizationfunds: "organization_funds",
+  organization_fund: "organization_funds",
+  organization_funds: "organization_funds",
+  auditorreport: "auditor_reports",
+  auditorreports: "auditor_reports",
+  auditor_report: "auditor_reports",
+  auditor_reports: "auditor_reports",
+  delegationrequest: "delegation_requests",
+  delegationrequests: "delegation_requests",
+  delegation_request: "delegation_requests",
+  delegation_requests: "delegation_requests",
+  systemlog: "system_logs",
+  systemlogs: "system_logs",
+  log: "system_logs",
+  logs: "system_logs"
+};
+function lookupEntityTable(entity) {
+  const lower = (entity || "").toLowerCase();
+  const normalized = lower.replace(/[-_]/g, "");
+  return ENTITY_TABLE_MAP[entity] || ENTITY_TABLE_MAP[lower] || ENTITY_TABLE_MAP[normalized];
+}
 async function ensureDatabaseSchema(pool) {
   if (schemaInitialized) return;
   const client = await pool.connect();
@@ -575,36 +661,20 @@ async function ensureDatabaseSchema(pool) {
     const usersCount = Number(counts.rows[0]?.count || 0);
     console.log("[DB DEBUG] Current users count:", usersCount);
     if (usersCount === 0) {
-      console.log("[DB DEBUG] No users found. Provisioning the 6 official officer accounts...");
+      console.log("[DB DEBUG] No users found. Provisioning officer accounts with configured credentials...");
       for (const u of OFFICIAL_OFFICERS) {
+        const password = u.password || u.passwordHash || process.env[`OFFICER_${u.username.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_PASSWORD`];
+        if (!password) {
+          console.warn(`[DB DEBUG] Skipping officer account "${u.username}": no password is configured in seed data or environment.`);
+          continue;
+        }
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (id) DO NOTHING;
-        `, [
-          u.id,
-          u.username,
-          u.password || "password123",
-          u.name,
-          u.role,
-          true,
-          u.joinedDate || "2024-01-01",
-          "Active"
-        ]);
+        `, [u.id, u.username, password, u.name, u.role, true, u.joinedDate || "2024-01-01", "Active"]);
       }
-      console.log("[DB DEBUG] Officer accounts provisioned");
-    }
-    try {
-      await client.query(`
-        DELETE FROM products 
-        WHERE name ILIKE '%baboy%' 
-           OR name ILIKE '%hog%' 
-           OR name ILIKE '%tilapia%' 
-           OR ceb_name ILIKE '%baboy%' 
-           OR ceb_name ILIKE '%hog%'
-           OR category = 'Livestock'
-      `);
-    } catch {
+      console.log("[DB DEBUG] Officer account provisioning completed");
     }
     schemaInitialized = true;
   } catch (err) {
@@ -617,6 +687,18 @@ async function ensureDatabaseSchema(pool) {
     throw err;
   } finally {
     client.release();
+  }
+}
+async function saveEntity(client, rows, mapping) {
+  const activeRows = rows.filter((row) => row?.id && !mapping.deletedIds.has(row.id));
+  if (activeRows.length === 0) return;
+  const columns = ["id", ...mapping.fields.map(([column]) => column)];
+  const placeholders = columns.map((_, index) => `$${index + 1}`);
+  const updates = columns.slice(1).map((column) => `${column} = EXCLUDED.${column}`);
+  const query = `INSERT INTO ${mapping.table} (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) ON CONFLICT (id) DO UPDATE SET ${updates.join(", ")}`;
+  for (const row of activeRows) {
+    const values = [row.id, ...mapping.fields.map(([, , transform]) => transform(row, row))];
+    await client.query(query, values);
   }
 }
 async function saveFullStateToPostgres(pool, state) {
@@ -699,34 +781,7 @@ async function saveFullStateToPostgres(pool, state) {
       }
     }
     if (state.deleteItem && state.deleteItem.entity && state.deleteItem.id) {
-      const tableMap = {
-        user: "users",
-        users: "users",
-        officer: "users",
-        officers: "users",
-        member: "members",
-        members: "members",
-        meeting: "meetings",
-        meetings: "meetings",
-        resolution: "resolutions",
-        resolutions: "resolutions",
-        transaction: "financial_transactions",
-        transactions: "financial_transactions",
-        financialtransaction: "financial_transactions",
-        financialtransactions: "financial_transactions",
-        financial_transaction: "financial_transactions",
-        financial_transactions: "financial_transactions",
-        announcement: "announcements",
-        announcements: "announcements",
-        product: "products",
-        products: "products",
-        activity: "activities",
-        activities: "activities",
-        fund: "organization_funds",
-        funds: "organization_funds"
-      };
-      const normEntity = state.deleteItem.entity.toLowerCase().replace(/[-_]/g, "");
-      const tbl = tableMap[state.deleteItem.entity] || tableMap[state.deleteItem.entity.toLowerCase()] || tableMap[normEntity];
+      const tbl = lookupEntityTable(state.deleteItem.entity);
       if (tbl) {
         await client.query(`DELETE FROM ${tbl} WHERE id = $1`, [state.deleteItem.id]);
         if (tbl === "users") deletedUserIds.add(state.deleteItem.id);
@@ -738,14 +793,17 @@ async function saveFullStateToPostgres(pool, state) {
         if (tbl === "products") deletedProductIds.add(state.deleteItem.id);
         if (tbl === "activities") deletedActivityIds.add(state.deleteItem.id);
         if (tbl === "organization_funds") deletedFundIds.add(state.deleteItem.id);
+        if (tbl === "auditor_reports") deletedAuditorIds.add(state.deleteItem.id);
+        if (tbl === "delegation_requests") deletedDelegationIds.add(state.deleteItem.id);
         console.log(`[DB DELETE] Single deleted ${tbl} ID: ${state.deleteItem.id}`);
       }
     }
-    if (state.users && Array.isArray(state.users)) {
-      const activeUsers = state.users.filter((u) => !deletedUserIds.has(u.id));
-      console.log("[DB DEBUG] Saving", activeUsers.length, "users...");
-      for (const u of activeUsers) {
-        await client.query(`
+    if (false) {
+      if (state.users && Array.isArray(state.users)) {
+        const activeUsers = state.users.filter((u) => !deletedUserIds.has(u.id));
+        console.log("[DB DEBUG] Saving", activeUsers.length, "users...");
+        for (const u of activeUsers) {
+          await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           ON CONFLICT (id) DO UPDATE SET
@@ -764,30 +822,30 @@ async function saveFullStateToPostgres(pool, state) {
             rsbsa_number = EXCLUDED.rsbsa_number,
             is_rsbsa_registered = EXCLUDED.is_rsbsa_registered;
         `, [
-          u.id,
-          u.username,
-          u.password || "password123",
-          u.name,
-          u.role,
-          u.isApproved,
-          u.joinedDate || null,
-          u.farmLocation || null,
-          u.primaryCrops || [],
-          u.contactNumber || null,
-          u.status || "Active",
-          u.avatarUrl || null,
-          u.memberIdNumber || null,
-          u.rsbsaNumber || null,
-          Boolean(u.isRsbsaRegistered)
-        ]);
+            u.id,
+            u.username,
+            u.password,
+            u.name,
+            u.role,
+            u.isApproved,
+            u.joinedDate || null,
+            u.farmLocation || null,
+            u.primaryCrops || [],
+            u.contactNumber || null,
+            u.status || "Active",
+            u.avatarUrl || null,
+            u.memberIdNumber || null,
+            u.rsbsaNumber || null,
+            Boolean(u.isRsbsaRegistered)
+          ]);
+        }
+        console.log("[DB DEBUG] Users saved");
       }
-      console.log("[DB DEBUG] Users saved");
-    }
-    if (state.members && Array.isArray(state.members)) {
-      const activeMembers = state.members.filter((m) => !deletedMemberIds.has(m.id));
-      console.log("[DB DEBUG] Saving", activeMembers.length, "members...");
-      for (const m of activeMembers) {
-        await client.query(`
+      if (state.members && Array.isArray(state.members)) {
+        const activeMembers = state.members.filter((m) => !deletedMemberIds.has(m.id));
+        console.log("[DB DEBUG] Saving", activeMembers.length, "members...");
+        for (const m of activeMembers) {
+          await client.query(`
           INSERT INTO members (id, name, farm_location, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (id) DO UPDATE SET
@@ -804,29 +862,29 @@ async function saveFullStateToPostgres(pool, state) {
             gender = EXCLUDED.gender,
             birth_date = EXCLUDED.birth_date;
         `, [
-          m.id,
-          m.name,
-          m.farmLocation || null,
-          m.primaryCrops || [],
-          m.contactNumber || null,
-          m.status || "Active",
-          m.joinedDate || null,
-          m.memberIdNumber || null,
-          m.rsbsaNumber || null,
-          Boolean(m.isRsbsaRegistered),
-          m.avatarUrl || null,
-          m.gender || null,
-          m.birthDate || null
-        ]);
+            m.id,
+            m.name,
+            m.farmLocation || null,
+            m.primaryCrops || [],
+            m.contactNumber || null,
+            m.status || "Active",
+            m.joinedDate || null,
+            m.memberIdNumber || null,
+            m.rsbsaNumber || null,
+            Boolean(m.isRsbsaRegistered),
+            m.avatarUrl || null,
+            m.gender || null,
+            m.birthDate || null
+          ]);
+        }
+        console.log("[DB DEBUG] Members saved");
       }
-      console.log("[DB DEBUG] Members saved");
-    }
-    const rawTxList = state.financialTransactions || state.transactions;
-    if (rawTxList && Array.isArray(rawTxList)) {
-      const txList = rawTxList.filter((tx) => !deletedTxIds.has(tx.id));
-      console.log("[DB DEBUG] Saving", txList.length, "transactions...");
-      for (const tx of txList) {
-        await client.query(`
+      const rawTxList = state.financialTransactions || state.transactions;
+      if (rawTxList && Array.isArray(rawTxList)) {
+        const txList = rawTxList.filter((tx) => !deletedTxIds.has(tx.id));
+        console.log("[DB DEBUG] Saving", txList.length, "transactions...");
+        for (const tx of txList) {
+          await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, fund_source, audited_status, audited_by, audited_date, audit_notes)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           ON CONFLICT (id) DO UPDATE SET
@@ -842,27 +900,27 @@ async function saveFullStateToPostgres(pool, state) {
             audited_date = EXCLUDED.audited_date,
             audit_notes = EXCLUDED.audit_notes;
         `, [
-          tx.id,
-          tx.type,
-          tx.category,
-          tx.amount,
-          tx.date,
-          tx.description,
-          tx.recordedBy,
-          tx.fundSource || null,
-          tx.auditedStatus || "Unaudited",
-          tx.auditedBy || null,
-          tx.auditedDate || null,
-          tx.auditNotes || null
-        ]);
+            tx.id,
+            tx.type,
+            tx.category,
+            tx.amount,
+            tx.date,
+            tx.description,
+            tx.recordedBy,
+            tx.fundSource || null,
+            tx.auditedStatus || "Unaudited",
+            tx.auditedBy || null,
+            tx.auditedDate || null,
+            tx.auditNotes || null
+          ]);
+        }
+        console.log("[DB DEBUG] Transactions saved");
       }
-      console.log("[DB DEBUG] Transactions saved");
-    }
-    if (state.meetings && Array.isArray(state.meetings)) {
-      const activeMeetings = state.meetings.filter((mt) => !deletedMeetingIds.has(mt.id));
-      console.log("[DB DEBUG] Saving", activeMeetings.length, "meetings...");
-      for (const mt of activeMeetings) {
-        await client.query(`
+      if (state.meetings && Array.isArray(state.meetings)) {
+        const activeMeetings = state.meetings.filter((mt) => !deletedMeetingIds.has(mt.id));
+        console.log("[DB DEBUG] Saving", activeMeetings.length, "meetings...");
+        for (const mt of activeMeetings) {
+          await client.query(`
           INSERT INTO meetings (id, title, date, location, attendance_count, agenda, minutes, officer_in_charge, attendance_record)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           ON CONFLICT (id) DO UPDATE SET
@@ -875,22 +933,22 @@ async function saveFullStateToPostgres(pool, state) {
             officer_in_charge = EXCLUDED.officer_in_charge,
             attendance_record = EXCLUDED.attendance_record;
         `, [
-          mt.id,
-          mt.title,
-          mt.date,
-          mt.location,
-          mt.attendanceCount || 0,
-          mt.agenda || "",
-          mt.minutes || "",
-          mt.officerInCharge || "",
-          JSON.stringify(mt.attendanceRecord || {})
-        ]);
+            mt.id,
+            mt.title,
+            mt.date,
+            mt.location,
+            mt.attendanceCount || 0,
+            mt.agenda || "",
+            mt.minutes || "",
+            mt.officerInCharge || "",
+            JSON.stringify(mt.attendanceRecord || {})
+          ]);
+        }
+        console.log("[DB DEBUG] Meetings saved");
       }
-      console.log("[DB DEBUG] Meetings saved");
-    }
-    if (state.hogRaising) {
-      console.log("[DB DEBUG] Saving hog raising state...");
-      await client.query(`
+      if (state.hogRaising) {
+        console.log("[DB DEBUG] Saving hog raising state...");
+        await client.query(`
         INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (id) DO UPDATE SET
@@ -902,23 +960,23 @@ async function saveFullStateToPostgres(pool, state) {
           chore_logs = EXCLUDED.chore_logs,
           closed_years = EXCLUDED.closed_years;
       `, [
-        "main_state",
-        Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
-        state.hogRaising.produces || ["Hog Raising"],
-        JSON.stringify(state.hogRaising.expenses || []),
-        JSON.stringify(state.hogRaising.sales || []),
-        JSON.stringify(state.hogRaising.groups || []),
-        JSON.stringify(state.hogRaising.choreLogs || []),
-        state.hogRaising.closedYears || []
-      ]);
-      await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
-      console.log("[DB DEBUG] Hog raising state saved");
-    }
-    const logList = state.systemLogs || state.logs;
-    if (logList && Array.isArray(logList)) {
-      console.log("[DB DEBUG] Saving", logList.length, "system logs...");
-      for (const lg of logList) {
-        await client.query(`
+          "main_state",
+          Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
+          state.hogRaising.produces || ["Hog Raising"],
+          JSON.stringify(state.hogRaising.expenses || []),
+          JSON.stringify(state.hogRaising.sales || []),
+          JSON.stringify(state.hogRaising.groups || []),
+          JSON.stringify(state.hogRaising.choreLogs || []),
+          state.hogRaising.closedYears || []
+        ]);
+        await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
+        console.log("[DB DEBUG] Hog raising state saved");
+      }
+      const logList = state.systemLogs || state.logs;
+      if (logList && Array.isArray(logList)) {
+        console.log("[DB DEBUG] Saving", logList.length, "system logs...");
+        for (const lg of logList) {
+          await client.query(`
           INSERT INTO system_logs (id, timestamp, user_name, role, action, details, sync_status, hash, previous_hash)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           ON CONFLICT (id) DO UPDATE SET
@@ -931,24 +989,24 @@ async function saveFullStateToPostgres(pool, state) {
             hash = EXCLUDED.hash,
             previous_hash = EXCLUDED.previous_hash;
         `, [
-          lg.id,
-          lg.timestamp,
-          lg.user || lg.userName || "Officer",
-          lg.role,
-          lg.action,
-          lg.details,
-          lg.syncStatus || "synced",
-          lg.hash || null,
-          lg.previousHash || null
-        ]);
+            lg.id,
+            lg.timestamp,
+            lg.user || lg.userName || "Officer",
+            lg.role,
+            lg.action,
+            lg.details,
+            lg.syncStatus || "synced",
+            lg.hash || null,
+            lg.previousHash || null
+          ]);
+        }
+        console.log("[DB DEBUG] System logs saved");
       }
-      console.log("[DB DEBUG] System logs saved");
-    }
-    if (state.products && Array.isArray(state.products)) {
-      const activeProducts = state.products.filter((p) => !deletedProductIds.has(p.id));
-      console.log("[DB DEBUG] Saving", activeProducts.length, "products...");
-      for (const p of activeProducts) {
-        await client.query(`
+      if (state.products && Array.isArray(state.products)) {
+        const activeProducts = state.products.filter((p) => !deletedProductIds.has(p.id));
+        console.log("[DB DEBUG] Saving", activeProducts.length, "products...");
+        for (const p of activeProducts) {
+          await client.query(`
           INSERT INTO products (id, name, ceb_name, category, description, unit, price, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           ON CONFLICT (id) DO UPDATE SET
@@ -970,33 +1028,33 @@ async function saveFullStateToPostgres(pool, state) {
             managed_by = EXCLUDED.managed_by,
             date_updated = EXCLUDED.date_updated;
         `, [
-          p.id,
-          p.name,
-          p.cebName || null,
-          p.category,
-          p.description,
-          p.unit,
-          p.price,
-          p.quantityAvailable || null,
-          p.stockStatus,
-          p.farmerName || null,
-          p.farmerSitio || null,
-          p.farmerPhone || null,
-          p.contactPerson || null,
-          p.imageUrl || null,
-          p.isPublished ?? true,
-          p.updatedBy || null,
-          p.managedBy || null,
-          p.dateUpdated || null
-        ]);
+            p.id,
+            p.name,
+            p.cebName || null,
+            p.category,
+            p.description,
+            p.unit,
+            p.price,
+            p.quantityAvailable || null,
+            p.stockStatus,
+            p.farmerName || null,
+            p.farmerSitio || null,
+            p.farmerPhone || null,
+            p.contactPerson || null,
+            p.imageUrl || null,
+            p.isPublished ?? true,
+            p.updatedBy || null,
+            p.managedBy || null,
+            p.dateUpdated || null
+          ]);
+        }
+        console.log("[DB DEBUG] Products saved");
       }
-      console.log("[DB DEBUG] Products saved");
-    }
-    if (state.resolutions && Array.isArray(state.resolutions)) {
-      const activeResolutions = state.resolutions.filter((r) => !deletedResolutionIds.has(r.id));
-      console.log("[DB DEBUG] Saving", activeResolutions.length, "resolutions...");
-      for (const r of activeResolutions) {
-        await client.query(`
+      if (state.resolutions && Array.isArray(state.resolutions)) {
+        const activeResolutions = state.resolutions.filter((r) => !deletedResolutionIds.has(r.id));
+        console.log("[DB DEBUG] Saving", activeResolutions.length, "resolutions...");
+        for (const r of activeResolutions) {
+          await client.query(`
           INSERT INTO resolutions (id, resolution_number, title, description, date_agreed, moved_by, seconded_by, vote_in_favor, vote_against, vote_abstain, status)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           ON CONFLICT (id) DO UPDATE SET
@@ -1011,26 +1069,26 @@ async function saveFullStateToPostgres(pool, state) {
             vote_abstain = EXCLUDED.vote_abstain,
             status = EXCLUDED.status;
         `, [
-          r.id,
-          r.resolutionNumber,
-          r.title,
-          r.description,
-          r.dateAgreed,
-          r.movedBy,
-          r.secondedBy,
-          r.voteInFavor,
-          r.voteAgainst,
-          r.voteAbstain,
-          r.status
-        ]);
+            r.id,
+            r.resolutionNumber,
+            r.title,
+            r.description,
+            r.dateAgreed,
+            r.movedBy,
+            r.secondedBy,
+            r.voteInFavor,
+            r.voteAgainst,
+            r.voteAbstain,
+            r.status
+          ]);
+        }
+        console.log("[DB DEBUG] Resolutions saved");
       }
-      console.log("[DB DEBUG] Resolutions saved");
-    }
-    if (state.announcements && Array.isArray(state.announcements)) {
-      const activeAnnouncements = state.announcements.filter((a) => !deletedAnnouncementIds.has(a.id));
-      console.log("[DB DEBUG] Saving", activeAnnouncements.length, "announcements...");
-      for (const a of activeAnnouncements) {
-        await client.query(`
+      if (state.announcements && Array.isArray(state.announcements)) {
+        const activeAnnouncements = state.announcements.filter((a) => !deletedAnnouncementIds.has(a.id));
+        console.log("[DB DEBUG] Saving", activeAnnouncements.length, "announcements...");
+        for (const a of activeAnnouncements) {
+          await client.query(`
           INSERT INTO announcements (id, title, category, content, date_posted, priority, posted_by)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
           ON CONFLICT (id) DO UPDATE SET
@@ -1041,14 +1099,14 @@ async function saveFullStateToPostgres(pool, state) {
             priority = EXCLUDED.priority,
             posted_by = EXCLUDED.posted_by;
         `, [a.id, a.title, a.category, a.content, a.datePosted, a.priority, a.postedBy]);
+        }
+        console.log("[DB DEBUG] Announcements saved");
       }
-      console.log("[DB DEBUG] Announcements saved");
-    }
-    if (state.activities && Array.isArray(state.activities)) {
-      const activeActivities = state.activities.filter((act) => !deletedActivityIds.has(act.id));
-      console.log("[DB DEBUG] Saving", activeActivities.length, "activities...");
-      for (const act of activeActivities) {
-        await client.query(`
+      if (state.activities && Array.isArray(state.activities)) {
+        const activeActivities = state.activities.filter((act) => !deletedActivityIds.has(act.id));
+        console.log("[DB DEBUG] Saving", activeActivities.length, "activities...");
+        for (const act of activeActivities) {
+          await client.query(`
           INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, documented_notes, attendees_count, target_audience, image_url)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           ON CONFLICT (id) DO UPDATE SET
@@ -1068,32 +1126,32 @@ async function saveFullStateToPostgres(pool, state) {
             target_audience = EXCLUDED.target_audience,
             image_url = EXCLUDED.image_url;
         `, [
-          act.id,
-          act.title,
-          act.cebTitle || null,
-          act.category,
-          act.scheduledDate || act.dateScheduled || null,
-          act.dateScheduled || act.scheduledDate || null,
-          act.scheduledTime || act.timeScheduled || null,
-          act.timeScheduled || act.scheduledTime || null,
-          act.location,
-          act.description,
-          act.organizer,
-          act.status,
-          act.documentedNotes || null,
-          act.attendeesCount || 0,
-          act.targetAudience || null,
-          act.imageUrl || null
-        ]);
+            act.id,
+            act.title,
+            act.cebTitle || null,
+            act.category,
+            act.scheduledDate || act.dateScheduled || null,
+            act.dateScheduled || act.scheduledDate || null,
+            act.scheduledTime || act.timeScheduled || null,
+            act.timeScheduled || act.scheduledTime || null,
+            act.location,
+            act.description,
+            act.organizer,
+            act.status,
+            act.documentedNotes || null,
+            act.attendeesCount || 0,
+            act.targetAudience || null,
+            act.imageUrl || null
+          ]);
+        }
+        console.log("[DB DEBUG] Activities saved");
       }
-      console.log("[DB DEBUG] Activities saved");
-    }
-    const rawFundList = state.organizationFunds || state.funds;
-    if (rawFundList && Array.isArray(rawFundList)) {
-      const fundList = rawFundList.filter((f) => !deletedFundIds.has(f.id));
-      console.log("[DB DEBUG] Saving", fundList.length, "organization funds...");
-      for (const f of fundList) {
-        await client.query(`
+      const rawFundList = state.organizationFunds || state.funds;
+      if (rawFundList && Array.isArray(rawFundList)) {
+        const fundList = rawFundList.filter((f) => !deletedFundIds.has(f.id));
+        console.log("[DB DEBUG] Saving", fundList.length, "organization funds...");
+        for (const f of fundList) {
+          await client.query(`
           INSERT INTO organization_funds (id, name, code, allocated_amount, current_balance, description, custodian, last_updated)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (id) DO UPDATE SET
@@ -1105,22 +1163,22 @@ async function saveFullStateToPostgres(pool, state) {
             custodian = EXCLUDED.custodian,
             last_updated = EXCLUDED.last_updated;
         `, [
-          f.id,
-          f.name,
-          f.code,
-          f.allocatedAmount || 0,
-          f.currentBalance || 0,
-          f.description || "",
-          f.custodian || "",
-          f.lastUpdated || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
-        ]);
+            f.id,
+            f.name,
+            f.code,
+            f.allocatedAmount || 0,
+            f.currentBalance || 0,
+            f.description || "",
+            f.custodian || "",
+            f.lastUpdated || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+          ]);
+        }
+        console.log("[DB DEBUG] Organization funds saved");
       }
-      console.log("[DB DEBUG] Organization funds saved");
-    }
-    if (state.auditorReports && Array.isArray(state.auditorReports)) {
-      console.log("[DB DEBUG] Saving", state.auditorReports.length, "auditor reports...");
-      for (const ar of state.auditorReports) {
-        await client.query(`
+      if (state.auditorReports && Array.isArray(state.auditorReports)) {
+        console.log("[DB DEBUG] Saving", state.auditorReports.length, "auditor reports...");
+        for (const ar of state.auditorReports) {
+          await client.query(`
           INSERT INTO auditor_reports (id, report_period, report_type, total_income, total_expenses, net_surplus, findings, recommendations, prepared_by, certified_by, status, date_submitted, date_certified)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (id) DO UPDATE SET
@@ -1137,27 +1195,27 @@ async function saveFullStateToPostgres(pool, state) {
             date_submitted = EXCLUDED.date_submitted,
             date_certified = EXCLUDED.date_certified;
         `, [
-          ar.id,
-          ar.reportPeriod,
-          ar.reportType,
-          ar.totalIncome || 0,
-          ar.totalExpenses || 0,
-          ar.netSurplus || 0,
-          ar.findings || "",
-          ar.recommendations || "",
-          ar.preparedBy,
-          ar.certifiedBy || null,
-          ar.status || "Submitted",
-          ar.dateSubmitted,
-          ar.dateCertified || null
-        ]);
+            ar.id,
+            ar.reportPeriod,
+            ar.reportType,
+            ar.totalIncome || 0,
+            ar.totalExpenses || 0,
+            ar.netSurplus || 0,
+            ar.findings || "",
+            ar.recommendations || "",
+            ar.preparedBy,
+            ar.certifiedBy || null,
+            ar.status || "Submitted",
+            ar.dateSubmitted,
+            ar.dateCertified || null
+          ]);
+        }
+        console.log("[DB DEBUG] Auditor reports saved");
       }
-      console.log("[DB DEBUG] Auditor reports saved");
-    }
-    if (state.delegationRequests && Array.isArray(state.delegationRequests)) {
-      console.log("[DB DEBUG] Saving", state.delegationRequests.length, "delegation requests...");
-      for (const dr of state.delegationRequests) {
-        await client.query(`
+      if (state.delegationRequests && Array.isArray(state.delegationRequests)) {
+        console.log("[DB DEBUG] Saving", state.delegationRequests.length, "delegation requests...");
+        for (const dr of state.delegationRequests) {
+          await client.query(`
           INSERT INTO delegation_requests (id, requested_by, reason, requested_date, effective_start, effective_end, status, reviewed_by, reviewed_date, remarks)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (id) DO UPDATE SET
@@ -1171,19 +1229,207 @@ async function saveFullStateToPostgres(pool, state) {
             reviewed_date = EXCLUDED.reviewed_date,
             remarks = EXCLUDED.remarks;
         `, [
-          dr.id,
-          dr.requestedBy,
-          dr.reason,
-          dr.requestedDate,
-          dr.effectiveStart || null,
-          dr.effectiveEnd || null,
-          dr.status || "Pending",
-          dr.reviewedBy || null,
-          dr.reviewedDate || null,
-          dr.remarks || null
-        ]);
+            dr.id,
+            dr.requestedBy,
+            dr.reason,
+            dr.requestedDate,
+            dr.effectiveStart || null,
+            dr.effectiveEnd || null,
+            dr.status || "Pending",
+            dr.reviewedBy || null,
+            dr.reviewedDate || null,
+            dr.remarks || null
+          ]);
+        }
+        console.log("[DB DEBUG] Delegation requests saved");
       }
-      console.log("[DB DEBUG] Delegation requests saved");
+    }
+    const saveMappings = [
+      { table: "users", deletedIds: deletedUserIds, fields: [
+        ["username", "username", (r) => r.username],
+        ["password", "password", (r) => r.password || r.passwordHash],
+        ["name", "name", (r) => r.name],
+        ["role", "role", (r) => r.role],
+        ["is_approved", "isApproved", (r) => r.isApproved],
+        ["joined_date", "joinedDate", (r) => r.joinedDate || null],
+        ["farm_location", "farmLocation", (r) => r.farmLocation || null],
+        ["primary_crops", "primaryCrops", (r) => r.primaryCrops || []],
+        ["contact_number", "contactNumber", (r) => r.contactNumber || null],
+        ["status", "status", (r) => r.status || "Active"],
+        ["avatar_url", "avatarUrl", (r) => r.avatarUrl || null],
+        ["member_id_number", "memberIdNumber", (r) => r.memberIdNumber || null],
+        ["rsbsa_number", "rsbsaNumber", (r) => r.rsbsaNumber || null],
+        ["is_rsbsa_registered", "isRsbsaRegistered", (r) => Boolean(r.isRsbsaRegistered)]
+      ] },
+      { table: "members", deletedIds: deletedMemberIds, fields: [
+        ["name", "name", (r) => r.name],
+        ["farm_location", "farmLocation", (r) => r.farmLocation || null],
+        ["primary_crops", "primaryCrops", (r) => r.primaryCrops || []],
+        ["contact_number", "contactNumber", (r) => r.contactNumber || null],
+        ["status", "status", (r) => r.status || "Active"],
+        ["joined_date", "joinedDate", (r) => r.joinedDate || null],
+        ["member_id_number", "memberIdNumber", (r) => r.memberIdNumber || null],
+        ["rsbsa_number", "rsbsaNumber", (r) => r.rsbsaNumber || null],
+        ["is_rsbsa_registered", "isRsbsaRegistered", (r) => Boolean(r.isRsbsaRegistered)],
+        ["avatar_url", "avatarUrl", (r) => r.avatarUrl || null],
+        ["gender", "gender", (r) => r.gender || null],
+        ["birth_date", "birthDate", (r) => r.birthDate || null]
+      ] },
+      { table: "financial_transactions", deletedIds: deletedTxIds, fields: [
+        ["type", "type", (r) => r.type],
+        ["category", "category", (r) => r.category],
+        ["amount", "amount", (r) => r.amount],
+        ["date", "date", (r) => r.date],
+        ["description", "description", (r) => r.description],
+        ["recorded_by", "recordedBy", (r) => r.recordedBy],
+        ["fund_source", "fundSource", (r) => r.fundSource || null],
+        ["audited_status", "auditedStatus", (r) => r.auditedStatus || "Unaudited"],
+        ["audited_by", "auditedBy", (r) => r.auditedBy || null],
+        ["audited_date", "auditedDate", (r) => r.auditedDate || null],
+        ["audit_notes", "auditNotes", (r) => r.auditNotes || null]
+      ] },
+      { table: "meetings", deletedIds: deletedMeetingIds, fields: [
+        ["title", "title", (r) => r.title],
+        ["date", "date", (r) => r.date],
+        ["location", "location", (r) => r.location],
+        ["attendance_count", "attendanceCount", (r) => r.attendanceCount || 0],
+        ["agenda", "agenda", (r) => r.agenda || ""],
+        ["minutes", "minutes", (r) => r.minutes || ""],
+        ["officer_in_charge", "officerInCharge", (r) => r.officerInCharge || ""],
+        ["attendance_record", "attendanceRecord", (r) => JSON.stringify(r.attendanceRecord || {})]
+      ] },
+      { table: "system_logs", deletedIds: /* @__PURE__ */ new Set(), fields: [
+        ["timestamp", "timestamp", (r) => r.timestamp],
+        ["user_name", "user", (r) => r.user || r.userName || "Officer"],
+        ["role", "role", (r) => r.role],
+        ["action", "action", (r) => r.action],
+        ["details", "details", (r) => r.details],
+        ["sync_status", "syncStatus", (r) => r.syncStatus || "synced"],
+        ["hash", "hash", (r) => r.hash || null],
+        ["previous_hash", "previousHash", (r) => r.previousHash || null]
+      ] },
+      { table: "products", deletedIds: deletedProductIds, fields: [
+        ["name", "name", (r) => r.name],
+        ["ceb_name", "cebName", (r) => r.cebName || null],
+        ["category", "category", (r) => r.category],
+        ["description", "description", (r) => r.description],
+        ["unit", "unit", (r) => r.unit],
+        ["price", "price", (r) => r.price],
+        ["quantity_available", "quantityAvailable", (r) => r.quantityAvailable || null],
+        ["stock_status", "stockStatus", (r) => r.stockStatus],
+        ["farmer_name", "farmerName", (r) => r.farmerName || null],
+        ["farmer_sitio", "farmerSitio", (r) => r.farmerSitio || null],
+        ["farmer_phone", "farmerPhone", (r) => r.farmerPhone || null],
+        ["contact_person", "contactPerson", (r) => r.contactPerson || null],
+        ["image_url", "imageUrl", (r) => r.imageUrl || null],
+        ["is_published", "isPublished", (r) => r.isPublished ?? true],
+        ["updated_by", "updatedBy", (r) => r.updatedBy || null],
+        ["managed_by", "managedBy", (r) => r.managedBy || null],
+        ["date_updated", "dateUpdated", (r) => r.dateUpdated || null]
+      ] },
+      { table: "resolutions", deletedIds: deletedResolutionIds, fields: [
+        ["resolution_number", "resolutionNumber", (r) => r.resolutionNumber],
+        ["title", "title", (r) => r.title],
+        ["description", "description", (r) => r.description],
+        ["date_agreed", "dateAgreed", (r) => r.dateAgreed],
+        ["moved_by", "movedBy", (r) => r.movedBy],
+        ["seconded_by", "secondedBy", (r) => r.secondedBy],
+        ["vote_in_favor", "voteInFavor", (r) => r.voteInFavor],
+        ["vote_against", "voteAgainst", (r) => r.voteAgainst],
+        ["vote_abstain", "voteAbstain", (r) => r.voteAbstain],
+        ["status", "status", (r) => r.status]
+      ] },
+      { table: "announcements", deletedIds: deletedAnnouncementIds, fields: [
+        ["title", "title", (r) => r.title],
+        ["category", "category", (r) => r.category],
+        ["content", "content", (r) => r.content],
+        ["date_posted", "datePosted", (r) => r.datePosted],
+        ["priority", "priority", (r) => r.priority],
+        ["posted_by", "postedBy", (r) => r.postedBy]
+      ] },
+      { table: "activities", deletedIds: deletedActivityIds, fields: [
+        ["title", "title", (r) => r.title],
+        ["ceb_title", "cebTitle", (r) => r.cebTitle || null],
+        ["category", "category", (r) => r.category],
+        ["scheduled_date", "scheduledDate", (r) => r.scheduledDate || r.dateScheduled || null],
+        ["date_scheduled", "dateScheduled", (r) => r.dateScheduled || r.scheduledDate || null],
+        ["scheduled_time", "scheduledTime", (r) => r.scheduledTime || r.timeScheduled || null],
+        ["time_scheduled", "timeScheduled", (r) => r.timeScheduled || r.scheduledTime || null],
+        ["location", "location", (r) => r.location],
+        ["description", "description", (r) => r.description],
+        ["organizer", "organizer", (r) => r.organizer],
+        ["status", "status", (r) => r.status],
+        ["documented_notes", "documentedNotes", (r) => r.documentedNotes || null],
+        ["attendees_count", "attendeesCount", (r) => r.attendeesCount || 0],
+        ["target_audience", "targetAudience", (r) => r.targetAudience || null],
+        ["image_url", "imageUrl", (r) => r.imageUrl || null]
+      ] },
+      { table: "organization_funds", deletedIds: deletedFundIds, fields: [
+        ["name", "name", (r) => r.name],
+        ["code", "code", (r) => r.code],
+        ["allocated_amount", "allocatedAmount", (r) => r.allocatedAmount || 0],
+        ["current_balance", "currentBalance", (r) => r.currentBalance || 0],
+        ["description", "description", (r) => r.description || ""],
+        ["custodian", "custodian", (r) => r.custodian || ""],
+        ["last_updated", "lastUpdated", (r) => r.lastUpdated || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]]
+      ] },
+      { table: "auditor_reports", deletedIds: deletedAuditorIds, fields: [
+        ["report_period", "reportPeriod", (r) => r.reportPeriod],
+        ["report_type", "reportType", (r) => r.reportType],
+        ["total_income", "totalIncome", (r) => r.totalIncome || 0],
+        ["total_expenses", "totalExpenses", (r) => r.totalExpenses || 0],
+        ["net_surplus", "netSurplus", (r) => r.netSurplus || 0],
+        ["findings", "findings", (r) => r.findings || ""],
+        ["recommendations", "recommendations", (r) => r.recommendations || ""],
+        ["prepared_by", "preparedBy", (r) => r.preparedBy],
+        ["certified_by", "certifiedBy", (r) => r.certifiedBy || null],
+        ["status", "status", (r) => r.status || "Submitted"],
+        ["date_submitted", "dateSubmitted", (r) => r.dateSubmitted],
+        ["date_certified", "dateCertified", (r) => r.dateCertified || null]
+      ] },
+      { table: "delegation_requests", deletedIds: deletedDelegationIds, fields: [
+        ["requested_by", "requestedBy", (r) => r.requestedBy],
+        ["reason", "reason", (r) => r.reason],
+        ["requested_date", "requestedDate", (r) => r.requestedDate],
+        ["effective_start", "effectiveStart", (r) => r.effectiveStart || null],
+        ["effective_end", "effectiveEnd", (r) => r.effectiveEnd || null],
+        ["status", "status", (r) => r.status || "Pending"],
+        ["reviewed_by", "reviewedBy", (r) => r.reviewedBy || null],
+        ["reviewed_date", "reviewedDate", (r) => r.reviewedDate || null],
+        ["remarks", "remarks", (r) => r.remarks || null]
+      ] }
+    ];
+    for (const mapping of saveMappings) {
+      const stateKeyByTable = {
+        financial_transactions: ["financialTransactions", "transactions"],
+        system_logs: ["systemLogs", "logs"],
+        organization_funds: ["organizationFunds", "funds"],
+        auditor_reports: ["auditorReports"],
+        delegation_requests: ["delegationRequests"]
+      };
+      const stateKeys = stateKeyByTable[mapping.table] || [mapping.table];
+      const rows = stateKeys.map((key) => state[key]).find(Array.isArray);
+      if (Array.isArray(rows)) await saveEntity(client, rows, mapping);
+    }
+    if (state.hogRaising) {
+      const hog = state.hogRaising;
+      await client.query(`
+        INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET opening_hog_count = EXCLUDED.opening_hog_count,
+          produces = EXCLUDED.produces, expenses = EXCLUDED.expenses, sales = EXCLUDED.sales,
+          groups = EXCLUDED.groups, chore_logs = EXCLUDED.chore_logs, closed_years = EXCLUDED.closed_years
+      `, [
+        "main_state",
+        Math.max(0, Math.floor(Number(hog.openingHogCount) || 0)),
+        hog.produces || ["Hog Raising"],
+        JSON.stringify(hog.expenses || []),
+        JSON.stringify(hog.sales || []),
+        JSON.stringify(hog.groups || []),
+        JSON.stringify(hog.choreLogs || []),
+        hog.closedYears || []
+      ]);
+      await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
     }
     console.log("[DB DEBUG] Committing transaction...");
     await client.query("COMMIT");
@@ -1224,43 +1470,72 @@ function sendResponse(res, statusCode, data) {
   }
 }
 async function parseRequestBody(req) {
-  if (req.body) {
-    if (typeof req.body === "string") {
+  const maxBytes = 1024 * 1024;
+  if (req.body !== void 0 && req.body !== null) {
+    const body = req.body;
+    const byteLength = typeof body === "string" ? Buffer.byteLength(body, "utf8") : Buffer.byteLength(JSON.stringify(body), "utf8");
+    if (byteLength > maxBytes) {
+      const error = new Error("Request body exceeds the 1 MiB limit.");
+      error.statusCode = 413;
+      throw error;
+    }
+    if (typeof body === "string") {
       try {
-        return JSON.parse(req.body);
+        return JSON.parse(body);
       } catch {
-        return req.body;
+        return body;
       }
     }
-    return req.body;
+    return body;
   }
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let raw = "";
+    let size = 0;
+    let settled = false;
     req.on("data", (chunk) => {
-      raw += chunk;
+      if (settled) return;
+      const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk;
+      size += Buffer.byteLength(text, "utf8");
+      if (size > maxBytes) {
+        settled = true;
+        const error = new Error("Request body exceeds the 1 MiB limit.");
+        error.statusCode = 413;
+        reject(error);
+        req.destroy(error);
+        return;
+      }
+      raw += text;
     });
     req.on("end", () => {
+      if (settled) return;
+      settled = true;
       try {
         resolve(raw ? JSON.parse(raw) : {});
-      } catch {
-        resolve({});
+      } catch (error) {
+        reject(new Error("Request body contains invalid JSON.", { cause: error }));
       }
     });
-    req.on("error", () => resolve({}));
+    req.on("aborted", () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Request body was aborted before it was fully received."));
+    });
+    req.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Failed to read request body.", { cause: error }));
+    });
   });
 }
 
 // src/api/push.ts
 async function handler(req, res) {
   try {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (req.method === "OPTIONS") {
-      if (typeof res.status === "function") return res.status(200).end();
-      res.statusCode = 200;
-      return res.end();
-    }
+    return sendResponse(res, 503, {
+      success: false,
+      offlineMode: true,
+      message: "Cloud sync is temporarily disabled until server-side authentication and authorization are configured."
+    });
     if (!isDatabaseConfigured()) {
       return sendResponse(res, 200, {
         success: true,

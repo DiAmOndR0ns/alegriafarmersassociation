@@ -8,14 +8,40 @@ const PgPool = (pg as any)?.Pool || (pg as any)?.default?.Pool || (pg as any)?.d
 let poolInstance: pg.Pool | null = null;
 let lastUsedConnectionString: string | null = null;
 
+// Pools are cached per connection string so that a changed DATABASE_URL never
+// forces us to end a pool that in-flight requests are still using. The previous
+// single-slot cache called poolInstance.end() whenever the URL changed, which
+// could tear down a pool mid-query under concurrent serverless invocations.
+const poolCache = new Map<string, pg.Pool>();
+const poolIdleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const POOL_IDLE_TTL_MS = 60_000;
+
+function scheduleIdleEviction(connectionString: string) {
+  const existing = poolIdleTimers.get(connectionString);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    poolIdleTimers.delete(connectionString);
+    const cached = poolCache.get(connectionString);
+    if (!cached) return;
+    poolCache.delete(connectionString);
+    // Safe to end here: the pool sat idle for the whole TTL, so no request is using it.
+    cached.end().catch(() => {});
+  }, POOL_IDLE_TTL_MS);
+
+  // Don't keep a Node process alive just for pool cleanup.
+  if (typeof (timer as any)?.unref === 'function') (timer as any).unref();
+  poolIdleTimers.set(connectionString, timer);
+}
 export function isDatabaseConfigured(): boolean {
   const dbUrl = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, '');
   return Boolean(
-    dbUrl && 
-    dbUrl !== '' && 
-    !dbUrl.includes('[YOUR-PASSWORD]') && 
+    dbUrl &&
+    dbUrl !== '' &&
+    !dbUrl.includes('[YOUR-PASSWORD]') &&
     !dbUrl.includes('<password>') &&
-    !dbUrl.includes('YOUR_PASSWORD') && 
+    !dbUrl.includes('YOUR_PASSWORD') &&
     !dbUrl.includes('your_supabase_connection_string') &&
     (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://'))
   );
@@ -52,32 +78,40 @@ export function getPool(): pg.Pool {
 
   const { connectionString } = cleanDatabaseUrl(rawDbUrl);
 
-  if (!poolInstance || lastUsedConnectionString !== connectionString) {
-    if (poolInstance) {
-      poolInstance.end().catch(() => {});
-    }
-    // NOTE: Do not set process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0' here.
-    // Supabase's certificate is accepted per-connection via the `ssl` option below,
-    // which is scoped to this pool. The global env flag disabled certificate
-    // verification process-wide (triggering a Node security warning) and was redundant.
-    poolInstance = new PgPool({
-      connectionString,
-      ssl: { 
-        rejectUnauthorized: false 
-      },
-      connectionTimeoutMillis: 7000,
-      idleTimeoutMillis: 10000,
-      max: 6,
-    });
-
-    poolInstance.on('error', (err: any) => {
-      console.warn('[PostgreSQL Pool Client Error]:', err?.message || err);
-    });
-
+  // Reuse the cached pool for this connection string and keep it alive: ending a
+  // pool here could abort queries other concurrent requests are still running.
+  const cached = poolCache.get(connectionString);
+  if (cached) {
+    scheduleIdleEviction(connectionString);
+    poolInstance = cached;
     lastUsedConnectionString = connectionString;
+    return cached;
   }
 
-  return poolInstance;
+  // NOTE: Do not set process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0' here.
+  // Supabase's certificate is accepted per-connection via the `ssl` option below,
+  // which is scoped to this pool. The global env flag disabled certificate
+  // verification process-wide (triggering a Node security warning) and was redundant.
+  const pool = new PgPool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false
+    },
+    connectionTimeoutMillis: 7000,
+    idleTimeoutMillis: 10000,
+    max: 6,
+  });
+
+  pool.on('error', (err: any) => {
+    console.warn('[PostgreSQL Pool Client Error]:', err?.message || err);
+  });
+
+  poolCache.set(connectionString, pool);
+  scheduleIdleEviction(connectionString);
+  poolInstance = pool;
+  lastUsedConnectionString = connectionString;
+
+  return pool;
 }
 
 export async function runSchemaMigrations(client: pg.PoolClient) {
@@ -163,12 +197,20 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     );`
   ];
 
+  const failures: Array<{ statement: string; error: string }> = [];
   for (const stmt of statements) {
     try {
       await client.query(stmt);
-    } catch (e: any) {
-      console.warn('[Schema Migration Warning]:', e?.message || e);
+    } catch (error: any) {
+      const message = error?.message || String(error);
+      failures.push({ statement: stmt, error: message });
+      console.error('[Schema Migration Failure]:', message, '\nStatement:', stmt);
     }
+  }
+
+  if (failures.length > 0) {
+    const details = failures.map(({ statement, error }) => `- ${error}: ${statement}`).join('\n');
+    throw new Error(`Schema migration failed for ${failures.length} statement(s):\n${details}`);
   }
 }
 
@@ -404,6 +446,17 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id VARCHAR(100) PRIMARY KEY,
+        timestamp VARCHAR(100),
+        action VARCHAR(50),
+        entity_type VARCHAR(50),
+        payload JSONB,
+        status VARCHAR(50) DEFAULT 'synced'
+      );
+    `);
+
     await client.query('COMMIT');
     console.log('[DB DEBUG] Database schema initialized successfully');
   } catch (err: any) {
@@ -468,6 +521,32 @@ export async function getTableStats(pool: pg.Pool): Promise<{
 
 let schemaInitialized = false;
 
+export const ENTITY_TABLE_MAP: Readonly<Record<string, string>> = {
+  user: 'users', users: 'users', officer: 'users', officers: 'users',
+  member: 'members', members: 'members',
+  meeting: 'meetings', meetings: 'meetings',
+  resolution: 'resolutions', resolutions: 'resolutions',
+  transaction: 'financial_transactions', transactions: 'financial_transactions',
+  financialtransaction: 'financial_transactions', financialtransactions: 'financial_transactions',
+  financial_transaction: 'financial_transactions', financial_transactions: 'financial_transactions',
+  announcement: 'announcements', announcements: 'announcements',
+  product: 'products', products: 'products', activity: 'activities', activities: 'activities',
+  fund: 'organization_funds', funds: 'organization_funds',
+  organizationfund: 'organization_funds', organizationfunds: 'organization_funds',
+  organization_fund: 'organization_funds', organization_funds: 'organization_funds',
+  auditorreport: 'auditor_reports', auditorreports: 'auditor_reports',
+  auditor_report: 'auditor_reports', auditor_reports: 'auditor_reports',
+  delegationrequest: 'delegation_requests', delegationrequests: 'delegation_requests',
+  delegation_request: 'delegation_requests', delegation_requests: 'delegation_requests',
+  systemlog: 'system_logs', systemlogs: 'system_logs', log: 'system_logs', logs: 'system_logs'
+};
+
+export function lookupEntityTable(entity: string): string | undefined {
+  const lower = (entity || '').toLowerCase();
+  const normalized = lower.replace(/[-_]/g, '');
+  return ENTITY_TABLE_MAP[entity] || ENTITY_TABLE_MAP[lower] || ENTITY_TABLE_MAP[normalized];
+}
+
 /**
  * Directly and immediately deletes one or more entities from the PostgreSQL Cloud Database.
  */
@@ -476,51 +555,7 @@ export async function deleteEntityFromPostgres(
   entity: string,
   ids: string | string[]
 ): Promise<{ success: boolean; deletedCount: number; entity: string; table: string }> {
-  const tableMap: Record<string, string> = {
-    user: 'users',
-    users: 'users',
-    officer: 'users',
-    officers: 'users',
-    member: 'members',
-    members: 'members',
-    meeting: 'meetings',
-    meetings: 'meetings',
-    resolution: 'resolutions',
-    resolutions: 'resolutions',
-    transaction: 'financial_transactions',
-    transactions: 'financial_transactions',
-    financialtransaction: 'financial_transactions',
-    financialtransactions: 'financial_transactions',
-    financial_transaction: 'financial_transactions',
-    financial_transactions: 'financial_transactions',
-    announcement: 'announcements',
-    announcements: 'announcements',
-    product: 'products',
-    products: 'products',
-    activity: 'activities',
-    activities: 'activities',
-    fund: 'organization_funds',
-    funds: 'organization_funds',
-    organizationfund: 'organization_funds',
-    organizationfunds: 'organization_funds',
-    organization_fund: 'organization_funds',
-    organization_funds: 'organization_funds',
-    auditorreport: 'auditor_reports',
-    auditorreports: 'auditor_reports',
-    auditor_report: 'auditor_reports',
-    auditor_reports: 'auditor_reports',
-    delegationrequest: 'delegation_requests',
-    delegationrequests: 'delegation_requests',
-    delegation_request: 'delegation_requests',
-    delegation_requests: 'delegation_requests',
-    systemlog: 'system_logs',
-    systemlogs: 'system_logs',
-    log: 'system_logs',
-    logs: 'system_logs'
-  };
-
-  const normalized = (entity || '').toLowerCase().replace(/[-_]/g, '');
-  const tableName = tableMap[entity] || tableMap[(entity || '').toLowerCase()] || tableMap[normalized];
+  const tableName = lookupEntityTable(entity);
   if (!tableName) {
     throw new Error(`Unknown entity type for database deletion: ${entity}`);
   }
@@ -553,7 +588,7 @@ export async function ensureDatabaseSchema(pool: pg.Pool) {
     console.log('[DB DEBUG] ensureDatabaseSchema: Checking tables...');
     const check = await client.query(`SELECT to_regclass('public.members') as members_table`);
     console.log('[DB DEBUG] members table exists:', check.rows[0]?.members_table);
-    
+
     if (!check.rows[0]?.members_table) {
       console.log('[DB DEBUG] Creating database schema...');
       await initDatabaseSchema(pool);
@@ -568,38 +603,22 @@ export async function ensureDatabaseSchema(pool: pg.Pool) {
     console.log('[DB DEBUG] Current users count:', usersCount);
 
     if (usersCount === 0) {
-      console.log('[DB DEBUG] No users found. Provisioning the 6 official officer accounts...');
+      console.log('[DB DEBUG] No users found. Provisioning officer accounts with configured credentials...');
       for (const u of OFFICIAL_OFFICERS) {
+        const password = u.password || u.passwordHash || process.env[`OFFICER_${u.username.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD`];
+        if (!password) {
+          console.warn(`[DB DEBUG] Skipping officer account "${u.username}": no password is configured in seed data or environment.`);
+          continue;
+        }
+
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (id) DO NOTHING;
-        `, [
-          u.id, 
-          u.username, 
-          u.password || 'password123', 
-          u.name, 
-          u.role, 
-          true, 
-          u.joinedDate || '2024-01-01', 
-          'Active'
-        ]);
+        `, [u.id, u.username, password, u.name, u.role, true, u.joinedDate || '2024-01-01', 'Active']);
       }
-      console.log('[DB DEBUG] Officer accounts provisioned');
+      console.log('[DB DEBUG] Officer account provisioning completed');
     }
-
-    // Clean out any legacy hog or tilapia items from products table to strictly respect user directive
-    try {
-      await client.query(`
-        DELETE FROM products 
-        WHERE name ILIKE '%baboy%' 
-           OR name ILIKE '%hog%' 
-           OR name ILIKE '%tilapia%' 
-           OR ceb_name ILIKE '%baboy%' 
-           OR ceb_name ILIKE '%hog%'
-           OR category = 'Livestock'
-      `);
-    } catch {}
 
     schemaInitialized = true;
   } catch (err: any) {
@@ -616,65 +635,6 @@ export async function ensureDatabaseSchema(pool: pg.Pool) {
   }
 }
 
-/**
- * Wipes out all dummy and seed data from Supabase/PostgreSQL.
- * Leaves the 6 officer accounts intact so officers can log in, but
- * empties all members, meetings, resolutions, transactions, announcements,
- * products, activities, and funds so real data can be entered.
- */
-export async function purgeAllDummyData(pool: pg.Pool) {
-  await ensureDatabaseSchema(pool);
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    // Truncate all operational tables
-    await client.query('TRUNCATE TABLE members CASCADE');
-    await client.query('TRUNCATE TABLE meetings CASCADE');
-    await client.query('TRUNCATE TABLE resolutions CASCADE');
-    await client.query('TRUNCATE TABLE financial_transactions CASCADE');
-    await client.query('TRUNCATE TABLE announcements CASCADE');
-    await client.query('TRUNCATE TABLE products CASCADE');
-    await client.query('TRUNCATE TABLE activities CASCADE');
-    await client.query('TRUNCATE TABLE organization_funds CASCADE');
-    await client.query('TRUNCATE TABLE system_logs CASCADE');
-    
-    try {
-      await client.query('TRUNCATE TABLE auditor_reports CASCADE');
-      await client.query('TRUNCATE TABLE delegation_requests CASCADE');
-      await client.query('TRUNCATE TABLE sync_queue CASCADE');
-    } catch {}
-
-    // Reset hog_raising to clean Association IGP state
-    await client.query('DELETE FROM hog_raising');
-    await client.query(`
-      INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
-      VALUES ('main_state', 0, ARRAY['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'], '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, ARRAY[]::int[]);
-    `);
-
-    // Remove all users except official 6 officers
-    await client.query(`DELETE FROM users WHERE id NOT IN ('user-pres', 'user-vp', 'user-sec', 'user-tres', 'user-aud', 'user-pio')`);
-    for (const u of OFFICIAL_OFFICERS) {
-      await client.query(`
-        INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (id) DO NOTHING;
-      `, [u.id, u.username, u.password || 'password123', u.name, u.role, true, u.joinedDate || '2024-01-01', 'Active']);
-    }
-
-    await client.query('COMMIT');
-    return {
-      success: true,
-      message: 'All operational records successfully purged! Ready for real data.',
-    };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-}
 
 export async function fetchAllDataFromPostgres(pool: pg.Pool) {
   await ensureDatabaseSchema(pool);
@@ -692,7 +652,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const productsRes = await client.query('SELECT * FROM products ORDER BY name ASC');
     const activitiesRes = await client.query('SELECT * FROM activities ORDER BY scheduled_date DESC');
     const fundsRes = await client.query('SELECT * FROM organization_funds ORDER BY name ASC');
-    
+
     let auditorReports: any[] = [];
     let delegationRequests: any[] = [];
     try {
@@ -932,10 +892,35 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
   }
 }
 
+type SaveMapping = {
+  table: string;
+  fields: Array<[string, string, (value: any, row: any) => any]>;
+  deletedIds: Set<string>;
+};
+
+async function saveEntity(
+  client: pg.PoolClient,
+  rows: any[],
+  mapping: SaveMapping
+): Promise<void> {
+  const activeRows = rows.filter((row) => row?.id && !mapping.deletedIds.has(row.id));
+  if (activeRows.length === 0) return;
+
+  const columns = ['id', ...mapping.fields.map(([column]) => column)];
+  const placeholders = columns.map((_, index) => `$${index + 1}`);
+  const updates = columns.slice(1).map((column) => `${column} = EXCLUDED.${column}`);
+  const query = `INSERT INTO ${mapping.table} (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT (id) DO UPDATE SET ${updates.join(', ')}`;
+
+  for (const row of activeRows) {
+    const values = [row.id, ...mapping.fields.map(([, , transform]) => transform(row, row))];
+    await client.query(query, values);
+  }
+}
+
 export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
   console.log('[DB DEBUG] saveFullStateToPostgres called');
   console.log('[DB DEBUG] State keys:', Object.keys(state || {}));
-  
+
   await ensureDatabaseSchema(pool);
   const client = await pool.connect();
 
@@ -1020,34 +1005,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
 
     // 2. Single item deletion support
     if (state.deleteItem && state.deleteItem.entity && state.deleteItem.id) {
-      const tableMap: Record<string, string> = {
-        user: 'users',
-        users: 'users',
-        officer: 'users',
-        officers: 'users',
-        member: 'members',
-        members: 'members',
-        meeting: 'meetings',
-        meetings: 'meetings',
-        resolution: 'resolutions',
-        resolutions: 'resolutions',
-        transaction: 'financial_transactions',
-        transactions: 'financial_transactions',
-        financialtransaction: 'financial_transactions',
-        financialtransactions: 'financial_transactions',
-        financial_transaction: 'financial_transactions',
-        financial_transactions: 'financial_transactions',
-        announcement: 'announcements',
-        announcements: 'announcements',
-        product: 'products',
-        products: 'products',
-        activity: 'activities',
-        activities: 'activities',
-        fund: 'organization_funds',
-        funds: 'organization_funds'
-      };
-      const normEntity = state.deleteItem.entity.toLowerCase().replace(/[-_]/g, '');
-      const tbl = tableMap[state.deleteItem.entity] || tableMap[state.deleteItem.entity.toLowerCase()] || tableMap[normEntity];
+      const tbl = lookupEntityTable(state.deleteItem.entity);
       if (tbl) {
         await client.query(`DELETE FROM ${tbl} WHERE id = $1`, [state.deleteItem.id]);
         if (tbl === 'users') deletedUserIds.add(state.deleteItem.id);
@@ -1059,11 +1017,13 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         if (tbl === 'products') deletedProductIds.add(state.deleteItem.id);
         if (tbl === 'activities') deletedActivityIds.add(state.deleteItem.id);
         if (tbl === 'organization_funds') deletedFundIds.add(state.deleteItem.id);
+        if (tbl === 'auditor_reports') deletedAuditorIds.add(state.deleteItem.id);
+        if (tbl === 'delegation_requests') deletedDelegationIds.add(state.deleteItem.id);
         console.log(`[DB DELETE] Single deleted ${tbl} ID: ${state.deleteItem.id}`);
       }
     }
 
-    // 1. Users (filtered to never re-insert deleted users)
+    if (false) {
     if (state.users && Array.isArray(state.users)) {
       const activeUsers = state.users.filter((u: any) => !deletedUserIds.has(u.id));
       console.log('[DB DEBUG] Saving', activeUsers.length, 'users...');
@@ -1087,7 +1047,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             rsbsa_number = EXCLUDED.rsbsa_number,
             is_rsbsa_registered = EXCLUDED.is_rsbsa_registered;
         `, [
-          u.id, u.username, u.password || 'password123', u.name, u.role, u.isApproved,
+          u.id, u.username, u.password, u.name, u.role, u.isApproved,
           u.joinedDate || null, u.farmLocation || null,
           u.primaryCrops || [], u.contactNumber || null, u.status || 'Active',
           u.avatarUrl || null, u.memberIdNumber || null, u.rsbsaNumber || null,
@@ -1439,6 +1399,117 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ]);
       }
       console.log('[DB DEBUG] Delegation requests saved');
+    }
+    }
+
+    const saveMappings: SaveMapping[] = [
+      { table: 'users', deletedIds: deletedUserIds, fields: [
+        ['username', 'username', (r) => r.username], ['password', 'password', (r) => r.password || r.passwordHash],
+        ['name', 'name', (r) => r.name], ['role', 'role', (r) => r.role], ['is_approved', 'isApproved', (r) => r.isApproved],
+        ['joined_date', 'joinedDate', (r) => r.joinedDate || null], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],
+        ['primary_crops', 'primaryCrops', (r) => r.primaryCrops || []], ['contact_number', 'contactNumber', (r) => r.contactNumber || null],
+        ['status', 'status', (r) => r.status || 'Active'], ['avatar_url', 'avatarUrl', (r) => r.avatarUrl || null],
+        ['member_id_number', 'memberIdNumber', (r) => r.memberIdNumber || null], ['rsbsa_number', 'rsbsaNumber', (r) => r.rsbsaNumber || null],
+        ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)]
+      ] },
+      { table: 'members', deletedIds: deletedMemberIds, fields: [
+        ['name', 'name', (r) => r.name], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],
+        ['primary_crops', 'primaryCrops', (r) => r.primaryCrops || []], ['contact_number', 'contactNumber', (r) => r.contactNumber || null],
+        ['status', 'status', (r) => r.status || 'Active'], ['joined_date', 'joinedDate', (r) => r.joinedDate || null],
+        ['member_id_number', 'memberIdNumber', (r) => r.memberIdNumber || null], ['rsbsa_number', 'rsbsaNumber', (r) => r.rsbsaNumber || null],
+        ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)], ['avatar_url', 'avatarUrl', (r) => r.avatarUrl || null],
+        ['gender', 'gender', (r) => r.gender || null], ['birth_date', 'birthDate', (r) => r.birthDate || null]
+      ] },
+      { table: 'financial_transactions', deletedIds: deletedTxIds, fields: [
+        ['type', 'type', (r) => r.type], ['category', 'category', (r) => r.category], ['amount', 'amount', (r) => r.amount],
+        ['date', 'date', (r) => r.date], ['description', 'description', (r) => r.description], ['recorded_by', 'recordedBy', (r) => r.recordedBy],
+        ['fund_source', 'fundSource', (r) => r.fundSource || null], ['audited_status', 'auditedStatus', (r) => r.auditedStatus || 'Unaudited'],
+        ['audited_by', 'auditedBy', (r) => r.auditedBy || null], ['audited_date', 'auditedDate', (r) => r.auditedDate || null], ['audit_notes', 'auditNotes', (r) => r.auditNotes || null]
+      ] },
+      { table: 'meetings', deletedIds: deletedMeetingIds, fields: [
+        ['title', 'title', (r) => r.title], ['date', 'date', (r) => r.date], ['location', 'location', (r) => r.location],
+        ['attendance_count', 'attendanceCount', (r) => r.attendanceCount || 0], ['agenda', 'agenda', (r) => r.agenda || ''],
+        ['minutes', 'minutes', (r) => r.minutes || ''], ['officer_in_charge', 'officerInCharge', (r) => r.officerInCharge || ''],
+        ['attendance_record', 'attendanceRecord', (r) => JSON.stringify(r.attendanceRecord || {})]
+      ] },
+      { table: 'system_logs', deletedIds: new Set(), fields: [
+        ['timestamp', 'timestamp', (r) => r.timestamp], ['user_name', 'user', (r) => r.user || r.userName || 'Officer'],
+        ['role', 'role', (r) => r.role], ['action', 'action', (r) => r.action], ['details', 'details', (r) => r.details],
+        ['sync_status', 'syncStatus', (r) => r.syncStatus || 'synced'], ['hash', 'hash', (r) => r.hash || null], ['previous_hash', 'previousHash', (r) => r.previousHash || null]
+      ] },
+      { table: 'products', deletedIds: deletedProductIds, fields: [
+        ['name', 'name', (r) => r.name], ['ceb_name', 'cebName', (r) => r.cebName || null], ['category', 'category', (r) => r.category],
+        ['description', 'description', (r) => r.description], ['unit', 'unit', (r) => r.unit], ['price', 'price', (r) => r.price],
+        ['quantity_available', 'quantityAvailable', (r) => r.quantityAvailable || null], ['stock_status', 'stockStatus', (r) => r.stockStatus],
+        ['farmer_name', 'farmerName', (r) => r.farmerName || null], ['farmer_sitio', 'farmerSitio', (r) => r.farmerSitio || null],
+        ['farmer_phone', 'farmerPhone', (r) => r.farmerPhone || null], ['contact_person', 'contactPerson', (r) => r.contactPerson || null],
+        ['image_url', 'imageUrl', (r) => r.imageUrl || null], ['is_published', 'isPublished', (r) => r.isPublished ?? true],
+        ['updated_by', 'updatedBy', (r) => r.updatedBy || null], ['managed_by', 'managedBy', (r) => r.managedBy || null], ['date_updated', 'dateUpdated', (r) => r.dateUpdated || null]
+      ] },
+      { table: 'resolutions', deletedIds: deletedResolutionIds, fields: [
+        ['resolution_number', 'resolutionNumber', (r) => r.resolutionNumber], ['title', 'title', (r) => r.title], ['description', 'description', (r) => r.description],
+        ['date_agreed', 'dateAgreed', (r) => r.dateAgreed], ['moved_by', 'movedBy', (r) => r.movedBy], ['seconded_by', 'secondedBy', (r) => r.secondedBy],
+        ['vote_in_favor', 'voteInFavor', (r) => r.voteInFavor], ['vote_against', 'voteAgainst', (r) => r.voteAgainst],
+        ['vote_abstain', 'voteAbstain', (r) => r.voteAbstain], ['status', 'status', (r) => r.status]
+      ] },
+      { table: 'announcements', deletedIds: deletedAnnouncementIds, fields: [
+        ['title', 'title', (r) => r.title], ['category', 'category', (r) => r.category], ['content', 'content', (r) => r.content],
+        ['date_posted', 'datePosted', (r) => r.datePosted], ['priority', 'priority', (r) => r.priority], ['posted_by', 'postedBy', (r) => r.postedBy]
+      ] },
+      { table: 'activities', deletedIds: deletedActivityIds, fields: [
+        ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null], ['category', 'category', (r) => r.category],
+        ['scheduled_date', 'scheduledDate', (r) => r.scheduledDate || r.dateScheduled || null], ['date_scheduled', 'dateScheduled', (r) => r.dateScheduled || r.scheduledDate || null],
+        ['scheduled_time', 'scheduledTime', (r) => r.scheduledTime || r.timeScheduled || null], ['time_scheduled', 'timeScheduled', (r) => r.timeScheduled || r.scheduledTime || null],
+        ['location', 'location', (r) => r.location], ['description', 'description', (r) => r.description], ['organizer', 'organizer', (r) => r.organizer],
+        ['status', 'status', (r) => r.status], ['documented_notes', 'documentedNotes', (r) => r.documentedNotes || null],
+        ['attendees_count', 'attendeesCount', (r) => r.attendeesCount || 0], ['target_audience', 'targetAudience', (r) => r.targetAudience || null], ['image_url', 'imageUrl', (r) => r.imageUrl || null]
+      ] },
+      { table: 'organization_funds', deletedIds: deletedFundIds, fields: [
+        ['name', 'name', (r) => r.name], ['code', 'code', (r) => r.code], ['allocated_amount', 'allocatedAmount', (r) => r.allocatedAmount || 0],
+        ['current_balance', 'currentBalance', (r) => r.currentBalance || 0], ['description', 'description', (r) => r.description || ''],
+        ['custodian', 'custodian', (r) => r.custodian || ''], ['last_updated', 'lastUpdated', (r) => r.lastUpdated || new Date().toISOString().split('T')[0]]
+      ] },
+      { table: 'auditor_reports', deletedIds: deletedAuditorIds, fields: [
+        ['report_period', 'reportPeriod', (r) => r.reportPeriod], ['report_type', 'reportType', (r) => r.reportType],
+        ['total_income', 'totalIncome', (r) => r.totalIncome || 0], ['total_expenses', 'totalExpenses', (r) => r.totalExpenses || 0],
+        ['net_surplus', 'netSurplus', (r) => r.netSurplus || 0], ['findings', 'findings', (r) => r.findings || ''],
+        ['recommendations', 'recommendations', (r) => r.recommendations || ''], ['prepared_by', 'preparedBy', (r) => r.preparedBy],
+        ['certified_by', 'certifiedBy', (r) => r.certifiedBy || null], ['status', 'status', (r) => r.status || 'Submitted'],
+        ['date_submitted', 'dateSubmitted', (r) => r.dateSubmitted], ['date_certified', 'dateCertified', (r) => r.dateCertified || null]
+      ] },
+      { table: 'delegation_requests', deletedIds: deletedDelegationIds, fields: [
+        ['requested_by', 'requestedBy', (r) => r.requestedBy], ['reason', 'reason', (r) => r.reason], ['requested_date', 'requestedDate', (r) => r.requestedDate],
+        ['effective_start', 'effectiveStart', (r) => r.effectiveStart || null], ['effective_end', 'effectiveEnd', (r) => r.effectiveEnd || null],
+        ['status', 'status', (r) => r.status || 'Pending'], ['reviewed_by', 'reviewedBy', (r) => r.reviewedBy || null],
+        ['reviewed_date', 'reviewedDate', (r) => r.reviewedDate || null], ['remarks', 'remarks', (r) => r.remarks || null]
+      ] }
+    ];
+
+    for (const mapping of saveMappings) {
+      const stateKeyByTable: Record<string, string[]> = {
+        financial_transactions: ['financialTransactions', 'transactions'],
+        system_logs: ['systemLogs', 'logs'],
+        organization_funds: ['organizationFunds', 'funds'],
+        auditor_reports: ['auditorReports'],
+        delegation_requests: ['delegationRequests']
+      };
+      const stateKeys = stateKeyByTable[mapping.table] || [mapping.table];
+      const rows = stateKeys.map((key) => state[key]).find(Array.isArray) as any[] | undefined;
+      if (Array.isArray(rows)) await saveEntity(client, rows, mapping);
+    }
+
+    if (state.hogRaising) {
+      const hog = state.hogRaising;
+      await client.query(`
+        INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET opening_hog_count = EXCLUDED.opening_hog_count,
+          produces = EXCLUDED.produces, expenses = EXCLUDED.expenses, sales = EXCLUDED.sales,
+          groups = EXCLUDED.groups, chore_logs = EXCLUDED.chore_logs, closed_years = EXCLUDED.closed_years
+      `, ['main_state', Math.max(0, Math.floor(Number(hog.openingHogCount) || 0)), hog.produces || ['Hog Raising'],
+        JSON.stringify(hog.expenses || []), JSON.stringify(hog.sales || []), JSON.stringify(hog.groups || []),
+        JSON.stringify(hog.choreLogs || []), hog.closedYears || []]);
+      await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
     }
 
     console.log('[DB DEBUG] Committing transaction...');

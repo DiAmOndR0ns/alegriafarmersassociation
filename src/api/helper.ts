@@ -24,30 +24,64 @@ export function sendResponse(res: any, statusCode: number, data: any) {
 }
 
 export async function parseRequestBody(req: any): Promise<any> {
-  if (req.body) {
-    if (typeof req.body === 'string') {
+  const maxBytes = 1024 * 1024;
+  if (req.body !== undefined && req.body !== null) {
+    const body = req.body;
+    const byteLength = typeof body === 'string'
+      ? Buffer.byteLength(body, 'utf8')
+      : Buffer.byteLength(JSON.stringify(body), 'utf8');
+    if (byteLength > maxBytes) {
+      const error: any = new Error('Request body exceeds the 1 MiB limit.');
+      error.statusCode = 413;
+      throw error;
+    }
+    if (typeof body === 'string') {
       try {
-        return JSON.parse(req.body);
+        return JSON.parse(body);
       } catch {
-        return req.body;
+        return body;
       }
     }
-    return req.body;
+    return body;
   }
 
   // If req is a stream (raw Node IncomingMessage)
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let raw = '';
-    req.on('data', (chunk: any) => {
-      raw += chunk;
+    let size = 0;
+    let settled = false;
+    req.on('data', (chunk: Buffer | string) => {
+      if (settled) return;
+      const text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk;
+      size += Buffer.byteLength(text, 'utf8');
+      if (size > maxBytes) {
+        settled = true;
+        const error: any = new Error('Request body exceeds the 1 MiB limit.');
+        error.statusCode = 413;
+        reject(error);
+        req.destroy(error);
+        return;
+      }
+      raw += text;
     });
     req.on('end', () => {
+      if (settled) return;
+      settled = true;
       try {
         resolve(raw ? JSON.parse(raw) : {});
-      } catch {
-        resolve({});
+      } catch (error) {
+        reject(new Error('Request body contains invalid JSON.', { cause: error }));
       }
     });
-    req.on('error', () => resolve({}));
+    req.on('aborted', () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('Request body was aborted before it was fully received.'));
+    });
+    req.on('error', (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('Failed to read request body.', { cause: error }));
+    });
   });
 }

@@ -9,6 +9,7 @@ import {
 import AnnouncementDashboard from './AnnouncementDashboard';
 import HogRaisingIgpTracker from './HogRaisingIgpTracker';
 import AffiliationManager from './AffiliationManager';
+import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 
 interface MemberDashboardProps {
   currentUser: User;
@@ -49,11 +50,11 @@ const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?auto=format&fit=crop&w=150&q=80'  // Young Farmer
 ];
 
-export default function MemberDashboard({ 
-  currentUser, 
-  onLogout, 
-  onUpdateProfile, 
-  toast, 
+export default function MemberDashboard({
+  currentUser,
+  onLogout,
+  onUpdateProfile,
+  toast,
   announcements = [],
   hogRaisingState,
   members,
@@ -84,24 +85,26 @@ export default function MemberDashboard({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [expandedAnnouncementId, setExpandedAnnouncementId] = useState<string | null>(null);
-  const [collapsedProductIds, setCollapsedProductIds] = useState<string[]>(() => 
+  const [collapsedProductIds, setCollapsedProductIds] = useState<string[]>(() =>
     products.filter(p => p.isPublished).map(p => p.id)
   );
-  const [readAnnouncements, setReadAnnouncements] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem('bafa_read_announcements');
-      return stored ? JSON.parse(stored) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  const [readAnnouncements, setReadAnnouncements] = useState<string[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void getSecureItem<string[]>('bafa_read_announcements').then((stored) => {
+      if (active && Array.isArray(stored)) setReadAnnouncements(stored);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   const markAsRead = (id: string) => {
-    if (!readAnnouncements.includes(id)) {
-      const updated = [...readAnnouncements, id];
-      setReadAnnouncements(updated);
-      localStorage.setItem('bafa_read_announcements', JSON.stringify(updated));
-    }
+    setReadAnnouncements((previous) => {
+      if (previous.includes(id)) return previous;
+      const updated = [...previous, id];
+      void setSecureItem('bafa_read_announcements', updated).catch(() => undefined);
+      return updated;
+    });
   };
 
   // Generate a membership code based on signup date or user id

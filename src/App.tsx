@@ -27,10 +27,11 @@ import PresidentReport, { buildReportData } from './components/PresidentReport';
 import ProductManagementModal from './components/ProductManagementModal';
 import DashboardSkeleton from './components/DashboardSkeleton';
 import { buildAuditChain, hashPassword, sanitizeUserForStorage } from './utils/audit';
+import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
-  ChevronLeft, ChevronRight, Download, Trash2, Database
+  ChevronLeft, ChevronRight, Download, Database
 } from 'lucide-react';
 
 export default function App() {
@@ -42,7 +43,6 @@ export default function App() {
   // Connection and Sync State
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [isPurging, setIsPurging] = useState<boolean>(false);
   const [syncQueue, setSyncQueue] = useState<SyncQueueItem[]>([]);
   const [dbStatus, setDbStatus] = useState<DatabaseStatus>({
     connected: false,
@@ -91,7 +91,6 @@ export default function App() {
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showPresidentReport, setShowPresidentReport] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
-  const [showPurgeConfirmModal, setShowPurgeConfirmModal] = useState<boolean>(false);
   const [showClearCacheConfirmModal, setShowClearCacheConfirmModal] = useState<boolean>(false);
 
   // Core App Data States (hydrated from localStorage or initials)
@@ -156,36 +155,24 @@ export default function App() {
     window.scrollTo({ top: y, behavior: 'smooth' });
   };
 
-  // Load Data on Mount
+  // Load and migrate encrypted browser data on mount.
   useEffect(() => {
-    try {
-      const storedMembers = localStorage.getItem('bafa_members');
-      const storedMeetings = localStorage.getItem('bafa_meetings');
-      const storedResolutions = localStorage.getItem('bafa_resolutions');
-      const storedTransactions = localStorage.getItem('bafa_transactions');
-      const storedAnnouncements = localStorage.getItem('bafa_announcements');
-      const storedHogRaising = localStorage.getItem('bafa_hog_raising');
-      const storedProducts = localStorage.getItem('bafa_products');
-      const storedActivities = localStorage.getItem('bafa_activities');
-      const storedFunds = localStorage.getItem('bafa_funds');
-      const storedInventory = localStorage.getItem('bafa_inventory');
-      const storedQueue = localStorage.getItem('bafa_sync_queue');
-      const storedLogs = localStorage.getItem('bafa_logs');
-      const storedUsers = localStorage.getItem('bafa_users');
+    let cancelled = false;
+    const loadLocalData = async () => {
+      try {
+        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_hog_raising', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_inventory', 'bafa_sync_queue', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
+        await migrateSecureItems(storageKeys);
+      if (cancelled) return;
+      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers] = await Promise.all([
+        getSecureItem<any>('bafa_members'), getSecureItem<any>('bafa_meetings'), getSecureItem<any>('bafa_resolutions'), getSecureItem<any>('bafa_transactions'), getSecureItem<any>('bafa_announcements'), getSecureItem<any>('bafa_hog_raising'), getSecureItem<any>('bafa_products'), getSecureItem<any>('bafa_activities'), getSecureItem<any>('bafa_funds'), getSecureItem<any>('bafa_inventory'), getSecureItem<any>('bafa_sync_queue'), getSecureItem<any>('bafa_logs'), getSecureItem<any>('bafa_users')
+      ]);
 
       // Detect and clear legacy dummy seed data from previous versions (e.g. Roberto Cañete / m-001)
-      const hasOldSeedMembers = storedMembers && (storedMembers.includes('m-001') || storedMembers.includes('Roberto M. Cañete') || storedMembers.includes('Juanito') || storedMembers.includes('user-m1'));
+      const storedMembersText = JSON.stringify(storedMembers || []);
+      const hasOldSeedMembers = storedMembersText.includes('m-001') || storedMembersText.includes('Roberto M. Cañete') || storedMembersText.includes('Juanito') || storedMembersText.includes('user-m1');
       if (hasOldSeedMembers) {
         console.log('[Auto-Cleanup]: Detected legacy dummy seed data in local cache. Cleaning storage for real data...');
-        localStorage.removeItem('bafa_members');
-        localStorage.removeItem('bafa_meetings');
-        localStorage.removeItem('bafa_resolutions');
-        localStorage.removeItem('bafa_transactions');
-        localStorage.removeItem('bafa_announcements');
-        localStorage.removeItem('bafa_products');
-        localStorage.removeItem('bafa_activities');
-        localStorage.removeItem('bafa_funds');
-        localStorage.removeItem('bafa_hog_raising');
+        clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_hog_raising']);
         setMembers([]);
         setMeetings([]);
         setResolutions([]);
@@ -196,21 +183,21 @@ export default function App() {
         setFunds([]);
         setHogRaising(INITIAL_HOG_RAISING);
       } else {
-        setMembers(storedMembers ? JSON.parse(storedMembers) : INITIAL_MEMBERS);
-        setMeetings(storedMeetings ? JSON.parse(storedMeetings) : INITIAL_MEETINGS);
-        setResolutions(storedResolutions ? JSON.parse(storedResolutions) : INITIAL_RESOLUTIONS);
-        setTransactions(storedTransactions ? JSON.parse(storedTransactions) : INITIAL_TRANSACTIONS);
-        setAnnouncements(storedAnnouncements ? JSON.parse(storedAnnouncements) : INITIAL_ANNOUNCEMENTS);
-        setHogRaising(storedHogRaising ? JSON.parse(storedHogRaising) : INITIAL_HOG_RAISING);
-        setProducts(storedProducts ? JSON.parse(storedProducts) : INITIAL_PRODUCTS);
-        setActivities(storedActivities ? JSON.parse(storedActivities) : INITIAL_ACTIVITIES);
-        setFunds(storedFunds ? JSON.parse(storedFunds) : INITIAL_FUNDS);
-        setInventory(storedInventory ? JSON.parse(storedInventory) : []);
+        setMembers(storedMembers || INITIAL_MEMBERS);
+        setMeetings(storedMeetings || INITIAL_MEETINGS);
+        setResolutions(storedResolutions || INITIAL_RESOLUTIONS);
+        setTransactions(storedTransactions || INITIAL_TRANSACTIONS);
+        setAnnouncements(storedAnnouncements || INITIAL_ANNOUNCEMENTS);
+        setHogRaising(storedHogRaising || INITIAL_HOG_RAISING);
+        setProducts(storedProducts || INITIAL_PRODUCTS);
+        setActivities(storedActivities || INITIAL_ACTIVITIES);
+        setFunds(storedFunds || INITIAL_FUNDS);
+        setInventory(storedInventory || []);
       }
 
-      setSyncQueue(storedQueue ? JSON.parse(storedQueue) : []);
+      setSyncQueue(storedQueue || []);
 
-      const parsedUsers = storedUsers ? JSON.parse(storedUsers) : OFFICIAL_OFFICERS;
+      const parsedUsers = storedUsers || OFFICIAL_OFFICERS;
       // Filter out any dummy members from users and strip any plain-text passwords
       const sanitizedUsers = (Array.isArray(parsedUsers) ? parsedUsers : OFFICIAL_OFFICERS)
         .filter((u: any) => u.role !== 'Member' || !u.id.startsWith('user-m'))
@@ -225,21 +212,16 @@ export default function App() {
           return copy;
         });
       setUsers(sanitizedUsers.length > 0 ? sanitizedUsers : OFFICIAL_OFFICERS);
-      localStorage.setItem('bafa_users', JSON.stringify(sanitizedUsers.length > 0 ? sanitizedUsers : OFFICIAL_OFFICERS));
+      await setSecureItem('bafa_users', sanitizedUsers.length > 0 ? sanitizedUsers : OFFICIAL_OFFICERS);
 
-      // Also clean bafa_current_user in localStorage if it contains plaintext password
-      const storedCurr = localStorage.getItem('bafa_current_user');
-      if (storedCurr) {
-        try {
-          const parsedCurr = JSON.parse(storedCurr);
-          if (parsedCurr && typeof parsedCurr === 'object' && parsedCurr.password) {
-            delete parsedCurr.password;
-            localStorage.setItem('bafa_current_user', JSON.stringify(parsedCurr));
-          }
-        } catch {}
+      const storedCurr = await getSecureItem<User>('bafa_current_user');
+      if (storedCurr?.password) {
+        const safeCurrentUser = { ...storedCurr };
+        delete safeCurrentUser.password;
+        await setSecureItem('bafa_current_user', safeCurrentUser);
       }
 
-      const rawLogs = storedLogs ? JSON.parse(storedLogs) : INITIAL_LOGS;
+      const rawLogs = storedLogs || INITIAL_LOGS;
       const needsChaining = rawLogs.some((l: any) => !l.hash || !l.previousHash);
       const activeLogs = needsChaining ? buildAuditChain(rawLogs) : rawLogs;
       if (needsChaining) {
@@ -263,11 +245,10 @@ export default function App() {
         })
         .then(res => {
           if (res?.success && res.data) {
-            // Check for any locally queued deleted IDs to prevent resurrecting deleted items before DB flush
-            let bootDeletedIds: Record<string, string[]> = {};
+            // Deletions pending for this session only; do not trust browser-persisted deletion markers.
+            let bootDeletedIds: StoredDeletedIds = {};
             try {
-              const rawDel = localStorage.getItem('bafa_deleted_ids');
-              if (rawDel) bootDeletedIds = JSON.parse(rawDel);
+              bootDeletedIds = getStoredDeletedIds();
             } catch {}
 
             const delUsers = new Set(bootDeletedIds.users || []);
@@ -343,9 +324,7 @@ export default function App() {
                 }).then(r => r.json()).then(pushRes => {
                   if (pushRes?.success) {
                     setSyncQueue([]);
-                    localStorage.removeItem('bafa_sync_queue');
-                    localStorage.removeItem('bafa_deleted_ids');
-                    updateStorage('bafa_sync_queue', []);
+                    void updateStorage('bafa_sync_queue', []);
                     console.log('[Auto-Sync]: Synced offline items and deletions on boot and purged local pending queue.');
                   }
                 }).catch(e => console.warn('[Boot sync push error]:', e));
@@ -357,7 +336,7 @@ export default function App() {
         })
         .catch(err => console.log('[Cloud DB Offline / Unreachable]: using local state', err));
     } catch (e) {
-      console.error('Error reading localStorage: ', e);
+      console.error('Error reading encrypted local storage: ', e);
       // Fallback
       setMembers(INITIAL_MEMBERS);
       setMeetings(INITIAL_MEETINGS);
@@ -371,31 +350,36 @@ export default function App() {
       setLogs(INITIAL_LOGS);
       setUsers(OFFICIAL_OFFICERS);
     }
+    };
+    void loadLocalData();
+    return () => { cancelled = true; };
   }, []);
 
   // Save changes helper with automatic security sanitization
-  const updateStorage = (key: string, data: any) => {
-    if (key === 'bafa_users' && Array.isArray(data)) {
-      const sanitized = data.map((u: any) => {
-        const copy = { ...u };
-        if (copy.password) {
-          if (!copy.passwordHash) {
-            copy.passwordHash = hashPassword(copy.password);
+  const updateStorage = async (key: string, data: any) => {
+    try {
+      if (key === 'bafa_users' && Array.isArray(data)) {
+        const sanitized = data.map((u: any) => {
+          const copy = { ...u };
+          if (copy.password) {
+            if (!copy.passwordHash) copy.passwordHash = hashPassword(copy.password);
+            delete copy.password;
           }
-          delete copy.password;
-        }
-        return copy;
-      });
-      localStorage.setItem(key, JSON.stringify(sanitized));
-      return;
+          return copy;
+        });
+        await setSecureItem(key, sanitized);
+        return;
+      }
+      if (key === 'bafa_current_user' && data && typeof data === 'object') {
+        const copy = { ...data };
+        delete copy.password;
+        await setSecureItem(key, copy);
+        return;
+      }
+      await setSecureItem(key, data);
+    } catch (error) {
+      console.error(`Unable to encrypt local storage item ${key}:`, error);
     }
-    if (key === 'bafa_current_user' && data && typeof data === 'object') {
-      const copy = { ...data };
-      delete copy.password;
-      localStorage.setItem(key, JSON.stringify(copy));
-      return;
-    }
-    localStorage.setItem(key, JSON.stringify(data));
   };
 
   const showToastMessage = (message: string, type: 'success' | 'warning' | 'info' | 'error' = 'success') => {
@@ -435,68 +419,37 @@ export default function App() {
   }
 
   const getStoredDeletedIds = (): StoredDeletedIds => {
-    let result: StoredDeletedIds = {};
-    try {
-      const raw = localStorage.getItem('bafa_deleted_ids');
-      if (raw) result = JSON.parse(raw);
-    } catch {
-      result = {};
+    const result: StoredDeletedIds = {};
+    for (const item of syncQueue) {
+      if (item.action !== 'delete' || !item.payload?.id) continue;
+      const id = item.payload.id;
+      const entity = (item.entityType || '').toLowerCase();
+      const keyByEntity: Record<string, keyof StoredDeletedIds> = {
+        member: 'members', user: 'users', officer: 'users', meeting: 'meetings',
+        resolution: 'resolutions', transaction: 'financialTransactions',
+        financialtransaction: 'financialTransactions', announcement: 'announcements',
+        product: 'products', activity: 'activities', fund: 'funds', inventory: 'inventory'
+      };
+      const key = keyByEntity[entity];
+      if (key) result[key] = Array.from(new Set([...(result[key] || []), id]));
     }
-
-    // Also inspect bafa_sync_queue to extract any pending offline 'delete' operations
-    try {
-      const rawQueue = localStorage.getItem('bafa_sync_queue');
-      if (rawQueue) {
-        const parsedQueue = JSON.parse(rawQueue);
-        if (Array.isArray(parsedQueue)) {
-          for (const item of parsedQueue) {
-            if (item.action === 'delete' && item.payload?.id) {
-              const entity = (item.entityType || '').toLowerCase();
-              const id = item.payload.id;
-              if (entity === 'member') result.members = Array.from(new Set([...(result.members || []), id]));
-              else if (entity === 'user' || entity === 'officer') result.users = Array.from(new Set([...(result.users || []), id]));
-              else if (entity === 'meeting') result.meetings = Array.from(new Set([...(result.meetings || []), id]));
-              else if (entity === 'resolution') result.resolutions = Array.from(new Set([...(result.resolutions || []), id]));
-              else if (entity === 'transaction' || entity === 'financialtransaction') {
-                result.financialTransactions = Array.from(new Set([...(result.financialTransactions || []), id]));
-                result.transactions = Array.from(new Set([...(result.transactions || []), id]));
-              }
-              else if (entity === 'announcement') result.announcements = Array.from(new Set([...(result.announcements || []), id]));
-              else if (entity === 'product') result.products = Array.from(new Set([...(result.products || []), id]));
-              else if (entity === 'activity') result.activities = Array.from(new Set([...(result.activities || []), id]));
-              else if (entity === 'fund') result.funds = Array.from(new Set([...(result.funds || []), id]));
-              else if (entity === 'inventory') result.inventory = Array.from(new Set([...(result.inventory || []), id]));
-            }
-          }
-        }
-      }
-    } catch {}
-
+    if (result.financialTransactions) result.transactions = result.financialTransactions;
     return result;
   };
 
   const storeDeletedId = (entity: keyof StoredDeletedIds, id: string): StoredDeletedIds => {
-    try {
-      const current = getStoredDeletedIds();
-      current[entity] = Array.from(new Set([...(current[entity] || []), id]));
-      if (entity === 'financialTransactions') {
-        current.transactions = Array.from(new Set([...(current.transactions || []), id]));
-      } else if (entity === 'transactions') {
-        current.financialTransactions = Array.from(new Set([...(current.financialTransactions || []), id]));
-      }
-      localStorage.setItem('bafa_deleted_ids', JSON.stringify(current));
-      return current;
-    } catch {
-      return {};
+    const current = getStoredDeletedIds();
+    current[entity] = Array.from(new Set([...(current[entity] || []), id]));
+    if (entity === 'financialTransactions') {
+      current.transactions = Array.from(new Set([...(current.transactions || []), id]));
+    } else if (entity === 'transactions') {
+      current.financialTransactions = Array.from(new Set([...(current.financialTransactions || []), id]));
     }
+    return current;
   };
 
   const clearStoredDeletedIds = () => {
-    try {
-      localStorage.removeItem('bafa_deleted_ids');
-    } catch {
-      // Ignore
-    }
+    // Pending deletion markers are session-local and kept in the sync queue.
   };
 
   const hasPendingDeletions = (): boolean => {
@@ -698,8 +651,7 @@ export default function App() {
       if (result?.success && !result?.offlineMode) {
         // Clear all locally stored pending contributions, mutations, and deletions
         setSyncQueue([]);
-        localStorage.removeItem('bafa_sync_queue');
-        updateStorage('bafa_sync_queue', []);
+        void updateStorage('bafa_sync_queue', []);
         clearStoredDeletedIds();
 
         // Mark pending system logs as synced in state and storage
@@ -744,61 +696,6 @@ export default function App() {
     }
   };
 
-  // Permanently Purge All Demo & Dummy Seed Records from Supabase and Local Storage
-  const handlePurgeAllDummyData = () => {
-    setShowPurgeConfirmModal(true);
-  };
-
-  const executePurgeAllDummyData = async () => {
-    setShowPurgeConfirmModal(false);
-    setIsPurging(true);
-    showToastMessage('Purging all demo and seed data from Supabase & local storage...', 'info');
-
-    try {
-      // 1. Wipe Cloud Supabase database tables
-      const res = await fetch('/api/db/purge', { method: 'POST' });
-      const data = await res.json();
-
-      // 2. Clear browser local storage
-      localStorage.removeItem('bafa_members');
-      localStorage.removeItem('bafa_meetings');
-      localStorage.removeItem('bafa_resolutions');
-      localStorage.removeItem('bafa_transactions');
-      localStorage.removeItem('bafa_announcements');
-      localStorage.removeItem('bafa_products');
-      localStorage.removeItem('bafa_activities');
-      localStorage.removeItem('bafa_funds');
-      localStorage.removeItem('bafa_hog_raising');
-      localStorage.removeItem('bafa_logs');
-      localStorage.removeItem('bafa_sync_queue');
-
-      // 3. Reset React states
-      setMembers([]);
-      setMeetings([]);
-      setResolutions([]);
-      setTransactions([]);
-      setAnnouncements([]);
-      setProducts([]);
-      setActivities([]);
-      setFunds([]);
-      setHogRaising(INITIAL_HOG_RAISING);
-      setSyncQueue([]);
-      setLogs([]);
-
-      // Keep only the 6 official officer logins in users
-      setUsers(OFFICIAL_OFFICERS);
-      localStorage.setItem('bafa_users', JSON.stringify(OFFICIAL_OFFICERS));
-
-      showToastMessage(data?.message || 'All demo records deleted! Ready for real data input.', 'success');
-      checkDatabaseConnection();
-    } catch (err: any) {
-      console.error('Purge error:', err);
-      showToastMessage(`Purged locally: ${err?.message || 'Ready for real data.'}`, 'info');
-    } finally {
-      setIsPurging(false);
-    }
-  };
-
   // Enforce Zero Residual Storage by clearing local browser cache once cloud database is active
   const handleClearLocalCache = () => {
     if (!dbStatus.connected) {
@@ -810,31 +707,20 @@ export default function App() {
 
   const executeClearLocalCache = () => {
     setShowClearCacheConfirmModal(false);
-    localStorage.removeItem('bafa_members');
-    localStorage.removeItem('bafa_meetings');
-    localStorage.removeItem('bafa_resolutions');
-    localStorage.removeItem('bafa_transactions');
-    localStorage.removeItem('bafa_announcements');
-    localStorage.removeItem('bafa_products');
-    localStorage.removeItem('bafa_activities');
-    localStorage.removeItem('bafa_funds');
-    localStorage.removeItem('bafa_hog_raising');
-    localStorage.removeItem('bafa_logs');
-    localStorage.removeItem('bafa_sync_queue');
+    clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_hog_raising', 'bafa_logs', 'bafa_sync_queue', 'bafa_deleted_ids']);
     showToastMessage('Local browser cache cleared! Operating in Zero-Residual Cloud Database mode.', 'success');
   };
 
   const handleClearQueue = () => {
     setSyncQueue([]);
-    localStorage.removeItem('bafa_sync_queue');
-    updateStorage('bafa_sync_queue', []);
+    void updateStorage('bafa_sync_queue', []);
     showToastMessage('Pending queue cleared. Confidential data purged from local cache.', 'info');
   };
 
   const handleRemoveQueueItem = (id: string) => {
     const updated = syncQueue.filter(item => item.id !== id);
     setSyncQueue(updated);
-    updateStorage('bafa_sync_queue', updated);
+    void updateStorage('bafa_sync_queue', updated);
     showToastMessage('Removed pending change from queue.', 'warning');
   };
 
@@ -1822,7 +1708,7 @@ export default function App() {
       logAction('Logged Out', `${currentUser.name} signed out of the system.`);
     }
     setCurrentUser(null);
-    localStorage.removeItem('bafa_current_user');
+    removeSecureItem('bafa_current_user');
     setGuestMode(true);
     showToastMessage('You have been signed out securely. Session ended.', 'info');
   };
@@ -2035,7 +1921,7 @@ export default function App() {
       const updatedCurrent = { ...currentUser, role: newRole };
       setCurrentUser(updatedCurrent);
       setCurrentRole(newRole as any);
-      sessionStorage.setItem('afa_user', JSON.stringify(updatedCurrent));
+      // Keep role updates in memory; do not persist an alternate session identity in web storage.
     }
 
     if (isOnline) {
@@ -2304,8 +2190,6 @@ export default function App() {
                 isSyncing={isSyncing}
                 dbStatus={dbStatus}
                 onCheckDb={checkDatabaseConnection}
-                onPurgeDb={handlePurgeAllDummyData}
-                isPurging={isPurging}
                 onClearLocalCache={handleClearLocalCache}
               />
             </div>
@@ -2427,8 +2311,6 @@ export default function App() {
               isSyncing={isSyncing}
               dbStatus={dbStatus}
               onCheckDb={checkDatabaseConnection}
-              onPurgeDb={handlePurgeAllDummyData}
-              isPurging={isPurging}
               onClearLocalCache={handleClearLocalCache}
             />
           </div>
@@ -2848,7 +2730,7 @@ export default function App() {
                 </button>
               </div>
 
-              <MemberDashboard 
+              <MemberDashboard
                 currentUser={currentUser!}
                 onUpdateProfile={handleUpdateProfile}
                 onLogout={handleLogout}
@@ -2865,7 +2747,7 @@ export default function App() {
 
           {/* OFFLINE SYNC QUEUE MANAGEMENT SCREEN (Always available to monitor) */}
           <div id="sync-queue-panel-window">
-            <SyncQueuePanel 
+            <SyncQueuePanel
               queue={syncQueue}
               isOnline={isOnline}
               onSync={handleSynchronize}
@@ -2891,7 +2773,7 @@ export default function App() {
 
       {/* OFFICER REPORT & EXPORT MODAL */}
       {showReportModal && (
-        <OfficerReportModal 
+        <OfficerReportModal
           currentRole={currentRole}
           members={members}
           meetings={meetings}
@@ -2931,7 +2813,7 @@ export default function App() {
 
       {/* PRODUCT MANAGEMENT MODAL */}
       {showProductModal && (
-        <ProductManagementModal 
+        <ProductManagementModal
           products={products}
           currentRole={currentRole}
           onAddProduct={handleAddProduct}
@@ -2941,8 +2823,7 @@ export default function App() {
         />
       )}
 
-      {/* CONFIRM PURGE ALL DEMO DATA IN-MODAL DIALOG */}
-      {showPurgeConfirmModal && (
+      {/*
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in text-left">
           <div className="bg-[#FAF8F5] border-2 border-rose-600/50 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
             <div className="flex items-center gap-3 border-b border-[#D5CFC1] pb-3.5">
@@ -2984,6 +2865,7 @@ export default function App() {
         </div>
       )}
 
+      */}
       {/* CONFIRM CLEAR LOCAL CACHE IN-MODAL DIALOG */}
       {showClearCacheConfirmModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in text-left">

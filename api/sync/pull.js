@@ -208,6 +208,23 @@ var OFFICIAL_OFFICERS = [
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
 var poolInstance = null;
 var lastUsedConnectionString = null;
+var poolCache = /* @__PURE__ */ new Map();
+var poolIdleTimers = /* @__PURE__ */ new Map();
+var POOL_IDLE_TTL_MS = 6e4;
+function scheduleIdleEviction(connectionString) {
+  const existing = poolIdleTimers.get(connectionString);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    poolIdleTimers.delete(connectionString);
+    const cached = poolCache.get(connectionString);
+    if (!cached) return;
+    poolCache.delete(connectionString);
+    cached.end().catch(() => {
+    });
+  }, POOL_IDLE_TTL_MS);
+  if (typeof timer?.unref === "function") timer.unref();
+  poolIdleTimers.set(connectionString, timer);
+}
 function isDatabaseConfigured() {
   const dbUrl = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, "");
   return Boolean(
@@ -238,26 +255,30 @@ function getPool() {
     throw new Error("DATABASE_URL environment variable is not configured");
   }
   const { connectionString } = cleanDatabaseUrl(rawDbUrl);
-  if (!poolInstance || lastUsedConnectionString !== connectionString) {
-    if (poolInstance) {
-      poolInstance.end().catch(() => {
-      });
-    }
-    poolInstance = new PgPool({
-      connectionString,
-      ssl: {
-        rejectUnauthorized: false
-      },
-      connectionTimeoutMillis: 7e3,
-      idleTimeoutMillis: 1e4,
-      max: 6
-    });
-    poolInstance.on("error", (err) => {
-      console.warn("[PostgreSQL Pool Client Error]:", err?.message || err);
-    });
+  const cached = poolCache.get(connectionString);
+  if (cached) {
+    scheduleIdleEviction(connectionString);
+    poolInstance = cached;
     lastUsedConnectionString = connectionString;
+    return cached;
   }
-  return poolInstance;
+  const pool = new PgPool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false
+    },
+    connectionTimeoutMillis: 7e3,
+    idleTimeoutMillis: 1e4,
+    max: 6
+  });
+  pool.on("error", (err) => {
+    console.warn("[PostgreSQL Pool Client Error]:", err?.message || err);
+  });
+  poolCache.set(connectionString, pool);
+  scheduleIdleEviction(connectionString);
+  poolInstance = pool;
+  lastUsedConnectionString = connectionString;
+  return pool;
 }
 async function runSchemaMigrations(client) {
   const statements = [
@@ -333,12 +354,20 @@ async function runSchemaMigrations(client) {
       status VARCHAR(50) DEFAULT 'synced'
     );`
   ];
+  const failures = [];
   for (const stmt of statements) {
     try {
       await client.query(stmt);
-    } catch (e) {
-      console.warn("[Schema Migration Warning]:", e?.message || e);
+    } catch (error) {
+      const message = error?.message || String(error);
+      failures.push({ statement: stmt, error: message });
+      console.error("[Schema Migration Failure]:", message, "\nStatement:", stmt);
     }
+  }
+  if (failures.length > 0) {
+    const details = failures.map(({ statement, error }) => `- ${error}: ${statement}`).join("\n");
+    throw new Error(`Schema migration failed for ${failures.length} statement(s):
+${details}`);
   }
 }
 async function initDatabaseSchema(pool) {
@@ -546,6 +575,16 @@ async function initDatabaseSchema(pool) {
         remarks TEXT
       );
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id VARCHAR(100) PRIMARY KEY,
+        timestamp VARCHAR(100),
+        action VARCHAR(50),
+        entity_type VARCHAR(50),
+        payload JSONB,
+        status VARCHAR(50) DEFAULT 'synced'
+      );
+    `);
     await client.query("COMMIT");
     console.log("[DB DEBUG] Database schema initialized successfully");
   } catch (err) {
@@ -575,36 +614,20 @@ async function ensureDatabaseSchema(pool) {
     const usersCount = Number(counts.rows[0]?.count || 0);
     console.log("[DB DEBUG] Current users count:", usersCount);
     if (usersCount === 0) {
-      console.log("[DB DEBUG] No users found. Provisioning the 6 official officer accounts...");
+      console.log("[DB DEBUG] No users found. Provisioning officer accounts with configured credentials...");
       for (const u of OFFICIAL_OFFICERS) {
+        const password = u.password || u.passwordHash || process.env[`OFFICER_${u.username.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_PASSWORD`];
+        if (!password) {
+          console.warn(`[DB DEBUG] Skipping officer account "${u.username}": no password is configured in seed data or environment.`);
+          continue;
+        }
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (id) DO NOTHING;
-        `, [
-          u.id,
-          u.username,
-          u.password || "password123",
-          u.name,
-          u.role,
-          true,
-          u.joinedDate || "2024-01-01",
-          "Active"
-        ]);
+        `, [u.id, u.username, password, u.name, u.role, true, u.joinedDate || "2024-01-01", "Active"]);
       }
-      console.log("[DB DEBUG] Officer accounts provisioned");
-    }
-    try {
-      await client.query(`
-        DELETE FROM products 
-        WHERE name ILIKE '%baboy%' 
-           OR name ILIKE '%hog%' 
-           OR name ILIKE '%tilapia%' 
-           OR ceb_name ILIKE '%baboy%' 
-           OR ceb_name ILIKE '%hog%'
-           OR category = 'Livestock'
-      `);
-    } catch {
+      console.log("[DB DEBUG] Officer account provisioning completed");
     }
     schemaInitialized = true;
   } catch (err) {
@@ -885,14 +908,11 @@ function sendResponse(res, statusCode, data) {
 // src/api/pull.ts
 async function handler(req, res) {
   try {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (req.method === "OPTIONS") {
-      if (typeof res.status === "function") return res.status(200).end();
-      res.statusCode = 200;
-      return res.end();
-    }
+    return sendResponse(res, 503, {
+      success: false,
+      offlineMode: true,
+      message: "Cloud data access is temporarily disabled until server-side authentication and authorization are configured."
+    });
     if (!isDatabaseConfigured()) {
       return sendResponse(res, 200, {
         success: false,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types';
-import { 
+import {  getSecureItem, setSecureItem } from '../utils/secureStorage';
+import {
   Megaphone, Search, Bell, Calendar, Tag, CloudSun, 
   DollarSign, AlertTriangle, BookOpen, User, Phone, 
   Printer, Check, Clock, Info, Shield, Layers
@@ -23,21 +24,22 @@ export default function AnnouncementDashboard({
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   
   // Track read state via local storage
-  const [readIds, setReadIds] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem('bafa_read_announcements');
-      return stored ? JSON.parse(stored) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  const [readIds, setReadIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void getSecureItem<string[]>('bafa_read_announcements').then((stored) => {
+      if (active && Array.isArray(stored)) setReadIds(stored);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   const handleReadAnnouncement = (ann: Announcement) => {
     setSelectedAnnouncement(ann);
     if (!readIds.includes(ann.id)) {
       const updated = [...readIds, ann.id];
       setReadIds(updated);
-      localStorage.setItem('bafa_read_announcements', JSON.stringify(updated));
+      void setSecureItem('bafa_read_announcements', updated).catch(() => undefined);
       // Dispatch custom event to trigger updates in parent if needed
       window.dispatchEvent(new Event('bafa_announcements_updated'));
     }
@@ -46,18 +48,20 @@ export default function AnnouncementDashboard({
   const handleMarkAllRead = () => {
     const allIds = announcements.map(ann => ann.id);
     setReadIds(allIds);
-    localStorage.setItem('bafa_read_announcements', JSON.stringify(allIds));
+    void setSecureItem('bafa_read_announcements', allIds).catch(() => undefined);
     window.dispatchEvent(new Event('bafa_announcements_updated'));
     if (onMarkAllAsRead) onMarkAllAsRead();
   };
 
   // Listen to external updates to read state
   useEffect(() => {
-    const handleUpdate = () => {
+    const handleUpdate = async () => {
       try {
-        const stored = localStorage.getItem('bafa_read_announcements');
-        if (stored) setReadIds(JSON.parse(stored));
-      } catch (e) {}
+        const stored = await getSecureItem<string[]>('bafa_read_announcements');
+        if (Array.isArray(stored)) setReadIds(stored);
+      } catch {
+        // Keep the current in-memory read state if storage is unavailable.
+      }
     };
     window.addEventListener('bafa_announcements_updated', handleUpdate);
     return () => window.removeEventListener('bafa_announcements_updated', handleUpdate);
