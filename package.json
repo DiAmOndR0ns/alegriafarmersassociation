@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build:api": "esbuild src/api/status.ts --bundle --platform=node --format=esm --packages=external --outfile=api/db/status.js && esbuild src/api/pull.ts --bundle --platform=node --format=esm --packages=external --outfile=api/sync/pull.js && esbuild src/api/push.ts --bundle --platform=node --format=esm --packages=external --outfile=api/sync/push.js && esbuild src/api/delete.ts --bundle --platform=node --format=esm --packages=external --outfile=api/db/delete.js && esbuild src/api/delete.ts --bundle --platform=node --format=esm --packages=external --outfile=api/sync/delete.js",
+    "build:api": "esbuild src/api/status.ts --bundle --platform=node --format=esm --packages=external --outfile=api/db/status.js && esbuild src/api/pull.ts --bundle --platform=node --format=esm --packages=external --outfile=api/sync/pull.js && esbuild src/api/push.ts --bundle --platform=node --format=esm --packages=external --outfile=api/sync/push.js",
     "build": "vite build && npm run build:api && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "bcrypt": "^5.1.1",
     "dotenv": "^17.2.3",
     "esbuild": "^0.25.0",
     "express": "^4.21.2",
