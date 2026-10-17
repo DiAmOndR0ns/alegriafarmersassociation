@@ -3,11 +3,11 @@ import { sendResponse } from './helper';
 
 export default async function handler(req: any, res: any) {
   try {
-    return sendResponse(res, 503, {
+  /*  return sendResponse(res, 503, {
       success: false,
       offlineMode: true,
       message: 'Cloud data access is temporarily disabled until server-side authentication and authorization are configured.',
-    });
+    }); */
 
     if (!isDatabaseConfigured()) {
       return sendResponse(res, 200, {
