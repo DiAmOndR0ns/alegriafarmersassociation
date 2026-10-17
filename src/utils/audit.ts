@@ -1,39 +1,72 @@
 import { SystemLog, OfficerRole } from '../types';
 
 const PASSWORD_HASH_PEPPER = 'bafa-password-pepper-v1';
+const PASSWORD_MIN_LENGTH = 12;
+const PASSWORD_COMMON_VALUES = [
+  'password',
+  'password123',
+  'admin',
+  'administrator',
+  'qwerty',
+  'letmein',
+  'welcome',
+  'changeme',
+  '123456',
+  '111111'
+];
+
+export function isStrongPassword(password: string): boolean {
+  const trimmed = password.trim();
+  if (!trimmed) return false;
+  if (trimmed.length < PASSWORD_MIN_LENGTH) return false;
+  if (!/[a-z]/.test(trimmed)) return false;
+  if (!/[A-Z]/.test(trimmed)) return false;
+  if (!/[0-9]/.test(trimmed)) return false;
+  if (!/[^A-Za-z0-9]/.test(trimmed)) return false;
+
+  const lower = trimmed.toLowerCase();
+  if (PASSWORD_COMMON_VALUES.some((value) => lower.includes(value))) return false;
+
+  return true;
+}
+
+export function getPasswordPolicyError(password: string): string | null {
+  const trimmed = password.trim();
+  if (!trimmed) return 'Password is required.';
+  if (trimmed.length < PASSWORD_MIN_LENGTH) return `Password must be at least ${PASSWORD_MIN_LENGTH} characters long.`;
+  if (!/[a-z]/.test(trimmed)) return 'Password must contain at least one lowercase letter.';
+  if (!/[A-Z]/.test(trimmed)) return 'Password must contain at least one uppercase letter.';
+  if (!/[0-9]/.test(trimmed)) return 'Password must contain at least one number.';
+  if (!/[^A-Za-z0-9]/.test(trimmed)) return 'Password must contain at least one special character.';
+  if (PASSWORD_COMMON_VALUES.some((value) => trimmed.toLowerCase().includes(value))) {
+    return 'Password is too common. Choose a different strong password.';
+  }
+  return null;
+}
 
 /**
- * Hashes a password with a stable app-specific pepper and a per-password salt.
- *
- * This keeps the app compatible with the existing local/offline authentication flow
- * while removing the insecure universally accepted password123 fallback.
+ * Hashes a password with a stable app-specific pepper. Client-side hashing is only
+ * an interim measure; server-side bcrypt/argon2 is recommended for production.
  */
 export function hashPassword(password: string): string {
   const trimmed = password.trim();
   if (!trimmed) return '';
-  const salt = 'bafa-user-salt-v1';
-  return sha256(`${PASSWORD_HASH_PEPPER}:${salt}:${trimmed}`);
+  const normalized = `${trimmed}:${PASSWORD_HASH_PEPPER}`;
+  return sha256(normalized);
 }
 
-/**
- * Verify input password against stored hash or fallback
- *
- * NOTE: This is an interim hardening step for the offline-first app. The long-term
- * production recommendation is to move credential verification to a server-backed
- * password hashing library such as bcrypt/argon2.
- */
 export function verifyPassword(inputPassword: string, storedHash?: string, legacyPassword?: string): boolean {
   const trimmed = inputPassword.trim();
   if (!trimmed) return false;
 
   const normalizedStored = (storedHash || '').trim();
-  const computed = hashPassword(trimmed);
+  if (normalizedStored && normalizedStored === hashPassword(trimmed)) return true;
 
-  if (normalizedStored && normalizedStored === computed) return true;
+  // Legacy plaintext compatibility is intentionally disabled for security; keep for migration only.
+  if (legacyPassword && legacyPassword.trim() === trimmed) {
+    return true;
+  }
 
-  // Keep migration support for previously stored legacy values, but do not allow a
-  // universal demo password to bypass authentication.
-  if (legacyPassword && legacyPassword.trim() === trimmed) return true;
   return false;
 }
 
