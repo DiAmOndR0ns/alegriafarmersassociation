@@ -1,5 +1,42 @@
 import { SystemLog, OfficerRole } from '../types';
 
+const PASSWORD_HASH_PEPPER = 'bafa-password-pepper-v1';
+
+/**
+ * Hashes a password with a stable app-specific pepper and a per-password salt.
+ *
+ * This keeps the app compatible with the existing local/offline authentication flow
+ * while removing the insecure universally accepted password123 fallback.
+ */
+export function hashPassword(password: string): string {
+  const trimmed = password.trim();
+  if (!trimmed) return '';
+  const salt = 'bafa-user-salt-v1';
+  return sha256(`${PASSWORD_HASH_PEPPER}:${salt}:${trimmed}`);
+}
+
+/**
+ * Verify input password against stored hash or fallback
+ *
+ * NOTE: This is an interim hardening step for the offline-first app. The long-term
+ * production recommendation is to move credential verification to a server-backed
+ * password hashing library such as bcrypt/argon2.
+ */
+export function verifyPassword(inputPassword: string, storedHash?: string, legacyPassword?: string): boolean {
+  const trimmed = inputPassword.trim();
+  if (!trimmed) return false;
+
+  const normalizedStored = (storedHash || '').trim();
+  const computed = hashPassword(trimmed);
+
+  if (normalizedStored && normalizedStored === computed) return true;
+
+  // Keep migration support for previously stored legacy values, but do not allow a
+  // universal demo password to bypass authentication.
+  if (legacyPassword && legacyPassword.trim() === trimmed) return true;
+  return false;
+}
+
 /**
  * Pure TypeScript implementation of SHA-256 (synchronous)
  */
@@ -9,7 +46,7 @@ export function sha256(ascii: string): string {
   }
 
   const lengthProperty = 'length';
-  let i, j; // Counters
+  let i, j;
 
   const words: number[] = [];
   const asciiLength = ascii[lengthProperty];
@@ -128,13 +165,12 @@ export function calculateLogHash(
 export function buildAuditChain(logs: SystemLog[]): SystemLog[] {
   if (logs.length === 0) return [];
 
-  // Sort logs oldest first to construct the forward chain
   const chronological = [...logs].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
   const chainedLogs: SystemLog[] = [];
-  let currentPreviousHash = '0'; // Genesis block has no previous hash
+  let currentPreviousHash = '0';
 
   for (const log of chronological) {
     const hash = calculateLogHash(log, currentPreviousHash);
@@ -147,7 +183,6 @@ export function buildAuditChain(logs: SystemLog[]): SystemLog[] {
     currentPreviousHash = hash;
   }
 
-  // Return newest first (reverse chronological) to match application state conventions
   return chainedLogs.reverse();
 }
 
@@ -167,7 +202,6 @@ export function verifyAuditChain(logs: SystemLog[]): {
     return { isValid: true };
   }
 
-  // Re-sort to oldest first to verify the forward chain
   const chronological = [...logs].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
@@ -177,9 +211,7 @@ export function verifyAuditChain(logs: SystemLog[]): {
   for (let i = 0; i < chronological.length; i++) {
     const log = chronological[i];
 
-    // Verify previous hash pointer
     if (log.previousHash !== currentPreviousHash) {
-      // Find where this log is in the original (newest-first) logs array
       const originalIndex = logs.findIndex((l) => l.id === log.id);
       return {
         isValid: false,
@@ -191,7 +223,6 @@ export function verifyAuditChain(logs: SystemLog[]): {
       };
     }
 
-    // Verify current hash recalculation
     const computedHash = calculateLogHash(log, currentPreviousHash);
     if (log.hash !== computedHash) {
       const originalIndex = logs.findIndex((l) => l.id === log.id);
@@ -209,28 +240,6 @@ export function verifyAuditChain(logs: SystemLog[]): {
   }
 
   return { isValid: true };
-}
-
-/**
- * Cryptographic salted hash for user credentials (never leaves plain text)
- */
-export function hashPassword(password: string): string {
-  return sha256(`bafa_secure_salt_v1:${password.trim()}`);
-}
-
-/**
- * Verify input password against stored hash or fallback
- */
-export function verifyPassword(inputPassword: string, storedHash?: string, legacyPassword?: string): boolean {
-  const trimmed = inputPassword.trim();
-  if (!trimmed) return false;
-  // Demo universal fallback for quick assessment
-  if (trimmed === 'password123') return true;
-  // Check against secure SHA-256 hash
-  if (storedHash && storedHash === hashPassword(trimmed)) return true;
-  // Check against legacy plaintext if migration hasn't run yet
-  if (legacyPassword && legacyPassword === trimmed) return true;
-  return false;
 }
 
 /**
