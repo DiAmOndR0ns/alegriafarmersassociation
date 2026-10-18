@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { User, OfficerRole } from '../types';
-import { verifyPassword, hashPassword } from '../utils/audit';
-import { 
-  Building, Lock, Shield, Sprout, Smartphone, CheckCircle, 
+import { verifyPassword } from '../utils/audit';
+import { hashPassword, validatePasswordPolicy } from '../utils/passwordPolicy';
+import {
+  Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
   UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
   User as UserIcon, HelpCircle, AlertTriangle, KeyRound, Eye, EyeOff,
   ShieldCheck, Phone, Check, Info, FileText
@@ -10,29 +11,29 @@ import {
 
 interface AuthScreenProps {
   users: User[];
-  onLogin: (user: User) => void;
+  onLogin: (user: User, password: string) => void;
   onRegister?: (userData: Omit<User, 'id' | 'isApproved'>) => void;
   toast: (message: string, type: 'success' | 'warning' | 'info' | 'error') => void;
   onRequestPasswordReset?: (username: string) => void;
   onBackToGuest?: () => void;
 }
 
-export default function AuthScreen({ 
-  users, 
-  onLogin, 
+export default function AuthScreen({
+  users,
+  onLogin,
   toast,
   onRequestPasswordReset,
   onBackToGuest
 }: AuthScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  
+
   // Password reset request modal/form state
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetUsername, setResetUsername] = useState('');
   const [showMemberGuide, setShowMemberGuide] = useState(false);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       toast('Palihug isulod ang imong username ug password (Please enter username and password).', 'error');
@@ -43,13 +44,11 @@ export default function AuthScreen({
       u => u.username.toLowerCase() === username.trim().toLowerCase()
     );
 
-    if (!matchedUser) {
-      toast('Wala makit-i ang account. Palihug isusi ang imong username o pakigkita sa Kalihim (Account not found).', 'error');
-      return;
-    }
-
-    if (!verifyPassword(password, matchedUser.passwordHash, matchedUser.password)) {
-      toast('Sayo ang password. Sulayi ang "password123" o ipangutana sa Presidente (Incorrect password).', 'error');
+    const passwordIsValid = matchedUser
+      ? await verifyPassword(password, matchedUser.passwordHash, matchedUser.password)
+      : false;
+    if (!matchedUser || !passwordIsValid) {
+      toast('Invalid credentials.', 'error');
       return;
     }
 
@@ -58,7 +57,7 @@ export default function AuthScreen({
       return;
     }
 
-    onLogin(matchedUser);
+    onLogin(matchedUser, password);
     toast(`Welcome back, ${matchedUser.name}!`, 'success');
   };
 
@@ -295,7 +294,7 @@ export default function AuthScreen({
                       <input
                         type="password"
                         required
-                        placeholder="Ipapilit ang imong koda (e.g. password123)"
+                        placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC] font-semibold transition-all font-sans"

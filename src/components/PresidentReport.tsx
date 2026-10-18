@@ -106,10 +106,18 @@ function Officers({ d }: { d: ReportData }) {
 
 
 /* ---------- Report ---------- */
-export default function PresidentReport({ data }: { data: ReportData }) {
+export default function PresidentReport({ data, year, users }: { data?: ReportData; year?: number; users?: User[] }) {
+  const resolvedData = useMemo(() => {
+    if (data) return data;
+    return buildReportData({
+      year: year || new Date().getFullYear(),
+      users,
+    });
+  }, [data, year, users]);
+
   const exportPdf = () => {
     const prev = document.title;
-    document.title = `${data.org.abbr}-Executive-Report-${data.year}`; // becomes the PDF filename
+    document.title = `${resolvedData.org.abbr}-Executive-Report-${resolvedData.year}`; // becomes the PDF filename
     const restore = () => {
       document.title = prev;
       window.removeEventListener("afterprint", restore);
@@ -123,9 +131,9 @@ export default function PresidentReport({ data }: { data: ReportData }) {
   return (
     <div className="pr-root">
       <div className="pr-toolbar"><button onClick={exportPdf}>Export PDF</button></div>
-      <Highlights d={data} />
-      <Plans d={data} />
-      <Officers d={data} />
+      <Highlights d={resolvedData} />
+      <Plans d={resolvedData} />
+      <Officers d={resolvedData} />
     </div>
   );
 }

@@ -1531,11 +1531,6 @@ async function parseRequestBody(req) {
 // src/api/push.ts
 async function handler(req, res) {
   try {
-    return sendResponse(res, 503, {
-      success: false,
-      offlineMode: true,
-      message: "Cloud sync is temporarily disabled until server-side authentication and authorization are configured."
-    });
     if (!isDatabaseConfigured()) {
       return sendResponse(res, 200, {
         success: true,

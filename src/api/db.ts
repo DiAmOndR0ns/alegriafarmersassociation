@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { OFFICIAL_OFFICERS, INITIAL_PRODUCTS } from '../initialData';
 import { AuditorReport, DelegationRequest } from '../types';
+import { generateInitialPassword, hashPassword } from '../utils/passwordPolicy';
 
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
 const PgPool = (pg as any)?.Pool || (pg as any)?.default?.Pool || (pg as any)?.default || pg;
@@ -127,6 +128,9 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS rsbsa_number VARCHAR(100);`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_rsbsa_registered BOOLEAN DEFAULT FALSE;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_history JSONB DEFAULT '[]'::jsonb;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;`,
 
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
@@ -236,7 +240,10 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         avatar_url TEXT,
         member_id_number VARCHAR(100),
         rsbsa_number VARCHAR(100),
-        is_rsbsa_registered BOOLEAN DEFAULT FALSE
+        is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+        password_history JSONB DEFAULT '[]'::jsonb,
+        password_changed_at TIMESTAMPTZ,
+        must_change_password BOOLEAN DEFAULT FALSE
       );
     `);
 
@@ -605,17 +612,20 @@ export async function ensureDatabaseSchema(pool: pg.Pool) {
     if (usersCount === 0) {
       console.log('[DB DEBUG] No users found. Provisioning officer accounts with configured credentials...');
       for (const u of OFFICIAL_OFFICERS) {
-        const password = u.password || u.passwordHash || process.env[`OFFICER_${u.username.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD`];
+        const configuredPassword = process.env[`OFFICER_${u.username.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD`];
+        const password = configuredPassword || generateInitialPassword(u.username, u.role);
+        if (!configuredPassword) console.warn(`[DB SECURITY] Generated one-time initial password for ${u.username}: ${password}`);
         if (!password) {
           console.warn(`[DB DEBUG] Skipping officer account "${u.username}": no password is configured in seed data or environment.`);
           continue;
         }
 
+        const passwordHash = password.startsWith('$2') ? password : hashPassword(password);
         await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status, password_changed_at, must_change_password)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (id) DO NOTHING;
-        `, [u.id, u.username, password, u.name, u.role, true, u.joinedDate || '2024-01-01', 'Active']);
+        `, [u.id, u.username, passwordHash, u.name, u.role, true, u.joinedDate || '2024-01-01', 'Active', new Date(0).toISOString(), true]);
       }
       console.log('[DB DEBUG] Officer account provisioning completed');
     }
@@ -740,7 +750,10 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const users = usersRes.rows.map(r => ({
       id: r.id,
       username: r.username,
-      password: r.password,
+      passwordHash: r.password,
+      passwordHistory: r.password_history || [],
+      passwordChangedAt: r.password_changed_at ? new Date(r.password_changed_at).toISOString() : undefined,
+      mustChangePassword: Boolean(r.must_change_password),
       name: r.name,
       role: r.role,
       isApproved: r.is_approved,
@@ -1410,7 +1423,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['primary_crops', 'primaryCrops', (r) => r.primaryCrops || []], ['contact_number', 'contactNumber', (r) => r.contactNumber || null],
         ['status', 'status', (r) => r.status || 'Active'], ['avatar_url', 'avatarUrl', (r) => r.avatarUrl || null],
         ['member_id_number', 'memberIdNumber', (r) => r.memberIdNumber || null], ['rsbsa_number', 'rsbsaNumber', (r) => r.rsbsaNumber || null],
-        ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)]
+        ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)],
+        ['password_history', 'passwordHistory', (r) => r.passwordHistory || []],
+        ['password_changed_at', 'passwordChangedAt', (r) => r.passwordChangedAt || null],
+        ['must_change_password', 'mustChangePassword', (r) => Boolean(r.mustChangePassword)]
       ] },
       { table: 'members', deletedIds: deletedMemberIds, fields: [
         ['name', 'name', (r) => r.name], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],

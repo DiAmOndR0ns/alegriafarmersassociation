@@ -8,11 +8,10 @@ export function sha256(ascii: string): string {
     return (value >>> amount) | (value << (32 - amount));
   }
 
-  const lengthProperty = 'length';
   let i, j; // Counters
-
+  const bytes = new TextEncoder().encode(ascii);
   const words: number[] = [];
-  const asciiLength = ascii[lengthProperty];
+  const byteLength = bytes.length;
 
   const hash = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
@@ -29,15 +28,15 @@ export function sha256(ascii: string): string {
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
   ];
 
-  const wordsLength = (((asciiLength + 8) >> 6) + 1) << 4;
+  const wordsLength = (((byteLength + 8) >> 6) + 1) << 4;
   for (i = 0; i < wordsLength; i++) {
     words[i] = 0;
   }
-  for (i = 0; i < asciiLength; i++) {
-    words[i >> 2] |= ascii.charCodeAt(i) << (24 - (i % 4) * 8);
+  for (i = 0; i < byteLength; i++) {
+    words[i >> 2] |= bytes[i] << (24 - (i % 4) * 8);
   }
-  words[asciiLength >> 2] |= 0x80 << (24 - (asciiLength % 4) * 8);
-  words[wordsLength - 1] = asciiLength * 8;
+  words[byteLength >> 2] |= 0x80 << (24 - (byteLength % 4) * 8);
+  words[wordsLength - 1] = byteLength * 8;
 
   for (j = 0; j < wordsLength; j += 16) {
     const w = [];
@@ -211,27 +210,7 @@ export function verifyAuditChain(logs: SystemLog[]): {
   return { isValid: true };
 }
 
-/**
- * Cryptographic salted hash for user credentials (never leaves plain text)
- */
-export function hashPassword(password: string): string {
-  return sha256(`bafa_secure_salt_v1:${password.trim()}`);
-}
-
-/**
- * Verify input password against stored hash or fallback
- */
-export function verifyPassword(inputPassword: string, storedHash?: string, legacyPassword?: string): boolean {
-  const trimmed = inputPassword.trim();
-  if (!trimmed) return false;
-  // Demo universal fallback for quick assessment
-  if (trimmed === 'password123') return true;
-  // Check against secure SHA-256 hash
-  if (storedHash && storedHash === hashPassword(trimmed)) return true;
-  // Check against legacy plaintext if migration hasn't run yet
-  if (legacyPassword && legacyPassword === trimmed) return true;
-  return false;
-}
+export { hashPassword, verifyPassword } from './passwordPolicy';
 
 /**
  * Strips sensitive plaintext credentials from user objects before localStorage writes

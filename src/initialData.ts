@@ -1,15 +1,16 @@
 import { Member, Meeting, Resolution, FinancialTransaction, Announcement, SystemLog, HogRaisingState, Product, AssociationActivity, User, OrganizationFund, AuditorReport, DelegationRequest } from './types';
-import { hashPassword } from './utils/audit';
+import { hashPassword } from './utils/passwordPolicy';
 
 // The 6 official officer accounts of Alegria Farmers Association (Tuburan, Cebu)
-// Allows designated officers to log in securely with salted SHA-256 hashed credentials.
-const DEFAULT_HASH = hashPassword('password123');
+// Legacy credentials are migrated to the current password-hash format on first load.
 
 export const OFFICIAL_OFFICERS: User[] = [
   {
     id: 'user-pres',
     username: 'president',
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword('password123'),
+    mustChangePassword: true,
+    passwordChangedAt: new Date(0).toISOString(),
     name: 'Zenaida A. Elbiña',
     role: 'President',
     isApproved: true,
@@ -18,7 +19,9 @@ export const OFFICIAL_OFFICERS: User[] = [
   {
     id: 'user-vp',
     username: 'vp',
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword('password123'),
+    mustChangePassword: true,
+    passwordChangedAt: new Date(0).toISOString(),
     name: 'Anselna B Arnado',
     role: 'Vice_President',
     isApproved: true,
@@ -27,7 +30,9 @@ export const OFFICIAL_OFFICERS: User[] = [
   {
     id: 'user-sec',
     username: 'secretary',
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword('password123'),
+    mustChangePassword: true,
+    passwordChangedAt: new Date(0).toISOString(),
     name: 'Jennylyn S Lumactao',
     role: 'Secretary',
     isApproved: true,
@@ -36,7 +41,9 @@ export const OFFICIAL_OFFICERS: User[] = [
   {
     id: 'user-tres',
     username: 'treasurer',
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword('password123'),
+    mustChangePassword: true,
+    passwordChangedAt: new Date(0).toISOString(),
     name: 'Gracelyn P Asendiente',
     role: 'Treasurer',
     isApproved: true,
@@ -45,7 +52,9 @@ export const OFFICIAL_OFFICERS: User[] = [
   {
     id: 'user-aud',
     username: 'auditor',
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword('password123'),
+    mustChangePassword: true,
+    passwordChangedAt: new Date(0).toISOString(),
     name: 'Lorena B Pinote',
     role: 'Auditor',
     isApproved: true,
@@ -54,7 +63,9 @@ export const OFFICIAL_OFFICERS: User[] = [
   {
     id: 'user-pio',
     username: 'pio',
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword('password123'),
+    mustChangePassword: true,
+    passwordChangedAt: new Date(0).toISOString(),
     name: 'Ida S Manera',
     role: 'PIO',
     isApproved: true,

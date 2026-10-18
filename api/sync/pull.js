@@ -908,11 +908,6 @@ function sendResponse(res, statusCode, data) {
 // src/api/pull.ts
 async function handler(req, res) {
   try {
-    return sendResponse(res, 503, {
-      success: false,
-      offlineMode: true,
-      message: "Cloud data access is temporarily disabled until server-side authentication and authorization are configured."
-    });
     if (!isDatabaseConfigured()) {
       return sendResponse(res, 200, {
         success: false,

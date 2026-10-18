@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Member, Meeting, Resolution, User, MemberAffiliation } from '../types';
-import { 
-  Users, BookOpen, FileText, Plus, Search, 
-  MapPin, CheckCircle, FilePlus, Calendar, 
+import {
+  Users, BookOpen, FileText, Plus, Search,
+  MapPin, CheckCircle, FilePlus, Calendar,
   Trash2, UserPlus, Info, Tag, Printer, UserCheck,
   CheckCircle2, AlertCircle, XCircle, Award, Sparkles, ShieldCheck, Clock,
   Key, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw, Edit3
@@ -14,6 +14,7 @@ import SecretaryTemplatesModal from './SecretaryTemplatesModal';
 import MemberIdBadgeModal from './MemberIdBadgeModal';
 import AffiliationManager from './AffiliationManager';
 import { splitName } from '../utils/names';
+import { generateInitialPassword, validatePasswordPolicy } from '../utils/passwordPolicy';
 
 interface SecretaryViewProps {
   members: Member[];
@@ -109,7 +110,7 @@ export default function SecretaryView({
   // Portal Account Setup States for Member Registration
   const [createLoginAccount, setCreateLoginAccount] = useState(true);
   const [loginUsername, setLoginUsername] = useState('');
-  const [loginPassword, setLoginPassword] = useState('password123');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [hasEditedUsernameManually, setHasEditedUsernameManually] = useState(false);
 
@@ -126,9 +127,10 @@ export default function SecretaryView({
   // Manage / Reset Portal Login Modal (for existing members)
   const [loginManageMember, setLoginManageMember] = useState<Member | null>(null);
   const [manageUsername, setManageUsername] = useState('');
-  const [managePassword, setManagePassword] = useState('password123');
+  const [managePassword, setManagePassword] = useState('');
   const [showManagePassword, setShowManagePassword] = useState(false);
   const [copiedManageCreds, setCopiedManageCreds] = useState(false);
+  const [managePasswordError, setManagePasswordError] = useState('');
 
   // Member Form State (Registration)
   const [showMemberModal, setShowMemberModal] = useState(false);
@@ -145,6 +147,7 @@ export default function SecretaryView({
   const [memberBirthDay, setMemberBirthDay] = useState('');
   const [memberBirthYear, setMemberBirthYear] = useState('');
   const [birthDateError, setBirthDateError] = useState('');
+  const [loginPasswordError, setLoginPasswordError] = useState('');
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
   const [memberAffiliations, setMemberAffiliations] = useState<MemberAffiliation[]>([]);
 
@@ -164,7 +167,7 @@ export default function SecretaryView({
   const [editBirthYear, setEditBirthYear] = useState('');
   const [editSelectedCrops, setEditSelectedCrops] = useState<string[]>([]);
   const [editAffiliations, setEditAffiliations] = useState<MemberAffiliation[]>([]);
-  
+
   // Meeting Form State
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [meetingTitle, setMeetingTitle] = useState('');
@@ -232,7 +235,13 @@ export default function SecretaryView({
 
     const finalMemberId = memberIdNum || `AFA-2026-0${members.length + 1}`;
     const cleanUsername = (loginUsername.trim() || assembledName.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '.')).toLowerCase();
-    const cleanPassword = loginPassword.trim() || 'password123';
+    const cleanPassword = loginPassword.trim() || generateInitialPassword(cleanUsername, 'Member');
+    const passwordError = createLoginAccount ? validatePasswordPolicy(cleanPassword, cleanUsername, 'Member') : null;
+    if (passwordError) {
+      setLoginPasswordError(passwordError);
+      return;
+    }
+    setLoginPasswordError('');
 
     onAddMember({
       name: assembledName,
@@ -278,7 +287,7 @@ export default function SecretaryView({
     setSelectedCrops([]);
     setMemberAffiliations([]);
     setLoginUsername('');
-    setLoginPassword('password123');
+    setLoginPassword('');
     setHasEditedUsernameManually(false);
     setShowMemberModal(false);
   };
@@ -347,7 +356,7 @@ export default function SecretaryView({
   const handleMeetingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!meetingTitle.trim() || !meetingMinutes.trim()) return;
-    
+
     // Use the compiled attendance count from the roll call if one was done, otherwise use input
     const finalCount = Object.keys(meetingAttendanceRecord).length > 0
       ? Object.values(meetingAttendanceRecord).filter(v => v === 'Present').length
@@ -402,7 +411,7 @@ export default function SecretaryView({
 
   // Filter Members
   const filteredMembers = members.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           member.primaryCrops.some(c => c.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesSitio = selectedSitio === 'All' || member.farmLocation === selectedSitio;
     return matchesSearch && matchesSitio;
@@ -548,8 +557,8 @@ export default function SecretaryView({
                 <tbody className="divide-y divide-[#D5CFC1] text-[#1B4332] text-sm">
                   {filteredMembers.length > 0 ? (
                     filteredMembers.map((member) => {
-                      const linkedUser = users.find(u => 
-                        u.id === member.id || 
+                      const linkedUser = users.find(u =>
+                        u.id === member.id ||
                         (member.memberIdNumber && u.memberIdNumber === member.memberIdNumber) ||
                         u.name.toLowerCase() === member.name.toLowerCase()
                       );
@@ -621,7 +630,7 @@ export default function SecretaryView({
                                 onClick={() => {
                                   setLoginManageMember(member);
                                   setManageUsername(linkedUser.username);
-                                  setManagePassword('password123');
+                                  setManagePassword(generateInitialPassword(linkedUser.username, 'Member'));
                                 }}
                                 className="p-1 hover:bg-[#EAF4EC] text-[#1B4332] hover:text-amber-700 rounded transition-colors"
                                 title="Reset / Manage Password"
@@ -636,7 +645,7 @@ export default function SecretaryView({
                                 setLoginManageMember(member);
                                 const gen = member.name.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '.');
                                 setManageUsername(gen);
-                                setManagePassword('password123');
+                                setManagePassword(generateInitialPassword(gen, 'Member'));
                               }}
                               className="inline-flex items-center gap-1 bg-[#1B4332] hover:bg-[#143326] text-white border border-[#2D6A4F] px-2 py-1 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
                               title="Issue portal login for this member"
@@ -1159,7 +1168,7 @@ export default function SecretaryView({
                             </label>
                             <button
                               type="button"
-                              onClick={() => setLoginPassword(`Afa@${Math.floor(100 + Math.random() * 900)}`)}
+                              onClick={() => setLoginPassword(generateInitialPassword(loginUsername || buildFullName(memberFirstName, memberMiddleName, memberSurname), 'Member'))}
                               className="text-[10px] text-[#2D6A4F] hover:underline font-bold cursor-pointer"
                             >
                               Generate
@@ -1170,7 +1179,7 @@ export default function SecretaryView({
                               type={showLoginPassword ? 'text' : 'password'}
                               required={createLoginAccount}
                               value={loginPassword}
-                              onChange={(e) => setLoginPassword(e.target.value)}
+                              onChange={(e) => { setLoginPassword(e.target.value); setLoginPasswordError(''); }}
                               className="w-full pl-2.5 pr-8 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 font-mono focus:outline-none focus:border-[#2D6A4F]"
                             />
                             <button
@@ -1181,6 +1190,8 @@ export default function SecretaryView({
                               {showLoginPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </button>
                           </div>
+                          <p className="mt-1 text-[10px] text-slate-600">12+ chars, upper/lowercase, number, symbol; no username, role, “password”, 12345 or qwerty.</p>
+                          {loginPasswordError && <p role="alert" className="text-[10px] text-red-700">{loginPasswordError}</p>}
                         </div>
                       </div>
                       <p className="text-[10px] text-[#3A4A42] italic">
@@ -1713,15 +1724,15 @@ export default function SecretaryView({
       )}
 
       {/* PRINT MINUTES MODAL */}
-      <PrintMinutesModal 
-        meeting={selectedMeetingForPrint} 
-        onClose={() => setSelectedMeetingForPrint(null)} 
+      <PrintMinutesModal
+        meeting={selectedMeetingForPrint}
+        onClose={() => setSelectedMeetingForPrint(null)}
       />
 
       {/* PRINT BLANK ATTENDANCE SHEET MODAL */}
-      <PrintAttendanceModal 
-        isOpen={showAttendanceModal} 
-        onClose={() => setShowAttendanceModal(false)} 
+      <PrintAttendanceModal
+        isOpen={showAttendanceModal}
+        onClose={() => setShowAttendanceModal(false)}
         members={members}
       />
 
@@ -1865,7 +1876,7 @@ export default function SecretaryView({
                 </h3>
                 <p className="text-xs text-[#4A5F57] mt-0.5">Farmer: <strong className="text-[#1B4332]">{loginManageMember.name}</strong> ({loginManageMember.memberIdNumber})</p>
               </div>
-              <button 
+              <button
                 onClick={() => setLoginManageMember(null)}
                 className="text-[#4A5F57] hover:text-[#1B4332] text-xl font-bold p-1 cursor-pointer rounded-lg hover:bg-white/60 transition-all"
                 aria-label="Close"
@@ -1874,10 +1885,16 @@ export default function SecretaryView({
               </button>
             </div>
 
-            <form 
+            <form
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!manageUsername.trim() || !managePassword.trim()) return;
+                const error = validatePasswordPolicy(managePassword, manageUsername, 'Member', users.find((user) => user.id === loginManageMember.id)?.passwordHistory || []);
+                if (error) {
+                  setManagePasswordError(error);
+                  return;
+                }
+                setManagePasswordError('');
                 if (onManageMemberLogin) {
                   onManageMemberLogin(loginManageMember.id, manageUsername.trim(), managePassword.trim());
                 }
@@ -1904,7 +1921,7 @@ export default function SecretaryView({
                   <label className="block text-xs font-bold text-[#1B4332] uppercase">Password</label>
                   <button
                     type="button"
-                    onClick={() => setManagePassword(`Afa@${Math.floor(100 + Math.random() * 900)}`)}
+                    onClick={() => setManagePassword(generateInitialPassword(manageUsername, 'Member'))}
                     className="text-xs text-[#1B4332] hover:underline font-bold cursor-pointer"
                   >
                     Generate Random
@@ -1915,7 +1932,7 @@ export default function SecretaryView({
                     type={showManagePassword ? "text" : "password"}
                     required
                     value={managePassword}
-                    onChange={(e) => setManagePassword(e.target.value)}
+                    onChange={(e) => { setManagePassword(e.target.value); setManagePasswordError(''); }}
                     className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono pr-10 focus:outline-none focus:border-[#1B4332]"
                   />
                   <button

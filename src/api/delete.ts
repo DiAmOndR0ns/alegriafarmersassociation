@@ -3,13 +3,12 @@ import { sendResponse, parseRequestBody } from './helper';
 
 export default async function handler(req: any, res: any) {
   try {
-    return sendResponse(res, 503, {
+  /*  return sendResponse(res, 503, {
       success: false,
       offlineMode: true,
       message: 'Remote deletion is temporarily disabled until server-side authentication and authorization are configured.',
-    });
+    }); */
 
-    /* Disabled until authenticated replacement.
     if (!isDatabaseConfigured()) {
       return sendResponse(res, 200, {
         success: false,
@@ -67,15 +66,11 @@ export default async function handler(req: any, res: any) {
       table: result.table,
       message: `Successfully deleted ${result.deletedCount} record(s) from database table "${result.table}".`,
     });
-    } catch (error: any) {
-      console.error('[Cloud DB Delete API Error]:', error?.message || error);
-      return sendResponse(res, 500, {
-        success: false,
-        message: `Failed to delete from database: ${error?.message || 'Internal server error'}`,
-      });
-    }
-    */
-  } catch {
-    return sendResponse(res, 503, { success: false, message: 'Remote deletion is disabled.' });
+  } catch (error: any) {
+    console.error('[Cloud DB Delete API Error]:', error?.message || error);
+    return sendResponse(res, 500, {
+      success: false,
+      message: `Failed to delete from database: ${error?.message || 'Internal server error'}`,
+    });
   }
 }

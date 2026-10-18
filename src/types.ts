@@ -20,8 +20,11 @@ export interface MemberAffiliation {
 export interface User {
   id: string;
   username: string;
-  password?: string; // Kept optional for in-memory handling; NEVER saved in plain text to localStorage
-  passwordHash?: string; // Cryptographic SHA-256 hash
+  password?: string; // Legacy in-memory credentials only; never persisted in plaintext
+  passwordHash?: string; // bcrypt hash or legacy hash pending login migration
+  passwordHistory?: { hash: string; changedAt: string }[];
+  passwordChangedAt?: string;
+  mustChangePassword?: boolean;
   name: string;
   role: OfficerRole | 'Member';
   isApproved: boolean;

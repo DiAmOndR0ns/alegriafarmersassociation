@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   OfficerRole, Member, Meeting, Resolution, 
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState,
@@ -10,23 +10,26 @@ import {
   INITIAL_PRODUCTS, INITIAL_ACTIVITIES, OFFICIAL_OFFICERS, INITIAL_FUNDS
 } from './initialData';
 import OfflineIndicator from './components/OfflineIndicator';
-import SecretaryView from './components/SecretaryView';
-import TreasurerView from './components/TreasurerView';
-import AuditorView from './components/AuditorView';
-import PioView from './components/PioView';
-import ExecutiveView from './components/ExecutiveView';
-import AnnouncementDashboard from './components/AnnouncementDashboard';
-import HogRaisingIgpTracker from './components/HogRaisingIgpTracker';
-import SyncQueuePanel from './components/SyncQueuePanel';
-import AuthScreen from './components/AuthScreen';
-import MemberDashboard from './components/MemberDashboard';
-import GuestPortal from './components/GuestPortal';
-import PrivacyPolicy from './components/PrivacyPolicy';
-import OfficerReportModal from './components/OfficerReportModal';
-import PresidentReport, { buildReportData } from './components/PresidentReport';
-import ProductManagementModal from './components/ProductManagementModal';
 import DashboardSkeleton from './components/DashboardSkeleton';
-import { buildAuditChain, hashPassword, sanitizeUserForStorage } from './utils/audit';
+
+const SecretaryView = lazy(() => import('./components/SecretaryView'));
+const TreasurerView = lazy(() => import('./components/TreasurerView'));
+const AuditorView = lazy(() => import('./components/AuditorView'));
+const PioView = lazy(() => import('./components/PioView'));
+const ExecutiveView = lazy(() => import('./components/ExecutiveView'));
+const AnnouncementDashboard = lazy(() => import('./components/AnnouncementDashboard'));
+const HogRaisingIgpTracker = lazy(() => import('./components/HogRaisingIgpTracker'));
+const SyncQueuePanel = lazy(() => import('./components/SyncQueuePanel'));
+const AuthScreen = lazy(() => import('./components/AuthScreen'));
+const MemberDashboard = lazy(() => import('./components/MemberDashboard'));
+const GuestPortal = lazy(() => import('./components/GuestPortal'));
+const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
+const OfficerReportModal = lazy(() => import('./components/OfficerReportModal'));
+const PresidentReport = lazy(() => import('./components/PresidentReport'));
+const ProductManagementModal = lazy(() => import('./components/ProductManagementModal'));
+const PasswordChangePrompt = lazy(() => import('./components/PasswordChangePrompt'));
+import { buildAuditChain, hashPassword, verifyPassword, sanitizeUserForStorage } from './utils/audit';
+import { generateInitialPassword, getPasswordExpiryStatus, hashPassword as hashPolicyPassword, isLegacyPasswordHash, needsInitialPasswordChange, validatePasswordPolicy } from './utils/passwordPolicy';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
@@ -39,6 +42,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [guestMode, setGuestMode] = useState<boolean>(true);
+  const [dismissedPasswordWarningFor, setDismissedPasswordWarningFor] = useState<string | null>(null);
 
   // Connection and Sync State
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -203,12 +207,21 @@ export default function App() {
         .filter((u: any) => u.role !== 'Member' || !u.id.startsWith('user-m'))
         .map((u: any) => {
           const copy = { ...u };
+          if (!copy.passwordHash && !copy.password && /^(user-pres|user-vp|user-sec|user-tres|user-aud|user-pio)$/.test(copy.id)) {
+            copy.passwordHash = hashPolicyPassword('password123');
+            copy.passwordChangedAt = new Date(0).toISOString();
+            copy.mustChangePassword = true;
+          }
+          const hadLegacyPlaintext = Boolean(copy.password);
           if (copy.password) {
-            if (!copy.passwordHash) {
-              copy.passwordHash = hashPassword(copy.password);
-            }
+            copy.passwordHash = copy.passwordHash?.startsWith('$2') ? copy.passwordHash : hashPolicyPassword(copy.password);
+            copy.passwordChangedAt = copy.passwordChangedAt || new Date(0).toISOString();
+            copy.passwordHistory = copy.passwordHistory || [];
+            copy.mustChangePassword = true;
             delete copy.password;
           }
+          if (hadLegacyPlaintext || !copy.passwordHash?.startsWith('$2')) copy.mustChangePassword = true;
+          if (!copy.passwordHistory) copy.passwordHistory = [];
           return copy;
         });
       setUsers(sanitizedUsers.length > 0 ? sanitizedUsers : OFFICIAL_OFFICERS);
@@ -284,9 +297,22 @@ export default function App() {
             if (res.data.hogRaising) { setHogRaising(res.data.hogRaising); updateStorage('bafa_hog_raising', res.data.hogRaising); }
             if (Array.isArray(res.data.users) && res.data.users.length > 0) {
               const officersOnly = res.data.users.filter((u: any) => !delUsers.has(u.id) && (u.role !== 'Member' || !u.id.startsWith('user-m')));
-              const cleanUsers = officersOnly.length > 0 ? officersOnly : OFFICIAL_OFFICERS;
-              setUsers(cleanUsers);
-              updateStorage('bafa_users', cleanUsers);
+              const cleanUsers = officersOnly.map((user: User) => {
+                const upgraded = { ...user, passwordHistory: user.passwordHistory || [] };
+                if (!upgraded.passwordHash && /^(user-pres|user-vp|user-sec|user-tres|user-aud|user-pio)$/.test(upgraded.id)) {
+                  upgraded.passwordHash = hashPolicyPassword('password123');
+                  upgraded.passwordChangedAt = new Date(0).toISOString();
+                  upgraded.mustChangePassword = true;
+                }
+                upgraded.mustChangePassword = !upgraded.passwordHash?.startsWith('$2') || needsInitialPasswordChange(upgraded);
+                return upgraded;
+              });
+              const resolvedUsers = cleanUsers.length > 0 ? cleanUsers : OFFICIAL_OFFICERS;
+              setUsers(resolvedUsers);
+              updateStorage('bafa_users', resolvedUsers);
+              if (isOnline && cleanUsers.some((user) => user.mustChangePassword || !user.passwordHash?.startsWith('$2'))) {
+                pushAllDataToCloud({ users: resolvedUsers }, { silent: true, source: 'Password Hash Upgrade' });
+              }
             }
             console.log('[Cloud DB] Successfully loaded fresh data from PostgreSQL Cloud DB');
             setDbStatus(prev => ({
@@ -362,17 +388,20 @@ export default function App() {
         const sanitized = data.map((u: any) => {
           const copy = { ...u };
           if (copy.password) {
-            if (!copy.passwordHash) copy.passwordHash = hashPassword(copy.password);
+            copy.passwordHash = copy.passwordHash?.startsWith('$2') ? copy.passwordHash : hashPolicyPassword(copy.password);
+            copy.passwordChangedAt = copy.passwordChangedAt || new Date(0).toISOString();
+            copy.passwordHistory = copy.passwordHistory || [];
+            copy.mustChangePassword = true;
             delete copy.password;
           }
-          return copy;
+          const { password: _password, passwordHash: _passwordHash, passwordHistory: _passwordHistory, ...safeUser } = copy;
+          return safeUser;
         });
         await setSecureItem(key, sanitized);
         return;
       }
       if (key === 'bafa_current_user' && data && typeof data === 'object') {
-        const copy = { ...data };
-        delete copy.password;
+        const { password: _password, passwordHash: _passwordHash, passwordHistory: _passwordHistory, ...copy } = data;
         await setSecureItem(key, copy);
         return;
       }
@@ -781,6 +810,13 @@ export default function App() {
     memberData: Omit<Member, 'id' | 'joinedDate'>,
     loginCredentials?: { username: string; initialPassword?: string }
   ) => {
+    if (loginCredentials?.username.trim() && loginCredentials.initialPassword) {
+      const policyError = validatePasswordPolicy(loginCredentials.initialPassword, loginCredentials.username, 'Member');
+      if (policyError) {
+        showToastMessage(policyError, 'error');
+        return;
+      }
+    }
     const newId = `member-${Date.now()}`;
     const newMember: Member = {
       ...memberData,
@@ -797,13 +833,16 @@ export default function App() {
     // If login credentials provided by the Secretary, create authenticated User account
     if (loginCredentials && loginCredentials.username.trim()) {
       const cleanUsername = loginCredentials.username.trim().toLowerCase();
-      const initialPassword = loginCredentials.initialPassword?.trim() || 'password123';
-      const cleanHash = hashPassword(initialPassword);
-
+      const initialPassword = loginCredentials.initialPassword?.trim() || generateInitialPassword(cleanUsername, 'Member');
+      const memberCredentialHash = hashPolicyPassword(initialPassword);
+      const credentialChangedAt = new Date().toISOString();
       const newMemberUser: User = {
         id: newId,
         username: cleanUsername,
-        passwordHash: cleanHash,
+        passwordHash: memberCredentialHash,
+        passwordHistory: [],
+        passwordChangedAt: credentialChangedAt,
+        mustChangePassword: true,
         name: newMember.name,
         role: 'Member',
         isApproved: true,
@@ -879,10 +918,14 @@ export default function App() {
   const handleManageMemberLogin = (memberId: string, username: string, initialPassword: string) => {
     const member = members.find(m => m.id === memberId);
     if (!member) return;
+    const policyError = validatePasswordPolicy(initialPassword, username, 'Member');
+    if (policyError) {
+      showToastMessage(policyError, 'error');
+      return;
+    }
 
     const cleanUsername = username.trim().toLowerCase();
     const cleanPassword = initialPassword.trim();
-    const newHash = hashPassword(cleanPassword);
 
     const existingIndex = users.findIndex(u => u.id === memberId || u.memberIdNumber === member.memberIdNumber);
 
@@ -894,7 +937,10 @@ export default function App() {
           return {
             ...rest,
             username: cleanUsername,
-            passwordHash: newHash,
+            passwordHash: hashPolicyPassword(cleanPassword),
+            passwordHistory: [...(u.passwordHistory || []), ...(u.passwordHash ? [{ hash: u.passwordHash, changedAt: u.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5),
+            passwordChangedAt: new Date().toISOString(),
+            mustChangePassword: true,
             name: member.name,
             resetRequested: false
           };
@@ -905,7 +951,10 @@ export default function App() {
       const newMemberUser: User = {
         id: member.id,
         username: cleanUsername,
-        passwordHash: newHash,
+        passwordHash: hashPolicyPassword(cleanPassword),
+        passwordHistory: [],
+        passwordChangedAt: new Date().toISOString(),
+        mustChangePassword: true,
         name: member.name,
         role: 'Member',
         isApproved: true,
@@ -1692,15 +1741,59 @@ export default function App() {
   };
 
   // USER AUTHENTICATION & MANAGEMENT ACTIONS
-  const handleLogin = (user: User) => {
-    // Sanitize user object: strip password from local session to protect credentials
-    const { password, ...safeUser } = user;
-    setCurrentUser(safeUser as User);
-    updateStorage('bafa_current_user', safeUser);
+  const handleLogin = (user: User, password: string) => {
+    const { password: legacyPassword, passwordHash, passwordHistory, ...safeUser } = user;
+    const requiresChange = needsInitialPasswordChange(user) || Date.now() - new Date(user.passwordChangedAt || 0).getTime() >= 90 * 86_400_000;
+    const upgradedHash = isLegacyPasswordHash(passwordHash) ? hashPolicyPassword(password) : passwordHash;
+    const upgradedUser: User = {
+      ...user,
+      passwordHash: upgradedHash,
+      passwordHistory: passwordHistory || [],
+      passwordChangedAt: isLegacyPasswordHash(passwordHash) ? (user.passwordChangedAt || new Date(0).toISOString()) : user.passwordChangedAt,
+      mustChangePassword: requiresChange
+    };
+    const upgradedUsers = users.map((candidate) => candidate.id === user.id ? upgradedUser : candidate);
+    setUsers(upgradedUsers);
+    setCurrentUser({ ...safeUser, passwordHistory: passwordHistory || [], mustChangePassword: requiresChange } as User);
+    updateStorage('bafa_current_user', { ...safeUser, mustChangePassword: requiresChange });
+    updateStorage('bafa_users', upgradedUsers);
+    if (isOnline) pushAllDataToCloud({ users: upgradedUsers }, { silent: true, source: 'Password Hash Migration' });
+
     if (user.role !== 'Member') {
       setCurrentRole(user.role as OfficerRole);
     }
     showToastMessage(`Maayong adlaw, ${user.name}! Successful login.`, 'success');
+  };
+
+  const handleChangeOwnPassword = async (newPassword: string) => {
+    if (!currentUser) return;
+    const account = users.find((candidate) => candidate.id === currentUser.id);
+    if (!account) return;
+    const policyError = validatePasswordPolicy(newPassword, account.username, account.role, account.passwordHistory || []);
+    if (policyError) {
+      showToastMessage(policyError, 'error');
+      return;
+    }
+    const nextChangedAt = new Date().toISOString();
+    const updatedHistory = [...(account.passwordHistory || []), ...(account.passwordHash ? [{ hash: account.passwordHash, changedAt: account.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5);
+    const newPasswordHash = hashPolicyPassword(newPassword);
+    const updatedUsers = users.map((candidate) => candidate.id === account.id ? {
+      ...candidate,
+      passwordHash: newPasswordHash,
+      passwordHistory: updatedHistory,
+      passwordChangedAt: nextChangedAt,
+      mustChangePassword: false
+    } : candidate);
+    setUsers(updatedUsers);
+    updateStorage('bafa_users', updatedUsers);
+    const changedAccount = updatedUsers.find((candidate) => candidate.id === account.id)!;
+    const { password, passwordHash, passwordHistory: _history, ...safeCurrent } = changedAccount;
+    const updatedCurrent = { ...safeCurrent, mustChangePassword: false, passwordChangedAt: nextChangedAt, passwordHistory: updatedHistory };
+    setCurrentUser(updatedCurrent);
+    setDismissedPasswordWarningFor(null);
+    updateStorage('bafa_current_user', updatedCurrent);
+    if (isOnline) pushAllDataToCloud({ users: updatedUsers }, { silent: true, source: 'Password Changed' });
+    showToastMessage('Your password has been updated successfully.', 'success');
   };
 
   const handleLogout = () => {
@@ -1713,17 +1806,29 @@ export default function App() {
     showToastMessage('You have been signed out securely. Session ended.', 'info');
   };
 
-  const handleRegister = (userData: Omit<User, 'id' | 'isApproved'>) => {
+  const handleRegister = async (userData: Omit<User, 'id' | 'isApproved'>) => {
     const copy = { ...userData };
-    if (copy.password) {
-      if (!copy.passwordHash) {
-        copy.passwordHash = hashPassword(copy.password);
-      }
-      delete copy.password;
+    if (!copy.password) {
+      showToastMessage('Enter a password that meets the password policy.', 'error');
+      return;
     }
+    if (users.some((user) => user.username.toLowerCase() === copy.username.toLowerCase())) {
+      showToastMessage('Invalid credentials.', 'error');
+      return;
+    }
+    const message = validatePasswordPolicy(copy.password, copy.username, copy.role, copy.passwordHistory || []);
+    if (message) {
+      showToastMessage(message, 'error');
+      return;
+    }
+    copy.passwordHash = hashPolicyPassword(copy.password);
+    copy.passwordChangedAt = new Date().toISOString();
+    delete copy.password;
     const newUser: User = {
       ...copy,
       id: `user-${Date.now()}`,
+      passwordHistory: [],
+      passwordChangedAt: copy.passwordChangedAt || new Date().toISOString(),
       isApproved: false,
       joinedDate: new Date().toISOString().split('T')[0]
     };
@@ -1740,7 +1845,7 @@ export default function App() {
   const handleRequestPasswordReset = (username: string) => {
     const matchedUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
     if (!matchedUser) {
-      showToastMessage('Wala makit-i ang username (Username not found).', 'error');
+      showToastMessage('Kung adunay account nga motakdo, ipadala ang password reset instructions.', 'success');
       return;
     }
     const updated = users.map(u => u.id === matchedUser.id ? { ...u, resetRequested: true } : u);
@@ -1749,7 +1854,7 @@ export default function App() {
 
     // Add simple system log
     logAction('Requested Reset', `Requested password reset for ${matchedUser.name} (${matchedUser.username})`);
-    showToastMessage(`Ang hangyo sa pag-reset sa password para kang ${matchedUser.name} napadala na sa Presidente!`, 'success');
+    showToastMessage('Kung adunay account nga motakdo, ipadala ang password reset instructions.', 'success');
   };
 
   const handleResetPassword = (userId: string, newPass: string) => {
@@ -1769,11 +1874,24 @@ export default function App() {
       return;
     }
 
-    const newHash = hashPassword(newPass.trim());
+    const policyError = validatePasswordPolicy(newPass, targetUser.username, targetUser.role, targetUser.passwordHistory || []);
+    if (policyError) {
+      showToastMessage(policyError, 'error');
+      return;
+    }
+    const resetChangedAt = new Date().toISOString();
+    const resetHash = hashPolicyPassword(newPass);
     const updated = users.map(u => {
       if (u.id === userId) {
         const { password, ...rest } = u;
-        return { ...rest, passwordHash: newHash, resetRequested: false };
+        return {
+          ...rest,
+          passwordHash: resetHash,
+          passwordHistory: [...(targetUser.passwordHistory || []), ...(targetUser.passwordHash ? [{ hash: targetUser.passwordHash, changedAt: targetUser.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5),
+          passwordChangedAt: resetChangedAt,
+          mustChangePassword: false,
+          resetRequested: false
+        };
       }
       return u;
     });
@@ -2048,7 +2166,7 @@ export default function App() {
       association: 'Alegria Farmers Association (Tuburan, Cebu)',
       version: '1.0.0',
       data: {
-        users,
+        users: users.map(({ password, passwordHash, passwordHistory, ...safeUser }) => safeUser),
         members,
         meetings,
         resolutions,
@@ -2078,7 +2196,11 @@ export default function App() {
   };
 
   if (window.location.pathname === '/privacy' || window.location.pathname === '/privacy/') {
-    return <PrivacyPolicy />;
+    return (
+      <Suspense fallback={<DashboardSkeleton variant="app" />}>
+        <PrivacyPolicy />
+      </Suspense>
+    );
   }
 
   if (isHydrating) {
@@ -2088,27 +2210,34 @@ export default function App() {
   if (!currentUser) {
     if (guestMode) {
       return (
-        <GuestPortal
-          onEnterLogin={() => setGuestMode(false)}
-          members={members}
-          hogRaising={hogRaising}
-          products={products}
-          announcements={announcements}
-          activities={activities}
-        />
+        <Suspense fallback={<DashboardSkeleton variant="guest" />}>
+          <GuestPortal
+            onEnterLogin={() => setGuestMode(false)}
+            members={members}
+            hogRaising={hogRaising}
+            products={products}
+            announcements={announcements}
+            activities={activities}
+          />
+        </Suspense>
       );
     }
 
     return (
       <div id="auth-screen-wrapper" className="min-h-screen bg-bafa-50">
-        <AuthScreen
-          users={users}
-          onLogin={handleLogin}
-          onRegister={handleRegister}
-          toast={showToastMessage}
-          onRequestPasswordReset={handleRequestPasswordReset}
-          onBackToGuest={() => setGuestMode(true)}
-        />
+        <Suspense fallback={<DashboardSkeleton variant="app" />}>
+          <AuthScreen
+            users={users}
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+            toast={showToastMessage}
+            onRequestPasswordReset={handleRequestPasswordReset}
+            onBackToGuest={() => setGuestMode(true)}
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          {currentUser?.mustChangePassword && <PasswordChangePrompt user={users.find((candidate) => candidate.id === currentUser.id) || currentUser} forced onSubmit={handleChangeOwnPassword} />}
+        </Suspense>
         {toast && (
           <div className="fixed bottom-6 right-6 z-50">
             <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${
@@ -2196,19 +2325,27 @@ export default function App() {
           </div>
         </header>
 
+        <Suspense fallback={null}>
+          {!currentUser.mustChangePassword && !dismissedPasswordWarningFor && currentUser.passwordChangedAt && (() => {
+            const expiry = getPasswordExpiryStatus(currentUser.passwordChangedAt);
+            return expiry.warning ? <PasswordChangePrompt user={users.find((candidate) => candidate.id === currentUser.id) || currentUser} forced={false} warningDays={expiry.daysRemaining} onSubmit={handleChangeOwnPassword} onClose={() => setDismissedPasswordWarningFor(currentUser.id)} /> : null;
+          })()}
+        </Suspense>
         <main className="flex-1 max-w-7xl w-full mx-auto p-3.5 sm:p-6">
-          <MemberDashboard
-            currentUser={currentUser}
-            onUpdateProfile={handleUpdateProfile}
-            onLogout={handleLogout}
-            toast={showToastMessage}
-            announcements={announcements}
-            hogRaisingState={hogRaising}
-            members={members}
-            onAddChoreLog={handleAddPigChore}
-            products={products}
-            activities={activities}
-          />
+          <Suspense fallback={<DashboardSkeleton variant="member" />}>
+            <MemberDashboard
+              currentUser={currentUser}
+              onUpdateProfile={handleUpdateProfile}
+              onLogout={handleLogout}
+              toast={showToastMessage}
+              announcements={announcements}
+              hogRaisingState={hogRaising}
+              members={members}
+              onAddChoreLog={handleAddPigChore}
+              products={products}
+              activities={activities}
+            />
+          </Suspense>
         </main>
 
         {toast && (
@@ -2253,6 +2390,12 @@ export default function App() {
           </div>
         </div>
       )}
+      <Suspense fallback={null}>
+        {!currentUser.mustChangePassword && !dismissedPasswordWarningFor && currentUser.passwordChangedAt && (() => {
+          const expiry = getPasswordExpiryStatus(currentUser.passwordChangedAt);
+          return expiry.warning ? <PasswordChangePrompt user={users.find((candidate) => candidate.id === currentUser.id) || currentUser} forced={false} warningDays={expiry.daysRemaining} onSubmit={handleChangeOwnPassword} onClose={() => setDismissedPasswordWarningFor(currentUser.id)} /> : null;
+        })()}
+      </Suspense>
 
       {/* TOP HEADER NAVIGATION AND IDENTIFIER */}
       <header className="bg-[#1B4332] border-b-2 border-[#122E22] py-3 sm:py-4 px-3.5 sm:px-6 shrink-0 shadow-md text-white">
@@ -2546,9 +2689,10 @@ export default function App() {
             </div>
           </div>
 
-          {officerTab === 'tasks' && (
-            /* ACTIVE VIEW WRAPPER */
-            <div id="officer-dashboard-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
+          <Suspense fallback={<DashboardSkeleton variant="officer" />}>
+            {officerTab === 'tasks' && (
+              /* ACTIVE VIEW WRAPPER */
+              <div id="officer-dashboard-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
 
             {/* President & Vice President View */}
             {(currentRole === 'President' || currentRole === 'Vice_President') && (
@@ -2585,7 +2729,13 @@ export default function App() {
               <SecretaryView
                 members={members}
                 users={users}
-                onAddMember={handleAddMember}
+                onAddMember={(memberData, loginCredentials) => {
+                  if (loginCredentials && users.some((user) => user.username.toLowerCase() === loginCredentials.username.toLowerCase())) {
+                    showToastMessage('That username is already in use.', 'error');
+                    return;
+                  }
+                  handleAddMember(memberData, loginCredentials);
+                }}
                 onUpdateMember={handleUpdateMember}
                 onUpdateMemberStatus={handleUpdateMemberStatus}
                 onDeleteMember={handleDeleteMember}
@@ -2756,6 +2906,7 @@ export default function App() {
               onRemoveItem={handleRemoveQueueItem}
             />
           </div>
+        </Suspense>
 
         </div>
       </main>
@@ -2773,21 +2924,23 @@ export default function App() {
 
       {/* OFFICER REPORT & EXPORT MODAL */}
       {showReportModal && (
-        <OfficerReportModal
-          currentRole={currentRole}
-          members={members}
-          meetings={meetings}
-          resolutions={resolutions}
-          transactions={transactions}
-          announcements={announcements}
-          activities={activities}
-          inventory={inventory}
-          logs={logs}
-          funds={funds}
-          hogRaising={hogRaising}
-          onClose={() => setShowReportModal(false)}
-          onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
-        />
+        <Suspense fallback={null}>
+          <OfficerReportModal
+            currentRole={currentRole}
+            members={members}
+            meetings={meetings}
+            resolutions={resolutions}
+            transactions={transactions}
+            announcements={announcements}
+            activities={activities}
+            inventory={inventory}
+            logs={logs}
+            funds={funds}
+            hogRaising={hogRaising}
+            onClose={() => setShowReportModal(false)}
+            onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
+          />
+        </Suspense>
       )}
 
       {/* PRESIDENT'S LETTERHEAD REPORT (print / save as PDF) */}
@@ -2801,26 +2954,28 @@ export default function App() {
             >
               ✕ Close Report
             </button>
-            <PresidentReport
-              data={buildReportData({
-                year: new Date().getFullYear(),
-                users,
-              })}
-            />
+            <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading report...</div>}>
+              <PresidentReport
+                year={new Date().getFullYear()}
+                users={users}
+              />
+            </Suspense>
           </div>
         </div>
       )}
 
       {/* PRODUCT MANAGEMENT MODAL */}
       {showProductModal && (
-        <ProductManagementModal
-          products={products}
-          currentRole={currentRole}
-          onAddProduct={handleAddProduct}
-          onUpdateProduct={handleUpdateProduct}
-          onDeleteProduct={handleDeleteProduct}
-          onClose={() => setShowProductModal(false)}
-        />
+        <Suspense fallback={null}>
+          <ProductManagementModal
+            products={products}
+            currentRole={currentRole}
+            onAddProduct={handleAddProduct}
+            onUpdateProduct={handleUpdateProduct}
+            onDeleteProduct={handleDeleteProduct}
+            onClose={() => setShowProductModal(false)}
+          />
+        </Suspense>
       )}
 
       {/*
