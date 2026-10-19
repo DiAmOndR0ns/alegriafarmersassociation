@@ -1052,9 +1052,10 @@ async function saveFullStateToPostgres(pool, state) {
         ["is_rsbsa_registered", "isRsbsaRegistered", (r) => Boolean(r.isRsbsaRegistered)],
         ["password_history", "passwordHistory", (r) => JSON.stringify(Array.isArray(r.passwordHistory) ? r.passwordHistory : [])],
         ["password_changed_at", "passwordChangedAt", (r) => r.passwordChangedAt || null],
-        ["must_change_password", "mustChangePassword", (r) => Boolean(r.mustChangePassword)],
+        ["must_change_password", "mustChangePassword", () => false],
         ["failed_login_attempts", "failedLoginAttempts", (r) => r.failedLoginAttempts ?? 0],
-        ["locked_until", "lockedUntil", (r) => r.lockedUntil || null]
+        ["locked_until", "lockedUntil", (r) => r.lockedUntil || null],
+        ["reset_requested", "resetRequested", (r) => Boolean(r.resetRequested)]
       ] },
       { table: "members", deletedIds: deletedMemberIds, fields: [
         ["name", "name", (r) => r.name],

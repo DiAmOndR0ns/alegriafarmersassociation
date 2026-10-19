@@ -732,9 +732,10 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       passwordHash: r.password,
       passwordHistory: Array.isArray(r.password_history) ? r.password_history : [],
       passwordChangedAt: r.password_changed_at ? new Date(r.password_changed_at).toISOString() : undefined,
-      mustChangePassword: Boolean(r.must_change_password),
+      mustChangePassword: false,
       failedLoginAttempts: r.failed_login_attempts ?? 0,
       lockedUntil: r.locked_until ? new Date(r.locked_until).toISOString() : undefined,
+      resetRequested: Boolean(r.reset_requested),
       name: r.name,
       role: r.role,
       isApproved: r.is_approved,
@@ -1411,9 +1412,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)],
         ['password_history', 'passwordHistory', (r) => JSON.stringify(Array.isArray(r.passwordHistory) ? r.passwordHistory : [])],
         ['password_changed_at', 'passwordChangedAt', (r) => r.passwordChangedAt || null],
-        ['must_change_password', 'mustChangePassword', (r) => Boolean(r.mustChangePassword)],
+        ['must_change_password', 'mustChangePassword', () => false],
         ['failed_login_attempts', 'failedLoginAttempts', (r) => r.failedLoginAttempts ?? 0],
-        ['locked_until', 'lockedUntil', (r) => r.lockedUntil || null]
+        ['locked_until', 'lockedUntil', (r) => r.lockedUntil || null],
+        ['reset_requested', 'resetRequested', (r) => Boolean(r.resetRequested)]
       ] },
       { table: 'members', deletedIds: deletedMemberIds, fields: [
         ['name', 'name', (r) => r.name], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],

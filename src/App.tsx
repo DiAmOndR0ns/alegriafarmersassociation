@@ -29,7 +29,7 @@ const PresidentReport = lazy(() => import('./components/PresidentReport'));
 const ProductManagementModal = lazy(() => import('./components/ProductManagementModal'));
 const PasswordChangePrompt = lazy(() => import('./components/PasswordChangePrompt'));
 import { buildAuditChain, hashPassword, verifyPassword, sanitizeUserForStorage } from './utils/audit';
-import { generateInitialPassword, getPasswordExpiryStatus, hashPassword as hashPolicyPassword, isLegacyPasswordHash, needsInitialPasswordChange, validatePasswordPolicy } from './utils/passwordPolicy';
+import { generateInitialPassword, getPasswordExpiryStatus, hashPassword as hashPolicyPassword, isLegacyPasswordHash, validatePasswordPolicy } from './utils/passwordPolicy';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
@@ -301,19 +301,15 @@ export default function App() {
                   if (upgraded.password) {
                     if (!upgraded.passwordHash?.startsWith('$2')) {
                       upgraded.passwordHash = hashPolicyPassword(upgraded.password);
-                      upgraded.passwordChangedAt = upgraded.passwordChangedAt || new Date(0).toISOString();
+                      upgraded.passwordChangedAt = upgraded.passwordChangedAt || new Date().toISOString();
                     }
-                    upgraded.mustChangePassword = true;
                     delete upgraded.password;
                   }
-                  upgraded.mustChangePassword = !upgraded.passwordHash?.startsWith('$2') || needsInitialPasswordChange(upgraded);
+                  upgraded.mustChangePassword = false;
                   return upgraded;
                 });
               setUsers(cleanUsers);
               updateStorage('bafa_users', cleanUsers);
-              if (isOnline && cleanUsers.some((user) => user.mustChangePassword || !user.passwordHash?.startsWith('$2'))) {
-                pushAllDataToCloud({ users: cleanUsers }, { silent: true, source: 'Password Hash Upgrade' });
-              }
             }
             console.log('[Cloud DB] Successfully loaded fresh data from PostgreSQL Cloud DB');
             setDbStatus(prev => ({
@@ -834,7 +830,7 @@ export default function App() {
         passwordHash: memberCredentialHash,
         passwordHistory: [],
         passwordChangedAt: credentialChangedAt,
-        mustChangePassword: true,
+        mustChangePassword: false,
         name: newMember.name,
         role: 'Member',
         isApproved: true,
@@ -932,7 +928,7 @@ export default function App() {
             passwordHash: hashPolicyPassword(cleanPassword),
             passwordHistory: [...(u.passwordHistory || []), ...(u.passwordHash ? [{ hash: u.passwordHash, changedAt: u.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5),
             passwordChangedAt: new Date().toISOString(),
-            mustChangePassword: true,
+            mustChangePassword: false,
             name: member.name,
             resetRequested: false
           };
@@ -946,7 +942,7 @@ export default function App() {
         passwordHash: hashPolicyPassword(cleanPassword),
         passwordHistory: [],
         passwordChangedAt: new Date().toISOString(),
-        mustChangePassword: true,
+        mustChangePassword: false,
         name: member.name,
         role: 'Member',
         isApproved: true,
@@ -1737,13 +1733,12 @@ export default function App() {
     const { password: legacyPassword, passwordHash, passwordHistory, ...safeUser } = user;
     const wasLegacy = isLegacyPasswordHash(passwordHash) || !passwordHash;
     const upgradedHash = wasLegacy ? hashPolicyPassword(password) : passwordHash;
-    const requiresChange = wasLegacy || needsInitialPasswordChange(user);
     const upgradedUser: User = {
       ...user,
       passwordHash: upgradedHash,
       passwordHistory: user.passwordHistory || [],
-      passwordChangedAt: user.passwordChangedAt || new Date(0).toISOString(),
-      mustChangePassword: requiresChange,
+      passwordChangedAt: user.passwordChangedAt || new Date().toISOString(),
+      mustChangePassword: false,
       failedLoginAttempts: 0,
       lockedUntil: undefined
     };
@@ -1751,8 +1746,8 @@ export default function App() {
 
     const upgradedUsers = users.map((candidate) => candidate.id === user.id ? upgradedUser : candidate);
     setUsers(upgradedUsers);
-    setCurrentUser({ ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, passwordHistory: upgradedUser.passwordHistory, mustChangePassword: requiresChange } as User);
-    updateStorage('bafa_current_user', { ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, mustChangePassword: requiresChange });
+    setCurrentUser({ ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, passwordHistory: upgradedUser.passwordHistory, mustChangePassword: false } as User);
+    updateStorage('bafa_current_user', { ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, mustChangePassword: false });
     updateStorage('bafa_users', upgradedUsers);
     if (isOnline) pushAllDataToCloud({ users: upgradedUsers }, { silent: true, source: 'Password Hash Migration' });
 
@@ -1924,7 +1919,7 @@ export default function App() {
           passwordHash: resetHash,
           passwordHistory: [...safeHistory, ...(targetUser.passwordHash ? [{ hash: targetUser.passwordHash, changedAt: targetUser.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5),
           passwordChangedAt: resetChangedAt,
-          mustChangePassword: true,
+          mustChangePassword: false,
           resetRequested: false,
           failedLoginAttempts: 0,
           lockedUntil: undefined
@@ -2129,7 +2124,7 @@ export default function App() {
       passwordHash: hashPolicyPassword(rawPassword),
       passwordHistory: [],
       passwordChangedAt: nowIso,
-      mustChangePassword: true,
+      mustChangePassword: false,
       failedLoginAttempts: 0,
       name: cleanName,
       role: officerData.role,
@@ -2359,9 +2354,6 @@ export default function App() {
             onRequestPasswordReset={handleRequestPasswordReset}
             onBackToGuest={() => setGuestMode(true)}
           />
-        </Suspense>
-        <Suspense fallback={null}>
-          {currentUser?.mustChangePassword && <PasswordChangePrompt user={users.find((candidate) => candidate.id === currentUser.id) || currentUser} forced onSubmit={handleChangeOwnPassword} />}
         </Suspense>
         {toast && (
           <div className="fixed bottom-6 right-6 z-50">

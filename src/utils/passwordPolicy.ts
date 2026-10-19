@@ -100,15 +100,13 @@ export function isLegacyPasswordHash(hash?: string): boolean {
   return Boolean(hash && !hash.startsWith('$2'));
 }
 
-export function needsInitialPasswordChange(user: {
+export function needsInitialPasswordChange(_user: {
   id: string;
   role: string;
   passwordChangedAt?: string;
   mustChangePassword?: boolean;
 }): boolean {
-  const hasNeverChangedPassword =
-    !user.passwordChangedAt || new Date(user.passwordChangedAt).getTime() <= 0;
-  return Boolean(user.mustChangePassword || hasNeverChangedPassword);
+  return false;
 }
 
 // Lockout policy: after MAX_LOGIN_ATTEMPTS consecutive failures, sign-in is blocked for LOCKOUT_DURATION_MS.
