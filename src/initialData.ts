@@ -1,77 +1,7 @@
 import { Member, Meeting, Resolution, FinancialTransaction, Announcement, SystemLog, HogRaisingState, Product, AssociationActivity, User, OrganizationFund, AuditorReport, DelegationRequest } from './types';
-import { hashPassword } from './utils/passwordPolicy';
 
-// The 6 official officer accounts of Alegria Farmers Association (Tuburan, Cebu)
-// Legacy credentials are migrated to the current password-hash format on first load.
-
-export const OFFICIAL_OFFICERS: User[] = [
-  {
-    id: 'user-pres',
-    username: 'president',
-    passwordHash: hashPassword('password123'),
-    mustChangePassword: true,
-    passwordChangedAt: new Date(0).toISOString(),
-    name: 'Zenaida A. Elbiña',
-    role: 'President',
-    isApproved: true,
-    joinedDate: '2024-01-01'
-  },
-  {
-    id: 'user-vp',
-    username: 'vp',
-    passwordHash: hashPassword('password123'),
-    mustChangePassword: true,
-    passwordChangedAt: new Date(0).toISOString(),
-    name: 'Anselna B Arnado',
-    role: 'Vice_President',
-    isApproved: true,
-    joinedDate: '2024-01-01'
-  },
-  {
-    id: 'user-sec',
-    username: 'secretary',
-    passwordHash: hashPassword('password123'),
-    mustChangePassword: true,
-    passwordChangedAt: new Date(0).toISOString(),
-    name: 'Jennylyn S Lumactao',
-    role: 'Secretary',
-    isApproved: true,
-    joinedDate: '2024-01-01'
-  },
-  {
-    id: 'user-tres',
-    username: 'treasurer',
-    passwordHash: hashPassword('password123'),
-    mustChangePassword: true,
-    passwordChangedAt: new Date(0).toISOString(),
-    name: 'Gracelyn P Asendiente',
-    role: 'Treasurer',
-    isApproved: true,
-    joinedDate: '2024-01-01'
-  },
-  {
-    id: 'user-aud',
-    username: 'auditor',
-    passwordHash: hashPassword('password123'),
-    mustChangePassword: true,
-    passwordChangedAt: new Date(0).toISOString(),
-    name: 'Lorena B Pinote',
-    role: 'Auditor',
-    isApproved: true,
-    joinedDate: '2024-01-01'
-  },
-  {
-    id: 'user-pio',
-    username: 'pio',
-    passwordHash: hashPassword('password123'),
-    mustChangePassword: true,
-    passwordChangedAt: new Date(0).toISOString(),
-    name: 'Ida S Manera',
-    role: 'PIO',
-    isApproved: true,
-    joinedDate: '2024-01-01'
-  }
-];
+// No hardcoded officer credentials — officers are provisioned by the Admin account.
+export const OFFICIAL_OFFICERS: User[] = [];
 
 // Clean empty collections — ready for real user input
 export const INITIAL_MEMBERS: Member[] = [];

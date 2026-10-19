@@ -7,7 +7,7 @@ import {
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
   INITIAL_TRANSACTIONS, INITIAL_ANNOUNCEMENTS, INITIAL_LOGS, INITIAL_HOG_RAISING,
-  INITIAL_PRODUCTS, INITIAL_ACTIVITIES, OFFICIAL_OFFICERS, INITIAL_FUNDS
+  INITIAL_PRODUCTS, INITIAL_ACTIVITIES, INITIAL_FUNDS
 } from './initialData';
 import OfflineIndicator from './components/OfflineIndicator';
 import DashboardSkeleton from './components/DashboardSkeleton';
@@ -201,17 +201,12 @@ export default function App() {
 
       setSyncQueue(storedQueue || []);
 
-      const parsedUsers = storedUsers || OFFICIAL_OFFICERS;
+      const parsedUsers = storedUsers || [];
       // Filter out any dummy members from users and strip any plain-text passwords
-      const sanitizedUsers = (Array.isArray(parsedUsers) ? parsedUsers : OFFICIAL_OFFICERS)
+      const sanitizedUsers = (Array.isArray(parsedUsers) ? parsedUsers : [])
         .filter((u: any) => u.role !== 'Member' || !u.id.startsWith('user-m'))
         .map((u: any) => {
           const copy = { ...u };
-          if (!copy.passwordHash && !copy.password && /^(user-pres|user-vp|user-sec|user-tres|user-aud|user-pio)$/.test(copy.id)) {
-            copy.passwordHash = hashPolicyPassword('password123');
-            copy.passwordChangedAt = new Date(0).toISOString();
-            copy.mustChangePassword = true;
-          }
           const hadLegacyPlaintext = Boolean(copy.password);
           if (copy.password) {
             copy.passwordHash = copy.passwordHash?.startsWith('$2') ? copy.passwordHash : hashPolicyPassword(copy.password);
@@ -224,8 +219,8 @@ export default function App() {
           if (!copy.passwordHistory) copy.passwordHistory = [];
           return copy;
         });
-      setUsers(sanitizedUsers.length > 0 ? sanitizedUsers : OFFICIAL_OFFICERS);
-      await setSecureItem('bafa_users', sanitizedUsers.length > 0 ? sanitizedUsers : OFFICIAL_OFFICERS);
+      setUsers(sanitizedUsers);
+      await setSecureItem('bafa_users', sanitizedUsers);
 
       const storedCurr = await getSecureItem<User>('bafa_current_user');
       if (storedCurr?.password) {
@@ -295,14 +290,14 @@ export default function App() {
             if (Array.isArray(res.data.funds)) { setFunds(cleanFunds); updateStorage('bafa_funds', cleanFunds); }
             if (Array.isArray(res.data.inventory)) { setInventory(cleanInventory); updateStorage('bafa_inventory', cleanInventory); }
             if (res.data.hogRaising) { setHogRaising(res.data.hogRaising); updateStorage('bafa_hog_raising', res.data.hogRaising); }
-            if (Array.isArray(res.data.users) && res.data.users.length > 0) {
+            if (Array.isArray(res.data.users)) {
               const cleanUsers = res.data.users
                 .filter((u: any) => !delUsers.has(u.id))
                 .map((user: User) => {
                   // The database row is the source of truth for credentials. Older rows store a
                   // plaintext `password`; promote it into the hash column exactly once instead of
                   // letting it be dropped during storage sanitization.
-                  const upgraded = { ...user, passwordHistory: user.passwordHistory || [] };
+                  const upgraded = { ...user, passwordHistory: Array.isArray(user.passwordHistory) ? user.passwordHistory : [] };
                   if (upgraded.password) {
                     if (!upgraded.passwordHash?.startsWith('$2')) {
                       upgraded.passwordHash = hashPolicyPassword(upgraded.password);
@@ -314,11 +309,10 @@ export default function App() {
                   upgraded.mustChangePassword = !upgraded.passwordHash?.startsWith('$2') || needsInitialPasswordChange(upgraded);
                   return upgraded;
                 });
-              const resolvedUsers = cleanUsers.length > 0 ? cleanUsers : OFFICIAL_OFFICERS;
-              setUsers(resolvedUsers);
-              updateStorage('bafa_users', resolvedUsers);
+              setUsers(cleanUsers);
+              updateStorage('bafa_users', cleanUsers);
               if (isOnline && cleanUsers.some((user) => user.mustChangePassword || !user.passwordHash?.startsWith('$2'))) {
-                pushAllDataToCloud({ users: resolvedUsers }, { silent: true, source: 'Password Hash Upgrade' });
+                pushAllDataToCloud({ users: cleanUsers }, { silent: true, source: 'Password Hash Upgrade' });
               }
             }
             console.log('[Cloud DB] Successfully loaded fresh data from PostgreSQL Cloud DB');
@@ -381,7 +375,7 @@ export default function App() {
       setInventory([]);
       setSyncQueue([]);
       setLogs(INITIAL_LOGS);
-      setUsers(OFFICIAL_OFFICERS);
+      setUsers([]);
     }
     };
     void loadLocalData();
@@ -424,19 +418,10 @@ export default function App() {
   };
 
   const getOfficerName = (role: OfficerRole) => {
+    if (currentUser && currentUser.role === role) return currentUser.name;
     const matchedUser = users.find(u => u.role === role);
     if (matchedUser) return matchedUser.name;
-
-    switch (role) {
-      case 'President': return 'Zenaida A. Elbiña';
-      case 'Vice_President': return 'Anselna B Arnado';
-      case 'Secretary': return 'Jennylyn S Lumactao';
-      case 'Treasurer': return 'Gracelyn P Asendiente';
-      case 'Assistant_Treasurer': return 'Assistant Treasurer';
-      case 'Auditor': return 'Lorena B Pinote';
-      case 'PIO': return 'Ida S Manera';
-      default: return 'AFA Officer';
-    }
+    return `AFA ${role.replace('_', ' ')}`;
   };
 
   // Deletion persistence tracking for PostgreSQL / Supabase
@@ -1824,33 +1809,52 @@ export default function App() {
       showToastMessage('Enter a password that meets the password policy.', 'error');
       return;
     }
+    const rawPassword = copy.password;
     if (users.some((user) => user.username.toLowerCase() === copy.username.toLowerCase())) {
-      showToastMessage('Invalid credentials.', 'error');
+      showToastMessage('That username is already in use.', 'error');
       return;
     }
-    const message = validatePasswordPolicy(copy.password, copy.username, copy.role, copy.passwordHistory);
+    const message = validatePasswordPolicy(rawPassword, copy.username, copy.role, copy.passwordHistory);
     if (message) {
       showToastMessage(message, 'error');
       return;
     }
-    copy.passwordHash = hashPolicyPassword(copy.password);
+    const hasPresidentAlready = users.some((user) => user.role === 'President');
+    const isInitialAdminBootstrap = !hasPresidentAlready && copy.role === 'President';
+
+    copy.passwordHash = hashPolicyPassword(rawPassword);
     copy.passwordChangedAt = new Date().toISOString();
     delete copy.password;
     const newUser: User = {
       ...copy,
       id: `user-${Date.now()}`,
+      username: copy.username.trim().toLowerCase(),
       passwordHistory: [],
       passwordChangedAt: copy.passwordChangedAt || new Date().toISOString(),
-      isApproved: false,
-      joinedDate: new Date().toISOString().split('T')[0]
+      mustChangePassword: false,
+      failedLoginAttempts: 0,
+      isApproved: isInitialAdminBootstrap,
+      joinedDate: new Date().toISOString().split('T')[0],
+      status: 'Active'
     };
     const updated = [newUser, ...users];
     setUsers(updated);
     updateStorage('bafa_users', updated);
 
     if (isOnline) {
-      pushAllDataToCloud({ users: updated }, { silent: true });
+      pushAllDataToCloud({ users: updated }, { silent: true, force: true, source: isInitialAdminBootstrap ? 'Admin Bootstrap' : 'User Registration' });
     }
+
+    if (isInitialAdminBootstrap) {
+      const { password: _p, passwordHash: _ph, passwordHistory: _hist, ...safeAdmin } = newUser;
+      setCurrentUser({ ...safeAdmin, passwordChangedAt: newUser.passwordChangedAt, passwordHistory: [], mustChangePassword: false } as User);
+      setCurrentRole('President');
+      updateStorage('bafa_current_user', { ...safeAdmin, passwordChangedAt: newUser.passwordChangedAt, mustChangePassword: false });
+      logAction('Bootstrapped Admin Account', `Created initial Admin/President account for ${newUser.name} (@${newUser.username}).`);
+      showToastMessage(`Admin/President account created! Welcome, ${newUser.name}.`, 'success');
+      return;
+    }
+
     showToastMessage('Sign-up request received! Awaiting President/Admin approval.', 'warning');
   };
 
@@ -2077,6 +2081,65 @@ export default function App() {
     }
   };
 
+  const handleAddOfficer = (officerData: { name: string; username: string; password: string; role: OfficerRole }) => {
+    if (!currentUser || currentUser.role !== 'President') {
+      showToastMessage('Wala kay katungod sa pagdugang og opisyal. Ang Presidente/Admin lamang ang makahimo niini.', 'error');
+      return false;
+    }
+
+    const cleanName = officerData.name.trim();
+    const cleanUsername = officerData.username.trim().toLowerCase();
+    const rawPassword = officerData.password.trim();
+
+    if (!cleanName || !cleanUsername || !rawPassword) {
+      showToastMessage('Palihug kompletoha ang Ngalan, Username, ug Password sa opisyal.', 'error');
+      return false;
+    }
+
+    if (users.some(u => u.username.toLowerCase() === cleanUsername)) {
+      showToastMessage('Kini nga username gigamit na sa laing account (Username already in use).', 'error');
+      return false;
+    }
+
+    const policyError = validatePasswordPolicy(rawPassword, cleanUsername, officerData.role, []);
+    if (policyError) {
+      showToastMessage(policyError, 'error');
+      return false;
+    }
+
+    const nowIso = new Date().toISOString();
+    const newOfficer: User = {
+      id: `user-${Date.now()}`,
+      username: cleanUsername,
+      passwordHash: hashPolicyPassword(rawPassword),
+      passwordHistory: [],
+      passwordChangedAt: nowIso,
+      mustChangePassword: true,
+      failedLoginAttempts: 0,
+      name: cleanName,
+      role: officerData.role,
+      isApproved: true,
+      joinedDate: nowIso.split('T')[0],
+      status: 'Active'
+    };
+
+    const updatedUsers = [newOfficer, ...users];
+    setUsers(updatedUsers);
+    updateStorage('bafa_users', updatedUsers);
+
+    const roleName = officerData.role.replace('_', ' ');
+    logAction('Added Officer Account', `Created ${roleName} account for ${cleanName} (@${cleanUsername}).`);
+
+    if (isOnline) {
+      showToastMessage(`Malampusong nadugang si ${cleanName} isip ${roleName}! Auto-syncing to database...`, 'success');
+      pushAllDataToCloud({ users: updatedUsers }, { silent: true, source: 'Officer Created' });
+    } else {
+      addToSyncQueue('create', 'officer', { id: newOfficer.id, name: cleanName, role: officerData.role });
+      showToastMessage(`Officer ${cleanName} added offline. Will sync to database when online.`, 'warning');
+    }
+    return true;
+  };
+
   const handleUpdateProfile = (updatedUser: User) => {
     const owner = currentUser && users.find(u => u.id === currentUser.id);
     if (!owner || updatedUser.id !== owner.id) {
@@ -2132,7 +2195,7 @@ export default function App() {
     turnoverNotes: string,
     outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'
   ) => {
-    const currentPresident = users.find(u => u.role === 'President');
+    const currentPresident = (currentUser && currentUser.role === 'President' ? users.find(u => u.id === currentUser.id) : null) || users.find(u => u.role === 'President');
     if (!currentPresident) {
       showToastMessage('Error: No active President found in the system.', 'error');
       return;
@@ -2144,11 +2207,13 @@ export default function App() {
       return;
     }
 
+    const resolvedOutgoingRole = (outgoingNewRole === 'None' ? 'Member' : outgoingNewRole) as OfficerRole | 'Member';
+
     const updatedUsers = users.map(user => {
-      if (user.role === 'President') {
+      if (user.id === currentPresident.id) {
         return {
           ...user,
-          role: (outgoingNewRole === 'None' ? 'Member' : outgoingNewRole) as any
+          role: resolvedOutgoingRole
         };
       }
       if (user.id === newPresidentId) {
@@ -2160,28 +2225,46 @@ export default function App() {
     setUsers(updatedUsers);
     updateStorage('bafa_users', updatedUsers);
 
-    let updatedCurrentUser = currentUser;
-    if (currentUser) {
-      if (currentUser.role === 'President') {
-        updatedCurrentUser = {
-          ...currentUser,
-          role: (outgoingNewRole === 'None' ? 'Member' : outgoingNewRole) as any
-        };
-        setCurrentRole(outgoingNewRole === 'None' ? 'Member' as any : outgoingNewRole as any);
-      } else if (currentUser.id === newPresidentId) {
-        updatedCurrentUser = {
-          ...currentUser,
-          role: 'President'
-        };
-        setCurrentRole('President');
-      }
-      setCurrentUser(updatedCurrentUser);
-      updateStorage('bafa_current_user', updatedCurrentUser);
+    const turnoverDetails = `FORMAL OFFICERS TURNOVER: Following the election on ${electionDate}, ${currentPresident.name} has formally turned over the presidency and all AFA files, keys, and assets to the newly-elected President, ${newPresidentUser.name}. Memo/Notes: ${turnoverNotes}`;
+    const newLog = logAction('Presidential Turnover', turnoverDetails);
+
+    if (isOnline) {
+      pushAllDataToCloud(
+        { users: updatedUsers, systemLogs: [newLog, ...logs] },
+        { silent: true, source: 'Presidential Turnover', force: true }
+      );
+    } else {
+      addToSyncQueue('update', 'officer', {
+        id: newPresidentId,
+        name: newPresidentUser.name,
+        newRole: 'President',
+        previousPresidentId: currentPresident.id,
+        outgoingNewRole: resolvedOutgoingRole
+      });
     }
 
-    const turnoverDetails = `FORMAL OFFICERS TURNOVER: Following the election on ${electionDate}, ${currentPresident.name} has formally turned over the presidency and all AFA files, keys, and assets to the newly-elected President, ${newPresidentUser.name}. Memo/Notes: ${turnoverNotes}`;
+    if (currentUser) {
+      if (currentUser.id === currentPresident.id) {
+        const updatedCurrentUser = {
+          ...currentUser,
+          role: resolvedOutgoingRole
+        };
+        setCurrentUser(updatedCurrentUser);
+        if (resolvedOutgoingRole !== 'Member') {
+          setCurrentRole(resolvedOutgoingRole);
+        }
+        updateStorage('bafa_current_user', updatedCurrentUser);
+      } else if (currentUser.id === newPresidentId) {
+        const updatedCurrentUser = {
+          ...currentUser,
+          role: 'President' as const
+        };
+        setCurrentUser(updatedCurrentUser);
+        setCurrentRole('President');
+        updateStorage('bafa_current_user', updatedCurrentUser);
+      }
+    }
 
-    logAction('Presidential Turnover', turnoverDetails);
     showToastMessage(`Turnover completed! The new President is ${newPresidentUser.name}!`, 'success');
   };
 
@@ -2737,6 +2820,7 @@ export default function App() {
                   updateStorage('bafa_logs', newLogs);
                 }}
                 users={users}
+                onAddOfficer={handleAddOfficer}
                 onApproveUser={handleApproveUser}
                 onDeclineUser={handleDeclineUser}
                 onDeleteUser={handleDeleteUser}

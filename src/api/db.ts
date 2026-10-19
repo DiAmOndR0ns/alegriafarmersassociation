@@ -1,7 +1,6 @@
 import pg from 'pg';
-import { OFFICIAL_OFFICERS, INITIAL_PRODUCTS } from '../initialData';
+import { INITIAL_PRODUCTS } from '../initialData';
 import { AuditorReport, DelegationRequest } from '../types';
-import { generateInitialPassword, hashPassword } from '../utils/passwordPolicy';
 
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
 const PgPool = (pg as any)?.Pool || (pg as any)?.default?.Pool || (pg as any)?.default || pg;
@@ -610,32 +609,6 @@ export async function ensureDatabaseSchema(pool: pg.Pool) {
       await runSchemaMigrations(client);
     }
 
-    // Only provision the 6 official officer logins if users table is empty
-    const counts = await client.query(`SELECT count(*) as count FROM users`);
-    const usersCount = Number(counts.rows[0]?.count || 0);
-    console.log('[DB DEBUG] Current users count:', usersCount);
-
-    if (usersCount === 0) {
-      console.log('[DB DEBUG] No users found. Provisioning officer accounts with configured credentials...');
-      for (const u of OFFICIAL_OFFICERS) {
-        const configuredPassword = process.env[`OFFICER_${u.username.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_PASSWORD`];
-        const password = configuredPassword || generateInitialPassword(u.username, u.role);
-        if (!configuredPassword) console.warn(`[DB SECURITY] Generated one-time initial password for ${u.username}: ${password}`);
-        if (!password) {
-          console.warn(`[DB DEBUG] Skipping officer account "${u.username}": no password is configured in seed data or environment.`);
-          continue;
-        }
-
-        const passwordHash = password.startsWith('$2') ? password : hashPassword(password);
-        await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status, password_changed_at, must_change_password, failed_login_attempts)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0)
-          ON CONFLICT (id) DO NOTHING;
-        `, [u.id, u.username, passwordHash, u.name, u.role, true, u.joinedDate || '2024-01-01', 'Active', new Date(0).toISOString(), true]);
-      }
-      console.log('[DB DEBUG] Officer account provisioning completed');
-    }
-
     schemaInitialized = true;
   } catch (err: any) {
     console.error('[DB DEBUG] ensureDatabaseSchema failed:', {
@@ -929,7 +902,11 @@ async function saveEntity(
 
   const columns = ['id', ...mapping.fields.map(([column]) => column)];
   const placeholders = columns.map((_, index) => `$${index + 1}`);
-  const updates = columns.slice(1).map((column) => `${column} = EXCLUDED.${column}`);
+  const updates = columns.slice(1).map((column) =>
+    mapping.table === 'users' && column === 'password'
+      ? `password = CASE WHEN EXCLUDED.password IS NOT NULL AND EXCLUDED.password != '' THEN EXCLUDED.password ELSE users.password END`
+      : `${column} = EXCLUDED.${column}`
+  );
   const query = `INSERT INTO ${mapping.table} (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT (id) DO UPDATE SET ${updates.join(', ')}`;
 
   for (const row of activeRows) {

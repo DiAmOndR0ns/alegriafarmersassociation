@@ -108,11 +108,7 @@ export function needsInitialPasswordChange(user: {
 }): boolean {
   const hasNeverChangedPassword =
     !user.passwordChangedAt || new Date(user.passwordChangedAt).getTime() <= 0;
-  const provisionedOfficer =
-    user.role !== 'Member' &&
-    /^(user-pres|user-vp|user-sec|user-tres|user-aud|user-pio)$/.test(user.id) &&
-    hasNeverChangedPassword;
-  return Boolean(user.mustChangePassword || provisionedOfficer || hasNeverChangedPassword);
+  return Boolean(user.mustChangePassword || hasNeverChangedPassword);
 }
 
 // Lockout policy: after MAX_LOGIN_ATTEMPTS consecutive failures, sign-in is blocked for LOCKOUT_DURATION_MS.

@@ -21,6 +21,7 @@ interface ExecutiveViewProps {
   currentUserId?: string;
   onUpdateLogs?: (newLogs: SystemLog[]) => void;
   users?: User[];
+  onAddOfficer?: (officerData: { name: string; username: string; password: string; role: OfficerRole }) => boolean;
   onApproveUser?: (id: string) => void;
   onDeclineUser?: (id: string) => void;
   onDeleteUser?: (id: string) => void;
@@ -53,6 +54,7 @@ export default function ExecutiveView({
   currentUserId,
   onUpdateLogs,
   users = [],
+  onAddOfficer,
   onApproveUser,
   onDeclineUser,
   onDeleteUser,
@@ -91,6 +93,13 @@ export default function ExecutiveView({
   const [editingRoleOfficerId, setEditingRoleOfficerId] = useState<string | null>(null);
   const [selectedNewRole, setSelectedNewRole] = useState<OfficerRole | 'Member'>('Secretary');
 
+  // Add New Officer Form State (Admin / President)
+  const [showAddOfficerForm, setShowAddOfficerForm] = useState<boolean>(false);
+  const [newOfficerName, setNewOfficerName] = useState<string>('');
+  const [newOfficerUsername, setNewOfficerUsername] = useState<string>('');
+  const [newOfficerPassword, setNewOfficerPassword] = useState<string>('');
+  const [newOfficerRole, setNewOfficerRole] = useState<OfficerRole>('Vice_President');
+
   // Member Portal -> Appoint as Officer state
   const [appointingMemberId, setAppointingMemberId] = useState<string | null>(null);
   const [appointRole, setAppointRole] = useState<OfficerRole>('Secretary');
@@ -107,6 +116,24 @@ export default function ExecutiveView({
       onUpdateUserRole(memberId, appointRole);
     }
     setAppointingMemberId(null);
+  };
+
+  const handleCreateOfficerSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onAddOfficer) return;
+    const ok = onAddOfficer({
+      name: newOfficerName,
+      username: newOfficerUsername,
+      password: newOfficerPassword,
+      role: newOfficerRole
+    });
+    if (ok) {
+      setNewOfficerName('');
+      setNewOfficerUsername('');
+      setNewOfficerPassword('');
+      setNewOfficerRole('Vice_President');
+      setShowAddOfficerForm(false);
+    }
   };
 
   // Search query for logs/roster
@@ -477,14 +504,114 @@ export default function ExecutiveView({
             <div>
               <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
                 <ShieldAlert className="w-5.5 h-5.5 text-[#1B4332]" />
-                <span>Officer Governance & Role Management (Delete Officer & Revoke Role)</span>
+                <span>Officer Governance & Role Management (Add, Reassign, or Delete Officers)</span>
               </h3>
             </div>
-            <div className="inline-flex items-center gap-1.5 bg-[#EAF4EC] border border-[#2D6A4F]/30 text-[#1B4332] px-3 py-1 rounded-full text-xs font-bold shrink-0 self-start sm:self-center">
-              <Check className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Auto-Sync Active</span>
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+              {canAppointOfficers && onAddOfficer && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextOpen = !showAddOfficerForm;
+                    setShowAddOfficerForm(nextOpen);
+                    if (nextOpen && !newOfficerPassword) {
+                      setNewOfficerPassword(generateInitialPassword(newOfficerUsername || 'officer', newOfficerRole));
+                    }
+                  }}
+                  className="px-3.5 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-xs"
+                >
+                  {showAddOfficerForm ? 'Cancel' : '+ Add Officer Account'}
+                </button>
+              )}
+              <div className="inline-flex items-center gap-1.5 bg-[#EAF4EC] border border-[#2D6A4F]/30 text-[#1B4332] px-3 py-1 rounded-full text-xs font-bold shrink-0">
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Auto-Sync Active</span>
+              </div>
             </div>
           </div>
+
+          {canAppointOfficers && showAddOfficerForm && (
+            <form onSubmit={handleCreateOfficerSubmit} className="bg-[#FAF8F5] border-2 border-[#1B4332]/20 rounded-2xl p-4 space-y-3 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-extrabold text-[#1B4332] uppercase tracking-wider">
+                  Create New Officer Account
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setNewOfficerPassword(generateInitialPassword(newOfficerUsername || 'officer', newOfficerRole))}
+                  className="text-[11px] font-bold text-[#2D6A4F] hover:underline cursor-pointer"
+                >
+                  Generate Strong Password
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Jennylyn S. Lumactao"
+                    value={newOfficerName}
+                    onChange={(e) => setNewOfficerName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Governance Role</label>
+                  <select
+                    value={newOfficerRole}
+                    onChange={(e) => setNewOfficerRole(e.target.value as OfficerRole)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                  >
+                    <option value="Vice_President">Vice President</option>
+                    <option value="Secretary">Secretary</option>
+                    <option value="Treasurer">Treasurer</option>
+                    <option value="Assistant_Treasurer">Assistant Treasurer</option>
+                    <option value="Auditor">Auditor</option>
+                    <option value="PIO">PIO</option>
+                    <option value="President">President</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Username</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. secretary"
+                    value={newOfficerUsername}
+                    onChange={(e) => setNewOfficerUsername(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Initial Password</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="12+ chars, upper/lower/num/symbol"
+                    value={newOfficerPassword}
+                    onChange={(e) => setNewOfficerPassword(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAddOfficerForm(false)}
+                  className="px-4 py-1.5 bg-white border border-[#D5CFC1] text-[#5D6B54] text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-extrabold rounded-xl cursor-pointer shadow-xs"
+                >
+                  Save & Provision Officer
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Officers Roster List */}
           <div className="space-y-3">
@@ -1097,7 +1224,7 @@ export default function ExecutiveView({
                     onChange={(e) => setTurnoverOutgoingRole(e.target.value as any)}
                     className="w-full px-3.5 py-2.5 bg-white border-2 border-[#D5CFC1] rounded-xl text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
                   >
-                    <option value="Vice_President">Vice President (Anselna)</option>
+                    <option value="Vice_President">Vice President</option>
                     <option value="Member">Miyembro (Regular Member)</option>
                     <option value="Secretary">Secretary</option>
                     <option value="Treasurer">Treasurer</option>

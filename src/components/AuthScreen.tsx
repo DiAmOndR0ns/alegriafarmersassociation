@@ -4,6 +4,7 @@ import { verifyPassword } from '../utils/audit';
 import {
   hashPassword,
   validatePasswordPolicy,
+  generateInitialPassword,
   getLockoutStatus,
   registerFailedLogin,
   MAX_LOGIN_ATTEMPTS,
@@ -29,6 +30,7 @@ interface AuthScreenProps {
 export default function AuthScreen({
   users,
   onLogin,
+  onRegister,
   onLoginFailed,
   toast,
   onRequestPasswordReset,
@@ -37,10 +39,37 @@ export default function AuthScreen({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
+  // First-time Admin / President bootstrap state (only available when no President account exists)
+  const hasPresidentAccount = users.some(u => u.role === 'President');
+  const [showAdminSetup, setShowAdminSetup] = useState(false);
+  const [adminName, setAdminName] = useState('');
+  const [adminUsername, setAdminUsername] = useState('admin');
+  const [adminPassword, setAdminPassword] = useState('');
+
   // Password reset request modal/form state
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetUsername, setResetUsername] = useState('');
   const [showMemberGuide, setShowMemberGuide] = useState(false);
+
+  const handleAdminSetupSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onRegister) return;
+    if (!adminName.trim() || !adminUsername.trim() || !adminPassword.trim()) {
+      toast('Palihug kompletoha ang Admin Name, Username, ug Password.', 'error');
+      return;
+    }
+    const policyErr = validatePasswordPolicy(adminPassword.trim(), adminUsername.trim(), 'President', []);
+    if (policyErr) {
+      toast(policyErr, 'error');
+      return;
+    }
+    onRegister({
+      name: adminName.trim(),
+      username: adminUsername.trim().toLowerCase(),
+      password: adminPassword.trim(),
+      role: 'President'
+    });
+  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,6 +341,24 @@ export default function AuthScreen({
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
+                  {!hasPresidentAccount && onRegister && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAdminSetup(true);
+                        setShowResetForm(false);
+                        setShowMemberGuide(false);
+                        if (!adminPassword) {
+                          setAdminPassword(generateInitialPassword(adminUsername || 'admin', 'President'));
+                        }
+                      }}
+                      className="w-full py-3 bg-[#EAF6EE] border-2 border-[#2D6A4F] text-[#1B4332] hover:bg-[#D8F3DC] rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-2.5"
+                    >
+                      <UserPlus className="w-4 h-4 text-[#1B4332]" />
+                      <span>First-Time Setup: Create Admin / President Account</span>
+                    </button>
+                  )}
+
                   {onBackToGuest && (
                     <button
                       type="button"
@@ -323,6 +370,79 @@ export default function AuthScreen({
                     </button>
                   )}
                 </form>
+
+                {!hasPresidentAccount && showAdminSetup && (
+                  <form onSubmit={handleAdminSetupSubmit} className="mt-4 p-4 bg-[#EAF6EE] border-2 border-[#2D6A4F] rounded-2xl space-y-3 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-[#1B4332]" />
+                        <span>Initialize Admin / President Account</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setAdminPassword(generateInitialPassword(adminUsername || 'admin', 'President'))}
+                        className="text-[11px] font-extrabold text-[#1B4332] hover:underline cursor-pointer"
+                      >
+                        Generate Strong Password
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-[#2D5A43] leading-relaxed">
+                      Walay nakit-an nga President/Admin account sa database. Paghimo og initial Admin account aron makadugang sa mga opisyal ug makabuhat og turnover.
+                    </p>
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">Admin / President Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. System Administrator"
+                          value={adminName}
+                          onChange={(e) => setAdminName(e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">Username</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. admin"
+                            value={adminUsername}
+                            onChange={(e) => setAdminUsername(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">Password (12+ chars)</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="12+ chars, upper/lower/num/symbol"
+                            value={adminPassword}
+                            onChange={(e) => setAdminPassword(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminSetup(false)}
+                        className="px-3.5 py-2 bg-white border border-[#A7D7B5] text-[#1B4332] rounded-xl text-xs font-bold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black cursor-pointer shadow-sm"
+                      >
+                        Create Admin & Sign In
+                      </button>
+                    </div>
+                  </form>
+                )}
 
                 <div className="mt-4 p-3.5 bg-[#FAF8F5] rounded-2xl border border-[#E8E3D8] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-[#5D6B54]">
                   <div className="flex items-center gap-2.5">
