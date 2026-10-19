@@ -36,7 +36,11 @@ export function sha256(ascii: string): string {
     words[i >> 2] |= bytes[i] << (24 - (i % 4) * 8);
   }
   words[byteLength >> 2] |= 0x80 << (24 - (byteLength % 4) * 8);
-  words[wordsLength - 1] = byteLength * 8;
+  // Append the 64-bit big-endian message length in bits. Using multiplication
+  // here would lose precision for inputs beyond ~2^29 bytes; the high word is
+  // computed from the byte length so multi-byte UTF-8 input stays correct.
+  words[wordsLength - 2] = Math.floor(byteLength / 0x20000000);
+  words[wordsLength - 1] = (byteLength << 3) >>> 0;
 
   for (j = 0; j < wordsLength; j += 16) {
     const w = [];

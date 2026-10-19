@@ -38,6 +38,8 @@ export interface User {
   joinedDate?: string;
   status?: 'Active' | 'Inactive'; // for Member status
   resetRequested?: boolean; // True if they applied to reset their password
+  failedLoginAttempts?: number; // Consecutive failed sign-in attempts; resets to 0 on success
+  lockedUntil?: string; // ISO timestamp until which sign-in is blocked after too many failures
   affiliations?: MemberAffiliation[]; // Other IDs or organizations aside from RSBSA
 }
 

@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { User, OfficerRole } from '../types';
 import { verifyPassword } from '../utils/audit';
-import { hashPassword, validatePasswordPolicy } from '../utils/passwordPolicy';
+import {
+  hashPassword,
+  validatePasswordPolicy,
+  getLockoutStatus,
+  registerFailedLogin,
+  MAX_LOGIN_ATTEMPTS,
+  LOCKOUT_DURATION_MS
+} from '../utils/passwordPolicy';
 import {
   Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
   UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
@@ -15,12 +22,14 @@ interface AuthScreenProps {
   onRegister?: (userData: Omit<User, 'id' | 'isApproved'>) => void;
   toast: (message: string, type: 'success' | 'warning' | 'info' | 'error') => void;
   onRequestPasswordReset?: (username: string) => void;
+  onLoginFailed?: (userId: string, state: { failedLoginAttempts: number; lockedUntil?: string }) => void;
   onBackToGuest?: () => void;
 }
 
 export default function AuthScreen({
   users,
   onLogin,
+  onLoginFailed,
   toast,
   onRequestPasswordReset,
   onBackToGuest
@@ -44,10 +53,37 @@ export default function AuthScreen({
       u => u.username.toLowerCase() === username.trim().toLowerCase()
     );
 
+    // Block sign-in while an account is temporarily locked after repeated failures.
+    if (matchedUser) {
+      const lockout = getLockoutStatus(matchedUser);
+      if (lockout.locked) {
+        const minutes = Math.ceil(lockout.remainingMs / 60000);
+        toast(`Account temporarily locked. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`, 'error');
+        return;
+      }
+    }
+
     const passwordIsValid = matchedUser
       ? await verifyPassword(password, matchedUser.passwordHash, matchedUser.password)
       : false;
     if (!matchedUser || !passwordIsValid) {
+      if (matchedUser && onLoginFailed) {
+        const nextState = registerFailedLogin(matchedUser);
+        onLoginFailed(matchedUser.id, nextState);
+        if (nextState.lockedUntil) {
+          toast(
+            `Too many failed attempts. Account locked for ${Math.ceil(LOCKOUT_DURATION_MS / 60000)} minutes.`,
+            'error'
+          );
+          return;
+        }
+        const remaining = MAX_LOGIN_ATTEMPTS - nextState.failedLoginAttempts;
+        toast(
+          `Invalid credentials. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before lockout.`,
+          'error'
+        );
+        return;
+      }
       toast('Invalid credentials.', 'error');
       return;
     }
@@ -55,6 +91,11 @@ export default function AuthScreen({
     if (!matchedUser.isApproved) {
       toast('Ang imong account nagpaabot pa sa pag-aprobar ni Presidente Zenaida A. Elbiña (Awaiting President approval).', 'warning');
       return;
+    }
+
+    // Clear the failure counter on a successful sign-in.
+    if (onLoginFailed && (matchedUser.failedLoginAttempts || matchedUser.lockedUntil)) {
+      onLoginFailed(matchedUser.id, { failedLoginAttempts: 0 });
     }
 
     onLogin(matchedUser, password);
@@ -76,9 +117,6 @@ export default function AuthScreen({
       toast('Dili pa magamit ang password reset request.', 'error');
     }
   };
-
-  // Demo users for quick-login grid (makes testing very easy for non-tech users)
-  const approvedUsers = users.filter(u => u.isApproved);
 
   return (
     <div id="auth-screen-root" className="min-h-screen bg-bafa-50 text-bafa-800 flex flex-col items-center justify-center p-4 sm:p-6 font-sans antialiased">
@@ -219,42 +257,6 @@ export default function AuthScreen({
               </div>
             ) : !showMemberGuide ? (
               <div className="space-y-6 text-left">
-                <div className="space-y-2">
-                  <span className="flex items-center gap-1 text-xs font-extrabold text-bafa-neutral-800 uppercase tracking-wider">
-                    <UserCheck className="w-4 h-4 text-bafa-700" />
-                    <span>Quick Login</span>
-                  </span>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {approvedUsers.map((user) => (
-                      <button
-                        key={user.id}
-                        type="button"
-                        onClick={() => {
-                          setUsername(user.username);
-                          setPassword('password123');
-                          toast(`Nahi-select si ${user.name}! Pindota ang "Mosulod sa Portal" sa ubos aron makasulod.`, 'info');
-                        }}
-                        className={`p-2.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between min-h-[76px] h-20 relative group overflow-hidden ${
-                          username.toLowerCase() === user.username.toLowerCase()
-                            ? 'bg-[#EAF5EE] border-[#2D6A4F] shadow-sm'
-                            : 'bg-[#F9FBF9] border-[#D8E7D9] hover:border-[#8EBDA2] hover:bg-white'
-                        }`}
-                      >
-                        <span className="block font-black text-[#18372d] text-sm leading-tight truncate group-hover:text-[#123326]">
-                          {user.name.split(' ')[0]}
-                        </span>
-                        <span className="block text-[9px] font-bold text-[#536A5D] uppercase tracking-[0.12em] truncate">
-                          {user.role.replace('_', ' ')}
-                        </span>
-                        {user.resetRequested && (
-                          <span className="absolute top-2 right-2 bg-amber-500 w-2 h-2 rounded-full" title="Forgot Password Request Pending" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center">

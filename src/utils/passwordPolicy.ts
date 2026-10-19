@@ -109,6 +109,50 @@ export function needsInitialPasswordChange(user: {
   return Boolean(user.mustChangePassword || provisionedOfficer || !user.passwordChangedAt);
 }
 
+// Lockout policy: after MAX_LOGIN_ATTEMPTS consecutive failures, sign-in is blocked for LOCKOUT_DURATION_MS.
+export const MAX_LOGIN_ATTEMPTS = 5;
+export const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
+export interface LockoutState {
+  failedLoginAttempts?: number;
+  lockedUntil?: string;
+}
+
+/**
+ * Returns whether the account is currently locked, and how long remains (in ms).
+ * A lock whose expiry has passed is treated as no longer active.
+ */
+export function getLockoutStatus(
+  user: LockoutState,
+  now: number = Date.now()
+): { locked: boolean; remainingMs: number } {
+  if (!user.lockedUntil) return { locked: false, remainingMs: 0 };
+  const remaining = new Date(user.lockedUntil).getTime() - now;
+  if (!Number.isFinite(remaining) || remaining <= 0) {
+    return { locked: false, remainingMs: 0 };
+  }
+  return { locked: true, remainingMs: remaining };
+}
+
+/**
+ * Produces the next lockout fields after a failed sign-in attempt.
+ * The counter resets to zero and the lock is lifted once the account has been
+ * successfully unlocked by an officer or after a successful sign-in.
+ */
+export function registerFailedLogin(
+  user: LockoutState,
+  now: number = Date.now()
+): { failedLoginAttempts: number; lockedUntil?: string } {
+  const nextAttempts = (user.failedLoginAttempts || 0) + 1;
+  if (nextAttempts >= MAX_LOGIN_ATTEMPTS) {
+    return {
+      failedLoginAttempts: nextAttempts,
+      lockedUntil: new Date(now + LOCKOUT_DURATION_MS).toISOString()
+    };
+  }
+  return { failedLoginAttempts: nextAttempts };
+}
+
 /**
  * Legacy SHA-256 hash (browser-safe).
  * Uses the pure TypeScript implementation from audit.ts.

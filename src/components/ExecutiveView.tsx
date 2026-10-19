@@ -6,7 +6,7 @@ import {
   KeyRound, Trash2, Clock, Smartphone, AlertTriangle, Printer, Calendar,
   Sprout, MapPin, Search, Lock, Download, ShieldAlert, Shield
 } from 'lucide-react';
-import { buildAuditChain } from '../utils/audit';
+import { buildAuditChain, verifyPassword } from '../utils/audit';
 import PrintMinutesModal from './PrintMinutesModal';
 
 interface ExecutiveViewProps {
@@ -17,6 +17,7 @@ interface ExecutiveViewProps {
   transactions: FinancialTransaction[];
   logs: SystemLog[];
   currentRole: OfficerRole;
+  currentUserId?: string;
   onUpdateLogs?: (newLogs: SystemLog[]) => void;
   users?: User[];
   onApproveUser?: (id: string) => void;
@@ -48,6 +49,7 @@ export default function ExecutiveView({
   transactions,
   logs,
   currentRole,
+  currentUserId,
   onUpdateLogs,
   users = [],
   onApproveUser,
@@ -78,6 +80,10 @@ export default function ExecutiveView({
   // Credentials edit state
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState<string>('');
+  // Step-up re-authentication: the officer must confirm their own password before a privileged reset.
+  const [stepUpUserId, setStepUpUserId] = useState<string | null>(null);
+  const [stepUpPassword, setStepUpPassword] = useState<string>('');
+  const [stepUpError, setStepUpError] = useState<string>('');
 
   // Officer Governance & Deletion modal state
   const [officerToDelete, setOfficerToDelete] = useState<User | null>(null);
@@ -220,9 +226,32 @@ export default function ExecutiveView({
   const handleResetPasswordSubmit = (e: React.FormEvent, userId: string) => {
     e.preventDefault();
     if (!newPassword.trim()) return;
+    // Do not reset yet: require the officer to re-enter their own password first.
+    setStepUpUserId(userId);
+    setStepUpPassword('');
+    setStepUpError('');
+  };
+
+  const handleStepUpConfirm = async (e: React.FormEvent, userId: string) => {
+    e.preventDefault();
+    if (!stepUpPassword.trim()) {
+      setStepUpError('Please enter your password to confirm.');
+      return;
+    }
+    const officer = users.find((candidate) => candidate.id === currentUserId);
+    const officerPasswordIsValid = officer
+      ? await verifyPassword(stepUpPassword, officer.passwordHash, officer.password)
+      : false;
+    if (!officerPasswordIsValid) {
+      setStepUpError('Incorrect password. The reset was not performed.');
+      return;
+    }
     if (onResetPassword) {
       onResetPassword(userId, newPassword.trim());
     }
+    setStepUpUserId(null);
+    setStepUpPassword('');
+    setStepUpError('');
     setEditingUserId(null);
     setNewPassword('');
   };
@@ -539,7 +568,7 @@ export default function ExecutiveView({
                       )}
 
                       {/* Inline Password Reset Form */}
-                      {isEditingPass && (
+                      {isEditingPass && stepUpUserId !== officer.id && (
                         <form onSubmit={(e) => handleResetPasswordSubmit(e, officer.id)} className="bg-white p-2.5 rounded-xl border border-[#E9E4D9] space-y-2 animate-fade-in">
                           <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">New Officer Password:</label>
                           <input
@@ -563,6 +592,41 @@ export default function ExecutiveView({
                               className="flex-1 py-1 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
                             >
                               Save Pass
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      {/* Step-up confirmation: re-enter the officer's own password before applying the reset */}
+                      {isEditingPass && stepUpUserId === officer.id && (
+                        <form onSubmit={(e) => handleStepUpConfirm(e, officer.id)} className="bg-[#FFF7ED] p-2.5 rounded-xl border border-[#F0C08A] space-y-2 animate-fade-in">
+                          <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                            Confirm your own password to authorize this reset
+                          </p>
+                          <input
+                            type="password"
+                            required
+                            autoComplete="current-password"
+                            placeholder="Your password"
+                            value={stepUpPassword}
+                            onChange={(e) => setStepUpPassword(e.target.value)}
+                            className="w-full px-2 py-1 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
+                          />
+                          {stepUpError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{stepUpError}</p>}
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { setStepUpUserId(null); setStepUpPassword(''); setStepUpError(''); }}
+                              className="flex-1 py-1 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                            >
+                              Back
+                            </button>
+                            <button
+                              type="submit"
+                              className="flex-1 py-1 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
+                            >
+                              Confirm Reset
                             </button>
                           </div>
                         </form>
@@ -743,7 +807,7 @@ export default function ExecutiveView({
                     )}
 
                     {/* Inline password edit form */}
-                    {isEditing && (
+                    {isEditing && stepUpUserId !== user.id && (
                       <form onSubmit={(e) => handleResetPasswordSubmit(e, user.id)} className="bg-white p-3 rounded-xl border border-[#E9E4D9] space-y-2.5">
                         <div className="space-y-1">
                           <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">New Password:</label>
@@ -769,6 +833,41 @@ export default function ExecutiveView({
                             className="flex-1 py-1.5 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
                           >
                             Save Password
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {/* Step-up confirmation: re-enter the officer's own password before applying the reset */}
+                    {isEditing && stepUpUserId === user.id && (
+                      <form onSubmit={(e) => handleStepUpConfirm(e, user.id)} className="bg-[#FFF7ED] p-3 rounded-xl border border-[#F0C08A] space-y-2.5">
+                        <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          Confirm your own password to authorize this reset
+                        </p>
+                        <input
+                          type="password"
+                          required
+                          autoComplete="current-password"
+                          placeholder="Your password"
+                          value={stepUpPassword}
+                          onChange={(e) => setStepUpPassword(e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
+                        />
+                        {stepUpError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{stepUpError}</p>}
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setStepUpUserId(null); setStepUpPassword(''); setStepUpError(''); }}
+                            className="flex-1 py-1.5 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                          >
+                            Back
+                          </button>
+                          <button
+                            type="submit"
+                            className="flex-1 py-1.5 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
+                          >
+                            Confirm Reset
                           </button>
                         </div>
                       </form>

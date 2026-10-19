@@ -131,6 +131,8 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_history JSONB DEFAULT '[]'::jsonb;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;`,
 
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
@@ -622,8 +624,8 @@ export async function ensureDatabaseSchema(pool: pg.Pool) {
 
         const passwordHash = password.startsWith('$2') ? password : hashPassword(password);
         await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status, password_changed_at, must_change_password)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status, password_changed_at, must_change_password, failed_login_attempts)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0)
           ON CONFLICT (id) DO NOTHING;
         `, [u.id, u.username, passwordHash, u.name, u.role, true, u.joinedDate || '2024-01-01', 'Active', new Date(0).toISOString(), true]);
       }
@@ -754,6 +756,8 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       passwordHistory: r.password_history || [],
       passwordChangedAt: r.password_changed_at ? new Date(r.password_changed_at).toISOString() : undefined,
       mustChangePassword: Boolean(r.must_change_password),
+      failedLoginAttempts: r.failed_login_attempts ?? 0,
+      lockedUntil: r.locked_until ? new Date(r.locked_until).toISOString() : undefined,
       name: r.name,
       role: r.role,
       isApproved: r.is_approved,
@@ -1426,7 +1430,9 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)],
         ['password_history', 'passwordHistory', (r) => r.passwordHistory || []],
         ['password_changed_at', 'passwordChangedAt', (r) => r.passwordChangedAt || null],
-        ['must_change_password', 'mustChangePassword', (r) => Boolean(r.mustChangePassword)]
+        ['must_change_password', 'mustChangePassword', (r) => Boolean(r.mustChangePassword)],
+        ['failed_login_attempts', 'failedLoginAttempts', (r) => r.failedLoginAttempts ?? 0],
+        ['locked_until', 'lockedUntil', (r) => r.lockedUntil || null]
       ] },
       { table: 'members', deletedIds: deletedMemberIds, fields: [
         ['name', 'name', (r) => r.name], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],

@@ -296,17 +296,24 @@ export default function App() {
             if (Array.isArray(res.data.inventory)) { setInventory(cleanInventory); updateStorage('bafa_inventory', cleanInventory); }
             if (res.data.hogRaising) { setHogRaising(res.data.hogRaising); updateStorage('bafa_hog_raising', res.data.hogRaising); }
             if (Array.isArray(res.data.users) && res.data.users.length > 0) {
-              const officersOnly = res.data.users.filter((u: any) => !delUsers.has(u.id) && (u.role !== 'Member' || !u.id.startsWith('user-m')));
-              const cleanUsers = officersOnly.map((user: User) => {
-                const upgraded = { ...user, passwordHistory: user.passwordHistory || [] };
-                if (!upgraded.passwordHash && /^(user-pres|user-vp|user-sec|user-tres|user-aud|user-pio)$/.test(upgraded.id)) {
-                  upgraded.passwordHash = hashPolicyPassword('password123');
-                  upgraded.passwordChangedAt = new Date(0).toISOString();
-                  upgraded.mustChangePassword = true;
-                }
-                upgraded.mustChangePassword = !upgraded.passwordHash?.startsWith('$2') || needsInitialPasswordChange(upgraded);
-                return upgraded;
-              });
+              const cleanUsers = res.data.users
+                .filter((u: any) => !delUsers.has(u.id))
+                .map((user: User) => {
+                  // The database row is the source of truth for credentials. Older rows store a
+                  // plaintext `password`; promote it into the hash column exactly once instead of
+                  // letting it be dropped during storage sanitization.
+                  const upgraded = { ...user, passwordHistory: user.passwordHistory || [] };
+                  if (upgraded.password) {
+                    if (!upgraded.passwordHash?.startsWith('$2')) {
+                      upgraded.passwordHash = hashPolicyPassword(upgraded.password);
+                      upgraded.passwordChangedAt = upgraded.passwordChangedAt || new Date(0).toISOString();
+                    }
+                    upgraded.mustChangePassword = true;
+                    delete upgraded.password;
+                  }
+                  upgraded.mustChangePassword = !upgraded.passwordHash?.startsWith('$2') || needsInitialPasswordChange(upgraded);
+                  return upgraded;
+                });
               const resolvedUsers = cleanUsers.length > 0 ? cleanUsers : OFFICIAL_OFFICERS;
               setUsers(resolvedUsers);
               updateStorage('bafa_users', resolvedUsers);
@@ -1842,6 +1849,18 @@ export default function App() {
     showToastMessage('Sign-up request received! Awaiting President/Admin approval.', 'warning');
   };
 
+  const handleLoginFailed = (userId: string, state: { failedLoginAttempts: number; lockedUntil?: string }) => {
+    const updated = users.map((candidate) =>
+      candidate.id === userId
+        ? { ...candidate, failedLoginAttempts: state.failedLoginAttempts, lockedUntil: state.lockedUntil }
+        : candidate
+    );
+    setUsers(updated);
+    if (isOnline) {
+      pushAllDataToCloud({ users: updated }, { silent: true });
+    }
+  };
+
   const handleRequestPasswordReset = (username: string) => {
     const matchedUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
     if (!matchedUser) {
@@ -2230,6 +2249,7 @@ export default function App() {
             users={users}
             onLogin={handleLogin}
             onRegister={handleRegister}
+            onLoginFailed={handleLoginFailed}
             toast={showToastMessage}
             onRequestPasswordReset={handleRequestPasswordReset}
             onBackToGuest={() => setGuestMode(true)}
@@ -2704,6 +2724,7 @@ export default function App() {
                 transactions={transactions}
                 logs={logs}
                 currentRole={currentRole}
+                currentUserId={currentUser?.id}
                 onUpdateLogs={(newLogs) => {
                   setLogs(newLogs);
                   updateStorage('bafa_logs', newLogs);
