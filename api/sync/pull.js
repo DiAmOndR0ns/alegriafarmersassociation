@@ -531,7 +531,7 @@ async function fetchAllDataFromPostgres(pool) {
       id: r.id,
       username: r.username,
       passwordHash: r.password,
-      passwordHistory: r.password_history || [],
+      passwordHistory: Array.isArray(r.password_history) ? r.password_history : [],
       passwordChangedAt: r.password_changed_at ? new Date(r.password_changed_at).toISOString() : void 0,
       mustChangePassword: Boolean(r.must_change_password),
       failedLoginAttempts: r.failed_login_attempts ?? 0,

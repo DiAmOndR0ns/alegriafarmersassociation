@@ -1050,7 +1050,7 @@ async function saveFullStateToPostgres(pool, state) {
         ["member_id_number", "memberIdNumber", (r) => r.memberIdNumber || null],
         ["rsbsa_number", "rsbsaNumber", (r) => r.rsbsaNumber || null],
         ["is_rsbsa_registered", "isRsbsaRegistered", (r) => Boolean(r.isRsbsaRegistered)],
-        ["password_history", "passwordHistory", (r) => r.passwordHistory || []],
+        ["password_history", "passwordHistory", (r) => JSON.stringify(Array.isArray(r.passwordHistory) ? r.passwordHistory : [])],
         ["password_changed_at", "passwordChangedAt", (r) => r.passwordChangedAt || null],
         ["must_change_password", "mustChangePassword", (r) => Boolean(r.mustChangePassword)],
         ["failed_login_attempts", "failedLoginAttempts", (r) => r.failedLoginAttempts ?? 0],

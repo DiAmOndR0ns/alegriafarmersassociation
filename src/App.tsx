@@ -1879,12 +1879,17 @@ export default function App() {
     updateStorage('bafa_users', updated);
 
     logAction('Requested Reset', `Requested password reset for ${matchedUser.name} (${matchedUser.username})`);
+    if (isOnline) {
+      pushAllDataToCloud({ users: updated }, { silent: true, force: true, source: 'Password Reset Requested' });
+    } else {
+      addToSyncQueue('update', 'user', { id: matchedUser.id, resetRequested: true });
+    }
     showToastMessage('Kung adunay account nga motakdo, ipadala ang password reset instructions.', 'success');
   };
 
-  const handleResetPassword = (userId: string, newPass: string) => {
+  const handleResetPassword = (userId: string, newPass: string): boolean => {
     const targetUser = users.find(u => u.id === userId);
-    if (!targetUser) return;
+    if (!targetUser) return false;
 
     // Authority guard: the President and Vice President (or Secretary for Member accounts) may reset passwords,
     // but the President's own account can never be reset from this desk.
@@ -1896,17 +1901,18 @@ export default function App() {
       );
     if (!canResetPasswords) {
       showToastMessage('Wala kay katungod sa pag-reset og password. Ang Presidente ug Bise-Presidente lamang ang makahimo niini. (Only the President and Vice President may reset passwords.)', 'error');
-      return;
+      return false;
     }
     if (targetUser.role === 'President') {
       showToastMessage('Dili ma-reset ang password sa Presidente. (The President\'s password cannot be reset.)', 'error');
-      return;
+      return false;
     }
 
-    const policyError = validatePasswordPolicy(newPass, targetUser.username, targetUser.role, targetUser.passwordHistory);
+    const safeHistory = Array.isArray(targetUser.passwordHistory) ? targetUser.passwordHistory : [];
+    const policyError = validatePasswordPolicy(newPass, targetUser.username, targetUser.role, safeHistory);
     if (policyError) {
       showToastMessage(policyError, 'error');
-      return;
+      return false;
     }
     const resetChangedAt = new Date().toISOString();
     const resetHash = hashPolicyPassword(newPass);
@@ -1916,7 +1922,7 @@ export default function App() {
         return {
           ...rest,
           passwordHash: resetHash,
-          passwordHistory: [...(targetUser.passwordHistory || []), ...(targetUser.passwordHash ? [{ hash: targetUser.passwordHash, changedAt: targetUser.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5),
+          passwordHistory: [...safeHistory, ...(targetUser.passwordHash ? [{ hash: targetUser.passwordHash, changedAt: targetUser.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5),
           passwordChangedAt: resetChangedAt,
           mustChangePassword: true,
           resetRequested: false,
@@ -1929,8 +1935,17 @@ export default function App() {
     setUsers(updated);
     updateStorage('bafa_users', updated);
 
-    logAction('Reset Password', `Updated password credentials for ${targetUser.name} (${targetUser.role})`);
+    const newLog = logAction('Reset Password', `Updated password credentials for ${targetUser.name} (${targetUser.role})`);
+    if (isOnline) {
+      pushAllDataToCloud(
+        { users: updated, systemLogs: [newLog, ...logs] },
+        { silent: true, force: true, source: 'Password Reset' }
+      );
+    } else {
+      addToSyncQueue('update', 'user', { id: userId, resetRequested: false });
+    }
     showToastMessage(`Malampusong na-reset ang password ni ${targetUser.name}!`, 'success');
+    return true;
   };
 
   const handleApproveUser = (id: string) => {

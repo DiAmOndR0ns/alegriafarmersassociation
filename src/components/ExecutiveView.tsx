@@ -26,7 +26,7 @@ interface ExecutiveViewProps {
   onDeclineUser?: (id: string) => void;
   onDeleteUser?: (id: string) => void;
   onUpdateUserRole?: (id: string, newRole: OfficerRole | 'Member') => void;
-  onResetPassword?: (id: string, newPass: string) => void;
+  onResetPassword?: (id: string, newPass: string) => boolean | void;
   onPresidentTurnover?: (
     newPresidentId: string,
     electionDate: string,
@@ -87,6 +87,8 @@ export default function ExecutiveView({
   const [stepUpUserId, setStepUpUserId] = useState<string | null>(null);
   const [stepUpPassword, setStepUpPassword] = useState<string>('');
   const [stepUpError, setStepUpError] = useState<string>('');
+  const [lastResetCredential, setLastResetCredential] = useState<{ userId: string; password: string } | null>(null);
+  const [copiedResetPassword, setCopiedResetPassword] = useState<boolean>(false);
 
   // Officer Governance & Deletion modal state
   const [officerToDelete, setOfficerToDelete] = useState<User | null>(null);
@@ -274,9 +276,18 @@ export default function ExecutiveView({
       setStepUpError('Incorrect password. The reset was not performed.');
       return;
     }
+    const trimmedNewPassword = newPassword.trim();
     if (onResetPassword) {
-      onResetPassword(userId, newPassword.trim());
+      const didSucceed = onResetPassword(userId, trimmedNewPassword);
+      if (didSucceed === false) {
+        setStepUpUserId(null);
+        setStepUpPassword('');
+        setStepUpError('');
+        return;
+      }
     }
+    setLastResetCredential({ userId, password: trimmedNewPassword });
+    setCopiedResetPassword(false);
     setStepUpUserId(null);
     setStepUpPassword('');
     setStepUpError('');
@@ -759,6 +770,37 @@ export default function ExecutiveView({
                           </div>
                         </form>
                       )}
+
+                      {lastResetCredential?.userId === officer.id && (
+                        <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl space-y-2 animate-fade-in">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-extrabold text-emerald-900 uppercase flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              New Officer Password Active
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setLastResetCredential(null)}
+                              className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                          <div className="bg-white border border-emerald-200 px-2.5 py-1.5 rounded-lg font-mono text-xs font-black text-[#1B4332] select-all break-all">
+                            {lastResetCredential.password}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(lastResetCredential.password);
+                              setCopiedResetPassword(true);
+                            }}
+                            className="w-full py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center transition-all"
+                          >
+                            {copiedResetPassword ? '✓ Copied to Clipboard!' : 'Copy New Password'}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Action Buttons for Officer */}
@@ -768,6 +810,7 @@ export default function ExecutiveView({
                           <button
                             type="button"
                             onClick={() => {
+                              setLastResetCredential(null);
                               setEditingUserId(officer.id);
                               setNewPassword(generateInitialPassword(officer.username, officer.role));
                             }}
@@ -870,6 +913,7 @@ export default function ExecutiveView({
                         {canResetPasswords && (
                           <button
                             onClick={() => {
+                              setLastResetCredential(null);
                               setEditingUserId(user.id);
                               setNewPassword(generateInitialPassword(user.username, user.role));
                             }}
@@ -999,6 +1043,37 @@ export default function ExecutiveView({
                           </button>
                         </div>
                       </form>
+                    )}
+
+                    {lastResetCredential?.userId === user.id && (
+                      <div className="bg-emerald-50 border border-emerald-300 p-3 rounded-xl space-y-2 animate-fade-in">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-extrabold text-emerald-900 uppercase flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            New Member Password Active
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setLastResetCredential(null)}
+                            className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                        <div className="bg-white border border-emerald-200 px-2.5 py-1.5 rounded-lg font-mono text-xs font-black text-[#1B4332] select-all break-all">
+                          {lastResetCredential.password}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(lastResetCredential.password);
+                            setCopiedResetPassword(true);
+                          }}
+                          className="w-full py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center transition-all"
+                        >
+                          {copiedResetPassword ? '✓ Copied to Clipboard!' : 'Copy New Password'}
+                        </button>
+                      </div>
                     )}
                   </div>
                 );
