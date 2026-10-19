@@ -7,6 +7,7 @@ import {
   Sprout, MapPin, Search, Lock, Download, ShieldAlert, Shield
 } from 'lucide-react';
 import { buildAuditChain, verifyPassword } from '../utils/audit';
+import { generateInitialPassword } from '../utils/passwordPolicy';
 import PrintMinutesModal from './PrintMinutesModal';
 
 interface ExecutiveViewProps {
@@ -641,7 +642,7 @@ export default function ExecutiveView({
                             type="button"
                             onClick={() => {
                               setEditingUserId(officer.id);
-                              setNewPassword('afa2026');
+                              setNewPassword(generateInitialPassword(officer.username, officer.role));
                             }}
                             className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
                             title="Reset password"
@@ -743,7 +744,7 @@ export default function ExecutiveView({
                           <button
                             onClick={() => {
                               setEditingUserId(user.id);
-                              setNewPassword('afa2026');
+                              setNewPassword(generateInitialPassword(user.username, user.role));
                             }}
                             className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border ${
                               user.resetRequested

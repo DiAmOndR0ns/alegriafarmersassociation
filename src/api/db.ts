@@ -133,6 +133,7 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested BOOLEAN DEFAULT FALSE;`,
 
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
@@ -245,7 +246,10 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         is_rsbsa_registered BOOLEAN DEFAULT FALSE,
         password_history JSONB DEFAULT '[]'::jsonb,
         password_changed_at TIMESTAMPTZ,
-        must_change_password BOOLEAN DEFAULT FALSE
+        must_change_password BOOLEAN DEFAULT FALSE,
+        failed_login_attempts INTEGER DEFAULT 0,
+        locked_until TIMESTAMPTZ,
+        reset_requested BOOLEAN DEFAULT FALSE
       );
     `);
 

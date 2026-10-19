@@ -1750,19 +1750,24 @@ export default function App() {
   // USER AUTHENTICATION & MANAGEMENT ACTIONS
   const handleLogin = (user: User, password: string) => {
     const { password: legacyPassword, passwordHash, passwordHistory, ...safeUser } = user;
-    const requiresChange = needsInitialPasswordChange(user) || Date.now() - new Date(user.passwordChangedAt || 0).getTime() >= 90 * 86_400_000;
-    const upgradedHash = isLegacyPasswordHash(passwordHash) ? hashPolicyPassword(password) : passwordHash;
+    const wasLegacy = isLegacyPasswordHash(passwordHash) || !passwordHash;
+    const upgradedHash = wasLegacy ? hashPolicyPassword(password) : passwordHash;
+    const requiresChange = wasLegacy || needsInitialPasswordChange(user);
     const upgradedUser: User = {
       ...user,
       passwordHash: upgradedHash,
-      passwordHistory: passwordHistory || [],
-      passwordChangedAt: isLegacyPasswordHash(passwordHash) ? (user.passwordChangedAt || new Date(0).toISOString()) : user.passwordChangedAt,
-      mustChangePassword: requiresChange
+      passwordHistory: user.passwordHistory || [],
+      passwordChangedAt: user.passwordChangedAt || new Date(0).toISOString(),
+      mustChangePassword: requiresChange,
+      failedLoginAttempts: 0,
+      lockedUntil: undefined
     };
+    delete upgradedUser.password;
+
     const upgradedUsers = users.map((candidate) => candidate.id === user.id ? upgradedUser : candidate);
     setUsers(upgradedUsers);
-    setCurrentUser({ ...safeUser, passwordHistory: passwordHistory || [], mustChangePassword: requiresChange } as User);
-    updateStorage('bafa_current_user', { ...safeUser, mustChangePassword: requiresChange });
+    setCurrentUser({ ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, passwordHistory: upgradedUser.passwordHistory, mustChangePassword: requiresChange } as User);
+    updateStorage('bafa_current_user', { ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, mustChangePassword: requiresChange });
     updateStorage('bafa_users', upgradedUsers);
     if (isOnline) pushAllDataToCloud({ users: upgradedUsers }, { silent: true, source: 'Password Hash Migration' });
 
@@ -1776,7 +1781,7 @@ export default function App() {
     if (!currentUser) return;
     const account = users.find((candidate) => candidate.id === currentUser.id);
     if (!account) return;
-    const policyError = validatePasswordPolicy(newPassword, account.username, account.role, account.passwordHistory || []);
+    const policyError = validatePasswordPolicy(newPassword, account.username, account.role, account.passwordHistory);
     if (policyError) {
       showToastMessage(policyError, 'error');
       return;
@@ -1823,7 +1828,7 @@ export default function App() {
       showToastMessage('Invalid credentials.', 'error');
       return;
     }
-    const message = validatePasswordPolicy(copy.password, copy.username, copy.role, copy.passwordHistory || []);
+    const message = validatePasswordPolicy(copy.password, copy.username, copy.role, copy.passwordHistory);
     if (message) {
       showToastMessage(message, 'error');
       return;
@@ -1856,9 +1861,7 @@ export default function App() {
         : candidate
     );
     setUsers(updated);
-    if (isOnline) {
-      pushAllDataToCloud({ users: updated }, { silent: true });
-    }
+    updateStorage('bafa_users', updated);
   };
 
   const handleRequestPasswordReset = (username: string) => {
@@ -1871,7 +1874,6 @@ export default function App() {
     setUsers(updated);
     updateStorage('bafa_users', updated);
 
-    // Add simple system log
     logAction('Requested Reset', `Requested password reset for ${matchedUser.name} (${matchedUser.username})`);
     showToastMessage('Kung adunay account nga motakdo, ipadala ang password reset instructions.', 'success');
   };
@@ -1880,10 +1882,14 @@ export default function App() {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return;
 
-    // Authority guard: the President and Vice President may reset passwords,
+    // Authority guard: the President and Vice President (or Secretary for Member accounts) may reset passwords,
     // but the President's own account can never be reset from this desk.
     const canResetPasswords =
-      !!currentUser && (currentUser.role === 'President' || currentUser.role === 'Vice_President');
+      !!currentUser && (
+        currentUser.role === 'President' ||
+        currentUser.role === 'Vice_President' ||
+        (currentUser.role === 'Secretary' && targetUser.role === 'Member')
+      );
     if (!canResetPasswords) {
       showToastMessage('Wala kay katungod sa pag-reset og password. Ang Presidente ug Bise-Presidente lamang ang makahimo niini. (Only the President and Vice President may reset passwords.)', 'error');
       return;
@@ -1893,7 +1899,7 @@ export default function App() {
       return;
     }
 
-    const policyError = validatePasswordPolicy(newPass, targetUser.username, targetUser.role, targetUser.passwordHistory || []);
+    const policyError = validatePasswordPolicy(newPass, targetUser.username, targetUser.role, targetUser.passwordHistory);
     if (policyError) {
       showToastMessage(policyError, 'error');
       return;
@@ -1908,8 +1914,10 @@ export default function App() {
           passwordHash: resetHash,
           passwordHistory: [...(targetUser.passwordHistory || []), ...(targetUser.passwordHash ? [{ hash: targetUser.passwordHash, changedAt: targetUser.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5),
           passwordChangedAt: resetChangedAt,
-          mustChangePassword: false,
-          resetRequested: false
+          mustChangePassword: true,
+          resetRequested: false,
+          failedLoginAttempts: 0,
+          lockedUntil: undefined
         };
       }
       return u;
@@ -1917,7 +1925,6 @@ export default function App() {
     setUsers(updated);
     updateStorage('bafa_users', updated);
 
-    // Add simple system log
     logAction('Reset Password', `Updated password credentials for ${targetUser.name} (${targetUser.role})`);
     showToastMessage(`Malampusong na-reset ang password ni ${targetUser.name}!`, 'success');
   };

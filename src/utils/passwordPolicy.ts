@@ -55,7 +55,7 @@ export function validatePasswordPolicy(
     return 'Password cannot contain common sequential or keyboard patterns.';
   }
 
-  const recent = history.slice(-PASSWORD_HISTORY_LIMIT);
+  const recent = (Array.isArray(history) ? history : []).slice(-PASSWORD_HISTORY_LIMIT);
   if (
     recent.some((entry) =>
       entry.hash?.startsWith('$2')
@@ -90,7 +90,10 @@ export function verifyPassword(
   if (hash?.startsWith('sha256$')) {
     return constantTimeEquals(createLegacySha256(password), hash);
   }
-  return Boolean(legacyPassword && constantTimeEquals(password.trim(), legacyPassword));
+  if (hash && constantTimeEquals(password.trim(), hash.trim())) {
+    return true;
+  }
+  return Boolean(legacyPassword && constantTimeEquals(password.trim(), legacyPassword.trim()));
 }
 
 export function isLegacyPasswordHash(hash?: string): boolean {
@@ -103,10 +106,13 @@ export function needsInitialPasswordChange(user: {
   passwordChangedAt?: string;
   mustChangePassword?: boolean;
 }): boolean {
+  const hasNeverChangedPassword =
+    !user.passwordChangedAt || new Date(user.passwordChangedAt).getTime() <= 0;
   const provisionedOfficer =
     user.role !== 'Member' &&
-    /^(user-pres|user-vp|user-sec|user-tres|user-aud|user-pio)$/.test(user.id);
-  return Boolean(user.mustChangePassword || provisionedOfficer || !user.passwordChangedAt);
+    /^(user-pres|user-vp|user-sec|user-tres|user-aud|user-pio)$/.test(user.id) &&
+    hasNeverChangedPassword;
+  return Boolean(user.mustChangePassword || provisionedOfficer || hasNeverChangedPassword);
 }
 
 // Lockout policy: after MAX_LOGIN_ATTEMPTS consecutive failures, sign-in is blocked for LOCKOUT_DURATION_MS.

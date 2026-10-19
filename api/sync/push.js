@@ -1,15 +1,18 @@
 // src/api/db.ts
 import pg from "pg";
 
+// src/utils/passwordPolicy.ts
+import bcrypt from "bcryptjs";
+
 // src/utils/audit.ts
 function sha256(ascii) {
   function rightRotate(value, amount) {
     return value >>> amount | value << 32 - amount;
   }
-  const lengthProperty = "length";
   let i, j;
+  const bytes = new TextEncoder().encode(ascii);
   const words = [];
-  const asciiLength = ascii[lengthProperty];
+  const byteLength = bytes.length;
   const hash = [
     1779033703,
     3144134277,
@@ -86,15 +89,16 @@ function sha256(ascii) {
     3204031479,
     3329325298
   ];
-  const wordsLength = (asciiLength + 8 >> 6) + 1 << 4;
+  const wordsLength = (byteLength + 8 >> 6) + 1 << 4;
   for (i = 0; i < wordsLength; i++) {
     words[i] = 0;
   }
-  for (i = 0; i < asciiLength; i++) {
-    words[i >> 2] |= ascii.charCodeAt(i) << 24 - i % 4 * 8;
+  for (i = 0; i < byteLength; i++) {
+    words[i >> 2] |= bytes[i] << 24 - i % 4 * 8;
   }
-  words[asciiLength >> 2] |= 128 << 24 - asciiLength % 4 * 8;
-  words[wordsLength - 1] = asciiLength * 8;
+  words[byteLength >> 2] |= 128 << 24 - byteLength % 4 * 8;
+  words[wordsLength - 2] = Math.floor(byteLength / 536870912);
+  words[wordsLength - 1] = byteLength << 3 >>> 0;
   for (j = 0; j < wordsLength; j += 16) {
     const w = [];
     for (i = 0; i < 16; i++) {
@@ -141,17 +145,71 @@ function sha256(ascii) {
   }
   return hex;
 }
+
+// src/utils/passwordPolicy.ts
+function constantTimeEquals(a, b) {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+var BCRYPT_COST = 12;
+var PASSWORD_MIN_LENGTH = 12;
+var PASSWORD_HISTORY_LIMIT = 5;
+function validatePasswordPolicy(password, username, role, history = []) {
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return "Password must be at least 12 characters long.";
+  }
+  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    return "Use uppercase and lowercase letters, a number, and a special character.";
+  }
+  const lowered = password.toLowerCase();
+  const prohibited = [username, role, "password"].filter((part) => part.trim().length > 0);
+  if (prohibited.some((part) => lowered.includes(part.toLowerCase()))) {
+    return 'Password cannot contain your username, role, or the word "password".';
+  }
+  if (/(?:01234|12345|23456|34567|45678|56789|67890|09876|98765|87654|76543|65432|54321|43210|qwerty|asdfgh|zxcvbn)/i.test(
+    password
+  )) {
+    return "Password cannot contain common sequential or keyboard patterns.";
+  }
+  const recent = (Array.isArray(history) ? history : []).slice(-PASSWORD_HISTORY_LIMIT);
+  if (recent.some(
+    (entry) => entry.hash?.startsWith("$2") ? bcrypt.compareSync(password, entry.hash) : entry.hash?.startsWith("sha256$") ? constantTimeEquals(createLegacySha256(password), entry.hash) : entry.hash === password
+  )) {
+    return "You cannot reuse any of your last 5 passwords.";
+  }
+  return null;
+}
 function hashPassword(password) {
-  return sha256(`bafa_secure_salt_v1:${password.trim()}`);
+  return bcrypt.hashSync(password, BCRYPT_COST);
+}
+var LOCKOUT_DURATION_MS = 15 * 60 * 1e3;
+function createLegacySha256(password) {
+  return `sha256$${sha256(`bafa_secure_salt_v1:${password.trim()}`)}`;
+}
+function generateInitialPassword(username = "", role = "") {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+-_";
+  const pick = (set) => set[globalThis.crypto.getRandomValues(new Uint8Array(1))[0] % set.length];
+  let password = "";
+  do {
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(20));
+    password = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+    password = `${pick("ABCDEFGHJKLMNPQRSTUVWXYZ")}${pick("abcdefghijkmnopqrstuvwxyz")}${pick("23456789")}${pick("!@#$%&*+-_")}${password.slice(4)}`;
+  } while (validatePasswordPolicy(password, username, role));
+  return password;
 }
 
 // src/initialData.ts
-var DEFAULT_HASH = hashPassword("password123");
 var OFFICIAL_OFFICERS = [
   {
     id: "user-pres",
     username: "president",
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword("password123"),
+    mustChangePassword: true,
+    passwordChangedAt: (/* @__PURE__ */ new Date(0)).toISOString(),
     name: "Zenaida A. Elbi\xF1a",
     role: "President",
     isApproved: true,
@@ -160,7 +218,9 @@ var OFFICIAL_OFFICERS = [
   {
     id: "user-vp",
     username: "vp",
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword("password123"),
+    mustChangePassword: true,
+    passwordChangedAt: (/* @__PURE__ */ new Date(0)).toISOString(),
     name: "Anselna B Arnado",
     role: "Vice_President",
     isApproved: true,
@@ -169,7 +229,9 @@ var OFFICIAL_OFFICERS = [
   {
     id: "user-sec",
     username: "secretary",
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword("password123"),
+    mustChangePassword: true,
+    passwordChangedAt: (/* @__PURE__ */ new Date(0)).toISOString(),
     name: "Jennylyn S Lumactao",
     role: "Secretary",
     isApproved: true,
@@ -178,7 +240,9 @@ var OFFICIAL_OFFICERS = [
   {
     id: "user-tres",
     username: "treasurer",
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword("password123"),
+    mustChangePassword: true,
+    passwordChangedAt: (/* @__PURE__ */ new Date(0)).toISOString(),
     name: "Gracelyn P Asendiente",
     role: "Treasurer",
     isApproved: true,
@@ -187,7 +251,9 @@ var OFFICIAL_OFFICERS = [
   {
     id: "user-aud",
     username: "auditor",
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword("password123"),
+    mustChangePassword: true,
+    passwordChangedAt: (/* @__PURE__ */ new Date(0)).toISOString(),
     name: "Lorena B Pinote",
     role: "Auditor",
     isApproved: true,
@@ -196,7 +262,9 @@ var OFFICIAL_OFFICERS = [
   {
     id: "user-pio",
     username: "pio",
-    passwordHash: DEFAULT_HASH,
+    passwordHash: hashPassword("password123"),
+    mustChangePassword: true,
+    passwordChangedAt: (/* @__PURE__ */ new Date(0)).toISOString(),
     name: "Ida S Manera",
     role: "PIO",
     isApproved: true,
@@ -292,6 +360,12 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS rsbsa_number VARCHAR(100);`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_rsbsa_registered BOOLEAN DEFAULT FALSE;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_history JSONB DEFAULT '[]'::jsonb;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
@@ -390,7 +464,13 @@ async function initDatabaseSchema(pool) {
         avatar_url TEXT,
         member_id_number VARCHAR(100),
         rsbsa_number VARCHAR(100),
-        is_rsbsa_registered BOOLEAN DEFAULT FALSE
+        is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+        password_history JSONB DEFAULT '[]'::jsonb,
+        password_changed_at TIMESTAMPTZ,
+        must_change_password BOOLEAN DEFAULT FALSE,
+        failed_login_attempts INTEGER DEFAULT 0,
+        locked_until TIMESTAMPTZ,
+        reset_requested BOOLEAN DEFAULT FALSE
       );
     `);
     await client.query(`
@@ -663,16 +743,19 @@ async function ensureDatabaseSchema(pool) {
     if (usersCount === 0) {
       console.log("[DB DEBUG] No users found. Provisioning officer accounts with configured credentials...");
       for (const u of OFFICIAL_OFFICERS) {
-        const password = u.password || u.passwordHash || process.env[`OFFICER_${u.username.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_PASSWORD`];
+        const configuredPassword = process.env[`OFFICER_${u.username.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_PASSWORD`];
+        const password = configuredPassword || generateInitialPassword(u.username, u.role);
+        if (!configuredPassword) console.warn(`[DB SECURITY] Generated one-time initial password for ${u.username}: ${password}`);
         if (!password) {
           console.warn(`[DB DEBUG] Skipping officer account "${u.username}": no password is configured in seed data or environment.`);
           continue;
         }
+        const passwordHash = password.startsWith("$2") ? password : hashPassword(password);
         await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, status, password_changed_at, must_change_password, failed_login_attempts)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0)
           ON CONFLICT (id) DO NOTHING;
-        `, [u.id, u.username, password, u.name, u.role, true, u.joinedDate || "2024-01-01", "Active"]);
+        `, [u.id, u.username, passwordHash, u.name, u.role, true, u.joinedDate || "2024-01-01", "Active", (/* @__PURE__ */ new Date(0)).toISOString(), true]);
       }
       console.log("[DB DEBUG] Officer account provisioning completed");
     }
@@ -1259,7 +1342,12 @@ async function saveFullStateToPostgres(pool, state) {
         ["avatar_url", "avatarUrl", (r) => r.avatarUrl || null],
         ["member_id_number", "memberIdNumber", (r) => r.memberIdNumber || null],
         ["rsbsa_number", "rsbsaNumber", (r) => r.rsbsaNumber || null],
-        ["is_rsbsa_registered", "isRsbsaRegistered", (r) => Boolean(r.isRsbsaRegistered)]
+        ["is_rsbsa_registered", "isRsbsaRegistered", (r) => Boolean(r.isRsbsaRegistered)],
+        ["password_history", "passwordHistory", (r) => r.passwordHistory || []],
+        ["password_changed_at", "passwordChangedAt", (r) => r.passwordChangedAt || null],
+        ["must_change_password", "mustChangePassword", (r) => Boolean(r.mustChangePassword)],
+        ["failed_login_attempts", "failedLoginAttempts", (r) => r.failedLoginAttempts ?? 0],
+        ["locked_until", "lockedUntil", (r) => r.lockedUntil || null]
       ] },
       { table: "members", deletedIds: deletedMemberIds, fields: [
         ["name", "name", (r) => r.name],
