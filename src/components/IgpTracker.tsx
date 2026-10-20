@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  HogRaisingState, IgpExpense, IgpSale, IgpChoreLog, IgpGroup, Member, User, Meeting 
+  HogRaisingState, HogStage, HogHerdBreakdown, IgpExpense, IgpSale, IgpChoreLog, IgpGroup, Member, User, Meeting 
 } from '../types';
 import { 
   Briefcase, Boxes, Package, Plus, ArrowUpRight, ArrowDownRight, Calendar, Users,   Activity, Trash2, Printer, CheckCircle, Info, DollarSign, 
@@ -8,15 +8,16 @@ import {
 } from 'lucide-react';
 import AttendanceDividendCalculatorModal from './AttendanceDividendCalculatorModal';
 
-interface HogRaisingIgpTrackerProps {
+interface IgpTrackerProps {
   state: HogRaisingState;
   members: Member[];
   meetings?: Meeting[];
   onAddExpense: (expense: Omit<IgpExpense, 'id' | 'recordedBy'>) => void;
   onAddSale: (sale: Omit<IgpSale, 'id' | 'recordedBy'>) => void;
   onAddChoreLog: (chore: Omit<IgpChoreLog, 'id'>) => void;
-  onUpdateOpeningHogCount?: (count: number) => void;
+  onUpdateOpeningHogCount?: (count: number, herdBreakdown?: HogHerdBreakdown) => void;
   onAddProduce?: (produce: string) => void;
+  onDeleteProduce?: (produce: string) => void;
   isTreasurerOrOfficer: boolean;
   currentUser: User;
   isOfficerMode?: boolean; // Toggles styling to match Officer's dark slate or Member's warm green
@@ -24,7 +25,7 @@ interface HogRaisingIgpTrackerProps {
   onCloseDecemberBook?: (year: number) => void;
 }
 
-export default function HogRaisingIgpTracker({
+export default function IgpTracker({
   state,
   members,
   meetings = [],
@@ -33,28 +34,45 @@ export default function HogRaisingIgpTracker({
   onAddChoreLog,
   onUpdateOpeningHogCount,
   onAddProduce,
+  onDeleteProduce,
   isTreasurerOrOfficer,
   currentUser,
   isOfficerMode = false,
   closedYears = state.closedYears || [2025],
   onCloseDecemberBook
-}: HogRaisingIgpTrackerProps) {
+}: IgpTrackerProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'chores' | 'dividends' | 'ledger' | 'reports'>('overview');
   const [showDividendCalcModal, setShowDividendCalcModal] = useState(false);
 
-  // Dynamic produces - strictly remove any Tilapia and ensure Chairs & Sacks Rentals are available
-  const rawProduces = state.produces || ['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'];
-  const filteredProduces = Array.from(new Set(rawProduces.filter(p => p !== 'Tilapia Breeding' && !p.toLowerCase().includes('tilapia'))));
-  if (!filteredProduces.includes('Chairs Rental (Abang sa Lingkoranan)')) {
-    filteredProduces.push('Chairs Rental (Abang sa Lingkoranan)');
-  }
-  if (!filteredProduces.includes('Sacks Rental (Abang sa Sako)')) {
-    filteredProduces.push('Sacks Rental (Abang sa Sako)');
-  }
-  const produces = filteredProduces;
-  const [selectedProduce, setSelectedProduce] = useState<string>(produces[0] || 'Hog Raising');
+  // Dynamic produces - starts empty until officers add the current IGP projects of the association
+  const rawProduces = Array.isArray(state.produces) ? state.produces : [];
+  const produces = Array.from(
+    new Set(
+      rawProduces.filter(
+        (p) => Boolean(p && p.trim()) && p !== 'Tilapia Breeding' && !p.toLowerCase().includes('tilapia')
+      )
+    )
+  );
+  const [selectedProduce, setSelectedProduce] = useState<string>(produces[0] || '');
   const [newProduceName, setNewProduceName] = useState('');
   const [showAddProduceModal, setShowAddProduceModal] = useState(false);
+
+  useEffect(() => {
+    if (produces.length === 0) {
+      if (selectedProduce !== '') setSelectedProduce('');
+    } else if (!produces.includes(selectedProduce)) {
+      setSelectedProduce(produces[0]);
+    }
+  }, [produces, selectedProduce]);
+
+  const suggestedProduces = [
+    'Hog Raising',
+    'Chairs Rental (Abang sa Lingkoranan)',
+    'Sacks Rental (Abang sa Sako)',
+    'Poultry Raising',
+    'Tent & Tables Rental',
+    'Corn / Vegetable Livelihood'
+  ];
 
   const getProduceLocalName = (produce: string) => {
     if (produce === 'Hog Raising') return 'Baboyan';
@@ -81,11 +99,13 @@ export default function HogRaisingIgpTracker({
 
   // New Chore Log Form
   const [choreBatchName, setChoreBatchName] = useState(state.groups[0]?.name || 'Batch 1 (Lunes)');
+  const [choreHogStage, setChoreHogStage] = useState<HogStage>('Fattening');
   const [choreCheckedBy, setChoreCheckedBy] = useState(currentUser.name || '');
   const [choreChoreActivities, setChoreChoreActivities] = useState<string[]>([]);
   const [choreNotes, setChoreNotes] = useState('');
 
   // New Expense Form
+  const [expHogStage, setExpHogStage] = useState<HogStage>('Fattening');
   const [expCategory, setExpCategory] = useState<string>('Feeds');
   const [expQuantity, setExpQuantity] = useState('');
   const [customExpCategory, setCustomExpCategory] = useState('');
@@ -95,6 +115,7 @@ export default function HogRaisingIgpTracker({
   const [expenseDateError, setExpenseDateError] = useState('');
 
   // New Sale Form
+  const [saleHogStage, setSaleHogStage] = useState<HogStage>('Fattening');
   const [saleHogsCount, setSaleHogsCount] = useState('');
   const [saleRevenue, setSaleRevenue] = useState('');
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
@@ -282,6 +303,31 @@ export default function HogRaisingIgpTracker({
   };
 
   const openingHogCount = Math.max(0, Math.floor(Number(state.openingHogCount) || 0));
+  const rawBreakdown = state.herdBreakdown || { fattening: openingHogCount, gestation: 0, lactating: 0 };
+  const breakdownSum = (Number(rawBreakdown.fattening) || 0) + (Number(rawBreakdown.gestation) || 0) + (Number(rawBreakdown.lactating) || 0);
+  const baseBreakdown: HogHerdBreakdown = breakdownSum > 0
+    ? {
+        fattening: Math.max(0, Math.floor(Number(rawBreakdown.fattening) || 0)),
+        gestation: Math.max(0, Math.floor(Number(rawBreakdown.gestation) || 0)),
+        lactating: Math.max(0, Math.floor(Number(rawBreakdown.lactating) || 0)),
+      }
+    : { fattening: openingHogCount, gestation: 0, lactating: 0 };
+
+  const purchasedByStage = (stage: HogStage) => state.expenses.reduce((sum, expense) => (
+    (expense.produce || 'Hog Raising') === 'Hog Raising' &&
+    expense.category === 'Piglets' &&
+    (expense.hogStage || 'Fattening') === stage
+      ? sum + Math.max(0, Math.floor(Number(expense.quantity) || 0))
+      : sum
+  ), 0);
+
+  const soldByStage = (stage: HogStage) => state.sales.reduce((sum, sale) => (
+    (sale.produce || 'Hog Raising') === 'Hog Raising' &&
+    (sale.hogStage || 'Fattening') === stage
+      ? sum + Math.max(0, Math.floor(Number(sale.produceCount || sale.hogsCount) || 0))
+      : sum
+  ), 0);
+
   const purchasedPiglets = state.expenses.reduce((sum, expense) => (
     (expense.produce || 'Hog Raising') === 'Hog Raising' && expense.category === 'Piglets'
       ? sum + Math.max(0, Math.floor(Number(expense.quantity) || 0))
@@ -292,6 +338,10 @@ export default function HogRaisingIgpTracker({
       ? sum + Math.max(0, Math.floor(Number(sale.produceCount || sale.hogsCount) || 0))
       : sum
   ), 0);
+
+  const currentFatteningCount = Math.max(0, baseBreakdown.fattening + purchasedByStage('Fattening') - soldByStage('Fattening'));
+  const currentGestationCount = Math.max(0, baseBreakdown.gestation + purchasedByStage('Gestation') - soldByStage('Gestation'));
+  const currentLactatingCount = Math.max(0, baseBreakdown.lactating + purchasedByStage('Lactating') - soldByStage('Lactating'));
   const currentHogCount = Math.max(0, openingHogCount + purchasedPiglets - hogsSold);
 
   // Number of unique registered farmers assigned across all rotational care groups (DB-backed)
@@ -302,11 +352,15 @@ export default function HogRaisingIgpTracker({
   ).length;
 
   const [isEditingOpeningHogCount, setIsEditingOpeningHogCount] = useState(false);
-  const [openingHogCountInput, setOpeningHogCountInput] = useState(openingHogCount.toString());
+  const [fatteningInput, setFatteningInput] = useState(baseBreakdown.fattening.toString());
+  const [gestationInput, setGestationInput] = useState(baseBreakdown.gestation.toString());
+  const [lactatingInput, setLactatingInput] = useState(baseBreakdown.lactating.toString());
 
   useEffect(() => {
-    setOpeningHogCountInput(openingHogCount.toString());
-  }, [openingHogCount]);
+    setFatteningInput(baseBreakdown.fattening.toString());
+    setGestationInput(baseBreakdown.gestation.toString());
+    setLactatingInput(baseBreakdown.lactating.toString());
+  }, [baseBreakdown.fattening, baseBreakdown.gestation, baseBreakdown.lactating]);
 
   // Calculations filtered by selected produce
   const totalExpenses = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
@@ -324,9 +378,11 @@ export default function HogRaisingIgpTracker({
   const getDynamicExpenseCategories = (produce: string) => {
     if (produce === 'Hog Raising') {
       return [
-        { value: 'Feeds', label: 'Feeds (Pagkaon sa Baboy)' },
-        { value: 'Piglets', label: 'Piglets (Pagpalit og Liso sa Baboy)' },
-        { value: 'Vitamins/Medicines', label: 'Vitamins & Medicines (Tambal/Vaccine)' },
+        { value: 'Feeds', label: 'Feeds (Starter / Grower / Gestation / Lactating Feeds)' },
+        { value: 'Piglets', label: 'Piglets / Gilts (Pagpalit og Biik o Anay)' },
+        { value: 'Breeding / AI Service', label: 'Breeding / Boar & AI Service (Pagpaliwat / Inseminasyon)' },
+        { value: 'Vitamins/Medicines', label: 'Vitamins, Iron & Vaccines (Tambal / Bakuna sa Anay ug Biik)' },
+        { value: 'Farrowing & Pen Care', label: 'Farrowing Pen & Heating Lamp (Gamit sa Pagpanganak / Koral)' },
         { value: 'Other', label: 'Other (Koral / Utilities)' }
       ];
     } else if (produce === 'Poultry Raising') {
@@ -368,8 +424,10 @@ export default function HogRaisingIgpTracker({
       return [
         { id: 'Feeding', label: 'Pagpakaon (Feeding)' },
         { id: 'Cleaning', label: 'Paglimpyo sa Koral' },
-        { id: 'Vitamins', label: 'Paghatag og Bitamina' },
+        { id: 'Vitamins', label: 'Paghatag og Bitamina / Iron' },
         { id: 'Water Refill', label: 'Tubig sa Trough' },
+        { id: 'Gestation Check', label: 'Pagsusi sa Mabdos nga Anay (Gestation)' },
+        { id: 'Lactation / Piglet Care', label: 'Pag-atiman sa Nagpasuso ug Biik (Lactating)' },
       ];
     } else if (produce === 'Poultry Raising') {
       return [
@@ -404,6 +462,34 @@ export default function HogRaisingIgpTracker({
 
   const dynamicChoreList = getDynamicChoreActivities(selectedProduce);
 
+  const getHogStageBadgeStyle = (stage?: HogStage) => {
+    switch (stage) {
+      case 'Gestation':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'Lactating':
+        return 'bg-pink-100 text-pink-800 border-pink-200';
+      case 'General':
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+      case 'Fattening':
+      default:
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+    }
+  };
+
+  const getHogStageLabel = (stage?: HogStage) => {
+    switch (stage) {
+      case 'Gestation':
+        return 'Gestation (Mabdos nga Anay)';
+      case 'Lactating':
+        return 'Lactating (Nagpasuso nga Anay)';
+      case 'General':
+        return 'General / All Pens';
+      case 'Fattening':
+      default:
+        return 'Fattening (Pabug-atonon)';
+    }
+  };
+
   // Colors based on theme mode (highly optimized for senior citizens on the member side)
   const theme = {
     bg: 'bg-[#F7F4EF] text-[#1B4332]',
@@ -431,6 +517,7 @@ export default function HogRaisingIgpTracker({
     if (choreChoreActivities.length === 0) return;
     onAddChoreLog({
       produce: selectedProduce,
+      hogStage: selectedProduce === 'Hog Raising' ? choreHogStage : undefined,
       date: new Date().toISOString().split('T')[0],
       time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
       batchName: choreBatchName,
@@ -454,6 +541,7 @@ export default function HogRaisingIgpTracker({
     }
     onAddExpense({
       produce: selectedProduce,
+      hogStage: selectedProduce === 'Hog Raising' ? expHogStage : undefined,
       category: expCategory === 'Other' ? (customExpCategory.trim() || 'Other') : expCategory,
       quantity: selectedProduce === 'Hog Raising' && expCategory === 'Piglets' ? pigletQuantity : undefined,
       description: expDesc,
@@ -484,6 +572,7 @@ export default function HogRaisingIgpTracker({
     }
     onAddSale({
       produce: selectedProduce,
+      hogStage: selectedProduce === 'Hog Raising' ? saleHogStage : undefined,
       date: saleDate,
       hogsCount: selectedProduce === 'Hog Raising' ? parseInt(saleHogsCount) : 0,
       produceCount: parseInt(saleHogsCount),
@@ -610,31 +699,182 @@ export default function HogRaisingIgpTracker({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-4 text-left">
         <div>
           <h2 className={`text-xl font-black ${theme.headerText} flex items-center gap-2.5 font-display`}>
-            {selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako') ? (
+            {selectedProduce && (selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako')) ? (
               <Boxes className={`w-6 h-6 ${isOfficerMode ? 'text-amber-400' : 'text-amber-600'}`} />
             ) : (
               <Briefcase className={`w-6 h-6 ${isOfficerMode ? 'text-emerald-400' : 'text-[#2D6A4F]'}`} />
-            )}            <span>
-              {getProduceProjectName(selectedProduce)}
+            )}
+            <span>
+              {selectedProduce ? getProduceProjectName(selectedProduce) : 'AFA Income Generating Projects (IGP)'}
             </span>
           </h2>
+          <p className="text-xs font-bold text-slate-600 mt-1">
+            {produces.length > 0
+              ? `${produces.length} Active Association IGP Project${produces.length === 1 ? '' : 's'} Registered`
+              : 'No active IGP projects registered yet — add the current IGP(s) of the association to begin tracking.'}
+          </p>
         </div>
 
         {/* Dynamic Badge */}
         <div className="flex items-center gap-2">
-          <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
+          <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Dynamic Livelihood Projects</span>
+            <span>AFA IGP Registry (`afa_igp`)</span>
           </span>
         </div>
       </div>
 
+      {/* ADD PRODUCE MODAL */}
+      {showAddProduceModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in text-left">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-md rounded-2xl shadow-2xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-500" />
+                <span>Add Current IGP of the Association</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddProduceModal(false)}
+                className="text-[#4A5F57] hover:text-[#1B4332] text-xl font-bold cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+            <p className="text-xs text-[#3A4A42] mb-4 font-semibold leading-relaxed">
+              Pilia o i-type ang kasamtangang Income Generating Project (IGP) sa asosasyon (pananglitan: Hog Raising, Chairs Rental, Sacks Rental, Poultry Raising, o uban pa).
+            </p>
+            <div className="mb-4 space-y-1.5">
+              <span className="block text-[10px] font-black text-[#1B4332] uppercase">Quick Select Common IGPs:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {suggestedProduces
+                  .filter((item) => !produces.includes(item))
+                  .map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => setNewProduceName(suggestion)}
+                      className={`text-[11px] font-black px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                        newProduceName === suggestion
+                          ? 'bg-[#1B4332] text-white border-[#1B4332]'
+                          : 'bg-white text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF4EC]'
+                      }`}
+                    >
+                      + {suggestion}
+                    </button>
+                  ))}
+              </div>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newProduceName.trim()) return;
+                const clean = newProduceName.trim();
+                onAddProduce?.(clean);
+                setSelectedProduce(clean);
+                const newCats = getDynamicExpenseCategories(clean);
+                if (newCats.length > 0) {
+                  setExpCategory(newCats[0].value);
+                }
+                setNewProduceName('');
+                setShowAddProduceModal(false);
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-[#1B4332] uppercase">Ngalan sa IGP Project (IGP Project Name)</label>
+                <input
+                  type="text"
+                  value={newProduceName}
+                  onChange={(e) => setNewProduceName(e.target.value)}
+                  placeholder="e.g., Hog Raising, Chairs Rental, Sacks Rental, Corn..."
+                  required
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500 font-sans font-bold"
+                />
+              </div>
+              <div className="flex justify-end gap-2.5 pt-2 font-bold text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProduceModal(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-[#1B4332] rounded-xl transition-all cursor-pointer border border-slate-300"
+                >
+                  Kansela
+                </button>
+                <button
+                  type="submit"
+                  className="px-4.5 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl transition-all cursor-pointer shadow-md font-black"
+                >
+                  I-register ang IGP
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {produces.length === 0 ? (
+        <div className={`p-6 sm:p-8 rounded-3xl border-2 border-dashed border-[#B7D7C2] bg-[#FAF8F5] text-center space-y-5`}>
+          <div className="w-14 h-14 rounded-2xl bg-[#EAF4EC] border border-[#B7D7C2] flex items-center justify-center mx-auto text-[#1B4332]">
+            <Briefcase className="w-7 h-7" />
+          </div>
+          <div className="max-w-xl mx-auto space-y-2">
+            <h3 className="text-lg font-black text-[#1B4332]">
+              Wala pay Narehistro nga IGP sa Asosasyon (No Active IGP Added Yet)
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed">
+              {isTreasurerOrOfficer
+                ? 'Pilia o idugang kung unsa ang kasamtangang Income Generating Project (IGP) sa Alegria Farmers Association aron masugdan ang pag-rekord sa imbentaryo, galastohan, halin, ug bahinay (dividends).'
+                : 'Wala pay gidugang nga kasamtangang Income Generating Project (IGP) ang mga opisyales sa asosasyon.'}
+            </p>
+          </div>
+
+          {isTreasurerOrOfficer && (
+            <div className="max-w-xl mx-auto space-y-4 pt-2">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#1B4332] block">
+                  Quick-Add Current Association IGP:
+                </span>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {suggestedProduces.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => {
+                        onAddProduce?.(item);
+                        setSelectedProduce(item);
+                        const newCats = getDynamicExpenseCategories(item);
+                        if (newCats.length > 0) setExpCategory(newCats[0].value);
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs font-black bg-white hover:bg-[#EAF4EC] text-[#1B4332] border-2 border-[#1B4332]/20 hover:border-[#1B4332] transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>{item}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProduceModal(true)}
+                  className="inline-flex items-center gap-2 text-xs font-black px-5 py-3 rounded-xl bg-[#1B4332] hover:bg-[#143326] text-white transition-all cursor-pointer shadow-md"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Custom IGP Project</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {/* PROJECT SELECTOR & REGISTRATION BAR */}
       <div className={`p-4 rounded-2xl border ${theme.cardBg} flex flex-col md:flex-row items-center justify-between gap-4 text-left`}>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
           <span className="text-xs sm:text-sm font-black uppercase text-[#1B4332] whitespace-nowrap flex items-center gap-2">
             <Filter className="w-4 h-4 text-[#1B4332]" />
-            Pilia ang Proyekto (Select Project):
+            Pilia ang Proyekto (Select IGP):
           </span>
           <select
             value={selectedProduce}
@@ -658,93 +898,69 @@ export default function HogRaisingIgpTracker({
           </select>
         </div>
 
-        {/* Add Produce Action (for Treasurer or Officers) */}
+        {/* Add / Remove Produce Actions (for Treasurer or Officers) */}
         {isTreasurerOrOfficer && (
-          <button
-            type="button"
-            onClick={() => setShowAddProduceModal(true)}
-            className="flex items-center gap-1.5 text-xs font-black px-4.5 py-2.5 rounded-xl border transition-all cursor-pointer shadow-sm bg-[#1B4332] hover:bg-[#143326] text-white border-transparent"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Dugang Bag-ong Produce (Add Project)</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAddProduceModal(true)}
+              className="flex items-center gap-1.5 text-xs font-black px-4.5 py-2.5 rounded-xl border transition-all cursor-pointer shadow-sm bg-[#1B4332] hover:bg-[#143326] text-white border-transparent"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Dugang IGP (Add IGP Project)</span>
+            </button>
+            {onDeleteProduce && selectedProduce && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Remove "${selectedProduce}" from active IGP projects?`)) {
+                    onDeleteProduce(selectedProduce);
+                  }
+                }}
+                className="flex items-center gap-1.5 text-xs font-black px-3.5 py-2.5 rounded-xl border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-800 transition-all cursor-pointer"
+                title="Remove selected IGP project"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove IGP</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
-      {/* ADD PRODUCE MODAL */}
-      {showAddProduceModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in text-left">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-md rounded-2xl shadow-2xl p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-500" />
-                <span>Dugang Bag-ong Proyekto sa Asosasyon</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowAddProduceModal(false)}
-                className="text-[#4A5F57] hover:text-[#1B4332] text-xl font-bold cursor-pointer"
-              >
-                &times;
-              </button>
-            </div>
-            <p className="text-xs text-[#3A4A42] mb-4 font-semibold leading-relaxed">
-              I-register ang bag-ong livelihood project o kagamitan nga abangan (e.g., Poultry Raising, Sound System Rental, Tent Rental, Mushrooms). Kini makapahimo sa asosasyon nga dynamic ug makasulod og daghang matang sa income projects.            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!newProduceName.trim()) return;
-                onAddProduce?.(newProduceName.trim());
-                setSelectedProduce(newProduceName.trim());
-                const newCats = getDynamicExpenseCategories(newProduceName.trim());
-                if (newCats.length > 0) {
-                  setExpCategory(newCats[0].value);
-                }
-                setNewProduceName('');
-                setShowAddProduceModal(false);
-              }}
-              className="space-y-4"
-            >
-              <div className="space-y-1">
-                <label className="block text-[10px] font-black text-[#1B4332] uppercase">Ngalan sa Proyekto / Produce Name</label>
-                <input
-                  type="text"
-                  value={newProduceName}
-                  onChange={(e) => setNewProduceName(e.target.value)}
-                  placeholder="e.g., Poultry Raising, Tent Rental, Mushrooms, Corn"
-                  required
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500 font-sans font-bold"
-                />
-              </div>
-              <div className="flex justify-end gap-2.5 pt-2 font-bold text-xs">
-                <button
-                  type="button"
-                  onClick={() => setShowAddProduceModal(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-[#1B4332] rounded-xl transition-all cursor-pointer border border-slate-300"
-                >
-                  Kansela
-                </button>
-                <button
-                  type="submit"
-                  className="px-4.5 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl transition-all cursor-pointer shadow-md font-black"
-                >
-                  I-register
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* METRIC CARDS FOR FINANCIAL BREAKDOWN */}
-      <div className={`grid grid-cols-2 ${selectedProduce === 'Hog Raising' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-3.5 text-left`}>
+      <div className={`grid grid-cols-1 ${selectedProduce === 'Hog Raising' ? 'lg:grid-cols-3' : 'sm:grid-cols-2'} gap-3.5 text-left`}>
 
         {selectedProduce === 'Hog Raising' && (
-          <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-2 shadow-sm`}>
+          <div className={`p-4.5 rounded-2xl border ${theme.cardBg} flex flex-col justify-between space-y-3 shadow-sm`}>
             <div>
-              <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Current Hog Inventory</span>
-              <span className="text-xl sm:text-2xl font-black text-[#1B4332] block mt-1 font-mono">{currentHogCount} hogs</span>
-              <span className="text-[10px] text-slate-500 block mt-1">Opening {openingHogCount} + purchased {purchasedPiglets} - sold {hogsSold}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider block">Current Hog Inventory</span>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#EAF4EC] text-[#1B4332] border border-[#CFE4D7]">
+                  3 Stages Tracked
+                </span>
+              </div>
+              <span className="text-xl sm:text-2xl font-black text-[#1B4332] block mt-1 font-mono">{currentHogCount} hogs total</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">Opening {openingHogCount} + purchased {purchasedPiglets} - sold {hogsSold}</span>
+
+              {/* Stage Breakdown Pills */}
+              <div className="grid grid-cols-3 gap-1.5 mt-3">
+                <div className="p-2 rounded-xl bg-amber-50/90 border border-amber-200 text-center">
+                  <span className="text-[9px] font-black uppercase text-amber-900 block">Fattening</span>
+                  <strong className="text-sm font-black text-amber-950 font-mono">{currentFatteningCount}</strong>
+                  <span className="text-[8px] text-amber-800 block font-bold">Pabug-atonon</span>
+                </div>
+                <div className="p-2 rounded-xl bg-purple-50/90 border border-purple-200 text-center">
+                  <span className="text-[9px] font-black uppercase text-purple-900 block">Gestation</span>
+                  <strong className="text-sm font-black text-purple-950 font-mono">{currentGestationCount}</strong>
+                  <span className="text-[8px] text-purple-800 block font-bold">Mabdos (Anay)</span>
+                </div>
+                <div className="p-2 rounded-xl bg-pink-50/90 border border-pink-200 text-center">
+                  <span className="text-[9px] font-black uppercase text-pink-900 block">Lactating</span>
+                  <strong className="text-sm font-black text-pink-950 font-mono">{currentLactatingCount}</strong>
+                  <span className="text-[8px] text-pink-800 block font-bold">Nagpasuso</span>
+                </div>
+              </div>
             </div>
             {isTreasurerOrOfficer && onUpdateOpeningHogCount && (
               <div>
@@ -752,30 +968,80 @@ export default function HogRaisingIgpTracker({
                   <form
                     onSubmit={(event) => {
                       event.preventDefault();
-                      const count = Number(openingHogCountInput);
-                      if (Number.isInteger(count) && count >= 0) {
-                        onUpdateOpeningHogCount(count);
-                        setIsEditingOpeningHogCount(false);
-                      }
+                      const fat = Math.max(0, Math.floor(Number(fatteningInput) || 0));
+                      const gest = Math.max(0, Math.floor(Number(gestationInput) || 0));
+                      const lact = Math.max(0, Math.floor(Number(lactatingInput) || 0));
+                      const totalOpening = fat + gest + lact;
+                      onUpdateOpeningHogCount(totalOpening, {
+                        fattening: fat,
+                        gestation: gest,
+                        lactating: lact,
+                      });
+                      setIsEditingOpeningHogCount(false);
                     }}
-                    className="flex gap-1.5"
+                    className="space-y-2 bg-white p-2.5 rounded-xl border border-[#D5CFC1]"
                   >
-                    <input
-                      aria-label="Opening hog count"
-                      type="number"
-                      min="0"
-                      step="1"
-                      required
-                      value={openingHogCountInput}
-                      onChange={(event) => setOpeningHogCountInput(event.target.value)}
-                      className={`min-w-0 flex-1 px-2 py-1 text-xs rounded-lg border ${theme.inputBg} font-mono`}
-                    />
-                    <button type="submit" className="px-2 py-1 rounded-lg bg-[#1B4332] text-white text-xs font-bold cursor-pointer">Save</button>
-                    <button type="button" onClick={() => { setOpeningHogCountInput(openingHogCount.toString()); setIsEditingOpeningHogCount(false); }} className="px-2 py-1 rounded-lg border border-[#D5CFC1] bg-white text-[#1B4332] text-xs font-bold cursor-pointer">Cancel</button>
+                    <span className="text-[10px] font-black uppercase text-[#1B4332] block">Set Opening Herd Breakdown:</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div>
+                        <label className="text-[9px] font-bold text-amber-900 block">Fattening</label>
+                        <input
+                          aria-label="Opening fattening hog count"
+                          type="number"
+                          min="0"
+                          step="1"
+                          required
+                          value={fatteningInput}
+                          onChange={(e) => setFatteningInput(e.target.value)}
+                          className={`w-full px-2 py-1 text-xs rounded-lg border ${theme.inputBg} font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-purple-900 block">Gestation</label>
+                        <input
+                          aria-label="Opening gestation hog count"
+                          type="number"
+                          min="0"
+                          step="1"
+                          required
+                          value={gestationInput}
+                          onChange={(e) => setGestationInput(e.target.value)}
+                          className={`w-full px-2 py-1 text-xs rounded-lg border ${theme.inputBg} font-mono`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-pink-900 block">Lactating</label>
+                        <input
+                          aria-label="Opening lactating hog count"
+                          type="number"
+                          min="0"
+                          step="1"
+                          required
+                          value={lactatingInput}
+                          onChange={(e) => setLactatingInput(e.target.value)}
+                          className={`w-full px-2 py-1 text-xs rounded-lg border ${theme.inputBg} font-mono`}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-1.5 pt-1">
+                      <button type="submit" className="px-2.5 py-1 rounded-lg bg-[#1B4332] text-white text-xs font-bold cursor-pointer">Save Breakdown</button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFatteningInput(baseBreakdown.fattening.toString());
+                          setGestationInput(baseBreakdown.gestation.toString());
+                          setLactatingInput(baseBreakdown.lactating.toString());
+                          setIsEditingOpeningHogCount(false);
+                        }}
+                        className="px-2.5 py-1 rounded-lg border border-[#D5CFC1] bg-white text-[#1B4332] text-xs font-bold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </form>
                 ) : (
                   <button type="button" onClick={() => setIsEditingOpeningHogCount(true)} className="inline-flex items-center gap-1 text-xs font-bold text-[#1B4332] hover:underline cursor-pointer">
-                    <Pencil className="w-3 h-3" /> Set opening count
+                    <Pencil className="w-3 h-3" /> Edit herd stages (Fattening / Gestation / Lactating)
                   </button>
                 )}
               </div>
@@ -903,14 +1169,39 @@ export default function HogRaisingIgpTracker({
 
                 <div className="grid grid-cols-2 gap-4 text-xs font-medium text-[#3A4A42]">
                   <div className="p-3 rounded-xl border bg-[#F5FAF6] border-[#E9E4D9]">
-                    <span>Active Projects in Pen</span>
+                    <span>Active Hogs in Pen</span>
                     <strong className="block text-lg font-extrabold mt-1 text-[#1B4332]">{currentHogCount} Baboy</strong>
                   </div>
                   <div className="p-3 rounded-xl border bg-[#F5FAF6] border-[#E9E4D9]">
-                    <span>Projects Sold (Nahalin)</span>
+                    <span>Hogs / Piglets Sold (Nahalin)</span>
                     <strong className="block text-lg font-extrabold mt-1 text-[#2D6A4F]">{hogsSold} Baboy</strong>
                   </div>
                 </div>
+
+                {selectedProduce === 'Hog Raising' && (
+                  <div className="p-3.5 rounded-2xl bg-white border border-[#D5CFC1] space-y-2">
+                    <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">
+                      Herd Stages in Communal Piggery:
+                    </span>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="p-2 rounded-xl bg-amber-50 border border-amber-200">
+                        <span className="text-[9px] font-black text-amber-900 uppercase block">Fattening</span>
+                        <strong className="text-sm font-black text-amber-950 font-mono">{currentFatteningCount} head</strong>
+                        <span className="text-[9px] text-amber-800 block">Pabug-atonon</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-purple-50 border border-purple-200">
+                        <span className="text-[9px] font-black text-purple-900 uppercase block">Gestation</span>
+                        <strong className="text-sm font-black text-purple-950 font-mono">{currentGestationCount} sows</strong>
+                        <span className="text-[9px] text-purple-800 block">Mabdos nga Anay</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-pink-50 border border-pink-200">
+                        <span className="text-[9px] font-black text-pink-900 uppercase block">Lactating</span>
+                        <strong className="text-sm font-black text-pink-950 font-mono">{currentLactatingCount} sows</strong>
+                        <span className="text-[9px] text-pink-800 block">Nagpasuso</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2 text-xs leading-relaxed text-[#3A4A42]">
                   <p>
@@ -1034,6 +1325,25 @@ export default function HogRaisingIgpTracker({
                   </select>
                 </div>
 
+                {/* Hog Stage Selection when Hog Raising is active */}
+                {selectedProduce === 'Hog Raising' && (
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-black text-[#1B4332] uppercase">
+                      Stage sa Baboy nga Gi-atiman (Hog Stage / Pen)
+                    </label>
+                    <select
+                      value={choreHogStage}
+                      onChange={(e) => setChoreHogStage(e.target.value as HogStage)}
+                      className={`w-full px-3 py-2 text-xs rounded-xl focus:outline-none ${theme.inputBg} font-bold`}
+                    >
+                      <option value="Fattening">Fattening (Pabug-atonon / Market Hogs)</option>
+                      <option value="Gestation">Gestation (Mabdos nga Anay)</option>
+                      <option value="Lactating">Lactating (Nagpasuso nga Anay ug Biik)</option>
+                      <option value="General">General / All Pens (Tanan nga Koral)</option>
+                    </select>
+                  </div>
+                )}
+
                 {/* Name Selection */}
                 <div className="space-y-1">
                   <label className="block text-[10px] font-black text-[#1B4332] uppercase">Gi-check ni (Checked / Logged By)</label>
@@ -1082,7 +1392,7 @@ export default function HogRaisingIgpTracker({
                     rows={2}
                     placeholder={
                       selectedProduce === 'Hog Raising'
-                        ? 'e.g., Ang tanan nga baboy maayo og paminaw. Kusog mokaon.'
+                        ? 'e.g., Ang tanan nga baboy (fattening, mabdos ug nagpasuso) maayo og paminaw.'
                         : selectedProduce === 'Poultry Raising'
                         ? 'e.g., Ang tanan nga manok maayo og paminaw. Walay masakiton.'
                         : 'e.g., Gi-check ang mga kahimtang sa pananom/hayop karong adlawa.'
@@ -1119,11 +1429,18 @@ export default function HogRaisingIgpTracker({
                       className="p-3.5 bg-[#F7F4EF] rounded-2xl border border-[#D5CFC1] space-y-2 text-xs shadow-sm"
                     >
                       <div className="flex justify-between items-start">
-                        <div>
+                        <div className="space-y-1">
                           <strong className="text-[#1B4332] block text-sm">{log.checkedBy}</strong>
-                          <span className="text-[10px] text-[#4A5F57] font-bold bg-white px-1.5 py-0.5 rounded border border-[#D5CFC1]">
-                            {log.batchName}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] text-[#4A5F57] font-bold bg-white px-1.5 py-0.5 rounded border border-[#D5CFC1]">
+                              {log.batchName}
+                            </span>
+                            {(log.produce || 'Hog Raising') === 'Hog Raising' && log.hogStage && (
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${getHogStageBadgeStyle(log.hogStage)}`}>
+                                {log.hogStage}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <span className="text-[10px] text-[#4A5F57] font-mono font-semibold">{log.date} @ {log.time}</span>
                       </div>
@@ -1326,7 +1643,7 @@ export default function HogRaisingIgpTracker({
                   <thead className="bg-slate-50 font-black text-slate-700 uppercase tracking-wider text-[10px] border-b border-[#D5CFC1]">
                     <tr>
                       <th className="p-4 rounded-l-xl">Type</th>
-                      <th className="p-4">Kategorya (Category)</th>
+                      <th className="p-4">Kategorya & Stage</th>
                       <th className="p-4">Description / Receipt Note</th>
                       <th className="p-4">Adlaw (Date)</th>
                       <th className="p-4">Quantity (Kadaghanon)</th>
@@ -1337,11 +1654,12 @@ export default function HogRaisingIgpTracker({
                     {/* Combine Expenses and Sales sorted by date descending */}
                     {[
                       ...state.expenses.map(e => ({ ...e, type: 'expense' as const, qty: e.quantity })),
-                      ...state.sales.map(s => ({ ...s, type: 'income' as const, category: s.produce || 'IGP Income', description: s.notes || (s.produce?.includes('Rental') || s.produce?.includes('Lingkoranan') || s.produce?.includes('Sako') ? `Abang sa ${s.produceCount || s.hogsCount} ka buok.` : `Sold ${s.hogsCount} mature units.`), amount: s.revenue, qty: s.produceCount || s.hogsCount }))
+                      ...state.sales.map(s => ({ ...s, type: 'income' as const, category: s.produce || 'IGP Income', description: s.notes || (s.produce?.includes('Rental') || s.produce?.includes('Lingkoranan') || s.produce?.includes('Sako') ? `Abang sa ${s.produceCount || s.hogsCount} ka buok.` : `Sold ${s.hogsCount} (${s.hogStage || 'Fattening'}) units.`), amount: s.revenue, qty: s.produceCount || s.hogsCount }))
                     ]
                     .sort((a, b) => b.date.localeCompare(a.date))
                     .map((item, idx) => {
                       const isExp = item.type === 'expense';
+                      const isHogProduce = (item.produce || 'Hog Raising') === 'Hog Raising';
                       return (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                           <td className="p-4">
@@ -1351,7 +1669,16 @@ export default function HogRaisingIgpTracker({
                               {isExp ? 'Expense' : 'Sale'}
                             </span>
                           </td>
-                          <td className="p-4 font-bold text-[#1B4332]">{item.category}</td>
+                          <td className="p-4 font-bold text-[#1B4332]">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span>{item.category}</span>
+                              {isHogProduce && (
+                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${getHogStageBadgeStyle(item.hogStage || 'Fattening')}`}>
+                                  {item.hogStage || 'Fattening'}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="p-4 text-[#3A4A42] max-w-xs truncate" title={item.description}>{item.description}</td>
                           <td className="p-4 text-[#3A4A42] font-mono">{item.date}</td>
                           <td className="p-4 text-[#3A4A42] font-bold">{item.qty || '-'}</td>
@@ -1535,7 +1862,13 @@ export default function HogRaisingIgpTracker({
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-left">
             <div className="bg-[#F0EDE7] px-5 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
-              <h3 className="font-bold text-[#1B4332] text-base">Record Expense</h3>              <button
+              <div>
+                <h3 className="font-bold text-[#1B4332] text-base">Record Expense</h3>
+                {selectedProduce === 'Hog Raising' && (
+                  <p className="text-[10px] text-[#4A5F57] font-bold">Fattening • Gestation (Mabdos) • Lactating (Nagpasuso)</p>
+                )}
+              </div>
+              <button
                 onClick={() => setShowExpenseModal(false)}
                 className="text-[#1B4332] hover:text-[#143326] text-lg font-bold cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg border border-[#D5CFC1] bg-white"
               >
@@ -1543,6 +1876,40 @@ export default function HogRaisingIgpTracker({
               </button>
             </div>
             <form onSubmit={handleExpenseSubmit} className="p-5 space-y-4 text-xs font-semibold text-[#1B4332]">
+              {/* Hog Stage Selector (Only for Hog Raising) */}
+              {selectedProduce === 'Hog Raising' && (
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">
+                    Hog Stage / Group (Matang sa Baboy)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: 'Fattening', title: 'Fattening', sub: 'Pabug-atonon' },
+                      { id: 'Gestation', title: 'Gestation', sub: 'Mabdos nga Anay' },
+                      { id: 'Lactating', title: 'Lactating', sub: 'Nagpasuso ug Biik' },
+                      { id: 'General', title: 'General / All', sub: 'Tanan nga Koral' },
+                    ] as { id: HogStage; title: string; sub: string }[]).map((stg) => {
+                      const active = expHogStage === stg.id;
+                      return (
+                        <button
+                          key={stg.id}
+                          type="button"
+                          onClick={() => setExpHogStage(stg.id)}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            active
+                              ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
+                              : 'bg-white text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF4EC]'
+                          }`}
+                        >
+                          <div className="font-black text-xs">{stg.title}</div>
+                          <div className={`text-[10px] ${active ? 'text-emerald-100' : 'text-[#4A5F57]'}`}>{stg.sub}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Category */}
               <div className="space-y-1">
                 <label className="block text-[10px] font-black text-[#1B4332] uppercase">Category</label>
@@ -1573,7 +1940,11 @@ export default function HogRaisingIgpTracker({
 
               {selectedProduce === 'Hog Raising' && expCategory === 'Piglets' && (
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-[#1B4332] uppercase" htmlFor="piglet-purchase-quantity">Piglets Purchased (Head)</label>
+                  <label className="block text-[10px] font-black text-[#1B4332] uppercase" htmlFor="piglet-purchase-quantity">
+                    {expHogStage === 'Gestation' || expHogStage === 'Lactating'
+                      ? 'Gilts / Breeder Sows Purchased (Head)'
+                      : 'Piglets Purchased (Head)'}
+                  </label>
                   <input
                     id="piglet-purchase-quantity"
                     type="number"
@@ -1584,7 +1955,9 @@ export default function HogRaisingIgpTracker({
                     onChange={(event) => setExpQuantity(event.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono focus:outline-none focus:border-emerald-500"
                   />
-                  <p className="text-[10px] text-[#4A5F57]">This quantity updates the current herd total.</p>
+                  <p className="text-[10px] text-[#4A5F57]">
+                    Updates the {expHogStage} stage count and overall herd inventory.
+                  </p>
                 </div>
               )}
 
@@ -1623,7 +1996,15 @@ export default function HogRaisingIgpTracker({
                 <textarea
                   rows={3}
                   required
-                  placeholder="e.g., Nakapalit og 5 ka sako nga starter feed sa Alegria Agri Supply."
+                  placeholder={
+                    selectedProduce === 'Hog Raising'
+                      ? expHogStage === 'Gestation'
+                        ? 'e.g., Gestation feed ug vitamins para sa mabdos nga anay.'
+                        : expHogStage === 'Lactating'
+                        ? 'e.g., Lactating feed sa anay ug iron/booster para sa mga biik.'
+                        : 'e.g., Nakapalit og 5 ka sako nga starter/grower feed sa Alegria Agri Supply.'
+                      : 'Enter expense details...'
+                  }
                   value={expDesc}
                   onChange={(e) => setExpDesc(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500 font-sans"
@@ -1660,11 +2041,16 @@ export default function HogRaisingIgpTracker({
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-left">
             <div className="bg-[#F0EDE7] px-5 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
-              <h3 className="font-bold text-[#1B4332] text-base">
-                {selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako')
-                  ? 'Record Rental Income'
-                  : 'Record Sale / Income'}
-              </h3>
+              <div>
+                <h3 className="font-bold text-[#1B4332] text-base">
+                  {selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako')
+                    ? 'Record Rental Income'
+                    : 'Record Sale / Income'}
+                </h3>
+                {selectedProduce === 'Hog Raising' && (
+                  <p className="text-[10px] text-[#4A5F57] font-bold">Market Fattening Hogs • Weaned Piglets (Lactating) • Breeder Sows</p>
+                )}
+              </div>
               <button
                 onClick={() => setShowSaleModal(false)}
                 className="text-[#1B4332] hover:text-[#143326] text-lg font-bold cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg border border-[#D5CFC1] bg-white"
@@ -1673,12 +2059,54 @@ export default function HogRaisingIgpTracker({
               </button>
             </div>
             <form onSubmit={handleSaleSubmit} className="p-5 space-y-4 text-xs font-semibold text-[#1B4332]">
+              {/* Hog Stage Selector (Only for Hog Raising) */}
+              {selectedProduce === 'Hog Raising' && (
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-black text-[#1B4332] uppercase">
+                    Hog Stage Sold (Matang sa Gibaligya)
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: 'Fattening', title: 'Fattening', sub: 'Market Hogs' },
+                      { id: 'Lactating', title: 'Lactating', sub: 'Lutas nga Biik' },
+                      { id: 'Gestation', title: 'Gestation', sub: 'Anay / Breeder' },
+                    ] as { id: HogStage; title: string; sub: string }[]).map((stg) => {
+                      const active = saleHogStage === stg.id;
+                      return (
+                        <button
+                          key={stg.id}
+                          type="button"
+                          onClick={() => setSaleHogStage(stg.id)}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            active
+                              ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
+                              : 'bg-white text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF4EC]'
+                          }`}
+                        >
+                          <div className="font-black text-xs">{stg.title}</div>
+                          <div className={`text-[10px] ${active ? 'text-emerald-100' : 'text-[#4A5F57]'}`}>{stg.sub}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[10px] text-[#4A5F57] block">
+                    Selected: <strong>{getHogStageLabel(saleHogStage)}</strong>
+                  </span>
+                </div>
+              )}
+
               {/* Quantity sold & Date */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="block text-[10px] font-black text-[#1B4332] uppercase">
                     {selectedProduce.includes('Rental') || selectedProduce.includes('Lingkoranan') || selectedProduce.includes('Sako')
                       ? 'Number of Items Rented (Kadaghanon)'
+                      : selectedProduce === 'Hog Raising'
+                      ? saleHogStage === 'Lactating'
+                        ? 'Weaned Piglets / Sows Sold'
+                        : saleHogStage === 'Gestation'
+                        ? 'Breeder Sows Sold (Head)'
+                        : 'Fattening Hogs Sold (Head)'
                       : 'Quantity / Units Sold'}
                   </label>
                   <input
@@ -1725,7 +2153,15 @@ export default function HogRaisingIgpTracker({
                 <label className="block text-[10px] font-black text-[#1B4332] uppercase">Sale Notes (Buyer/Weight Details)</label>
                 <textarea
                   rows={3}
-                  placeholder="e.g., Sold to Tuburan Public Market Buyer. Average weight 85kg per hog."
+                  placeholder={
+                    selectedProduce === 'Hog Raising'
+                      ? saleHogStage === 'Lactating'
+                        ? 'e.g., Halin sa nalutas nga mga biik gikan sa nagpasuso nga anay.'
+                        : saleHogStage === 'Gestation'
+                        ? 'e.g., Halin sa mabdos nga anay / breeder.'
+                        : 'e.g., Sold fattening hogs to Tuburan Public Market Buyer. Avg weight 85kg.'
+                      : 'Enter sale notes...'
+                  }
                   value={saleNotes}
                   onChange={(e) => setSaleNotes(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500 font-sans"
@@ -1767,6 +2203,8 @@ export default function HogRaisingIgpTracker({
         meetings={meetings}
         hogRaisingState={state}
       />
+        </>
+      )}
 
     </div>
   );

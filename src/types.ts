@@ -186,10 +186,19 @@ export interface SystemLog {
 }
 
 // HOG RAISING & GENERAL INCOME GENERATING PROJECT (IGP) TYPES
+export type HogStage = 'Fattening' | 'Gestation' | 'Lactating' | 'General';
+
+export interface HogHerdBreakdown {
+  fattening: number;
+  gestation: number;
+  lactating: number;
+}
+
 export interface IgpExpense {
   id: string;
   produce?: string; // e.g., "Hog Raising", "Poultry Raising"
-  category: 'Piglets' | 'Feeds' | 'Vitamins/Medicines' | 'Other' | string;
+  hogStage?: HogStage; // Stage classification: Fattening, Gestation, Lactating, or General
+  category: 'Piglets' | 'Feeds' | 'Breeding / AI Service' | 'Vitamins/Medicines' | 'Farrowing & Pen Care' | 'Other' | string;
   quantity?: number;
   description: string;
   amount: number;
@@ -201,6 +210,7 @@ export interface IgpExpense {
 export interface IgpSale {
   id: string;
   produce?: string; // e.g., "Hog Raising", "Poultry Raising"
+  hogStage?: HogStage; // Stage sold: Fattening (Market Hog), Lactating (Weaned Piglets), Gestation (Sow)
   date: string;
   hogsCount: number; // For backward compatibility
   produceCount?: number; // General quantity
@@ -219,6 +229,7 @@ export interface IgpGroup {
 export interface IgpChoreLog {
   id: string;
   produce?: string; // e.g., "Hog Raising", "Poultry Raising"
+  hogStage?: HogStage; // Stage cared for: Fattening, Gestation, Lactating, or General
   date: string;
   time: string;
   batchName: string;
@@ -240,6 +251,7 @@ export interface OrganizationFund {
 
 export interface HogRaisingState {
   openingHogCount?: number;
+  herdBreakdown?: HogHerdBreakdown;
   produces?: string[]; // Dynamic list of produce projects, e.g. ["Hog Raising", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"]
   expenses: IgpExpense[];
   sales: IgpSale[];

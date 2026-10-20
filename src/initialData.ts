@@ -170,7 +170,12 @@ export const INITIAL_DELEGATIONS: DelegationRequest[] = [];
 
 export const INITIAL_HOG_RAISING: HogRaisingState = {
   openingHogCount: 0,
-  produces: ['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'],
+  herdBreakdown: {
+    fattening: 0,
+    gestation: 0,
+    lactating: 0
+  },
+  produces: [],
   expenses: [],
   sales: [],
   groups: [],

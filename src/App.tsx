@@ -18,7 +18,7 @@ const AuditorView = lazy(() => import('./components/AuditorView'));
 const PioView = lazy(() => import('./components/PioView'));
 const ExecutiveView = lazy(() => import('./components/ExecutiveView'));
 const AnnouncementDashboard = lazy(() => import('./components/AnnouncementDashboard'));
-const HogRaisingIgpTracker = lazy(() => import('./components/HogRaisingIgpTracker'));
+const IgpTracker = lazy(() => import('./components/IgpTracker'));
 const SyncQueuePanel = lazy(() => import('./components/SyncQueuePanel'));
 const AuthScreen = lazy(() => import('./components/AuthScreen'));
 const MemberDashboard = lazy(() => import('./components/MemberDashboard'));
@@ -164,11 +164,12 @@ export default function App() {
     let cancelled = false;
     const loadLocalData = async () => {
       try {
-        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_hog_raising', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_inventory', 'bafa_sync_queue', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
+        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_inventory', 'bafa_sync_queue', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
+        clearSecureItems(['bafa_hog_raising']);
         await migrateSecureItems(storageKeys);
       if (cancelled) return;
       const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers] = await Promise.all([
-        getSecureItem<any>('bafa_members'), getSecureItem<any>('bafa_meetings'), getSecureItem<any>('bafa_resolutions'), getSecureItem<any>('bafa_transactions'), getSecureItem<any>('bafa_announcements'), getSecureItem<any>('bafa_hog_raising'), getSecureItem<any>('bafa_products'), getSecureItem<any>('bafa_activities'), getSecureItem<any>('bafa_funds'), getSecureItem<any>('bafa_inventory'), getSecureItem<any>('bafa_sync_queue'), getSecureItem<any>('bafa_logs'), getSecureItem<any>('bafa_users')
+        getSecureItem<any>('bafa_members'), getSecureItem<any>('bafa_meetings'), getSecureItem<any>('bafa_resolutions'), getSecureItem<any>('bafa_transactions'), getSecureItem<any>('bafa_announcements'), getSecureItem<any>('bafa_afa_igp'), getSecureItem<any>('bafa_products'), getSecureItem<any>('bafa_activities'), getSecureItem<any>('bafa_funds'), getSecureItem<any>('bafa_inventory'), getSecureItem<any>('bafa_sync_queue'), getSecureItem<any>('bafa_logs'), getSecureItem<any>('bafa_users')
       ]);
 
       // Detect and clear legacy dummy seed data from previous versions (e.g. Roberto Cañete / m-001)
@@ -176,7 +177,7 @@ export default function App() {
       const hasOldSeedMembers = storedMembersText.includes('m-001') || storedMembersText.includes('Roberto M. Cañete') || storedMembersText.includes('Juanito') || storedMembersText.includes('user-m1');
       if (hasOldSeedMembers) {
         console.log('[Auto-Cleanup]: Detected legacy dummy seed data in local cache. Cleaning storage for real data...');
-        clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_hog_raising']);
+        clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_afa_igp']);
         setMembers([]);
         setMeetings([]);
         setResolutions([]);
@@ -289,7 +290,7 @@ export default function App() {
             if (Array.isArray(res.data.activities)) { setActivities(cleanActivities); updateStorage('bafa_activities', cleanActivities); }
             if (Array.isArray(res.data.funds)) { setFunds(cleanFunds); updateStorage('bafa_funds', cleanFunds); }
             if (Array.isArray(res.data.inventory)) { setInventory(cleanInventory); updateStorage('bafa_inventory', cleanInventory); }
-            if (res.data.hogRaising) { setHogRaising(res.data.hogRaising); updateStorage('bafa_hog_raising', res.data.hogRaising); }
+            if (res.data.hogRaising) { setHogRaising(res.data.hogRaising); updateStorage('bafa_afa_igp', res.data.hogRaising); }
             if (Array.isArray(res.data.users)) {
               const cleanUsers = res.data.users
                 .filter((u: any) => !delUsers.has(u.id))
@@ -301,7 +302,7 @@ export default function App() {
                   if (upgraded.password) {
                     if (!upgraded.passwordHash?.startsWith('$2')) {
                       upgraded.passwordHash = hashPolicyPassword(upgraded.password);
-                      upgraded.passwordChangedAt = upgraded.passwordChangedAt || new Date().toISOString();
+                      upgraded.passwordChangedAt = upgraded.passwordChangedAt || new Date(0).toISOString();
                     }
                     delete upgraded.password;
                   }
@@ -310,6 +311,9 @@ export default function App() {
                 });
               setUsers(cleanUsers);
               updateStorage('bafa_users', cleanUsers);
+              if (isOnline && cleanUsers.some((user) => !user.passwordHash?.startsWith('$2'))) {
+                pushAllDataToCloud({ users: cleanUsers }, { silent: true, source: 'Password Hash Upgrade' });
+              }
             }
             console.log('[Cloud DB] Successfully loaded fresh data from PostgreSQL Cloud DB');
             setDbStatus(prev => ({
@@ -1284,66 +1288,72 @@ export default function App() {
     }
   };
 
-  // HOG RAISING IGP HANDLERS
+  // AFA IGP HANDLERS
   const handleAddPigExpense = (expData: Omit<IgpExpense, 'id' | 'recordedBy'>) => {
+    const officerLabel = currentUser ? `${currentUser.role.replace('_', ' ')} (${currentUser.name})` : `Treasurer (${getOfficerName('Treasurer')})`;
     const newExp: IgpExpense = {
       ...expData,
       id: `pig-exp-${Date.now()}`,
-      recordedBy: currentUser ? `${currentUser.role} (${currentUser.name})` : 'Treasurer (Rodolfo Climaco)'
+      recordedBy: officerLabel
     };
     const updatedState: HogRaisingState = {
       ...hogRaising,
       expenses: [newExp, ...hogRaising.expenses]
     };
     setHogRaising(updatedState);
-    updateStorage('bafa_hog_raising', updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
 
+    const projectLabel = expData.produce || 'AFA IGP';
+    const stageLabel = expData.hogStage && expData.hogStage !== 'General' ? ` • ${expData.hogStage}` : '';
     // Also register in general ledger for complete co-op records!
     handleAddTransaction({
       type: 'expense',
-      category: 'Hog Raising Project',
+      category: `${projectLabel} Project`,
       amount: expData.amount,
       date: expData.date,
-      description: `[Hog Raising IGP] ${expData.category}${expData.quantity ? ` (${expData.quantity} head)` : ''}: ${expData.description}`,
-      recordedBy: currentUser ? `Treasurer (${currentUser.name})` : 'Treasurer (Rodolfo Climaco)'
+      description: `[${projectLabel} IGP${stageLabel}] ${expData.category}${expData.quantity ? ` (${expData.quantity})` : ''}: ${expData.description}`,
+      recordedBy: officerLabel
     });
 
     if (isOnline) {
-      logAction('Recorded Pig Expense', `Logged PHP ${newExp.amount.toLocaleString()} piggery expense for "${newExp.category}"`);
-      showToastMessage('Hog raising expense recorded and linked to general ledger.');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Hog Purchase or Expense' });
+      logAction('Recorded IGP Expense', `Logged PHP ${newExp.amount.toLocaleString()} expense for ${projectLabel} ("${newExp.category}"${stageLabel})`);
+      showToastMessage(`${projectLabel} expense recorded and linked to general ledger.`);
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Expense' });
     } else {
       addToSyncQueue('create', 'hog_expense', newExp);
     }
   };
 
   const handleAddHogSale = (saleData: Omit<IgpSale, 'id' | 'recordedBy'>) => {
+    const officerLabel = currentUser ? `${currentUser.role.replace('_', ' ')} (${currentUser.name})` : `Treasurer (${getOfficerName('Treasurer')})`;
     const newSale: IgpSale = {
       ...saleData,
       id: `pig-sale-${Date.now()}`,
-      recordedBy: currentUser ? `${currentUser.role} (${currentUser.name})` : 'Treasurer (Rodolfo Climaco)'
+      recordedBy: officerLabel
     };
     const updatedState: HogRaisingState = {
       ...hogRaising,
       sales: [newSale, ...hogRaising.sales]
     };
     setHogRaising(updatedState);
-    updateStorage('bafa_hog_raising', updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
 
+    const projectLabel = saleData.produce || 'AFA IGP';
+    const stageLabel = saleData.hogStage && saleData.hogStage !== 'General' ? ` (${saleData.hogStage})` : '';
     // Also register in general ledger for complete co-op records!
     handleAddTransaction({
       type: 'income',
-      category: 'Hog Raising Project',
+      category: `${projectLabel} Project`,
       amount: saleData.revenue,
       date: saleData.date,
-      description: `[Hog Raising IGP] Sold ${saleData.hogsCount} hogs: ${saleData.notes || 'Mature hogs sold.'}`,
-      recordedBy: currentUser ? `Treasurer (${currentUser.name})` : 'Treasurer (Rodolfo Climaco)'
+      description: `[${projectLabel} IGP] Revenue (${saleData.hogsCount} unit/head${stageLabel}): ${saleData.notes || `${projectLabel} sale/rental income.`}`,
+      recordedBy: officerLabel
     });
 
     if (isOnline) {
-      logAction('Recorded Hog Sale', `Sold ${newSale.hogsCount} mature hogs for PHP ${newSale.revenue.toLocaleString()}`);
-      showToastMessage(`Hog sale of PHP ${newSale.revenue.toLocaleString()} recorded and linked to general ledger.`);
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Hog Sale' });
+      logAction('Recorded IGP Revenue', `Recorded PHP ${newSale.revenue.toLocaleString()} revenue for ${projectLabel}${stageLabel}`);
+      showToastMessage(`${projectLabel} revenue of PHP ${newSale.revenue.toLocaleString()} recorded and linked to general ledger.`);
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Revenue' });
     } else {
       addToSyncQueue('create', 'hog_sale', newSale);
     }
@@ -1511,44 +1521,81 @@ export default function App() {
       choreLogs: [newChore, ...hogRaising.choreLogs]
     };
     setHogRaising(updatedState);
-    updateStorage('bafa_hog_raising', updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
-      logAction('Logged Pig Chore', `${newChore.checkedBy} checked-in: ${newChore.activities.join(', ')}`);
-      showToastMessage('Daily pig care activity has been recorded successfully!');
+      logAction('Logged IGP Chore', `${newChore.checkedBy} checked-in: ${newChore.activities.join(', ')}`);
+      showToastMessage('Daily IGP care/activity log has been recorded successfully!');
       pushAllDataToCloud({ hogRaising: updatedState }, { silent: true });
     } else {
       addToSyncQueue('create', 'hog_chore', newChore);
     }
   };
 
-  const handleUpdateOpeningHogCount = (count: number) => {
-    const openingHogCount = Math.max(0, Math.floor(Number(count) || 0));
-    const updatedState: HogRaisingState = { ...hogRaising, openingHogCount };
+  const handleUpdateOpeningHogCount = (
+    count: number,
+    herdBreakdown?: { fattening: number; gestation: number; lactating: number }
+  ) => {
+    const normalizedBreakdown = herdBreakdown
+      ? {
+          fattening: Math.max(0, Math.floor(Number(herdBreakdown.fattening) || 0)),
+          gestation: Math.max(0, Math.floor(Number(herdBreakdown.gestation) || 0)),
+          lactating: Math.max(0, Math.floor(Number(herdBreakdown.lactating) || 0))
+        }
+      : hogRaising.herdBreakdown;
+    const openingHogCount = normalizedBreakdown
+      ? normalizedBreakdown.fattening + normalizedBreakdown.gestation + normalizedBreakdown.lactating
+      : Math.max(0, Math.floor(Number(count) || 0));
+    const updatedState: HogRaisingState = {
+      ...hogRaising,
+      openingHogCount,
+      ...(normalizedBreakdown ? { herdBreakdown: normalizedBreakdown } : {})
+    };
     setHogRaising(updatedState);
-    updateStorage('bafa_hog_raising', updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
+
+    const breakdownDetail = normalizedBreakdown
+      ? ` (Fattening: ${normalizedBreakdown.fattening}, Gestation: ${normalizedBreakdown.gestation}, Lactating: ${normalizedBreakdown.lactating})`
+      : '';
 
     if (isOnline) {
-      logAction('Updated Opening Hog Inventory', `Set opening herd count to ${openingHogCount} hogs.`);
-      showToastMessage(`Opening herd count saved: ${openingHogCount} hogs.`);
+      logAction('Updated Opening Hog Inventory', `Set opening herd count to ${openingHogCount} hogs${breakdownDetail}.`);
+      showToastMessage(`Herd inventory saved: ${openingHogCount} total hogs${breakdownDetail}.`);
       pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Opening Hog Inventory' });
     } else {
-      addToSyncQueue('update', 'hog_expense', { id: 'opening-hog-count', quantity: openingHogCount });
+      addToSyncQueue('update', 'hog_expense', { id: 'opening-hog-count', quantity: openingHogCount, herdBreakdown: normalizedBreakdown });
     }
   };
 
   const handleAddProduce = (produceName: string) => {
+    const cleanName = produceName.trim();
+    if (!cleanName) return;
     const updatedState: HogRaisingState = {
       ...hogRaising,
-      produces: Array.from(new Set([...(hogRaising.produces || ['Chairs Rental', 'Sacks Rental', 'Crop Livelihood']), produceName]))
+      produces: Array.from(new Set([...(hogRaising.produces || []), cleanName]))
     };
     setHogRaising(updatedState);
-    updateStorage('bafa_hog_raising', updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
-      logAction('Added Dynamic IGP Produce', `Added new dynamic produce project: "${produceName}"`);
-      showToastMessage(`Successfully added dynamic IGP project: "${produceName}"`, 'success');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true });
+      logAction('Added AFA IGP Project', `Added current IGP project: "${cleanName}"`);
+      showToastMessage(`Successfully added IGP project: "${cleanName}"`, 'success');
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Added AFA IGP Project' });
+    }
+  };
+
+  const handleDeleteProduce = (produceName: string) => {
+    const updatedState: HogRaisingState = {
+      ...hogRaising,
+      produces: (hogRaising.produces || []).filter(p => p !== produceName)
+    };
+    setHogRaising(updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
+
+    if (isOnline) {
+      logAction('Removed AFA IGP Project', `Removed IGP project from active list: "${produceName}"`);
+      showToastMessage(`Removed IGP project: "${produceName}"`, 'info');
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Removed AFA IGP Project' });
     }
   };
 
@@ -1560,7 +1607,7 @@ export default function App() {
       closedYears: [...closedList, year]
     };
     setHogRaising(updatedState);
-    updateStorage('bafa_hog_raising', updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
       logAction('Closed Financial Book', `Officially closed and sealed the Hog Raising IGP financial book for December ${year}.`);
@@ -2917,7 +2964,7 @@ export default function App() {
 
           {officerTab === 'hog-raising' && (
             <div id="officer-hog-raising-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900 text-left">
-              <HogRaisingIgpTracker
+              <IgpTracker
                 state={hogRaising}
                 members={members}
                 meetings={meetings}
@@ -2926,6 +2973,7 @@ export default function App() {
                 onAddChoreLog={handleAddPigChore}
                 onUpdateOpeningHogCount={handleUpdateOpeningHogCount}
                 onAddProduce={handleAddProduce}
+                onDeleteProduce={handleDeleteProduce}
                 isTreasurerOrOfficer={currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer' || currentRole === 'Auditor' || currentRole === 'President'}
                 currentUser={currentUser!}
                 isOfficerMode={true}

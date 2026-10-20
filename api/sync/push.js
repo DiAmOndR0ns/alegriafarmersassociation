@@ -99,7 +99,10 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audit_notes TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
-    `ALTER TABLE hog_raising ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
+    `DROP TABLE IF EXISTS hog_raising;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_available VARCHAR(100);`,
@@ -286,9 +289,10 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS hog_raising (
+      CREATE TABLE IF NOT EXISTS afa_igp (
         id VARCHAR(100) PRIMARY KEY,
         opening_hog_count INTEGER NOT NULL DEFAULT 0,
+        herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb,
         produces TEXT[],
         expenses JSONB,
         sales JSONB,
@@ -440,6 +444,9 @@ var ENTITY_TABLE_MAP = {
   delegationrequests: "delegation_requests",
   delegation_request: "delegation_requests",
   delegation_requests: "delegation_requests",
+  afa_igp: "afa_igp",
+  afaigp: "afa_igp",
+  igp: "afa_igp",
   systemlog: "system_logs",
   systemlogs: "system_logs",
   log: "system_logs",
@@ -739,7 +746,7 @@ async function saveFullStateToPostgres(pool, state) {
       if (state.hogRaising) {
         console.log("[DB DEBUG] Saving hog raising state...");
         await client.query(`
-        INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
+        INSERT INTO afa_igp (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (id) DO UPDATE SET
           opening_hog_count = EXCLUDED.opening_hog_count,
@@ -752,14 +759,14 @@ async function saveFullStateToPostgres(pool, state) {
       `, [
           "main_state",
           Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
-          state.hogRaising.produces || ["Hog Raising"],
+          state.hogRaising.produces || [],
           JSON.stringify(state.hogRaising.expenses || []),
           JSON.stringify(state.hogRaising.sales || []),
           JSON.stringify(state.hogRaising.groups || []),
           JSON.stringify(state.hogRaising.choreLogs || []),
           state.hogRaising.closedYears || []
         ]);
-        await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
+        await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
         console.log("[DB DEBUG] Hog raising state saved");
       }
       const logList = state.systemLogs || state.logs;
@@ -1209,23 +1216,30 @@ async function saveFullStateToPostgres(pool, state) {
     }
     if (state.hogRaising) {
       const hog = state.hogRaising;
+      const safeBreakdown = {
+        fattening: Math.max(0, Math.floor(Number(hog.herdBreakdown?.fattening) || 0)),
+        gestation: Math.max(0, Math.floor(Number(hog.herdBreakdown?.gestation) || 0)),
+        lactating: Math.max(0, Math.floor(Number(hog.herdBreakdown?.lactating) || 0))
+      };
       await client.query(`
-        INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, expenses, sales, groups, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (id) DO UPDATE SET opening_hog_count = EXCLUDED.opening_hog_count,
+          herd_breakdown = EXCLUDED.herd_breakdown,
           produces = EXCLUDED.produces, expenses = EXCLUDED.expenses, sales = EXCLUDED.sales,
           groups = EXCLUDED.groups, chore_logs = EXCLUDED.chore_logs, closed_years = EXCLUDED.closed_years
       `, [
         "main_state",
         Math.max(0, Math.floor(Number(hog.openingHogCount) || 0)),
-        hog.produces || ["Hog Raising"],
+        JSON.stringify(safeBreakdown),
+        hog.produces || [],
         JSON.stringify(hog.expenses || []),
         JSON.stringify(hog.sales || []),
         JSON.stringify(hog.groups || []),
         JSON.stringify(hog.choreLogs || []),
         hog.closedYears || []
       ]);
-      await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
+      await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
     }
     console.log("[DB DEBUG] Committing transaction...");
     await client.query("COMMIT");

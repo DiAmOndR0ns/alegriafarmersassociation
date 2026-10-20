@@ -7,7 +7,7 @@ import {
   Megaphone, Search, Bell, ChevronDown, ChevronUp, Briefcase, ShoppingBag, Clock, Coffee,  ChevronLeft, ChevronRight, Plus
 } from 'lucide-react';
 import AnnouncementDashboard from './AnnouncementDashboard';
-import HogRaisingIgpTracker from './HogRaisingIgpTracker';
+import IgpTracker from './IgpTracker';
 import AffiliationManager from './AffiliationManager';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 
@@ -955,7 +955,7 @@ export default function MemberDashboard({
 
       {activeTab === 'hog-raising' && (
         <div id="member-hog-raising-panel" className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print">
-          <HogRaisingIgpTracker
+          <IgpTracker
             state={hogRaisingState}
             members={members}
             onAddExpense={() => {}}

@@ -99,7 +99,10 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audit_notes TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
-    `ALTER TABLE hog_raising ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
+    `DROP TABLE IF EXISTS hog_raising;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_available VARCHAR(100);`,
@@ -286,9 +289,10 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS hog_raising (
+      CREATE TABLE IF NOT EXISTS afa_igp (
         id VARCHAR(100) PRIMARY KEY,
         opening_hog_count INTEGER NOT NULL DEFAULT 0,
+        herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb,
         produces TEXT[],
         expenses JSONB,
         sales JSONB,
@@ -441,8 +445,8 @@ async function fetchAllDataFromPostgres(pool) {
     const transactionsRes = await client.query("SELECT * FROM financial_transactions ORDER BY date DESC");
     const announcementsRes = await client.query("SELECT * FROM announcements ORDER BY date_posted DESC");
     const logsRes = await client.query("SELECT * FROM system_logs ORDER BY timestamp DESC");
-    const hogQuery = await client.query("SELECT * FROM hog_raising WHERE id IN ('main_state', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
-    const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query("SELECT * FROM hog_raising LIMIT 1");
+    const hogQuery = await client.query("SELECT * FROM afa_igp WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
+    const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query("SELECT * FROM afa_igp LIMIT 1");
     const productsRes = await client.query("SELECT * FROM products ORDER BY name ASC");
     const activitiesRes = await client.query("SELECT * FROM activities ORDER BY scheduled_date DESC");
     const fundsRes = await client.query("SELECT * FROM organization_funds ORDER BY name ASC");
@@ -485,7 +489,8 @@ async function fetchAllDataFromPostgres(pool) {
     }
     let hogState = {
       openingHogCount: 0,
-      produces: ["Hog Raising", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"],
+      herdBreakdown: { fattening: 0, gestation: 0, lactating: 0 },
+      produces: [],
       expenses: [],
       sales: [],
       groups: [],
@@ -494,16 +499,16 @@ async function fetchAllDataFromPostgres(pool) {
     };
     if (hogRes.rows.length > 0) {
       const row = hogRes.rows[0];
-      const rawProduces = Array.isArray(row.produces) ? row.produces : ["Hog Raising"];
-      const cleanProduces = rawProduces.filter((p) => p !== "Tilapia Breeding" && !p.toLowerCase().includes("tilapia"));
-      if (!cleanProduces.includes("Chairs Rental (Abang sa Lingkoranan)")) {
-        cleanProduces.push("Chairs Rental (Abang sa Lingkoranan)");
-      }
-      if (!cleanProduces.includes("Sacks Rental (Abang sa Sako)")) {
-        cleanProduces.push("Sacks Rental (Abang sa Sako)");
-      }
+      const rawProduces = Array.isArray(row.produces) ? row.produces : [];
+      const cleanProduces = rawProduces.filter((p) => Boolean(p && p.trim()) && p !== "Tilapia Breeding" && !p.toLowerCase().includes("tilapia"));
+      const rawBreakdown = row.herd_breakdown && typeof row.herd_breakdown === "object" ? row.herd_breakdown : {};
       hogState = {
         openingHogCount: Number(row.opening_hog_count || 0),
+        herdBreakdown: {
+          fattening: Math.max(0, Math.floor(Number(rawBreakdown.fattening) || 0)),
+          gestation: Math.max(0, Math.floor(Number(rawBreakdown.gestation) || 0)),
+          lactating: Math.max(0, Math.floor(Number(rawBreakdown.lactating) || 0))
+        },
         produces: cleanProduces,
         expenses: row.expenses || [],
         sales: row.sales || [],

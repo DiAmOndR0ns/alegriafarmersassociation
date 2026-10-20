@@ -141,7 +141,10 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audit_notes TEXT;`,
 
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
-    `ALTER TABLE hog_raising ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
+    `DROP TABLE IF EXISTS hog_raising;`,
 
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
@@ -351,9 +354,10 @@ export async function initDatabaseSchema(pool: pg.Pool) {
 
     // 8. Hog Raising IGP State
     await client.query(`
-      CREATE TABLE IF NOT EXISTS hog_raising (
+      CREATE TABLE IF NOT EXISTS afa_igp (
         id VARCHAR(100) PRIMARY KEY,
         opening_hog_count INTEGER NOT NULL DEFAULT 0,
+        herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb,
         produces TEXT[],
         expenses JSONB,
         sales JSONB,
@@ -495,7 +499,7 @@ export async function getTableStats(pool: pg.Pool): Promise<{
         (SELECT count(*) FROM financial_transactions) as financial_transactions,
         (SELECT count(*) FROM announcements) as announcements,
         (SELECT count(*) FROM system_logs) as system_logs,
-        (SELECT count(*) FROM hog_raising) as hog_raising,
+        (SELECT count(*) FROM afa_igp) as afa_igp,
         (SELECT count(*) FROM products) as products,
         (SELECT count(*) FROM activities) as activities,
         (SELECT count(*) FROM organization_funds) as organization_funds,
@@ -511,7 +515,7 @@ export async function getTableStats(pool: pg.Pool): Promise<{
       financial_transactions: Number(row.financial_transactions || 0),
       announcements: Number(row.announcements || 0),
       system_logs: Number(row.system_logs || 0),
-      hog_raising: Number(row.hog_raising || 0),
+      afa_igp: Number(row.afa_igp || 0),
       products: Number(row.products || 0),
       activities: Number(row.activities || 0),
       organization_funds: Number(row.organization_funds || 0),
@@ -550,7 +554,7 @@ export const ENTITY_TABLE_MAP: Readonly<Record<string, string>> = {
   auditor_report: 'auditor_reports', auditor_reports: 'auditor_reports',
   delegationrequest: 'delegation_requests', delegationrequests: 'delegation_requests',
   delegation_request: 'delegation_requests', delegation_requests: 'delegation_requests',
-  systemlog: 'system_logs', systemlogs: 'system_logs', log: 'system_logs', logs: 'system_logs'
+  afa_igp: 'afa_igp', afaigp: 'afa_igp', igp: 'afa_igp', systemlog: 'system_logs', systemlogs: 'system_logs', log: 'system_logs', logs: 'system_logs'
 };
 
 export function lookupEntityTable(entity: string): string | undefined {
@@ -636,8 +640,8 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const transactionsRes = await client.query('SELECT * FROM financial_transactions ORDER BY date DESC');
     const announcementsRes = await client.query('SELECT * FROM announcements ORDER BY date_posted DESC');
     const logsRes = await client.query('SELECT * FROM system_logs ORDER BY timestamp DESC');
-    const hogQuery = await client.query("SELECT * FROM hog_raising WHERE id IN ('main_state', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
-    const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query('SELECT * FROM hog_raising LIMIT 1');
+    const hogQuery = await client.query("SELECT * FROM afa_igp WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
+    const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query('SELECT * FROM afa_igp LIMIT 1');
     const productsRes = await client.query('SELECT * FROM products ORDER BY name ASC');
     const activitiesRes = await client.query('SELECT * FROM activities ORDER BY scheduled_date DESC');
     const fundsRes = await client.query('SELECT * FROM organization_funds ORDER BY name ASC');
@@ -681,7 +685,8 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
 
     let hogState = {
       openingHogCount: 0,
-      produces: ['Hog Raising', 'Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Poultry Raising'],
+      herdBreakdown: { fattening: 0, gestation: 0, lactating: 0 },
+      produces: [] as string[],
       expenses: [],
       sales: [],
       groups: [],
@@ -691,16 +696,16 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
 
     if (hogRes.rows.length > 0) {
       const row = hogRes.rows[0];
-      const rawProduces: string[] = Array.isArray(row.produces) ? row.produces : ['Hog Raising'];
-      const cleanProduces = rawProduces.filter((p: string) => p !== 'Tilapia Breeding' && !p.toLowerCase().includes('tilapia'));
-      if (!cleanProduces.includes('Chairs Rental (Abang sa Lingkoranan)')) {
-        cleanProduces.push('Chairs Rental (Abang sa Lingkoranan)');
-      }
-      if (!cleanProduces.includes('Sacks Rental (Abang sa Sako)')) {
-        cleanProduces.push('Sacks Rental (Abang sa Sako)');
-      }
+      const rawProduces: string[] = Array.isArray(row.produces) ? row.produces : [];
+      const cleanProduces = rawProduces.filter((p: string) => Boolean(p && p.trim()) && p !== 'Tilapia Breeding' && !p.toLowerCase().includes('tilapia'));
+      const rawBreakdown = row.herd_breakdown && typeof row.herd_breakdown === 'object' ? row.herd_breakdown : {};
       hogState = {
         openingHogCount: Number(row.opening_hog_count || 0),
+        herdBreakdown: {
+          fattening: Math.max(0, Math.floor(Number(rawBreakdown.fattening) || 0)),
+          gestation: Math.max(0, Math.floor(Number(rawBreakdown.gestation) || 0)),
+          lactating: Math.max(0, Math.floor(Number(rawBreakdown.lactating) || 0))
+        },
         produces: cleanProduces,
         expenses: row.expenses || [],
         sales: row.sales || [],
@@ -1149,7 +1154,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Saving hog raising state...');
 
       await client.query(`
-        INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
+        INSERT INTO afa_igp (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (id) DO UPDATE SET
           opening_hog_count = EXCLUDED.opening_hog_count,
@@ -1162,14 +1167,14 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       `, [
         'main_state',
         Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
-        state.hogRaising.produces || ['Hog Raising'],
+        state.hogRaising.produces || [],
         JSON.stringify(state.hogRaising.expenses || []),
         JSON.stringify(state.hogRaising.sales || []),
         JSON.stringify(state.hogRaising.groups || []),
         JSON.stringify(state.hogRaising.choreLogs || []),
         state.hogRaising.closedYears || []
       ]);
-      await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
+      await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
       console.log('[DB DEBUG] Hog raising state saved');
     }
 
@@ -1505,16 +1510,22 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
 
     if (state.hogRaising) {
       const hog = state.hogRaising;
+      const safeBreakdown = {
+        fattening: Math.max(0, Math.floor(Number(hog.herdBreakdown?.fattening) || 0)),
+        gestation: Math.max(0, Math.floor(Number(hog.herdBreakdown?.gestation) || 0)),
+        lactating: Math.max(0, Math.floor(Number(hog.herdBreakdown?.lactating) || 0))
+      };
       await client.query(`
-        INSERT INTO hog_raising (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, expenses, sales, groups, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (id) DO UPDATE SET opening_hog_count = EXCLUDED.opening_hog_count,
+          herd_breakdown = EXCLUDED.herd_breakdown,
           produces = EXCLUDED.produces, expenses = EXCLUDED.expenses, sales = EXCLUDED.sales,
           groups = EXCLUDED.groups, chore_logs = EXCLUDED.chore_logs, closed_years = EXCLUDED.closed_years
-      `, ['main_state', Math.max(0, Math.floor(Number(hog.openingHogCount) || 0)), hog.produces || ['Hog Raising'],
+      `, ['main_state', Math.max(0, Math.floor(Number(hog.openingHogCount) || 0)), JSON.stringify(safeBreakdown), hog.produces || [],
         JSON.stringify(hog.expenses || []), JSON.stringify(hog.sales || []), JSON.stringify(hog.groups || []),
         JSON.stringify(hog.choreLogs || []), hog.closedYears || []]);
-      await client.query("DELETE FROM hog_raising WHERE id != 'main_state'");
+      await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
     }
 
     console.log('[DB DEBUG] Committing transaction...');
