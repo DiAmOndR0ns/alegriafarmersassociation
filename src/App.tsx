@@ -31,6 +31,7 @@ const ProductManagementModal = lazy(() => import('./components/ProductManagement
 const PasswordChangePrompt = lazy(() => import('./components/PasswordChangePrompt'));
 import { buildAuditChain, hashPassword, verifyPassword, sanitizeUserForStorage } from './utils/audit';
 import { generateInitialPassword, getPasswordExpiryStatus, hashPassword as hashPolicyPassword, isLegacyPasswordHash, validatePasswordPolicy } from './utils/passwordPolicy';
+import { LanguageToggle } from './i18n/LanguageContext';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
@@ -2524,6 +2525,7 @@ export default function App() {
             </div>
 
             <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 sm:gap-2.5 w-full sm:w-auto max-w-full">
+              <LanguageToggle onDark />
               {/* Active session bar with prominent Logout button */}
               <div className="flex items-center justify-between gap-2.5 bg-[#081C15] px-3 py-1.5 rounded-2xl border-2 border-[#52B788] w-full sm:w-auto min-w-0 shrink-0 shadow-sm">
                 <div className="flex items-center gap-2 min-w-0">
@@ -2659,6 +2661,7 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2 sm:gap-2.5 w-full lg:w-auto max-w-full">
+            <LanguageToggle onDark />
             {/* Active session bar */}
             <div className="flex items-center justify-between gap-2 bg-[#081C15] px-3 py-1.5 rounded-2xl border-2 border-[#52B788] w-full sm:w-auto min-w-0 shrink-0 shadow-sm">
               <div className="flex items-center gap-2 min-w-0">
@@ -3076,7 +3079,7 @@ export default function App() {
           )}
 
           {officerTab === 'products' && (
-            <div id="officer-products-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
+            <div id="officer-products-window" className="w-full">
               <ProductManagementModal
                 products={products}
                 currentRole={currentRole}
@@ -3120,10 +3123,7 @@ export default function App() {
                     <Users className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-[#1B4332]">My Member Dashboard & ID </h2>
-                    <p className="text-xs text-slate-600 font-bold">
-                      View and manage your personal AFA member credentials, digital ID badge, and benefits ({currentUser?.role.replace('_', ' ')}).
-                    </p>
+                    <h2 className="text-base font-black text-[#1B4332]">My Member Dashboard & ID</h2>
                   </div>
                 </div>
                 <button

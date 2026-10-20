@@ -16,6 +16,7 @@ import {
   User as UserIcon, HelpCircle, AlertTriangle, KeyRound, Eye, EyeOff,
   ShieldCheck, Phone, Check, Info, FileText, Languages
 } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface AuthScreenProps {
   users: User[];
@@ -50,9 +51,8 @@ export default function AuthScreen({
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetUsername, setResetUsername] = useState('');
 
-  // Language mode: 'mixed' = English + Bisaya (default), 'en' = English only
-  const [language, setLanguage] = useState<'mixed' | 'en'>('mixed');
-  const en = language === 'en';
+  // Global language: 'mixed' = English + Bisaya (default), 'en' = English only
+  const { isEnglish: en, toggleLanguage, language } = useLanguage();
 
   const handleAdminSetupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,7 +236,7 @@ export default function AuthScreen({
 
               <button
                 type="button"
-                onClick={() => setLanguage(en ? 'mixed' : 'en')}
+                onClick={toggleLanguage}
                 title={en ? 'Show English + Bisaya (default)' : 'Show English only'}
                 className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider border transition-colors cursor-pointer bg-[#EAF6EE] hover:bg-[#D4EEDC] text-[#1B4332] border-[#B7E3C4]"
               >

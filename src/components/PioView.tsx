@@ -194,9 +194,6 @@ export default function PioView({
             <Megaphone className="w-5 h-5 text-[#1B4332]" />
             <span>PIO Communications & Activity Management</span>
           </h2>
-          <p className="text-xs text-[#4B6259] mt-1">
-            Create public announcements, schedule association events, and document community activities.
-          </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 w-full sm:w-auto">
@@ -421,7 +418,7 @@ export default function PioView({
       {/* CREATE ANNOUNCEMENT MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl">
             <div className="bg-[#EAF4EC] px-5 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
               <h3 className="font-bold text-[#1B4332] text-base">Post to Public Announcement Board</h3>
               <button
@@ -525,7 +522,7 @@ export default function PioView({
       {/* CREATE / EDIT ACTIVITY MODAL */}
       {showAddActivityModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden">
+          <div className="bg-slate-800 border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl">
             <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-blue-400" />

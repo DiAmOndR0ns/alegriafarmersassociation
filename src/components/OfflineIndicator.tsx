@@ -112,17 +112,17 @@ export default function OfflineIndicator({
         {isSyncing ? (
           <div 
             id="sync-status-syncing"
-            className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1 rounded-lg text-[11px] font-bold text-emerald-200 animate-pulse"
+            className="flex items-center gap-1.5 bg-[#0F2D24] border border-[#2D6A4F] px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#95D5B2]"
             title="Automatically syncing changes to the database..."
           >
-            <RotateCw className="w-3 h-3 animate-spin text-emerald-400" />
+            <RotateCw className="w-3 h-3 animate-spin text-[#95D5B2]" />
             <span>Auto-Syncing to DB...</span>
           </div>
         ) : queueCount > 0 ? (
           !isOnline ? (
             <div
               id="sync-status-offline-saved"
-              className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/35 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-amber-200"
+              className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/35 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-amber-100"
               title="Changes saved offline. They will automatically sync to the database as soon as you reconnect without pressing any button."
             >
               <AlertCircle className="w-3 h-3 text-amber-400" />
@@ -131,10 +131,10 @@ export default function OfflineIndicator({
           ) : (
             <div
               id="sync-status-pending-online"
-              className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/35 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-emerald-200"
+              className="flex items-center gap-1.5 bg-[#0F2D24] border border-[#2D6A4F] px-2.5 py-1 rounded-lg text-[11px] font-semibold text-[#95D5B2]"
               title="Auto-syncing queued offline changes to the database..."
             >
-              <RotateCw className="w-3 h-3 animate-spin text-emerald-400" />
+              <RotateCw className="w-3 h-3 animate-spin text-[#95D5B2]" />
               <span>Auto-syncing ({queueCount})...</span>
             </div>
           )

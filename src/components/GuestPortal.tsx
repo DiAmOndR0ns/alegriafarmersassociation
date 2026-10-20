@@ -6,6 +6,7 @@ import {
   MapPin, Clock, Tag, AlertTriangle, Boxes, Package, Phone, X, ShoppingBag
 } from 'lucide-react';
 import { HogRaisingState, Member, Product, Announcement, AssociationActivity } from '../types';
+import { useLanguage, LanguageToggle } from '../i18n/LanguageContext';
 
 interface GuestPortalProps {
   onEnterLogin: () => void;
@@ -16,14 +17,15 @@ interface GuestPortalProps {
   activities?: AssociationActivity[];
 }
 
-export default function GuestPortal({ 
-  onEnterLogin, 
-  members, 
-  hogRaising, 
+export default function GuestPortal({
+  onEnterLogin,
+  members,
+  hogRaising,
   products = [],
   announcements = [],
   activities = []
 }: GuestPortalProps) {
+  const { isEnglish: en, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'>('home');
   const [selectedProductModal, setSelectedProductModal] = useState<any | null>(null);
   const [collapsedProductIds, setCollapsedProductIds] = useState<string[]>([]);
@@ -183,13 +185,14 @@ export default function GuestPortal({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end shrink-0">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+            <LanguageToggle />
             <button
               onClick={onEnterLogin}
               className="w-full sm:w-auto bg-bafa-coral-600 hover:bg-bafa-coral-500 text-white font-black text-xs sm:text-sm md:text-base px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
             >
               <LogIn className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-              <span>Log In</span>
+              <span>{en ? 'Log In' : 'Pagsulod (Log In)'}</span>
             </button>
           </div>
         </div>
@@ -199,7 +202,7 @@ export default function GuestPortal({
       <section className="bg-[#1B4332] text-white py-8 sm:py-12 md:py-14 px-4 sm:px-6 text-center shadow-inner">
         <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4 min-w-0">
           <h2 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight leading-tight font-display break-words max-w-3xl mx-auto px-2 text-white">
-            Magkauban sa Pag-uma ug Pagpalambo sa Atong Yutang Natawhan
+            {en ? 'Together in Farming and Growing Our Homeland' : 'Magkauban sa Pag-uma ug Pagpalambo sa Atong Yutang Natawhan'}
           </h2>
         </div>
       </section>
@@ -209,18 +212,18 @@ export default function GuestPortal({
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 flex flex-col items-center">
 
           <div className="flex sm:hidden items-center justify-center gap-1.5 w-full px-2.5 py-1 text-[11px] font-black text-[#1B4332] bg-[#EAF4EC] rounded-lg mb-1.5 border border-emerald-800/20 shadow-xs">
-            <span>Scroll or swipe the menu below</span>
+            <span>{en ? 'Scroll or swipe the menu below' : 'I-scroll o i-swipe ang menu sa ubos'}</span>
           </div>
 
           <div className="relative w-full flex items-center">
             <div className="w-full flex justify-start sm:justify-center gap-1 sm:gap-2 overflow-x-auto py-1 select-none scrollbar-thin scrollbar-thumb-[#1B4332]/20 px-3 sm:px-6">
               {[
-                { id: 'home', label: 'Overview', icon: Sparkles },
-                { id: 'announcements', label: 'Announcements', icon: Megaphone },
-                { id: 'activities', label: 'Activities', icon: Calendar },
-                { id: 'products', label: 'Products', icon: Coffee },
-                { id: 'achievements', label: 'Achievements', icon: Trophy },
-                { id: 'history', label: 'History', icon: BookOpen }
+                { id: 'home', label: en ? 'Overview' : 'Kabuuan', icon: Sparkles },
+                { id: 'announcements', label: en ? 'Announcements' : 'Mga Pahibalo', icon: Megaphone },
+                { id: 'activities', label: en ? 'Activities' : 'Mga Kalihokan', icon: Calendar },
+                { id: 'products', label: en ? 'Products' : 'Mga Produkto', icon: Coffee },
+                { id: 'achievements', label: en ? 'Achievements' : 'Mga Kalampusan', icon: Trophy },
+                { id: 'history', label: en ? 'History' : 'Kasaysayan', icon: BookOpen }
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -259,9 +262,9 @@ export default function GuestPortal({
                   <Users className="w-8 h-8 sm:w-10 sm:h-10" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <span className="block text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider leading-tight">Mga Rehistradong Mag-uuma</span>
-                  <span className="text-2xl sm:text-3xl font-black text-[#1B4332] font-mono leading-tight block break-words">{registeredMembersCount} Miyembro</span>
-                  <span className="block text-[11px] sm:text-xs text-slate-600 mt-0.5 sm:mt-1 font-bold break-words">{activeMembersCount} Aktibo sa 4 ka Sitio</span>
+                  <span className="block text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider leading-tight">{en ? 'Registered Farmers' : 'Mga Rehistradong Mag-uuma'}</span>
+                  <span className="text-2xl sm:text-3xl font-black text-[#1B4332] font-mono leading-tight block break-words">{registeredMembersCount} {en ? 'Members' : 'Miyembro'}</span>
+                  <span className="block text-[11px] sm:text-xs text-slate-600 mt-0.5 sm:mt-1 font-bold break-words">{activeMembersCount} {en ? 'Active across 4 Sitios' : 'Aktibo sa 4 ka Sitio'}</span>
                 </div>
               </div>
 
@@ -270,9 +273,9 @@ export default function GuestPortal({
                   <Boxes className="w-8 h-8 sm:w-10 sm:h-10" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <span className="block text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider leading-tight">Komunidad IGP & Rentals</span>
-                  <span className="text-xl sm:text-2xl font-black text-[#1B4332] font-mono leading-tight block break-words">Lingkoranan & Sako</span>
-                  <span className="block text-[11px] sm:text-xs text-emerald-700 mt-0.5 sm:mt-1 font-bold break-words">Bukas abangan alang sa tanan</span>
+                  <span className="block text-[11px] sm:text-xs font-black text-slate-500 uppercase tracking-wider leading-tight">{en ? 'Community IGP & Rentals' : 'Komunidad IGP & Rentals'}</span>
+                  <span className="text-xl sm:text-2xl font-black text-[#1B4332] font-mono leading-tight block break-words">{en ? 'Chairs & Sacks' : 'Lingkoranan & Sako'}</span>
+                  <span className="block text-[11px] sm:text-xs text-emerald-700 mt-0.5 sm:mt-1 font-bold break-words">{en ? 'Open for rent to everyone' : 'Bukas abangan alang sa tanan'}</span>
                 </div>
               </div>
 
@@ -282,26 +285,26 @@ export default function GuestPortal({
             <div className="bg-white rounded-3xl p-4 sm:p-6 md:p-8 grid grid-cols-1 md:grid-cols-12 gap-6 items-center shadow-md min-w-0">
               <div className="md:col-span-8 space-y-3 sm:space-y-4 min-w-0">
                 <h3 className="text-lg sm:text-xl md:text-2xl font-black text-[#1B4332] font-display break-words">
-                  Mahitungod sa Alegria Farmers Association
+                  {en ? 'About Alegria Farmers Association' : 'Mahitungod sa Alegria Farmers Association'}
                 </h3>
                 <p className="text-xs sm:text-sm md:text-base text-slate-700 leading-relaxed font-semibold break-words">
-                  Ang AFA gilusad aron tagaan og gahum, modernong tabang, ug dugang kita ang atong mga lokal nga mag-uuma.
-                  Gikan sa atong iladong <strong className="text-[#BF360C]">Kape sa Tuburan</strong>, saging, mais, hangtod sa mga proyekto sa komunidad sama sa <strong className="text-[#1B4332]">Abang sa Lingkoranan ug Sako</strong>,
-                  atong paningkamotan nga mapalambo ang agrikultura pinaagi sa kooperasyon.
+                  {en
+                    ? 'AFA empowers our local farmers with modern support and added income — from our famous Tuburan Coffee, bananas, and corn, to community projects such as equipment rentals.'
+                    : 'Ang AFA gilusad aron tagaan og gahum, modernong tabang, ug dugang kita ang atong mga lokal nga mag-uuma. Gikan sa atong iladong Kape sa Tuburan, saging, mais, hangtod sa mga proyekto sa komunidad.'}
                 </p>
                 <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 sm:gap-4 pt-2">
                   <button
                     onClick={() => setActiveTab('history')}
                     className="w-full sm:w-auto bg-[#1B4332] hover:bg-[#143326] text-white font-black text-xs sm:text-sm px-4 sm:px-5 py-3 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow shrink-0"
                   >
-                    <span>Basaha Atong Kasaysayan</span>
+                    <span>{en ? 'Read Our History' : 'Basaha Atong Kasaysayan'}</span>
                     <ArrowRight className="w-4 h-4 shrink-0" />
                   </button>
                   <button
                     onClick={() => setActiveTab('products')}
                     className="w-full sm:w-auto bg-white border-2 border-[#9E9785] text-[#1B4332] hover:bg-slate-50 font-black text-xs sm:text-sm px-4 sm:px-5 py-3 rounded-xl cursor-pointer transition-all flex items-center justify-center shrink-0"
                   >
-                    <span>Tan-awa Atong mga Produkto</span>
+                    <span>{en ? 'View Our Products' : 'Tan-awa Atong mga Produkto'}</span>
                   </button>
                 </div>
               </div>
@@ -716,12 +719,9 @@ export default function GuestPortal({
               <div className="border-b-2 border-[#F0EBE1] pb-3 flex items-center gap-2.5 flex-wrap">
                 <Coffee className="w-6 h-6 text-amber-700 shrink-0" />
                 <h3 className="text-lg sm:text-xl font-black text-[#1B4332] font-display break-words">
-                  Products &amp; Rental Services
+                  {en ? 'Product Catalog' : 'Katalogo sa Produkto'}
                 </h3>
               </div>
-              <p className="text-xs text-slate-600 font-semibold pt-1">
-                Agricultural produce, IGP goods, and community equipment available for rent.
-              </p>
             </div>
 
             {/* Products Grid — condensed cards */}
@@ -777,14 +777,12 @@ export default function GuestPortal({
 
             {/* Buying Note Card */}
             <div className="bg-[#EAF4EC] rounded-2xl p-4 sm:p-5 text-center space-y-1.5 max-w-3xl mx-auto min-w-0">
-              <h4 className="text-sm sm:text-base font-black text-[#1B4332] font-display break-words">Want to order or rent?</h4>
+              <h4 className="text-sm sm:text-base font-black text-[#1B4332] font-display break-words">{en ? 'Want to order or rent?' : 'Gusto ka mopalit o mo-abang?'}</h4>
               <p className="text-xs text-slate-700 font-semibold leading-relaxed break-words">
-                All proceeds go directly to our fellow farmers in the four (4) official Sitios of Alegria, Tuburan, Cebu.
-                To order or book a rental, please contact or visit President Zenaida A. Elbiña or any AFA officer in person.
+                {en
+                  ? 'Contact or visit President Zenaida A. Elbiña or any AFA officer to place an order or book a rental.'
+                  : 'Kontaka o bisitaha si Presidente Zenaida A. Elbiña o bisan kinsa nga Opisyales sa AFA aron mo-order o mo-book og abang.'}
               </p>
-              <div className="font-bold text-[#BF360C] text-xs break-words">
-                Thank you for supporting our local farmers!
-              </div>
             </div>
           </div>
         )}

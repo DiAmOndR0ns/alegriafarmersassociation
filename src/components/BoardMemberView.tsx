@@ -58,9 +58,6 @@ export default function BoardMemberView({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-black uppercase tracking-wide text-[#1B4332]">Association Resolutions</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-600">
-            {pending.length} proposal{pending.length === 1 ? '' : 's'} awaiting approval
-          </p>
         </div>
         <button
           type="button"

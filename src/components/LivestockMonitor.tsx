@@ -477,9 +477,6 @@ export default function LivestockMonitor({
               <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                 Live Cooperative Assets
               </span>
-              <span className="text-[10px] font-bold text-white/60">
-                Auditor • Treasurer • President • VP Access
-              </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight mt-1 text-white flex items-center gap-2">
               <Briefcase className="w-6 h-6 text-emerald-300" />
@@ -1397,7 +1394,7 @@ export default function LivestockMonitor({
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-[70] text-left">
-      <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-lg rounded-3xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
+      <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-4xl rounded-3xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4 border-b border-[#D5CFC1] pb-3">
           <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wider">{title}</h3>
           <button type="button" onClick={onClose} aria-label="Close" className="text-[#4A5F57] hover:text-[#1B4332] cursor-pointer">

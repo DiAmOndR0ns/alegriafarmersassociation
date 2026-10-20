@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Product, OfficerRole } from '../types';
-import { 
-  ShoppingBag, Plus, Edit, Trash2, Eye, EyeOff, X, Check, Search, Tag, DollarSign, Package, User, Phone, MapPin
-} from 'lucide-react';
+import {  ShoppingBag, Plus, Edit, Trash2, Eye, EyeOff, X, Check, Search, Tag, DollarSign, Package, User, Phone, MapPin } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface ProductManagementModalProps {
   products: Product[];
@@ -22,6 +21,7 @@ export default function ProductManagementModal({
   onDeleteProduct,
   onClose
 }: ProductManagementModalProps) {
+  const { isEnglish: en } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [showAddEditModal, setShowAddEditModal] = useState(false);
@@ -163,8 +163,8 @@ export default function ProductManagementModal({
   });
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[95] animate-fade-in text-left">
-      <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-[#1B4332]">
+    <div className="w-full text-left">
+      <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full rounded-3xl shadow-sm overflow-hidden flex flex-col text-[#1B4332]">
 
         {/* HEADER */}
         <div className="p-5 bg-[#F0EDE7] border-b border-[#D5CFC1] flex justify-between items-center">
@@ -172,19 +172,13 @@ export default function ProductManagementModal({
             <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700">
               <ShoppingBag className="w-6 h-6" />
             </div>
-            <div>
-              <h2 className="text-base font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-2">
-                <span>Products Catalog</span>
-              </h2>
-            </div>
+            <h2 className="text-base font-black text-[#1B4332] uppercase tracking-wider">
+              Product Catalog
+            </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[#4A5F57] hover:text-[#1B4332] p-2 rounded-xl bg-white border border-[#D5CFC1] transition-all cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <span className="text-[11px] font-black bg-[#1B4332] text-white px-3 py-1 rounded-full">
+            {filteredProducts.length} items
+          </span>
         </div>
 
         {/* CONTROLS BAR */}
@@ -194,7 +188,7 @@ export default function ProductManagementModal({
               <Search className="w-4 h-4 text-[#4A5F57] absolute left-3 top-3" />
               <input
                 type="text"
-                placeholder="Pangitaa ang produkto..."
+                placeholder={en ? 'Search products...' : 'Pangitaa ang produkto...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-white border border-[#D5CFC1] rounded-xl pl-9 pr-3 py-2 text-xs text-[#1B4332] placeholder-[#4A5F57] focus:outline-none focus:border-emerald-500"
@@ -206,13 +200,13 @@ export default function ProductManagementModal({
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-xs text-[#1B4332] focus:outline-none focus:border-emerald-500 shrink-0"
             >
-              <option value="All">Tanan Kategoriya</option>
-              <option value="Produce">Produce (Ani)</option>
-              <option value="Livestock">Livestock (Baboyan/Mahi-mahi)</option>
-              <option value="Processed Goods">Processed Goods</option>
-              <option value="Seeds & Fertilizer">Seeds & Fertilizer</option>
-              <option value="Coffee & Crops">Coffee & Crops</option>
-              <option value="Other">Other (Iba pa)</option>
+              <option value="All">{en ? 'All Categories' : 'Tanan Kategoriya'}</option>
+              <option value="Produce">{en ? 'Produce' : 'Produce (Ani)'}</option>
+              <option value="Livestock">{en ? 'Livestock' : 'Livestock (Baboy/Manok)'}</option>
+              <option value="Processed Goods">{en ? 'Processed Goods' : 'Processed Goods'}</option>
+              <option value="Seeds & Fertilizer">{en ? 'Seeds & Fertilizer' : 'Seeds & Fertilizer'}</option>
+              <option value="Coffee & Crops">{en ? 'Coffee & Crops' : 'Coffee & Crops'}</option>
+              <option value="Other">{en ? 'Other' : 'Other (Iba pa)'}</option>
             </select>
           </div>
 
@@ -222,17 +216,17 @@ export default function ProductManagementModal({
             className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shrink-0"
           >
             <Plus className="w-4 h-4" />
-            <span>Idugang ang Produkto (Add Product)</span>
+            <span>{en ? 'Add Product' : 'Idugang ang Produkto (Add Product)'}</span>
           </button>
         </div>
 
         {/* PRODUCTS GRID / LIST */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+        <div className="p-6 space-y-4">
           {filteredProducts.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-2xl border border-[#D5CFC1]">
               <Package className="w-12 h-12 text-[#4A5F57] mx-auto mb-3" />
-              <p className="text-sm font-bold text-[#1B4332]">Walay nakit-an nga produkto</p>
-              <p className="text-xs text-[#4A5F57] mt-1">I-click ang "Idugang ang Produkto" aron makadugang og bag-ong baligya sa asosasyon.</p>
+              <p className="text-sm font-bold text-[#1B4332]">{en ? 'No products found' : 'Walay nakit-an nga produkto'}</p>
+              <p className="text-xs text-[#4A5F57] mt-1">{en ? 'Use "Add Product" to register a new item in the catalog.' : 'I-click ang "Idugang ang Produkto" aron makadugang og bag-ong baligya sa asosasyon.'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -304,12 +298,12 @@ export default function ProductManagementModal({
                       {product.quantityAvailable && (
                         <div className="flex items-center gap-1.5 text-[#1B4332] font-semibold">
                           <Package className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                          <span><strong>Kadaghanon (Quantity):</strong> {product.quantityAvailable}</span>
+                          <span><strong>{en ? 'Quantity' : 'Kadaghanon (Quantity)'}:</strong> {product.quantityAvailable}</span>
                         </div>
                       )}
                       <div className="flex items-center gap-1.5 text-[#1B4332] font-semibold">
                         <User className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                        <span><strong>Mag-uuma (Selling Farmer):</strong> {product.farmerName || product.contactPerson || 'AFA Member'}</span>                      </div>
+                        <span><strong>{en ? 'Selling Farmer' : 'Mag-uuma (Selling Farmer)'}:</strong> {product.farmerName || product.contactPerson || 'AFA Member'}</span>                      </div>
                       {(product.farmerSitio || product.farmerPhone) && (
                         <div className="flex items-center gap-3 text-[11px] text-[#4A5F57] pl-5">
                           {product.farmerSitio && (
@@ -344,7 +338,7 @@ export default function ProductManagementModal({
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         product.isPublished ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-200 text-[#4A5F57] border border-slate-300'
                       }`}>
-                        {product.isPublished ? 'Gimantala (Published)' : 'Draft'}
+                        {product.isPublished ? (en ? 'Published' : 'Gimantala (Published)') : 'Draft'}
                       </span>
                     </div>
                   </div>
@@ -354,15 +348,15 @@ export default function ProductManagementModal({
           )}
         </div>
 
-        {/* MODAL FOOTER */}
-        <div className="p-4 bg-slate-950 border-t border-slate-800 text-[10px] text-slate-500 text-center font-mono">
-          Alegria Farmers Association (AFA) • Product Registry System        </div>
+        {/* PAGE FOOTER */}
+        <div className="p-3.5 bg-white border-t border-[#D5CFC1] text-[10px] text-[#4A5F57] text-center font-mono">
+          Alegria Farmers Association (AFA) • Product Registry        </div>
       </div>
 
       {/* ADD / EDIT PRODUCT SUB-MODAL */}
       {showAddEditModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-[100] animate-fade-in text-left">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-lg rounded-2xl p-4 sm:p-6 space-y-4 shadow-2xl text-[#1B4332] max-h-[92vh] overflow-y-auto">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-3xl rounded-2xl p-4 sm:p-6 space-y-4 shadow-2xl text-[#1B4332] max-h-[92vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-[#D5CFC1] pb-3">
               <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-amber-700" />

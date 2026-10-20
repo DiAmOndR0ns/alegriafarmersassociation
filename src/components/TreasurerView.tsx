@@ -1293,7 +1293,7 @@ export default function TreasurerView({
       {/* ADD ORGANIZATION FUND MODAL */}
       {showAddFundModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+          <div className="bg-slate-800 border border-slate-700 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl">
             <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
@@ -1301,8 +1301,7 @@ export default function TreasurerView({
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">Pagdugang og Tinubdan sa Pundo (Add Fund Source)</h3>
-                </div>
-              </div>
+                </div>              </div>
               <button
                 onClick={() => setShowAddFundModal(false)}
                 className="text-slate-400 hover:text-white text-xl font-bold p-1 cursor-pointer"
