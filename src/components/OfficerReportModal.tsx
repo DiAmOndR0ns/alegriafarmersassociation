@@ -124,6 +124,7 @@ export default function OfficerReportModal({
       case 'President': return 'Zenaida A. Elbiña';
       case 'Vice_President': return 'Anselna B. Arnado';
       case 'Secretary': return 'Jennylyn S. Lumactao';
+      case 'Assistant_Secretary': return 'Joan A. Cebas';
       case 'Treasurer': return 'Gracelyn P. Asendiente';
       case 'Assistant_Treasurer': return 'Assistant Treasurer';
       case 'Auditor': return 'Lorena B. Pinote';
@@ -145,6 +146,7 @@ export default function OfficerReportModal({
       Assistant_Treasurer: "ASSISTANT TREASURER'S FINANCIAL & CASH FLOW REPORT",
       Auditor: "AUDITOR'S FINANCIAL OVERSIGHT & COMPLIANCE REPORT",
       Secretary: "SECRETARY'S MEMBERSHIP & LEGISLATIVE MINUTES REPORT",
+      Assistant_Secretary: "ASSISTANT SECRETARY'S MEMBERSHIP & LEGISLATIVE MINUTES REPORT",
       President: "PRESIDENT'S CONSOLIDATED EXECUTIVE SUMMARY OF ALL OFFICER REPORTS",
       Vice_President: "VICE PRESIDENT'S EXECUTIVE ADMINISTRATION REPORT",
       PIO: "PUBLIC INFORMATION OFFICER (PIO) COMMUNICATIONS & ACTIVITIES REPORT"
@@ -363,7 +365,7 @@ export default function OfficerReportModal({
           </tbody>
         </table>
       `;
-    } else if (activeReportRole === 'Secretary') {
+    } else if (activeReportRole === 'Secretary' || activeReportRole === 'Assistant_Secretary') {
       contentHtml = `
         <div class="section-title">1. MEMBERSHIP ROSTER & RSBSA REGISTRATION STATISTICS</div>
         <table>
@@ -852,10 +854,10 @@ export default function OfficerReportModal({
           `"${(t.auditNotes || '').replace(/"/g, '""')}"`
         ].join(','));
       });
-    } else if (activeReportRole === 'Secretary') {
-      csvRows.push('AFA OFFICIAL SECRETARY ROSTER & LEGISLATIVE REPORT');
+    } else if (activeReportRole === 'Secretary' || activeReportRole === 'Assistant_Secretary') {
+      csvRows.push(`AFA OFFICIAL ${activeReportRole === 'Assistant_Secretary' ? 'ASSISTANT SECRETARY' : 'SECRETARY'} ROSTER & LEGISLATIVE REPORT`);
       csvRows.push(`Date Generated,${reportDate}`);
-      csvRows.push(`Secretary,${getOfficerNameByRole('Secretary')}`);
+      csvRows.push(`${activeReportRole === 'Assistant_Secretary' ? 'Assistant Secretary' : 'Secretary'},${getOfficerNameByRole(activeReportRole)}`);
       csvRows.push('');
       csvRows.push('MEMBERSHIP ROSTER');
       csvRows.push('ID,Surname,Name,Member ID,RSBSA Number,Sitio Location,Primary Crops,Status,Joined Date');
@@ -1090,12 +1092,13 @@ export default function OfficerReportModal({
               <p className="text-[10px] text-[#4A5F57] font-medium">
                 Report segregation of duties: the President issues the consolidated executive summary; all financial reports belong to the Treasurer; all member reports belong to the Secretary; all activities belong to the PIO.
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 {[
                   { role: 'President' as OfficerRole, label: 'President (Executive Summary)', icon: FileText, color: 'text-purple-600' },
                   { role: 'Treasurer' as OfficerRole, label: 'Treasurer (Financial)', icon: Coins, color: 'text-amber-700' },
                   { role: 'Auditor' as OfficerRole, label: 'Auditor (Financial Oversight)', icon: ShieldCheck, color: 'text-emerald-700' },
                   { role: 'Secretary' as OfficerRole, label: 'Secretary (Members)', icon: Users, color: 'text-blue-700' },
+                  { role: 'Assistant_Secretary' as OfficerRole, label: 'Assistant Secretary (Members)', icon: Users, color: 'text-blue-700' },
                   { role: 'PIO' as OfficerRole, label: 'PIO (Activities)', icon: Megaphone, color: 'text-pink-700' }
                 ].map((item) => {
                   const Icon = item.icon;
@@ -1130,6 +1133,7 @@ export default function OfficerReportModal({
                   {activeReportRole === 'Assistant_Treasurer' && "Assistant Treasurer's Financial & Cash Flow Statement (With Budget Sources)"}
                   {activeReportRole === 'Auditor' && "Auditor's Financial Oversight & Allocation Compliance Inspection Report"}
                   {activeReportRole === 'Secretary' && "Secretary's Membership Roster & Legislative Assembly Report"}
+                  {activeReportRole === 'Assistant_Secretary' && "Assistant Secretary's Membership Roster & Legislative Assembly Report"}
                   {activeReportRole === 'President' && "President's Executive Consolidated Summary of All Officer Reports & Capital Portfolios"}
                   {activeReportRole === 'Vice_President' && "Vice President's Administration & Oversight Report"}
                   {activeReportRole === 'PIO' && "Public Information Officer Communications & Activities Report"}
@@ -1210,7 +1214,7 @@ export default function OfficerReportModal({
                 </>
               )}
 
-              {activeReportRole === 'Secretary' && (
+              {(activeReportRole === 'Secretary' || activeReportRole === 'Assistant_Secretary') && (
                 <>
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Active Roster</span>

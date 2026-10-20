@@ -2017,10 +2017,10 @@ export default function App() {
       !!currentUser && (
         currentUser.role === 'President' ||
         currentUser.role === 'Vice_President' ||
-        (currentUser.role === 'Secretary' && targetUser.role === 'Member')
+        (['Secretary', 'Assistant_Secretary'].includes(currentUser.role) && targetUser.role === 'Member')
       );
     if (!canResetPasswords) {
-      showToastMessage('Wala kay katungod sa pag-reset og password. Ang Presidente ug Bise-Presidente lamang ang makahimo niini. (Only the President and Vice President may reset passwords.)', 'error');
+      showToastMessage('Only the President, Vice President, Secretary, or Assistant Secretary may reset the permitted account passwords.', 'error');
       return false;
     }
     if (targetUser.role === 'President') {
@@ -2132,7 +2132,7 @@ export default function App() {
     }
 
     const roleName = targetUser.role.replace('_', ' ');
-    const isOfficer = ['President', 'Vice_President', 'Secretary', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(targetUser.role);
+    const isOfficer = ['President', 'Vice_President', 'Secretary', 'Assistant_Secretary', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(targetUser.role);
 
     const updatedUsers = users.filter(u => u.id !== id);
     setUsers(updatedUsers);
@@ -2328,7 +2328,7 @@ export default function App() {
     newPresidentId: string,
     electionDate: string,
     turnoverNotes: string,
-    outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'
+    outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Assistant_Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'
   ) => {
     const currentPresident = (currentUser && currentUser.role === 'President' ? users.find(u => u.id === currentUser.id) : null) || users.find(u => u.role === 'President');
     if (!currentPresident) {
@@ -2969,7 +2969,7 @@ export default function App() {
             )}
 
             {/* Secretary View */}
-            {currentRole === 'Secretary' && (
+            {(currentRole === 'Secretary' || currentRole === 'Assistant_Secretary') && (
               <SecretaryView
                 members={members}
                 users={users}

@@ -1,4 +1,4 @@
-export type OfficerRole = 'President' | 'Vice_President' | 'Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO';
+export type OfficerRole = 'President' | 'Vice_President' | 'Secretary' | 'Assistant_Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO';
 
 // The 4 Official Sitios of Barangay Alegria, Tuburan, Cebu (based on the official Barangay Profile of Tuburan)
 export const OFFICIAL_ALEGRIA_SITIOS = [
@@ -321,5 +321,4 @@ export interface InventoryItem {
   dateRecorded: string;
   lastUpdated: string;
 }
-
 
