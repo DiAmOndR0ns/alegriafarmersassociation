@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   OfficerRole, Member, Meeting, Resolution, 
-  FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState,
+  FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState, HogHerdBreakdown,
   IgpExpense, IgpSale, IgpChoreLog, Product, AssociationActivity, OrganizationFund, DatabaseStatus, InventoryItem
 } from './types';
 import {
@@ -18,7 +18,7 @@ const AuditorView = lazy(() => import('./components/AuditorView'));
 const PioView = lazy(() => import('./components/PioView'));
 const ExecutiveView = lazy(() => import('./components/ExecutiveView'));
 const AnnouncementDashboard = lazy(() => import('./components/AnnouncementDashboard'));
-const IgpTracker = lazy(() => import('./components/IgpTracker'));
+const LivestockMonitor = lazy(() => import('./components/LivestockMonitor'));
 const SyncQueuePanel = lazy(() => import('./components/SyncQueuePanel'));
 const AuthScreen = lazy(() => import('./components/AuthScreen'));
 const MemberDashboard = lazy(() => import('./components/MemberDashboard'));
@@ -1359,6 +1359,80 @@ export default function App() {
     }
   };
 
+  const handleUpdatePigExpense = (updatedExp: IgpExpense) => {
+    const updatedExpenses = (hogRaising.expenses || []).map((e) => (e.id === updatedExp.id ? updatedExp : e));
+    const updatedState: HogRaisingState = {
+      ...hogRaising,
+      expenses: updatedExpenses
+    };
+    setHogRaising(updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
+
+    if (isOnline) {
+      logAction('Updated IGP Expense', `Updated ${updatedExp.produce || 'IGP'} expense for "${updatedExp.category}" (PHP ${updatedExp.amount.toLocaleString()})`);
+      showToastMessage('IGP expense updated successfully.');
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Expense Update' });
+    } else {
+      addToSyncQueue('update', 'hog_expense', updatedExp);
+    }
+  };
+
+  const handleDeletePigExpense = (expenseId: string) => {
+    const target = (hogRaising.expenses || []).find((e) => e.id === expenseId);
+    const updatedExpenses = (hogRaising.expenses || []).filter((e) => e.id !== expenseId);
+    const updatedState: HogRaisingState = {
+      ...hogRaising,
+      expenses: updatedExpenses
+    };
+    setHogRaising(updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
+
+    if (isOnline) {
+      logAction('Deleted IGP Expense', `Removed ${target?.produce || 'IGP'} expense for "${target?.category || expenseId}" (PHP ${(target?.amount || 0).toLocaleString()})`);
+      showToastMessage('IGP expense deleted.', 'info');
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Expense Deletion' });
+    } else {
+      addToSyncQueue('delete', 'hog_expense', { id: expenseId });
+    }
+  };
+
+  const handleUpdateHogSale = (updatedSale: IgpSale) => {
+    const updatedSales = (hogRaising.sales || []).map((s) => (s.id === updatedSale.id ? updatedSale : s));
+    const updatedState: HogRaisingState = {
+      ...hogRaising,
+      sales: updatedSales
+    };
+    setHogRaising(updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
+
+    if (isOnline) {
+      logAction('Updated IGP Revenue', `Updated ${updatedSale.produce || 'IGP'} revenue record (PHP ${updatedSale.revenue.toLocaleString()})`);
+      showToastMessage('IGP revenue record updated successfully.');
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Revenue Update' });
+    } else {
+      addToSyncQueue('update', 'hog_sale', updatedSale);
+    }
+  };
+
+  const handleDeleteHogSale = (saleId: string) => {
+    const target = (hogRaising.sales || []).find((s) => s.id === saleId);
+    const updatedSales = (hogRaising.sales || []).filter((s) => s.id !== saleId);
+    const updatedState: HogRaisingState = {
+      ...hogRaising,
+      sales: updatedSales
+    };
+    setHogRaising(updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
+
+    if (isOnline) {
+      logAction('Deleted IGP Revenue', `Removed ${target?.produce || 'IGP'} revenue record (PHP ${(target?.revenue || 0).toLocaleString()})`);
+      showToastMessage('IGP revenue record deleted.', 'info');
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Revenue Deletion' });
+    } else {
+      addToSyncQueue('delete', 'hog_sale', { id: saleId });
+    }
+  };
+
   const handleAddProduct = (newProduct: Omit<Product, 'id'>) => {
     const product: Product = {
       ...newProduct,
@@ -1534,34 +1608,38 @@ export default function App() {
 
   const handleUpdateOpeningHogCount = (
     count: number,
-    herdBreakdown?: { fattening: number; gestation: number; lactating: number }
+    herdBreakdown?: HogHerdBreakdown
   ) => {
-    const normalizedBreakdown = herdBreakdown
+    const normalizedBreakdown: HogHerdBreakdown = herdBreakdown
       ? {
           fattening: Math.max(0, Math.floor(Number(herdBreakdown.fattening) || 0)),
           gestation: Math.max(0, Math.floor(Number(herdBreakdown.gestation) || 0)),
-          lactating: Math.max(0, Math.floor(Number(herdBreakdown.lactating) || 0))
+          lactating: Math.max(0, Math.floor(Number(herdBreakdown.lactating) || 0)),
+          dispersal: Math.max(0, Math.floor(Number(herdBreakdown.dispersal) || 0)),
+          cattleFattening: Math.max(0, Math.floor(Number(herdBreakdown.cattleFattening) || 0)),
+          cattleDispersal: Math.max(0, Math.floor(Number(herdBreakdown.cattleDispersal) || 0)),
+          rtlCount: Math.max(0, Math.floor(Number(herdBreakdown.rtlCount) || 0))
         }
-      : hogRaising.herdBreakdown;
+      : hogRaising.herdBreakdown || { fattening: 0, gestation: 0, lactating: 0, dispersal: 0, cattleFattening: 0, cattleDispersal: 0, rtlCount: 0 };
     const openingHogCount = normalizedBreakdown
-      ? normalizedBreakdown.fattening + normalizedBreakdown.gestation + normalizedBreakdown.lactating
+      ? normalizedBreakdown.fattening + normalizedBreakdown.gestation + normalizedBreakdown.lactating + (normalizedBreakdown.dispersal || 0)
       : Math.max(0, Math.floor(Number(count) || 0));
     const updatedState: HogRaisingState = {
       ...hogRaising,
       openingHogCount,
-      ...(normalizedBreakdown ? { herdBreakdown: normalizedBreakdown } : {})
+      herdBreakdown: normalizedBreakdown
     };
     setHogRaising(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     const breakdownDetail = normalizedBreakdown
-      ? ` (Fattening: ${normalizedBreakdown.fattening}, Gestation: ${normalizedBreakdown.gestation}, Lactating: ${normalizedBreakdown.lactating})`
+      ? ` (Swine: ${openingHogCount}, Cattle: ${(normalizedBreakdown.cattleFattening || 0) + (normalizedBreakdown.cattleDispersal || 0)}, RTL: ${normalizedBreakdown.rtlCount || 0})`
       : '';
 
     if (isOnline) {
-      logAction('Updated Opening Hog Inventory', `Set opening herd count to ${openingHogCount} hogs${breakdownDetail}.`);
-      showToastMessage(`Herd inventory saved: ${openingHogCount} total hogs${breakdownDetail}.`);
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Opening Hog Inventory' });
+      logAction('Updated Livestock Headcount', `Updated livestock inventory counts${breakdownDetail}.`);
+      showToastMessage(`Livestock inventory updated: ${openingHogCount} total swine, Cattle: ${(normalizedBreakdown.cattleFattening || 0) + (normalizedBreakdown.cattleDispersal || 0)}, RTL: ${normalizedBreakdown.rtlCount || 0}.`);
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Opening Livestock Inventory' });
     } else {
       addToSyncQueue('update', 'hog_expense', { id: 'opening-hog-count', quantity: openingHogCount, herdBreakdown: normalizedBreakdown });
     }
@@ -2964,17 +3042,22 @@ export default function App() {
 
           {officerTab === 'hog-raising' && (
             <div id="officer-hog-raising-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900 text-left">
-              <IgpTracker
+              <LivestockMonitor
                 state={hogRaising}
                 members={members}
                 meetings={meetings}
                 onAddExpense={handleAddPigExpense}
+                onUpdateExpense={handleUpdatePigExpense}
+                onDeleteExpense={handleDeletePigExpense}
                 onAddSale={handleAddHogSale}
+                onUpdateSale={handleUpdateHogSale}
+                onDeleteSale={handleDeleteHogSale}
                 onAddChoreLog={handleAddPigChore}
                 onUpdateOpeningHogCount={handleUpdateOpeningHogCount}
                 onAddProduce={handleAddProduce}
                 onDeleteProduce={handleDeleteProduce}
-                isTreasurerOrOfficer={currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer' || currentRole === 'Auditor' || currentRole === 'President'}
+                isTreasurerOrOfficer={['Auditor', 'Treasurer', 'Assistant_Treasurer', 'President', 'Vice_President'].includes(currentRole || '')}
+                isTreasurer={currentRole === 'Treasurer'}
                 currentUser={currentUser!}
                 isOfficerMode={true}
                 closedYears={hogRaising.closedYears || [2025]}

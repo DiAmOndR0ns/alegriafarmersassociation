@@ -685,7 +685,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
 
     let hogState = {
       openingHogCount: 0,
-      herdBreakdown: { fattening: 0, gestation: 0, lactating: 0 },
+      herdBreakdown: { fattening: 0, gestation: 0, lactating: 0, dispersal: 0, cattleFattening: 0, cattleDispersal: 0, rtlCount: 0 },
       produces: [] as string[],
       expenses: [],
       sales: [],
@@ -704,7 +704,11 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
         herdBreakdown: {
           fattening: Math.max(0, Math.floor(Number(rawBreakdown.fattening) || 0)),
           gestation: Math.max(0, Math.floor(Number(rawBreakdown.gestation) || 0)),
-          lactating: Math.max(0, Math.floor(Number(rawBreakdown.lactating) || 0))
+          lactating: Math.max(0, Math.floor(Number(rawBreakdown.lactating) || 0)),
+          dispersal: Math.max(0, Math.floor(Number(rawBreakdown.dispersal) || 0)),
+          cattleFattening: Math.max(0, Math.floor(Number(rawBreakdown.cattleFattening) || 0)),
+          cattleDispersal: Math.max(0, Math.floor(Number(rawBreakdown.cattleDispersal) || 0)),
+          rtlCount: Math.max(0, Math.floor(Number(rawBreakdown.rtlCount) || 0))
         },
         produces: cleanProduces,
         expenses: row.expenses || [],
@@ -1149,15 +1153,26 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Meetings saved');
     }
 
-    // 5. Hog Raising IGP State
+    // 5. AFA IGP State
     if (state.hogRaising) {
-      console.log('[DB DEBUG] Saving hog raising state...');
+      console.log('[DB DEBUG] Saving AFA IGP state...');
+
+      const safeBreakdown = {
+        fattening: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.fattening) || 0)),
+        gestation: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.gestation) || 0)),
+        lactating: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.lactating) || 0)),
+        dispersal: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.dispersal) || 0)),
+        cattleFattening: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.cattleFattening) || 0)),
+        cattleDispersal: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.cattleDispersal) || 0)),
+        rtlCount: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.rtlCount) || 0))
+      };
 
       await client.query(`
-        INSERT INTO afa_igp (id, opening_hog_count, produces, expenses, sales, groups, chore_logs, closed_years)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, expenses, sales, groups, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (id) DO UPDATE SET
           opening_hog_count = EXCLUDED.opening_hog_count,
+          herd_breakdown = EXCLUDED.herd_breakdown,
           produces = EXCLUDED.produces,
           expenses = EXCLUDED.expenses,
           sales = EXCLUDED.sales,
@@ -1167,6 +1182,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       `, [
         'main_state',
         Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
+        JSON.stringify(safeBreakdown),
         state.hogRaising.produces || [],
         JSON.stringify(state.hogRaising.expenses || []),
         JSON.stringify(state.hogRaising.sales || []),
@@ -1175,7 +1191,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         state.hogRaising.closedYears || []
       ]);
       await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
-      console.log('[DB DEBUG] Hog raising state saved');
+      console.log('[DB DEBUG] AFA IGP state saved');
     }
 
     // 6. System Logs
@@ -1513,7 +1529,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const safeBreakdown = {
         fattening: Math.max(0, Math.floor(Number(hog.herdBreakdown?.fattening) || 0)),
         gestation: Math.max(0, Math.floor(Number(hog.herdBreakdown?.gestation) || 0)),
-        lactating: Math.max(0, Math.floor(Number(hog.herdBreakdown?.lactating) || 0))
+        lactating: Math.max(0, Math.floor(Number(hog.herdBreakdown?.lactating) || 0)),
+        dispersal: Math.max(0, Math.floor(Number(hog.herdBreakdown?.dispersal) || 0)),
+        cattleFattening: Math.max(0, Math.floor(Number(hog.herdBreakdown?.cattleFattening) || 0)),
+        cattleDispersal: Math.max(0, Math.floor(Number(hog.herdBreakdown?.cattleDispersal) || 0)),
+        rtlCount: Math.max(0, Math.floor(Number(hog.herdBreakdown?.rtlCount) || 0))
       };
       await client.query(`
         INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, expenses, sales, groups, chore_logs, closed_years)

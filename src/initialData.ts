@@ -173,7 +173,11 @@ export const INITIAL_HOG_RAISING: HogRaisingState = {
   herdBreakdown: {
     fattening: 0,
     gestation: 0,
-    lactating: 0
+    lactating: 0,
+    dispersal: 0,
+    cattleFattening: 0,
+    cattleDispersal: 0,
+    rtlCount: 0
   },
   produces: [],
   expenses: [],

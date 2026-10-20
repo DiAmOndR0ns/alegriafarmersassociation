@@ -14,9 +14,8 @@ import {
 
 dotenv.config();
 
-async function startServer() {
+export async function createApp() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(express.json({ limit: '15mb' }));
 
@@ -279,6 +278,13 @@ async function startServer() {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  return app;
+}
+
+async function startServer() {
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const app = await createApp();
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`BAFA Express server listening on http://0.0.0.0:${PORT}`);

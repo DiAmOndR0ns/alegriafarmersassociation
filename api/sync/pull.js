@@ -489,7 +489,7 @@ async function fetchAllDataFromPostgres(pool) {
     }
     let hogState = {
       openingHogCount: 0,
-      herdBreakdown: { fattening: 0, gestation: 0, lactating: 0 },
+      herdBreakdown: { fattening: 0, gestation: 0, lactating: 0, dispersal: 0, cattleFattening: 0, cattleDispersal: 0, rtlCount: 0 },
       produces: [],
       expenses: [],
       sales: [],
@@ -507,7 +507,11 @@ async function fetchAllDataFromPostgres(pool) {
         herdBreakdown: {
           fattening: Math.max(0, Math.floor(Number(rawBreakdown.fattening) || 0)),
           gestation: Math.max(0, Math.floor(Number(rawBreakdown.gestation) || 0)),
-          lactating: Math.max(0, Math.floor(Number(rawBreakdown.lactating) || 0))
+          lactating: Math.max(0, Math.floor(Number(rawBreakdown.lactating) || 0)),
+          dispersal: Math.max(0, Math.floor(Number(rawBreakdown.dispersal) || 0)),
+          cattleFattening: Math.max(0, Math.floor(Number(rawBreakdown.cattleFattening) || 0)),
+          cattleDispersal: Math.max(0, Math.floor(Number(rawBreakdown.cattleDispersal) || 0)),
+          rtlCount: Math.max(0, Math.floor(Number(rawBreakdown.rtlCount) || 0))
         },
         produces: cleanProduces,
         expenses: row.expenses || [],
