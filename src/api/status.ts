@@ -156,7 +156,7 @@ export default async function handler(req: any, res: any) {
       timestamp: result.rows[0]?.current_time,
       tableCounts: stats.tableCounts,
       totalRecords: stats.totalRecords,
-      message: `Connected to ${provider} (${result.rows[0]?.db_name || 'postgres'}) — ${stats.totalRecords} records across 11 tables`,
+      message: `Connected to ${provider} (${result.rows[0]?.db_name || 'postgres'}) — ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`,
     });
   } catch (err: any) {
     const rawUrl = (process.env.DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');

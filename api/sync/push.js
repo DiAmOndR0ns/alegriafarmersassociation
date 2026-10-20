@@ -102,6 +102,24 @@ async function runSchemaMigrations(client) {
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
+      id VARCHAR(100) PRIMARY KEY,
+      produce TEXT NOT NULL,
+      date VARCHAR(50),
+      expense_data JSONB NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);`,
+    `INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
+      SELECT expense->>'id',
+        COALESCE(NULLIF(expense->>'produce', ''), 'Swine Raising (Baboyan)'),
+        expense->>'date',
+        expense
+      FROM afa_igp AS igp
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]'::jsonb END
+      ) AS item(expense)
+      WHERE NULLIF(expense->>'id', '') IS NOT NULL
+      ON CONFLICT (id) DO NOTHING;`,
     `DROP TABLE IF EXISTS hog_raising;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
@@ -301,6 +319,15 @@ async function initDatabaseSchema(pool) {
         closed_years INT[]
       );
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_expenses (
+        id VARCHAR(100) PRIMARY KEY,
+        produce TEXT NOT NULL,
+        date VARCHAR(50),
+        expense_data JSONB NOT NULL
+      );
+    `);
+    await client.query("CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);");
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(100) PRIMARY KEY,
@@ -778,6 +805,11 @@ async function saveFullStateToPostgres(pool, state) {
           state.hogRaising.closedYears || []
         ]);
         await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
+        await saveIgpExpenseSegments(
+          client,
+          state.hogRaising.expenses || [],
+          state.hogRaising.produces?.[0]
+        );
         console.log("[DB DEBUG] AFA IGP state saved");
       }
       const logList = state.systemLogs || state.logs;

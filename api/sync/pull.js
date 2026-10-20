@@ -102,6 +102,24 @@ async function runSchemaMigrations(client) {
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
+      id VARCHAR(100) PRIMARY KEY,
+      produce TEXT NOT NULL,
+      date VARCHAR(50),
+      expense_data JSONB NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);`,
+    `INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
+      SELECT expense->>'id',
+        COALESCE(NULLIF(expense->>'produce', ''), 'Swine Raising (Baboyan)'),
+        expense->>'date',
+        expense
+      FROM afa_igp AS igp
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]'::jsonb END
+      ) AS item(expense)
+      WHERE NULLIF(expense->>'id', '') IS NOT NULL
+      ON CONFLICT (id) DO NOTHING;`,
     `DROP TABLE IF EXISTS hog_raising;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
@@ -302,6 +320,15 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_expenses (
+        id VARCHAR(100) PRIMARY KEY,
+        produce TEXT NOT NULL,
+        date VARCHAR(50),
+        expense_data JSONB NOT NULL
+      );
+    `);
+    await client.query("CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);");
+    await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
@@ -434,6 +461,19 @@ async function ensureDatabaseSchema(pool) {
     client.release();
   }
 }
+function mergeIgpExpenses(legacyExpenses, segmentedRows) {
+  const expensesById = /* @__PURE__ */ new Map();
+  const legacy = Array.isArray(legacyExpenses) ? legacyExpenses : [];
+  legacy.forEach((expense, index) => {
+    const id = typeof expense?.id === "string" && expense.id ? expense.id : `legacy-${index}`;
+    expensesById.set(id, expense);
+  });
+  for (const row of segmentedRows) {
+    const expense = typeof row.expense_data === "string" ? JSON.parse(row.expense_data) : row.expense_data;
+    expensesById.set(row.id, expense);
+  }
+  return Array.from(expensesById.values());
+}
 async function fetchAllDataFromPostgres(pool) {
   await ensureDatabaseSchema(pool);
   const client = await pool.connect();
@@ -447,6 +487,7 @@ async function fetchAllDataFromPostgres(pool) {
     const logsRes = await client.query("SELECT * FROM system_logs ORDER BY timestamp DESC");
     const hogQuery = await client.query("SELECT * FROM afa_igp WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
     const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query("SELECT * FROM afa_igp LIMIT 1");
+    const igpExpenseRows = await client.query("SELECT id, expense_data FROM afa_igp_expenses ORDER BY date DESC, id ASC");
     const productsRes = await client.query("SELECT * FROM products ORDER BY name ASC");
     const activitiesRes = await client.query("SELECT * FROM activities ORDER BY scheduled_date DESC");
     const fundsRes = await client.query("SELECT * FROM organization_funds ORDER BY name ASC");
@@ -514,7 +555,7 @@ async function fetchAllDataFromPostgres(pool) {
           rtlCount: Math.max(0, Math.floor(Number(rawBreakdown.rtlCount) || 0))
         },
         produces: cleanProduces,
-        expenses: row.expenses || [],
+        expenses: mergeIgpExpenses(row.expenses, igpExpenseRows.rows),
         sales: row.sales || [],
         groups: row.groups || [],
         choreLogs: row.chore_logs || [],

@@ -144,6 +144,24 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
+      id VARCHAR(100) PRIMARY KEY,
+      produce TEXT NOT NULL,
+      date VARCHAR(50),
+      expense_data JSONB NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);`,
+    `INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
+      SELECT expense->>'id',
+        COALESCE(NULLIF(expense->>'produce', ''), 'Swine Raising (Baboyan)'),
+        expense->>'date',
+        expense
+      FROM afa_igp AS igp
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]'::jsonb END
+      ) AS item(expense)
+      WHERE NULLIF(expense->>'id', '') IS NOT NULL
+      ON CONFLICT (id) DO NOTHING;`,
     `DROP TABLE IF EXISTS hog_raising;`,
 
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
@@ -367,6 +385,16 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_expenses (
+        id VARCHAR(100) PRIMARY KEY,
+        produce TEXT NOT NULL,
+        date VARCHAR(50),
+        expense_data JSONB NOT NULL
+      );
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);');
+
     // 9. Products
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
@@ -500,6 +528,7 @@ export async function getTableStats(pool: pg.Pool): Promise<{
         (SELECT count(*) FROM announcements) as announcements,
         (SELECT count(*) FROM system_logs) as system_logs,
         (SELECT count(*) FROM afa_igp) as afa_igp,
+        (SELECT count(*) FROM afa_igp_expenses) as afa_igp_expenses,
         (SELECT count(*) FROM products) as products,
         (SELECT count(*) FROM activities) as activities,
         (SELECT count(*) FROM organization_funds) as organization_funds,
@@ -516,6 +545,7 @@ export async function getTableStats(pool: pg.Pool): Promise<{
       announcements: Number(row.announcements || 0),
       system_logs: Number(row.system_logs || 0),
       afa_igp: Number(row.afa_igp || 0),
+      afa_igp_expenses: Number(row.afa_igp_expenses || 0),
       products: Number(row.products || 0),
       activities: Number(row.activities || 0),
       organization_funds: Number(row.organization_funds || 0),
@@ -628,6 +658,24 @@ export async function ensureDatabaseSchema(pool: pg.Pool) {
   }
 }
 
+function mergeIgpExpenses(legacyExpenses: unknown, segmentedRows: Array<{ id: string; expense_data: unknown }>) {
+  const expensesById = new Map<string, any>();
+  const legacy = Array.isArray(legacyExpenses) ? legacyExpenses : [];
+
+  legacy.forEach((expense, index) => {
+    const id = typeof expense?.id === 'string' && expense.id ? expense.id : `legacy-${index}`;
+    expensesById.set(id, expense);
+  });
+
+  for (const row of segmentedRows) {
+    const expense = typeof row.expense_data === 'string'
+      ? JSON.parse(row.expense_data)
+      : row.expense_data;
+    expensesById.set(row.id, expense);
+  }
+
+  return Array.from(expensesById.values());
+}
 
 export async function fetchAllDataFromPostgres(pool: pg.Pool) {
   await ensureDatabaseSchema(pool);
@@ -642,6 +690,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const logsRes = await client.query('SELECT * FROM system_logs ORDER BY timestamp DESC');
     const hogQuery = await client.query("SELECT * FROM afa_igp WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
     const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query('SELECT * FROM afa_igp LIMIT 1');
+    const igpExpenseRows = await client.query('SELECT id, expense_data FROM afa_igp_expenses ORDER BY date DESC, id ASC');
     const productsRes = await client.query('SELECT * FROM products ORDER BY name ASC');
     const activitiesRes = await client.query('SELECT * FROM activities ORDER BY scheduled_date DESC');
     const fundsRes = await client.query('SELECT * FROM organization_funds ORDER BY name ASC');
@@ -711,7 +760,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
           rtlCount: Math.max(0, Math.floor(Number(rawBreakdown.rtlCount) || 0))
         },
         produces: cleanProduces,
-        expenses: row.expenses || [],
+        expenses: mergeIgpExpenses(row.expenses, igpExpenseRows.rows),
         sales: row.sales || [],
         groups: row.groups || [],
         choreLogs: row.chore_logs || [],
@@ -923,6 +972,38 @@ async function saveEntity(
     const values = [row.id, ...mapping.fields.map(([, , transform]) => transform(row, row))];
     await client.query(query, values);
   }
+}
+
+async function saveIgpExpenseSegments(
+  client: pg.PoolClient,
+  expenses: any[],
+  defaultProduce?: string
+) {
+  const ids: string[] = [];
+  for (const expense of expenses) {
+    if (typeof expense?.id !== 'string' || !expense.id.trim()) {
+      throw new Error('Cannot sync IGP expense without a valid id');
+    }
+
+    const produce = typeof expense.produce === 'string' && expense.produce.trim()
+      ? expense.produce
+      : defaultProduce || 'Swine Raising (Baboyan)';
+    const segmentedExpense = { ...expense, produce };
+    ids.push(expense.id);
+    await client.query(`
+      INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (id) DO UPDATE SET
+        produce = EXCLUDED.produce,
+        date = EXCLUDED.date,
+        expense_data = EXCLUDED.expense_data;
+    `, [expense.id, produce, expense.date || null, JSON.stringify(segmentedExpense)]);
+  }
+
+  await client.query(
+    'DELETE FROM afa_igp_expenses WHERE NOT (id = ANY($1::varchar[]))',
+    [ids]
+  );
 }
 
 export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
@@ -1191,6 +1272,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         state.hogRaising.closedYears || []
       ]);
       await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
+      await saveIgpExpenseSegments(
+        client,
+        state.hogRaising.expenses || [],
+        state.hogRaising.produces?.[0]
+      );
       console.log('[DB DEBUG] AFA IGP state saved');
     }
 
@@ -1566,4 +1652,3 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     client.release();
   }
 }
-
