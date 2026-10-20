@@ -202,7 +202,7 @@ export default function GuestPortal({
       <section className="bg-[#1B4332] text-white py-8 sm:py-12 md:py-14 px-4 sm:px-6 text-center shadow-inner">
         <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4 min-w-0">
           <h2 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight leading-tight font-display break-words max-w-3xl mx-auto px-2 text-white">
-            {en ? 'Together in Farming and Growing Our Homeland' : 'Magkauban sa Pag-uma ug Pagpalambo sa Atong Yutang Natawhan'}
+            Magkauban sa Pag-uma ug Pagpalambo sa Atong Yutang Natawhan
           </h2>
         </div>
       </section>
