@@ -125,6 +125,7 @@ export default function OfficerReportModal({
       case 'Vice_President': return 'Anselna B. Arnado';
       case 'Secretary': return 'Jennylyn S. Lumactao';
       case 'Assistant_Secretary': return 'Joan A. Cebas';
+      case 'Board_Member': return 'AFA Board Member';
       case 'Treasurer': return 'Gracelyn P. Asendiente';
       case 'Assistant_Treasurer': return 'Assistant Treasurer';
       case 'Auditor': return 'Lorena B. Pinote';
@@ -147,6 +148,7 @@ export default function OfficerReportModal({
       Auditor: "AUDITOR'S FINANCIAL OVERSIGHT & COMPLIANCE REPORT",
       Secretary: "SECRETARY'S MEMBERSHIP & LEGISLATIVE MINUTES REPORT",
       Assistant_Secretary: "ASSISTANT SECRETARY'S MEMBERSHIP & LEGISLATIVE MINUTES REPORT",
+      Board_Member: "BOARD MEMBER'S POLICY & RESOLUTION REPORT",
       President: "PRESIDENT'S CONSOLIDATED EXECUTIVE SUMMARY OF ALL OFFICER REPORTS",
       Vice_President: "VICE PRESIDENT'S EXECUTIVE ADMINISTRATION REPORT",
       PIO: "PUBLIC INFORMATION OFFICER (PIO) COMMUNICATIONS & ACTIVITIES REPORT"

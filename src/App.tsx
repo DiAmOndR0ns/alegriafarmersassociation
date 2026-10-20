@@ -17,6 +17,7 @@ const TreasurerView = lazy(() => import('./components/TreasurerView'));
 const AuditorView = lazy(() => import('./components/AuditorView'));
 const PioView = lazy(() => import('./components/PioView'));
 const ExecutiveView = lazy(() => import('./components/ExecutiveView'));
+const BoardMemberView = lazy(() => import('./components/BoardMemberView'));
 const AnnouncementDashboard = lazy(() => import('./components/AnnouncementDashboard'));
 const LivestockMonitor = lazy(() => import('./components/LivestockMonitor'));
 const SyncQueuePanel = lazy(() => import('./components/SyncQueuePanel'));
@@ -2132,7 +2133,7 @@ export default function App() {
     }
 
     const roleName = targetUser.role.replace('_', ' ');
-    const isOfficer = ['President', 'Vice_President', 'Secretary', 'Assistant_Secretary', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(targetUser.role);
+    const isOfficer = ['President', 'Vice_President', 'Secretary', 'Assistant_Secretary', 'Board_Member', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(targetUser.role);
 
     const updatedUsers = users.filter(u => u.id !== id);
     setUsers(updatedUsers);
@@ -2328,7 +2329,7 @@ export default function App() {
     newPresidentId: string,
     electionDate: string,
     turnoverNotes: string,
-    outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Assistant_Secretary' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'
+    outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Assistant_Secretary' | 'Board_Member' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'
   ) => {
     const currentPresident = (currentUser && currentUser.role === 'President' ? users.find(u => u.id === currentUser.id) : null) || users.find(u => u.role === 'President');
     if (!currentPresident) {
@@ -2965,6 +2966,14 @@ export default function App() {
                 onReturnMeetingMinutes={handleReturnMeetingMinutes}
                 onPresidentApproveTransaction={handlePresidentApproveTransaction}
                 onPresidentReturnTransaction={handlePresidentReturnTransaction}
+              />
+            )}
+
+            {currentRole === 'Board_Member' && (
+              <BoardMemberView
+                resolutions={resolutions}
+                currentUser={currentUser!}
+                onAddResolution={handleAddResolution}
               />
             )}
 
