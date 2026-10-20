@@ -54,12 +54,12 @@ export default function GuestPortal({
   const defaultProductsList = [
     {
       id: 'prod-chairs-rental',
-      name: 'Abang sa Lingkoranan (Plastic Chairs Rental)',
-      cebName: 'Mga Lingkoranan nga Abangan Alang sa Tanan (Rentable by Everyone)',
-      desc: 'Lig-on ug limpyo nga mga monobloc plastic chairs nga maabangan alang sa mga asembliya, kasal, pista, lubong, ug panagtigom sa komunidad.',
-      specs: 'Heavy-Duty Monobloc Chairs (Bukas alang sa tanan)',
-      price: 'PHP 10 matag adlaw / lingkoranan',
-      quantityAvailable: '150 ka buok lingkoranan',
+      name: 'Chairs Rental',
+      cebName: 'Open to everyone · for any event or gathering',
+      desc: 'Durable, clean monobloc plastic chairs available for assemblies, weddings, fiestas, wakes, and community gatherings.',
+      specs: 'Heavy-Duty Monobloc Chairs',
+      price: 'PHP 10 per chair / day',
+      quantityAvailable: '150 chairs',
       farmerName: 'AFA Community Logistics & Asset Committee',
       farmerSitio: 'Sitio Tapon',
       farmerPhone: '0917-345-6789',
@@ -70,12 +70,12 @@ export default function GuestPortal({
     },
     {
       id: 'prod-sacks-rental',
-      name: 'Abang sa Sako (Harvest & Storage Sacks Rental)',
-      cebName: 'Mga Sako nga Abangan para sa Ting-ani (Rentable by Everyone)',
-      desc: 'Limpyo ug lig-on nga mga 50kg woven sacks nga maabangan sa tanang mag-uuma ug lumulupyo alang sa ting-ani sa mais, kape, kopras, ug abot sa uma.',
-      specs: '50kg Capacity Woven Polypropylene Sacks (Bukas alang sa tanan)',
-      price: 'PHP 5 matag gamit / sako',
-      quantityAvailable: '250 ka buok sako',
+      name: 'Harvest & Storage Sacks Rental',
+      cebName: 'Open to everyone · for harvest season',
+      desc: 'Clean, durable 50kg woven sacks available to all farmers and residents for corn, coffee, copra, and other harvests.',
+      specs: '50kg Capacity Woven Polypropylene Sacks',
+      price: 'PHP 5 per sack / use',
+      quantityAvailable: '250 sacks',
       farmerName: 'AFA Warehouse & Logistics Committee',
       farmerSitio: 'Sitio Lamak',
       farmerPhone: '0917-345-6789',
@@ -173,8 +173,8 @@ export default function GuestPortal({
       <header className="bg-white border-b-2 border-bafa-neutral-300 py-3.5 sm:py-4 px-3.5 sm:px-6 shadow-sm sticky top-0 z-30 no-print">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 sm:gap-4">
           <div className="flex items-center gap-2.5 sm:gap-3.5 w-full sm:w-auto min-w-0">
-            <div className="bg-bafa-800 p-1.5 rounded-2xl text-white shadow-md shrink-0 overflow-hidden border border-bafa-600">
-              <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-9 h-9 sm:w-11 sm:h-11 object-cover block rounded-xl" />
+            <div className="bg-white p-1 rounded-full shadow-md shrink-0 overflow-hidden border-2 border-bafa-600">
+              <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full" />
             </div>
             <div className="text-left min-w-0 flex-1">
               <h1 className="text-sm sm:text-lg md:text-xl font-black tracking-tight text-bafa-700 uppercase font-display leading-tight break-words">
@@ -208,21 +208,11 @@ export default function GuestPortal({
       <div className="bg-[#FAF8F5] border-b-2 border-[#D5CFC1] static md:sticky md:top-[73px] z-20 shadow-sm no-print">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 flex flex-col items-center">
 
-          {/* Mobile Phone Scroll Hint Indicator */}
-          <div className="flex sm:hidden items-center justify-between w-full px-2.5 py-1 text-[11px] font-black text-[#1B4332] bg-[#EAF4EC] rounded-lg mb-1.5 border border-emerald-800/20 shadow-xs">
-            <span className="flex items-center gap-1">
-              <ChevronLeft className="w-3.5 h-3.5 text-[#BF360C]" />
-              I-scroll o i-swipe ang menu sa ubos →
-            </span>
-              <ChevronRight className="w-3.5 h-3.5 text-[#BF360C]" />
+          <div className="flex sm:hidden items-center justify-center gap-1.5 w-full px-2.5 py-1 text-[11px] font-black text-[#1B4332] bg-[#EAF4EC] rounded-lg mb-1.5 border border-emerald-800/20 shadow-xs">
+            <span>Scroll or swipe the menu below</span>
           </div>
 
           <div className="relative w-full flex items-center">
-            {/* Left Scroll Indicator Arrow */}
-            <div className="hidden sm:flex absolute left-0 z-10 p-1 bg-[#FAF8F5] items-center text-[#1B4332]">
-              <ChevronLeft className="w-5 h-5 text-[#BF360C] animate-bounce-x" />
-            </div>
-
             <div className="w-full flex justify-start sm:justify-center gap-1 sm:gap-2 overflow-x-auto py-1 select-none scrollbar-thin scrollbar-thumb-[#1B4332]/20 px-3 sm:px-6">
               {[
                 { id: 'home', label: 'Overview', icon: Sparkles },
@@ -249,11 +239,6 @@ export default function GuestPortal({
                   </button>
                 );
               })}
-            </div>
-
-            {/* Right Scroll Indicator Arrow */}
-            <div className="hidden sm:flex absolute right-0 z-10 p-1 bg-[#FAF8F5] items-center text-[#1B4332]">
-              <ChevronRight className="w-5 h-5 text-[#BF360C] animate-bounce-x" />
             </div>
           </div>
         </div>
@@ -727,101 +712,62 @@ export default function GuestPortal({
         {/* TAB 4: MGA PRODUKTO (PRODUCTS) */}
         {activeTab === 'products' && (
           <div className="space-y-6 sm:space-y-8 text-left min-w-0">
-            <div className="bg-white border-2 border-[#D5CFC1] p-4 sm:p-6 md:p-8 rounded-3xl shadow-sm space-y-3 min-w-0">
-              <div className="border-b-2 border-[#F0EBE1] pb-3.5 sm:pb-4 flex items-center gap-2.5 flex-wrap">
-                <Coffee className="w-6 h-6 sm:w-7 sm:h-7 text-amber-700 shrink-0" />
-                <h3 className="text-lg sm:text-xl md:text-2xl font-black text-[#1B4332] font-display break-words">
-                  Our Agriculture Produce
+            <div className="bg-white border-2 border-[#D5CFC1] p-4 sm:p-5 rounded-3xl shadow-sm space-y-1.5 min-w-0">
+              <div className="border-b-2 border-[#F0EBE1] pb-3 flex items-center gap-2.5 flex-wrap">
+                <Coffee className="w-6 h-6 text-amber-700 shrink-0" />
+                <h3 className="text-lg sm:text-xl font-black text-[#1B4332] font-display break-words">
+                  Products &amp; Rental Services
                 </h3>
               </div>
+              <p className="text-xs text-slate-600 font-semibold pt-1">
+                Agricultural produce, IGP goods, and community equipment available for rent.
+              </p>
             </div>
 
-            {/* Products Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
+            {/* Products Grid — condensed cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 min-w-0">
               {((products.length > 0 ? products : defaultProductsList).filter(
-                (p: any) => !p.name?.toLowerCase().includes('baboy') && 
-                            !p.name?.toLowerCase().includes('hog') && 
+                (p: any) => !p.name?.toLowerCase().includes('baboy') &&
+                            !p.name?.toLowerCase().includes('hog') &&
                             !p.cebName?.toLowerCase().includes('baboy') &&
                             !p.category?.toLowerCase().includes('hog')
               )).map((prod: any) => {
                 const Icon = prod.icon || (prod.category?.includes('Rental') ? Boxes : Coffee);
                 const cardColor = prod.color || (prod.category?.includes('Rental') ? 'bg-emerald-100 border-emerald-300 text-emerald-900' : 'bg-stone-100 border-stone-300 text-stone-900');
                 return (
-                  <div 
-                    key={prod.id} 
+                  <div
+                    key={prod.id}
                     onClick={() => setSelectedProductModal(prod)}
-                    className="bg-white border-2 border-[#D5CFC1] hover:border-[#1B4332] hover:shadow-xl hover:-translate-y-1 hover:bg-[#F8FCF9] transition-all duration-300 rounded-3xl p-4 sm:p-6 flex flex-col justify-between min-w-0 cursor-pointer group"                  >
-                    <div className="space-y-3.5 min-w-0">
-                      <div className="flex items-start sm:items-center gap-3 min-w-0">
-                        <div className={`p-2.5 sm:p-3 rounded-2xl ${cardColor} border shadow-inner shrink-0 group-hover:scale-105 transition-transform`}>
-                          <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#1B4332] border border-emerald-200">
-                              {prod.category || 'Rental & Produce'}
-                            </span>
-                            {prod.category?.includes('Rental') && (
-                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                                Rentable by Everyone
-                              </span>
-                            )}
-                          </div>
-                          <h4 className="text-sm sm:text-base md:text-lg font-black text-[#1B4332] font-display leading-snug break-words group-hover:text-emerald-800 transition-colors">
-                            {prod.name}
-                          </h4>
-                          <span className="text-xs text-slate-600 font-extrabold leading-snug break-words block mt-0.5">
-                            {prod.cebName}
-                          </span>
-                        </div>
-                      </div>
-
-                      <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed break-words line-clamp-3">
-                        {prod.desc || prod.description}
-                      </p>
+                    className="bg-white border-2 border-[#D5CFC1] hover:border-[#1B4332] hover:shadow-lg transition-all duration-200 rounded-2xl p-4 flex items-start gap-3 min-w-0 cursor-pointer group"
+                  >
+                    <div className={`p-2.5 rounded-xl ${cardColor} border shadow-inner shrink-0`}>
+                      <Icon className="w-5 h-5" />
                     </div>
-
-                    <div className="mt-4 pt-3 border-t border-[#F0EBE1] space-y-3 min-w-0">
-                      {/* Quantity & Price */}
-                      <div className="flex flex-col sm:flex-row sm:items-end justify-between text-xs font-black gap-2 min-w-0">
-                        <div className="space-y-0.5 min-w-0">
-                          <span className="block text-[10px] text-slate-500 uppercase font-bold tracking-wider">Magamit nga Kadaghanon (Quantity):</span>
-                          <span className="text-[#1B4332] font-bold text-xs break-words">{prod.quantityAvailable || prod.specs || prod.unit || 'Magamit sa Asosasyon'}</span>
-                        </div>
-                        <div className="sm:text-right space-y-0.5 min-w-0 shrink-0">
-                          <span className="block text-[10px] text-slate-500 uppercase font-bold tracking-wider">Standard Presyo / Rate:</span>
-                          <span className="text-[#BF360C] font-mono font-black text-xs sm:text-sm break-words">{typeof prod.price === 'number' ? `PHP ${prod.price.toLocaleString()} / ${prod.unit || 'buok'}` : prod.price}</span>
-                        </div>
-                      </div>
-
-                      {/* Selling Farmer Contact Details */}
-                      <div className="bg-[#FAF8F5] border border-[#E2DCCE] p-3 rounded-2xl space-y-1.5 min-w-0">
-                        <span className="block text-[10px] text-amber-900 uppercase font-extrabold tracking-wider break-words">
-                          Nalambigit nga Mag-uuma / Custodian:
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <h4 className="text-sm font-black text-[#1B4332] font-display leading-snug break-words group-hover:text-emerald-800 transition-colors">
+                        {prod.name}
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-emerald-100 text-[#1B4332] border border-emerald-200">
+                          {prod.category || 'Association Assets'}
                         </span>
-                        <div className="text-xs font-black text-[#1B4332] flex flex-col sm:flex-row sm:items-center justify-between gap-1 min-w-0">
-                          <span className="break-words min-w-0">{prod.farmerName || prod.contactPerson || 'Miyembro nga Mag-uuma sa AFA'}</span>
-                          {prod.farmerSitio && <span className="text-[11px] text-slate-600 font-bold shrink-0">📍 {prod.farmerSitio}</span>}
-                        </div>
-                        {(prod.farmerPhone || prod.contactPerson) && (
-                          <div className="text-xs font-mono font-bold text-[#BF360C] pt-0.5 flex items-center gap-1 flex-wrap break-all sm:break-words">
-                            <span>📞 Kontak: {prod.farmerPhone || prod.contactPerson}</span>
-                          </div>
+                        {prod.category?.includes('Rental') && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                            Open to All
+                          </span>
                         )}
                       </div>
-
-                      {/* Action Button */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedProductModal(prod);
-                        }}
-                        className="w-full py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white font-black text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm group-hover:bg-[#143326]"
-                      >
-                        <ShoppingBag className="w-3.5 h-3.5" />
-                        <span>Tan-awa ang Detalye / Abangi (View Details & Rent)</span>
-                      </button>
+                      <p className="text-xs text-slate-600 font-semibold leading-relaxed line-clamp-2 break-words">
+                        {prod.desc || prod.description || prod.cebName}
+                      </p>
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <span className="text-[11px] font-bold text-slate-600 truncate">
+                          {prod.quantityAvailable || prod.specs || prod.unit || 'Available'}
+                        </span>
+                        <span className="text-xs font-mono font-black text-[#BF360C] shrink-0">
+                          {typeof prod.price === 'number' ? `PHP ${prod.price.toLocaleString()}` : prod.price}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -830,14 +776,14 @@ export default function GuestPortal({
 
 
             {/* Buying Note Card */}
-            <div className="bg-[#EAF4EC] rounded-3xl p-5 sm:p-8 text-center space-y-3 sm:space-y-4 max-w-3xl mx-auto min-w-0">
-              <h4 className="text-base sm:text-lg md:text-xl font-black text-[#1B4332] font-display break-words">Gusto ba ka mopalit o mo-order?</h4>
-              <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed break-words">
-                Ang tanang halin niini direkta nga moadto sa atong mga kaubang mag-uuma sa upat (4) ka opisyal nga Sitio (Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak) sa Alegria, Tuburan, Cebu. 
-                Aron pagpalit, palihug kontaka o bisitaha si Presidente Zenaida A. Elbiña o bisan kinsa nga Opisyales sa AFA sa personal.
+            <div className="bg-[#EAF4EC] rounded-2xl p-4 sm:p-5 text-center space-y-1.5 max-w-3xl mx-auto min-w-0">
+              <h4 className="text-sm sm:text-base font-black text-[#1B4332] font-display break-words">Want to order or rent?</h4>
+              <p className="text-xs text-slate-700 font-semibold leading-relaxed break-words">
+                All proceeds go directly to our fellow farmers in the four (4) official Sitios of Alegria, Tuburan, Cebu.
+                To order or book a rental, please contact or visit President Zenaida A. Elbiña or any AFA officer in person.
               </p>
-              <div className="font-bold text-[#BF360C] text-xs sm:text-sm break-words">
-                Salamat sa inyong padayong pagsuporta sa lokal nga mga mag-uuma sa Alegria!
+              <div className="font-bold text-[#BF360C] text-xs break-words">
+                Thank you for supporting our local farmers!
               </div>
             </div>
           </div>

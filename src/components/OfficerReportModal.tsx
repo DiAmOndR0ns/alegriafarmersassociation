@@ -1075,7 +1075,7 @@ export default function OfficerReportModal({
                 <div className="min-w-0">
                   <span className="font-extrabold text-[#1B4332] block">President's Executive Consolidated Access</span>
                   <p className="text-[11px] text-[#3A4A42]">
-                    Exporting consolidated executive summaries across all executive officers with full treasury and capital breakdown (DOLE, DSWD-SLP, ATI, FCCT, Dispersal Pool, CBU).
+                    Consolidated summaries across all executive officers, with full treasury and capital breakdown.
                   </p>
                 </div>
               </div>
@@ -1092,7 +1092,7 @@ export default function OfficerReportModal({
                 Select View / Report Scope:
               </label>
               <p className="text-[10px] text-[#4A5F57] font-medium">
-                Report segregation of duties: the President issues the consolidated executive summary; all financial reports belong to the Treasurer; all member reports belong to the Secretary; all activities belong to the PIO.
+                President — consolidated executive summary • Treasurer — financial reports • Secretary — member reports • PIO — activities.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 {[
@@ -1329,9 +1329,7 @@ export default function OfficerReportModal({
 
         {/* MODAL FOOTER */}
         <div className="p-4 sm:p-5 bg-[#F0EDE7] border-t border-[#D5CFC1] flex flex-col sm:flex-row justify-between items-center gap-3 w-full">
-          <div className="text-[10px] text-[#4A5F57] font-mono text-center sm:text-left">
-            Barangay Alegria Farmers Association • Tuburan, Cebu
-          </div>
+          <div className="w-full sm:w-auto" />
 
           <div className="flex flex-wrap items-center justify-end gap-2.5 w-full sm:w-auto">
             <button

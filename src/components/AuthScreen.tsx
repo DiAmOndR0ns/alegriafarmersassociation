@@ -14,7 +14,7 @@ import {
   Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
   UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
   User as UserIcon, HelpCircle, AlertTriangle, KeyRound, Eye, EyeOff,
-  ShieldCheck, Phone, Check, Info, FileText
+  ShieldCheck, Phone, Check, Info, FileText, Languages
 } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -49,7 +49,10 @@ export default function AuthScreen({
   // Password reset request modal/form state
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetUsername, setResetUsername] = useState('');
-  const [showMemberGuide, setShowMemberGuide] = useState(false);
+
+  // Language mode: 'mixed' = English + Bisaya (default), 'en' = English only
+  const [language, setLanguage] = useState<'mixed' | 'en'>('mixed');
+  const en = language === 'en';
 
   const handleAdminSetupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,8 +159,8 @@ export default function AuthScreen({
 
           <div className="relative space-y-6">
             <div className="flex items-center gap-3">
-              <div className="bg-bafa-100 p-2 rounded-2xl text-bafa-700 shadow-inner overflow-hidden border border-bafa-300">
-                <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-11 h-11 sm:w-12 sm:h-12 object-cover block rounded-xl" />
+              <div className="bg-white p-1.5 rounded-full shadow-lg shrink-0 overflow-hidden border-2 border-bafa-500">
+                <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-16 h-16 sm:w-20 sm:h-20 object-contain block rounded-full" />
               </div>
               <div>
                 <h1 className="text-2xl sm:text-[2rem] font-black font-display tracking-tight text-white uppercase leading-none">AFA</h1>
@@ -170,7 +173,9 @@ export default function AuthScreen({
                 Farmer Access Portal
               </h2>
               <p className="text-sm sm:text-[15px] text-[#D7F0DF] leading-relaxed font-medium">
-                Kini nga sistema gidisenyo aron mahimong yano, sayon gamiton, ug daling masabtan sa atong mga kaubang mag-uuma ug opisyal.
+                {en
+                  ? 'This portal is designed to be simple, easy to use, and easy to understand for our fellow farmers and officers.'
+                  : 'Kini nga sistema gidisenyo aron mahimong yano, sayon gamiton, ug daling masabtan sa atong mga kaubang mag-uuma ug opisyal.'}
               </p>
 
               <div className="space-y-3 pt-2 text-sm text-white">
@@ -178,19 +183,34 @@ export default function AuthScreen({
                   <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
                     <CheckCircle className="w-3.5 h-3.5" />
                   </div>
-                  <span><strong className="font-extrabold text-white">Quick sign in:</strong> Enter your username and password below to access your member or officer dashboard.</span>
+                  <span>
+                    <strong className="font-extrabold text-white">Quick sign in:</strong>{' '}
+                    {en
+                      ? 'Enter your username and password below to access your member or officer dashboard.'
+                      : 'Isulod ang imong username ug password sa ubos aron makasulod sa member o opisyal nga dashboard.'}
+                  </span>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
                   <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
                     <ShieldCheck className="w-3.5 h-3.5" />
                   </div>
-                  <span><strong className="font-extrabold text-white">Membership verification:</strong> Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema antes magamit ang ilang access.</span>
+                  <span>
+                    <strong className="font-extrabold text-white">Membership verification:</strong>{' '}
+                    {en
+                      ? 'All officers and members must be validated and approved in the system before their access can be used.'
+                      : 'Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema antes magamit ang ilang access.'}
+                  </span>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
                   <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
                     <CheckCircle className="w-3.5 h-3.5" />
                   </div>
-                  <span><strong className="font-extrabold text-white">Member access:</strong> Regular farmers are enrolled via the Secretary desk and receive their login slip.</span>
+                  <span>
+                    <strong className="font-extrabold text-white">Member access:</strong>{' '}
+                    {en
+                      ? 'Regular farmers are enrolled via the Secretary desk and receive their login slip.'
+                      : 'Ang mga regular nga mag-uuma gipasakop pinaagi sa Secretary desk ug makadawat og ilang login slip.'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -209,25 +229,19 @@ export default function AuthScreen({
           <div className="space-y-6">
             <div className="flex justify-between items-center border-b border-bafa-100 pb-3">
               <div className="flex items-center gap-2.5">
-                <span className="text-sm font-extrabold font-display text-bafa-800 tracking-[0.08em] border-b-2 border-bafa-800 pb-3">
-                  PAGSULOD SA SISTEMA (Log In)
+                <span className="text-sm font-extrabold font-display text-bafa-800 tracking-[0.08em]">
+                  {en ? 'SYSTEM SIGN IN' : 'PAGSULOD SA SISTEMA (Log In)'}
                 </span>
               </div>
 
               <button
                 type="button"
-                onClick={() => {
-                  setShowMemberGuide(!showMemberGuide);
-                  setShowResetForm(false);
-                }}
-                className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider border transition-colors cursor-pointer ${
-                  showMemberGuide
-                    ? 'bg-[#1B4332] text-white border-[#1B4332]'
-                    : 'bg-[#EAF6EE] hover:bg-[#D4EEDC] text-[#1B4332] border-[#B7E3C4]'
-                }`}
+                onClick={() => setLanguage(en ? 'mixed' : 'en')}
+                title={en ? 'Show English + Bisaya (default)' : 'Show English only'}
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider border transition-colors cursor-pointer bg-[#EAF6EE] hover:bg-[#D4EEDC] text-[#1B4332] border-[#B7E3C4]"
               >
-                <Info className="w-3.5 h-3.5" />
-                <span>{showMemberGuide ? 'Balik sa Log In' : 'Membership Policy'}</span>
+                <Languages className="w-3.5 h-3.5" />
+                <span>{en ? 'English + Bisaya' : 'Translate to English'}</span>
               </button>
             </div>
 
@@ -284,7 +298,7 @@ export default function AuthScreen({
                   </div>
                 </form>
               </div>
-            ) : !showMemberGuide ? (
+            ) : (
               <div className="space-y-6 text-left">
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1.5">
@@ -292,7 +306,7 @@ export default function AuthScreen({
                       <label className="block text-xs font-black text-bafa-neutral-800 uppercase tracking-[0.12em]">
                         Username
                       </label>
-                      <span className="text-[10px] text-bafa-neutral-700 italic">Use your username</span>
+                      <span className="text-[10px] text-bafa-neutral-700 italic">{en ? 'Use your username' : 'Gamita ang imong username'}</span>
                     </div>
                     <div className="relative">
                       <UserIcon className="absolute left-3.5 top-3.5 w-4 h-4 text-[#4D615A]" />
@@ -347,7 +361,6 @@ export default function AuthScreen({
                       onClick={() => {
                         setShowAdminSetup(true);
                         setShowResetForm(false);
-                        setShowMemberGuide(false);
                         if (!adminPassword) {
                           setAdminPassword(generateInitialPassword(adminUsername || 'admin', 'President'));
                         }
@@ -444,122 +457,22 @@ export default function AuthScreen({
                   </form>
                 )}
 
-                <div className="mt-4 p-3.5 bg-[#FAF8F5] rounded-2xl border border-[#E8E3D8] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-[#5D6B54]">
-                  <div className="flex items-center gap-2.5">
-                    <Shield className="w-4 h-4 text-[#1B4332] shrink-0" />
-                    <span>Walay public sign-up. Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema.</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMemberGuide(true);
-                      setShowResetForm(false);
-                    }}
-                    className="text-[11px] font-extrabold text-[#1B4332] hover:underline cursor-pointer shrink-0 ml-auto sm:ml-0"
-                  >
-                    Membership Policy →
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 text-left animate-fade-in max-h-[64vh] overflow-y-auto pr-1">
-                <div className="bg-[#EAF6EE] border-2 border-[#52B788]/40 rounded-2xl p-4.5 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#1B4332] text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Shield className="w-5 h-5 text-[#52B788]" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-[#1B4332] bg-white px-2 py-0.5 rounded-md border border-[#A7D7B5]">
-                        Opisyal nga Polisa sa Asosasyon
-                      </span>
-                      <h4 className="text-base font-extrabold text-[#123326] mt-1 font-display">
-                        Pagpasakop sa Miyembro: Pinaagi sa Kalihim Lamang
-                      </h4>
-                      <p className="text-xs text-[#2D5A43] leading-relaxed mt-1">
-                        Aron masiguro ang husto nga RSBSA verification ug audit trails, ang mga regular nga mag-uuma <strong>dili kinahanglan mag-sign up sa online form</strong>. Ang <strong>Kalihim (Jennylyn S. Lumactao)</strong> lamang ang awtorisado nga mopasakop ug mohatag og Login Slip credentials.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-[#FAF8F5] border border-[#E2DDD3] rounded-2xl p-4 space-y-3">
-                  <h5 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4 text-[#1B4332]" />
-                    <span>Sayon nga mga Lakang sa Pagpasakop:</span>
-                  </h5>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-[#3E4C3A]">
-                    <div className="bg-white p-3 rounded-xl border border-[#E8E3D8] space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#1B4332] text-white text-[10px] font-black flex items-center justify-center">1</span>
-                        <strong className="text-[#123326] font-bold">Bisitaha ang Kalihim</strong>
-                      </div>
-                      <p className="text-[11px] text-[#556551] pl-7">
-                        Adto sa Alegria Farmers Center o pakigkita kang Kalihim Jennylyn S. Lumactao.
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-3 rounded-xl border border-[#E8E3D8] space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#1B4332] text-white text-[10px] font-black flex items-center justify-center">2</span>
-                        <strong className="text-[#123326] font-bold">RSBSA & Farm Record</strong>
-                      </div>
-                      <p className="text-[11px] text-[#556551] pl-7">
-                        Ihatag ang imong RSBSA Control Number, gidak-on sa uma, sitio, ug produkto.
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-3 rounded-xl border border-[#E8E3D8] space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#1B4332] text-white text-[10px] font-black flex items-center justify-center">3</span>
-                        <strong className="text-[#123326] font-bold">Dawat og Login Slip</strong>
-                      </div>
-                      <p className="text-[11px] text-[#556551] pl-7">
-                        Direkta nga i-isyu sa Kalihim ang imong opisyal nga Username ug Koda (Password).
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-3 rounded-xl border border-[#E8E3D8] space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#1B4332] text-white text-[10px] font-black flex items-center justify-center">4</span>
-                        <strong className="text-[#123326] font-bold">Diretsong Pagsulod</strong>
-                      </div>
-                      <p className="text-[11px] text-[#556551] pl-7">
-                        Gamita ang imong koda aron makasulod sa Member Portal ug makita ang imong tinigom.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-[#D5CFC1] rounded-2xl p-3.5 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <Building className="w-5 h-5 text-[#1B4332] shrink-0" />
-                    <div>
-                      <p className="font-extrabold text-[#123326]">Opisina sa Kalihim (Secretary Desk)</p>
-                      <p className="text-[#556551] text-[11px]">Jennylyn S. Lumactao • Alegria Farmers Center, Tuburan, Cebu</p>
-                    </div>
-                  </div>
-                  <span className="bg-[#FAF8F5] text-[#1B4332] text-[10px] font-bold px-2 py-1 rounded-lg border border-[#D5CFC1] shrink-0">
-                    Lunes - Biyernes
+                <div className="mt-4 p-3.5 bg-[#FAF8F5] rounded-2xl border border-[#E8E3D8] flex items-center gap-2.5 text-xs text-[#5D6B54]">
+                  <Shield className="w-4 h-4 text-[#1B4332] shrink-0" />
+                  <span>
+                    {en
+                      ? 'No public sign-up. All officers and members must be validated and approved in the system.'
+                      : 'Walay public sign-up. Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema.'}
                   </span>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowMemberGuide(false)}
-                    className="w-full py-3 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <span>Balik sa Pagsulod (Back to Log In)</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             )}
           </div>
 
           <div className="text-center text-[10px] text-[#85947E] mt-6 border-t border-[#F0EBE1] pt-3">
-            Sistemang AFA v1.1 • Gidisenyo alang sa kasayon sa matag mag-uuma ug opisyal.
+            {en
+              ? 'AFA System v1.1 • Designed for ease of use by every farmer and officer.'
+              : 'Sistemang AFA v1.1 • Gidisenyo alang sa kasayon sa matag mag-uuma ug opisyal.'}
           </div>
         </div>
       </div>

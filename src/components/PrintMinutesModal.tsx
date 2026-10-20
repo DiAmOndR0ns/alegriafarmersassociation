@@ -158,28 +158,28 @@ Attested by:
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in no-print">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-5xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-        
+      <div className="bg-white border-2 border-slate-300 w-full max-w-5xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+
         {/* MODAL ACTION BAR */}
-        <div className="bg-slate-950 px-5 py-4 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3">
+        <div className="bg-white px-5 py-4 border-b-2 border-slate-300 flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="bg-emerald-600/10 p-1.5 rounded-lg border border-emerald-500/20 text-emerald-400">
+            <div className="bg-emerald-100 p-1.5 rounded-lg border border-emerald-300 text-emerald-700">
               <Printer className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-sm">Meeting Minutes Print Suite</h3>
-              <p className="text-[10px] text-slate-400">Generate, customize, and print official documents.</p>
+              <h3 className="font-black text-black text-sm">Meeting Minutes Print Suite</h3>
+              <p className="text-[10px] text-black font-semibold">Generate, customize, and print official documents.</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               id="toggle-settings-btn"
               onClick={() => setShowSettings(!showSettings)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
-                showSettings 
-                  ? 'bg-emerald-600 border-emerald-500 text-white' 
-                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 cursor-pointer ${
+                showSettings
+                  ? 'bg-[#1B4332] border-[#1B4332] text-white'
+                  : 'bg-white border-slate-400 text-black hover:bg-slate-100'
               }`}
             >
               <Settings className="w-3.5 h-3.5" />
@@ -189,16 +189,16 @@ Attested by:
             <button
               id="copy-text-btn"
               onClick={handleCopyToClipboard}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border-2 border-slate-400 text-black hover:bg-slate-100 transition-all cursor-pointer"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied Plain' : 'Copy Text'}</span>
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Copied' : 'Copy Text'}</span>
             </button>
 
             <button
               id="download-text-btn"
               onClick={handleDownloadTxt}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border-2 border-slate-400 text-black hover:bg-slate-100 transition-all cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download .txt</span>
@@ -207,18 +207,18 @@ Attested by:
             <button
               id="trigger-print-btn"
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-black bg-[#1B4332] hover:bg-[#143326] text-white shadow-md transition-all cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Print / Save PDF</span>
             </button>
 
-            <div className="w-[1px] h-6 bg-slate-800 mx-1" />
+            <div className="w-[1px] h-6 bg-slate-300 mx-1" />
 
-            <button 
+            <button
               id="close-print-modal"
               onClick={onClose}
-              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-all"
+              className="text-black hover:bg-slate-200 p-1 rounded-lg transition-all cursor-pointer"
               aria-label="Close print preview"
             >
               <X className="w-5 h-5" />
@@ -231,18 +231,18 @@ Attested by:
           
           {/* SIDEBAR DYNAMIC CUSTOMIZATION SETTINGS */}
           {showSettings && (
-            <div className="w-80 bg-slate-950 border-r border-slate-800 p-4 overflow-y-auto space-y-4 shrink-0 animate-fade-in text-left">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-2">
+            <div className="w-80 bg-white border-r-2 border-slate-300 p-4 overflow-y-auto space-y-4 shrink-0 animate-fade-in text-left">
+              <h4 className="text-xs font-black text-black uppercase tracking-wider border-b-2 border-slate-300 pb-2">
                 Document Settings
               </h4>
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Document Header Title</label>
+                  <label className="block text-[10px] font-black text-black uppercase mb-1">Document Header Title</label>
                   <select
                     value={documentType}
                     onChange={(e) => setDocumentType(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border-2 border-slate-300 rounded-lg text-black font-bold focus:outline-none focus:border-black"
                   >
                     <option value="Minutes of the General Assembly">General Assembly Minutes</option>
                     <option value="Minutes of the Board of Officers Meeting">Officers Board Minutes</option>
@@ -252,66 +252,66 @@ Attested by:
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Presiding Officer</label>
+                  <label className="block text-[10px] font-black text-black uppercase mb-1">Presiding Officer</label>
                   <input
                     type="text"
                     value={presidingOfficer}
                     onChange={(e) => setPresidingOfficer(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border-2 border-slate-300 rounded-lg text-black font-semibold focus:outline-none focus:border-black font-sans"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Prepared By (Secretariat)</label>
+                  <label className="block text-[10px] font-black text-black uppercase mb-1">Prepared By (Secretariat)</label>
                   <input
                     type="text"
                     value={secretaryName}
                     onChange={(e) => setSecretaryName(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border-2 border-slate-300 rounded-lg text-black font-semibold focus:outline-none focus:border-black font-sans"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Time Started</label>
+                    <label className="block text-[10px] font-black text-black uppercase mb-1">Time Started</label>
                     <input
                       type="text"
                       value={timeCommenced}
                       onChange={(e) => setTimeCommenced(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans font-mono"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border-2 border-slate-300 rounded-lg text-black font-semibold focus:outline-none focus:border-black font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Time Ended</label>
+                    <label className="block text-[10px] font-black text-black uppercase mb-1">Time Ended</label>
                     <input
                       type="text"
                       value={timeAdjourned}
                       onChange={(e) => setTimeAdjourned(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans font-mono"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border-2 border-slate-300 rounded-lg text-black font-semibold focus:outline-none focus:border-black font-mono"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Additional Notes / Remarks</label>
+                  <label className="block text-[10px] font-black text-black uppercase mb-1">Additional Notes / Remarks</label>
                   <textarea
                     rows={3}
                     placeholder="e.g. Next GA scheduled on..."
                     value={customNotes}
                     onChange={(e) => setCustomNotes(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border-2 border-slate-300 rounded-lg text-black font-semibold placeholder:text-slate-500 focus:outline-none focus:border-black font-sans"
                   />
                 </div>
 
-                <div className="pt-2 border-t border-slate-800 space-y-2">
+                <div className="pt-2 border-t-2 border-slate-300 space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showLetterhead}
                       onChange={(e) => setShowLetterhead(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-900 text-emerald-600 focus:ring-0 focus:ring-offset-0"
+                      className="w-4 h-4 rounded border-slate-400 bg-white accent-black cursor-pointer"
                     />
-                    <span className="text-xs text-slate-300">Show Barangay Letterhead</span>
+                    <span className="text-xs font-bold text-black">Show Barangay Letterhead</span>
                   </label>
 
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -319,14 +319,14 @@ Attested by:
                       type="checkbox"
                       checked={showWatermark}
                       onChange={(e) => setShowWatermark(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-900 text-emerald-600 focus:ring-0 focus:ring-offset-0"
+                      className="w-4 h-4 rounded border-slate-400 bg-white accent-black cursor-pointer"
                     />
-                    <span className="text-xs text-slate-300">Subtle Draft Watermark</span>
+                    <span className="text-xs font-bold text-black">Subtle Draft Watermark</span>
                   </label>
                 </div>
               </div>
 
-              <div className="p-3 bg-emerald-950/20 border border-emerald-500/15 rounded-lg text-[10px] text-emerald-400 leading-relaxed">
+              <div className="p-3 bg-emerald-50 border-2 border-emerald-300 rounded-lg text-[10px] text-emerald-900 leading-relaxed font-semibold">
                 <strong>💡 Printing Tip:</strong> When the browser print window opens, check "Background Graphics" under "More Settings" to preserve the lines, seals, and watermark styling.
               </div>
             </div>

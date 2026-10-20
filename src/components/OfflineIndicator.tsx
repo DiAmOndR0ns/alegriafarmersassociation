@@ -171,196 +171,154 @@ export default function OfflineIndicator({
       {/* MODAL: DATABASE CONNECTION AUDIT & DETAILS */}
       {showDbModal && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4"
           onClick={() => setShowDbModal(false)}
         >
-          <div 
-            className="bg-slate-900 border border-slate-750 text-slate-100 rounded-2xl w-full max-w-md shadow-2xl p-5 space-y-4 relative text-left"
+          <div
+            className="bg-white border border-slate-200 text-slate-800 rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col overflow-hidden text-left animate-fade-in"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <div className={`p-2 rounded-xl ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-300'}`}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-[#F6F8F6] shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`p-2.5 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-100 text-emerald-700' : isConfigured ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-600'}`}>
                   <Server className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-black text-white font-display">
-                    Database Connection Status
+                <div className="min-w-0">
+                  <h3 className="text-base font-black text-[#1B4332] font-display truncate">
+                    Cloud Database
                   </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Live audit & sync engine connectivity
+                  <p className="text-[11px] text-slate-500">
+                    {isConnected ? 'Connected and syncing automatically' : isConfigured ? 'Configured but unreachable' : 'Offline-first local storage mode'}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowDbModal(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-800 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer shrink-0"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Status Card */}
-            <div className={`p-4 rounded-xl border space-y-2 ${
-              isConnected
-                ? 'bg-emerald-950/30 border-emerald-500/40'
-                : isConfigured
-                ? 'bg-rose-950/30 border-rose-500/40'
-                : 'bg-slate-800/60 border-slate-750'
-            }`}>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Target Provider
-                </span>
-                <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
-                  isConnected 
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
-                    : isConfigured
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                    : 'bg-slate-700 text-slate-300'
-                }`}>
-                  {isConnected ? '● Connected' : isConfigured ? '✕ Disconnected' : '○ Local Storage'}
-                </span>
-              </div>
+            {/* Scrollable Body */}
+            <div className="p-5 space-y-3.5 overflow-y-auto flex-1">
 
-              <div className="text-base font-extrabold text-white flex items-center gap-1.5">
-                {isConnected ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                ) : isConfigured ? (
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                ) : (
-                  <HardDrive className="w-4 h-4 text-slate-400 shrink-0" />
-                )}
-                <span>{providerName}</span>
-              </div>
-
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {dbStatus?.message || (
-                  isConnected 
-                    ? 'Your application is connected to the cloud database. Member registrations, funds, meetings, and logs are automatically synchronized.'
-                    : isConfigured
-                    ? 'A connection string is configured, but the database could not be reached. Verify your credentials, password, and network access.'
-                    : 'Running in offline-first mode. All data is saved safely in your browser local storage.'
-                )}
-              </p>
-
-              {dbStatus?.database && (
-                <div className="pt-1 text-[11px] text-slate-400 flex items-center gap-1">
-                  <span>Database:</span>
-                  <code className="bg-slate-900/80 px-1.5 py-0.5 rounded text-emerald-300 font-mono text-[10px]">
-                    {dbStatus.database}
-                  </code>
-                </div>
-              )}
-
-              {dbStatus?.timestamp && (
-                <div className="text-[10px] text-slate-500">
-                  Last verified: {new Date(dbStatus.timestamp).toLocaleTimeString()}
-                </div>
-              )}
-            </div>
-
-            {/* Cloud Database Tables Status & Record Counts */}
-            {isConnected && (
-              <div className="bg-slate-800/60 border border-slate-750 p-3.5 rounded-xl space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <Database className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Supabase Table Record Counts</span>
+              {/* Status Card */}
+              <div className={`p-4 rounded-2xl border ${isConnected ? 'bg-emerald-50 border-emerald-200' : isConfigured ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-extrabold text-slate-700 flex items-center gap-1.5 min-w-0">
+                    {isConnected ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : isConfigured ? (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    ) : (
+                      <HardDrive className="w-4 h-4 text-slate-500 shrink-0" />
+                    )}
+                    <span className="truncate">{providerName}</span>
                   </span>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                    (dbStatus?.totalRecords ?? 0) > 0 
-                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' 
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                  }`}>
-                    {dbStatus?.totalRecords !== undefined ? `${dbStatus.totalRecords} total rows` : 'Syncing counts...'}
+                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${isConnected ? 'bg-emerald-600 text-white' : isConfigured ? 'bg-rose-600 text-white' : 'bg-slate-600 text-white'}`}>
+                    {isConnected ? 'Online' : isConfigured ? 'Offline' : 'Local'}
                   </span>
                 </div>
 
-                {dbStatus?.tableCounts && Object.keys(dbStatus.tableCounts).length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px]">
-                    {Object.entries(dbStatus.tableCounts).map(([table, count]) => (
-                      <div 
-                        key={table}
-                        className="bg-slate-900/70 border border-slate-800 px-2 py-1 rounded-lg flex items-center justify-between"
-                      >
-                        <span className="text-slate-400 capitalize truncate" title={table}>
-                          {table.replace(/_/g, ' ')}
-                        </span>
-                        <span className={`font-mono font-bold ml-1 ${count > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          {count}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-400 italic">
-                    Loading table inventory from Supabase...
-                  </div>
-                )}
+                <p className="text-xs text-slate-600 leading-relaxed mt-2">
+                  {isConnected
+                    ? 'All records, contributions, and changes sync to Supabase automatically. No button needed.'
+                    : isConfigured
+                    ? 'The database could not be reached. Check the connection string and network access.'
+                    : 'All data is saved safely in this browser (local storage).'}
+                </p>
 
-                {dbStatus?.totalRecords === 0 && (
-                  <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between gap-2">
-                    <span>Database tables are clean and empty. Ready for real operational data.</span>
-                  </div>
-                )}
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 font-medium">
+                  {dbStatus?.database && (
+                    <span className="flex items-center gap-1">
+                      <span>DB:</span>
+                      <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-emerald-700 font-mono">{dbStatus.database}</code>
+                    </span>
+                  )}
+                  {dbStatus?.timestamp && (
+                    <span>Verified {new Date(dbStatus.timestamp).toLocaleTimeString()}</span>
+                  )}
+                </div>
               </div>
-            )}
 
-            {/* Quick Explanation / Setup Tips */}
-            <div className="bg-slate-800/40 border border-slate-750 p-3 rounded-xl space-y-1.5 text-xs text-slate-300">
-              <span className="font-bold text-white block text-[11px] uppercase tracking-wider flex items-center gap-1">
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isConnected ? 'Active Cloud Synchronization' : 'Why is Data Stored in Local Storage?'}</span>
-              </span>
-              <p className="text-[11px] leading-relaxed text-slate-400">
+              {/* Table Record Counts */}
+              {isConnected && (
+                <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#F6F8F6] border-b border-slate-200">
+                    <span className="text-[11px] font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
+                      <Database className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Records</span>
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-700">
+                      {dbStatus?.totalRecords !== undefined ? `${dbStatus.totalRecords} total` : 'Loading...'}
+                    </span>
+                  </div>
+                  {dbStatus?.tableCounts && Object.keys(dbStatus.tableCounts).length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-slate-200 text-[11px]">
+                      {Object.entries(dbStatus.tableCounts).map(([table, count]) => (
+                        <div key={table} className="bg-white px-2.5 py-1.5 flex items-center justify-between gap-1">
+                          <span className="text-slate-600 capitalize truncate" title={table}>
+                            {table.replace(/_/g, ' ')}
+                          </span>
+                          <span className={`font-mono font-bold shrink-0 ${count > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                            {count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-3.5 py-3 text-xs text-slate-500 italic">Loading table counts...</div>
+                  )}
+                </div>
+              )}
+
+              {/* How it works / Setup */}
+              <div className="border border-slate-200 rounded-2xl p-3.5 space-y-1.5">
+                <span className="font-black text-[#1B4332] text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{isConnected ? 'How Sync Works' : 'Connect Supabase'}</span>
+                </span>
                 {isConnected ? (
-                  <>Changes made in the portal are immediately mirrored to Supabase. When offline, contributions and changes queue up locally and automatically sync the moment connection returns.</>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Changes are mirrored to Supabase instantly. If you go offline, they queue locally and sync automatically once you reconnect.
+                  </p>
                 ) : (
-                  <>Your application is currently running in <strong>Offline-First mode</strong> because <code className="bg-slate-900 px-1 py-0.5 rounded text-amber-300 font-mono text-[10px]">DATABASE_URL</code> is not connected on your Vercel deployment. All records are safely preserved in this browser so your data is not lost. Once you connect your Supabase database in Vercel settings, you can push all local data to the cloud.</>
-                )}
-              </p>
-              {!isConnected && (
-                <div className="mt-2 pt-2 border-t border-slate-700/60 text-[11px] text-slate-400 space-y-1">
-                  <span className="font-bold text-slate-300 block">How to connect Supabase on Vercel:</span>
-                  <ol className="list-decimal list-inside space-y-0.5 pl-1 text-[10px] text-slate-400">
-                    <li>Open your Vercel Dashboard → Project Settings → <strong>Environment Variables</strong>.</li>
-                    <li>Add key <code className="text-amber-300 font-mono">DATABASE_URL</code> with your Supabase Transaction Pooler URI (port 6543).</li>
-                    <li>Go to Deployments → Redeploy the latest build.</li>
+                  <ol className="list-decimal list-inside text-xs text-slate-600 leading-relaxed space-y-0.5">
+                    <li>Vercel → Project Settings → Environment Variables.</li>
+                    <li>Add <code className="bg-slate-100 px-1 rounded text-emerald-700 font-mono text-[10px]">DATABASE_URL</code> (Supabase pooler URI, port 6543).</li>
+                    <li>Redeploy the project.</li>
                   </ol>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            {/* Security & Confidentiality Guarantee */}
-            <div className="bg-emerald-950/25 border border-emerald-500/30 p-3 rounded-xl space-y-1.5 text-xs text-emerald-300">
-              <span className="font-bold block text-[11px] uppercase tracking-wider flex items-center gap-1.5 text-emerald-400">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Zero Plaintext Passwords & Residual Storage</span>
-              </span>
-              <p className="text-[11px] leading-relaxed text-emerald-200/90">
-                <strong>Credential Protection:</strong> Passwords are never stored in plain text anywhere in browser local storage. All credentials are protected with irreversible cryptographic salted SHA-256 hashes.
-              </p>
-              <p className="text-[11px] leading-relaxed text-emerald-200/80">
-                <strong>Cloud Zero-Residual Mode:</strong> When connected to Supabase, all records are safely centralized in PostgreSQL. You can use the "Clear Local Cache" button below to purge cached browser tables from this device.
-              </p>
+              {/* Security */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 space-y-1">
+                <span className="font-black text-emerald-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Security</span>
+                </span>
+                <p className="text-xs text-emerald-900/80 leading-relaxed">
+                  Passwords are never stored in plain text — only irreversible salted SHA-256 hashes.
+                  {isConnected && ' All records live in PostgreSQL; local cached tables can be purged below.'}
+                </p>
+              </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 bg-[#F6F8F6] border-t border-slate-200 shrink-0">
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   disabled={isChecking}
-                  onClick={() => {
-                    if (onCheckDb) onCheckDb();
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-750 text-white rounded-xl text-xs font-bold transition-all border border-slate-700 cursor-pointer disabled:opacity-50"
+                  onClick={() => { if (onCheckDb) onCheckDb(); }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-[#1B4332] rounded-xl text-xs font-bold transition-all border border-slate-300 cursor-pointer disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-                  <span>{isChecking ? 'Checking...' : 'Test Connection'}</span>
+                  <span>{isChecking ? 'Checking...' : 'Test'}</span>
                 </button>
 
                 {isConnected && onClearLocalCache && (
@@ -368,11 +326,11 @@ export default function OfflineIndicator({
                     id="clear-local-cache-btn"
                     type="button"
                     onClick={onClearLocalCache}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-all border border-slate-700 cursor-pointer"
-                    title="Clear local browser storage cache to enforce Zero-Residual storage"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-300 cursor-pointer"
+                    title="Purge cached browser tables (records stay safe in the cloud)"
                   >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Clear Local Cache (Zero Residual)</span>
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Clear Cache</span>
                   </button>
                 )}
 
@@ -382,11 +340,11 @@ export default function OfflineIndicator({
                     type="button"
                     disabled={isPurging}
                     onClick={onPurgeDb}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded-xl text-xs font-bold transition-all border border-rose-500/40 cursor-pointer disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-all border border-rose-200 cursor-pointer disabled:opacity-50"
                     title="Permanently remove all demo and seed records"
                   >
-                    <Trash2 className={`w-3.5 h-3.5 ${isPurging ? 'animate-spin' : 'text-rose-400'}`} />
-                    <span>{isPurging ? 'Purging Demo Data...' : 'Purge Demo Data'}</span>
+                    <Trash2 className={`w-3.5 h-3.5 ${isPurging ? 'animate-spin' : ''}`} />
+                    <span>{isPurging ? 'Purging...' : 'Purge Demo'}</span>
                   </button>
                 )}
               </div>
@@ -394,7 +352,7 @@ export default function OfflineIndicator({
               <button
                 type="button"
                 onClick={() => setShowDbModal(false)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all cursor-pointer"
+                className="px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all cursor-pointer"
               >
                 Close
               </button>
