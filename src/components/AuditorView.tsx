@@ -168,9 +168,6 @@ export default function AuditorView({
               </div>
               <div>
                 <h2 className="text-lg font-black text-[#1B4332]">Association Inventory & Custodial Notes</h2>
-                <p className="mt-1 text-xs text-[#4A5F57]">
-                  Since there is no Property Custodian, the Auditor keeps the official notes of all association inventory — equipment, tools, rental assets, and supplies.
-                </p>
               </div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -3,8 +3,10 @@ import { Announcement, AssociationActivity } from '../types';
 import { 
   Megaphone, Plus, Trash2, Calendar, Shield, Tag, AlertTriangle, 
   CloudSun, DollarSign, Printer, CheckCircle, Clock, MapPin, 
-  Users, Edit3, FileText, Check
+  Users, Edit3, FileText, Check, X
 } from 'lucide-react';
+
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface PioViewProps {
   announcements: Announcement[];
@@ -30,6 +32,7 @@ export default function PioView({
   onOpenReportModal,
   postedByName = 'PIO (Ida S. Manera)'
 }: PioViewProps) {
+  const { t, isEnglish: en } = useLanguage();
   const [activeTab, setActiveTab] = useState<'bulletins' | 'activities'>('bulletins');
 
   // Announcement State
@@ -324,7 +327,7 @@ export default function PioView({
                   <div className="space-y-3">
                     <div className="flex justify-between items-start gap-2 border-b border-[#E9E4D9] pb-3">
                       <div>
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
                           {act.category}
                         </span>
                         <h3 className="text-base font-bold text-[#1B4332] mt-1.5">{act.title}</h3>
@@ -335,10 +338,10 @@ export default function PioView({
 
                       <div className="flex items-center gap-1.5">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          act.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                          act.status === 'In Progress' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                          act.status === 'Cancelled' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
-                          'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          act.status === 'Completed' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                          act.status === 'In Progress' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                          act.status === 'Cancelled' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                          'bg-blue-100 text-blue-800 border border-blue-300'
                         }`}>
                           {act.status}
                         </span>
@@ -369,40 +372,40 @@ export default function PioView({
 
                     <div className="grid grid-cols-2 gap-2 text-xs text-[#4B6259] bg-[#F5FAF6] p-3 rounded-xl border border-[#E9E4D9]">
                       <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <Calendar className="w-3.5 h-3.5 text-[#0D47A1] shrink-0" />
                         <span>{act.scheduledDate}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <Clock className="w-3.5 h-3.5 text-[#B26A00] shrink-0" />
                         <span>{act.scheduledTime}</span>
                       </div>
                       <div className="col-span-2 flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-[#2D6A4F] shrink-0" />
                         <span className="truncate">{act.location}</span>
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-300 leading-relaxed">{act.description}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed break-words">{act.description}</p>
 
                     {act.documentedNotes && (
-                      <div className="bg-emerald-950/30 border border-emerald-500/20 p-3 rounded-xl space-y-1 text-xs">
-                        <span className="text-[10px] font-black uppercase text-emerald-400 flex items-center gap-1">
+                      <div className="bg-[#FAF8F5] border-2 border-[#E9E4D9] p-3 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#4A5F57] flex items-center gap-1">
                           <FileText className="w-3 h-3" />
-                          <span>Documented Outcome / Notes:</span>
+                          <span>{en ? 'Notes' : 'Mga Saysay'}</span>
                         </span>
-                        <p className="text-emerald-200/90 italic">{act.documentedNotes}</p>
+                        <p className="text-xs text-slate-800 leading-relaxed break-words">{act.documentedNotes}</p>
                         {act.attendeesCount ? (
-                          <span className="inline-block text-[10px] font-bold text-emerald-400 mt-1">
-                            Attendees: {act.attendeesCount} Farmers Present
+                          <span className="inline-block text-[11px] font-black text-[#2D6A4F] pt-0.5">
+                            {t('Niadto', 'Attendees')}: {act.attendeesCount}
                           </span>
                         ) : null}
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-2 border-t border-slate-750 flex justify-between items-center text-[11px] text-slate-500">
-                    <span>Organizer: {act.organizer}</span>
-                    <span>Audience: {act.targetAudience || 'AFA Members'}</span>
+                  <div className="pt-2 border-t border-[#E9E4D9] flex flex-wrap justify-between items-center gap-2 text-[11px] text-[#5D6B54] font-semibold">
+                    <span>{t('Organisasyon', 'Organizer')}: {act.organizer}</span>
+                    <span>{t('Tumong', 'Audience')}: {act.targetAudience || 'AFA Members'}</span>
                   </div>
                 </div>
               ))}
@@ -519,163 +522,188 @@ export default function PioView({
         </div>
       )}
 
-      {/* CREATE / EDIT ACTIVITY MODAL */}
+      {/* SCHEDULE / EDIT ACTIVITY MODAL */}
       {showAddActivityModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl">
-            <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="font-bold text-white text-base flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-blue-400" />
-                <span>{editingActivity ? 'I-update ang Hilkutin (Edit Activity)' : 'Idugang ang Bag-ong Hilkutin (Schedule Activity)'}</span>
-              </h3>
-              <button 
+        <div className="fixed inset-0 bg-[#0B1F17]/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fade-in text-left">
+          <div className="bg-white w-full max-w-4xl max-h-[94vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden">
+
+            {/* HEADER */}
+            <div className="bg-[#1B4332] text-white px-5 sm:px-6 py-4 shrink-0 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2.5 rounded-xl bg-white/15 shrink-0">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-black text-base leading-tight truncate">
+                    {editingActivity ? (en ? 'Edit Activity' : 'I-update ang Kalihokan') : (en ? 'Schedule Activity' : 'Schedule Bag-ong Kalihokan')}
+                  </h3>
+                </div>
+              </div>
+              <button
                 onClick={() => setShowAddActivityModal(false)}
-                className="text-slate-400 hover:text-white text-lg font-bold cursor-pointer"
+                aria-label="Close activity form"
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors cursor-pointer shrink-0"
               >
-                &times;
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveActivity} className="p-5 space-y-4 text-xs">
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Activity Title (English)</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Organic Farming & Vermicomposting Seminar"
-                  value={actTitle}
-                  onChange={(e) => setActTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
+            {/* BODY */}
+            <form onSubmit={handleSaveActivity} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-3 space-y-2.5">
 
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Cebuano Title</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Seminar sa Organikong Pag-uuma ug Abuno"
-                  value={actCebTitle}
-                  onChange={(e) => setActCebTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
+                {/* TITLE */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Title' : 'Titulo sa Kalihokan'}</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Organic Farming Seminar"
+                      value={actTitle}
+                      onChange={(e) => setActTitle(e.target.value)}
+                      className="w-full px-3.5 py-2 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Category</label>
-                  <select
-                    value={actCategory}
-                    onChange={(e) => setActCategory(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="Training / Workshop">Training / Workshop</option>
-                    <option value="Community Outreach">Community Outreach</option>
-                    <option value="Harvest Fair">Harvest Fair</option>
-                    <option value="Assembly & Fiesta">Assembly & Fiesta</option>
-                    <option value="Livelihood Project">Livelihood Project</option>
-                    <option value="Other">Other</option>
-                  </select>
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">
+                      {en ? 'Bisaya Title' : 'Bisaya nga Titulo'} <span className="font-semibold normal-case text-slate-400">({en ? 'optional' : 'opsyonal'})</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Seminar sa Organikong Pag-uuma"
+                      value={actCebTitle}
+                      onChange={(e) => setActCebTitle(e.target.value)}
+                      className="w-full px-3.5 py-2 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Status</label>
-                  <select
-                    value={actStatus}
-                    onChange={(e) => setActStatus(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="Scheduled">Scheduled</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Cancelled">Cancelled</option>
-                  </select>
-                </div>
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Category' : 'Klase sa Kalihokan'}</label>
+                    <select
+                      value={actCategory}
+                      onChange={(e) => setActCategory(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors cursor-pointer"
+                    >
+                      <option value="Training / Workshop">{t('Pagbansay / Workshop', 'Training / Workshop')}</option>
+                      <option value="Community Outreach">{t('Komunidad Outreach', 'Community Outreach')}</option>
+                      <option value="Harvest Fair">{t('Harvest Fair', 'Harvest Fair')}</option>
+                      <option value="Assembly & Fiesta">{t('Asembliya ug Pista', 'Assembly & Fiesta')}</option>
+                      <option value="Livelihood Project">{t('Proyektong Panginabuhian', 'Livelihood Project')}</option>
+                      <option value="Other">{t('Iba pa', 'Other')}</option>
+                    </select>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Date</label>
-                  <input
-                    type="date"
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Status' : 'Kahimtang'}</label>
+                    <select
+                      value={actStatus}
+                      onChange={(e) => setActStatus(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors cursor-pointer"
+                    >
+                      <option value="Scheduled">{t('Nakaplano', 'Scheduled')}</option>
+                      <option value="In Progress">{t('Nagpadayon', 'In Progress')}</option>
+                      <option value="Completed">{t('Nahuman', 'Completed')}</option>
+                      <option value="Cancelled">{t('Kinansela', 'Cancelled')}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Date' : 'Petsa'}</label>
+                    <input
+                      type="date"
+                      required
+                      value={actDate}
+                      onChange={(e) => setActDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Time' : 'Oras'}</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 09:00 AM"
+                      value={actTime}
+                      onChange={(e) => setActTime(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Venue' : 'Asa Gihimo'}</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Barangay Covered Court"
+                      value={actLocation}
+                      onChange={(e) => setActLocation(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Description' : 'Paghulagway'}</label>
+                  <textarea
+                    rows={2}
                     required
-                    value={actDate}
-                    onChange={(e) => setActDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
+                    placeholder={t('Katuyoan sa kalihokan...', 'Purpose of this activity...')}
+                    value={actDesc}
+                    onChange={(e) => setActDesc(e.target.value)}
+                    className="w-full h-[64px] px-3.5 py-2 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors resize-none"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Time</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 09:00 AM"
-                    value={actTime}
-                    onChange={(e) => setActTime(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">
+                      Notes <span className="font-semibold normal-case text-slate-400">({en ? 'optional' : 'opsyonal'})</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder={en ? 'Results or agreements...' : 'Resulta o kasabutan...'}
+                      value={actNotes}
+                      onChange={(e) => setActNotes(e.target.value)}
+                      className="w-full h-[64px] px-3.5 py-2 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors resize-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Attendees' : 'Niadto'}</label>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      value={actAttendees}
+                      onChange={(e) => setActAttendees(Number(e.target.value))}
+                      className="w-full h-[64px] px-3.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Location</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Barangay Alegria Covered Court"
-                  value={actLocation}
-                  onChange={(e) => setActLocation(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Description / Objective</label>
-                <textarea
-                  rows={2}
-                  required
-                  placeholder="Mubo nga deskripsyon sa katuyoan sa hilkutin..."
-                  value={actDesc}
-                  onChange={(e) => setActDesc(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Documented Notes / Event Outcomes (Optional):</label>
-                <textarea
-                  rows={2}
-                  placeholder="I-rekord ang mga nahitabo, resulta, o kasabutan pagkahuman sa hilkutin..."
-                  value={actNotes}
-                  onChange={(e) => setActNotes(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Attendees Count (If completed):</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={actAttendees}
-                  onChange={(e) => setActAttendees(Number(e.target.value))}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-blue-500 font-mono"
-                />
-              </div>
-
-              <div className="pt-2 flex gap-3">
+              {/* FOOTER */}
+              <div className="px-5 sm:px-6 py-3 bg-[#FAF8F5] border-t border-[#E9E4D9] flex items-center justify-end gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowAddActivityModal(false)}
-                  className="flex-1 py-2.5 text-sm font-semibold bg-slate-700 hover:bg-slate-650 text-slate-200 rounded-xl cursor-pointer"
+                  className="px-4 py-2.5 text-sm font-bold bg-white border-2 border-[#D5CFC1] text-[#1B4332] hover:bg-[#F0EDE7] rounded-xl cursor-pointer transition-colors"
                 >
-                  Kanselahi
+                  {t('Kanselahi', 'Cancel')}
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 text-sm font-black bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-sm cursor-pointer"
+                  className="px-5 py-2.5 text-sm font-black bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl shadow-sm cursor-pointer transition-colors flex items-center gap-1.5"
                 >
-                  I-save ang Hilkutin
+                  <Check className="w-4 h-4" />
+                  <span>{editingActivity ? t('I-update', 'Save Changes') : t('I-save', 'Save Activity')}</span>
                 </button>
               </div>
             </form>

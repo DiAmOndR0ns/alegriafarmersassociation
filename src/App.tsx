@@ -3246,7 +3246,6 @@ export default function App() {
               </div>
               <div>
                 <h3 className="font-extrabold text-[#1B4332] text-base">I-delete ang Tanan nga Demo / Seed Data?</h3>
-                <p className="text-xs text-[#4A5F57]">Purge Demo Records from Database & Storage</p>
               </div>
             </div>
 
@@ -3290,7 +3289,6 @@ export default function App() {
               </div>
               <div>
                 <h3 className="font-extrabold text-[#1B4332] text-base">Limpyohan ang Local Browser Cache?</h3>
-                <p className="text-xs text-[#4A5F57]">Enforce Zero-Residual Confidential Storage</p>
               </div>
             </div>
 

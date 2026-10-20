@@ -502,32 +502,32 @@ export default function LivestockMonitor({
           {/* SWINE PORTFOLIO */}
           <div
             onClick={() => setSelected('Swine Raising (Baboyan)')}
-            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${
               isSwine
-                ? 'bg-white text-slate-900 border-white shadow-md ring-2 ring-emerald-300'
-                : 'bg-white/10 hover:bg-white/15 text-white border-white/20'
+                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
+                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className={`text-xs font-black uppercase tracking-wider ${isSwine ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
                 🐖 Swine / Baboy
               </span>
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${isSwine ? 'bg-emerald-100 text-[#1B4332]' : 'bg-white/20 text-white'}`}>
-                {totalSwine} Heads
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ${isSwine ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
+                {totalSwine} Head
               </span>
             </div>
-            <div className="mt-2.5 space-y-1 text-xs">
-              <div className="flex justify-between font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-white/80'}>Fattening:</span>
-                <span className="font-mono font-black">{currentSwineFattening}</span>
+            <div className="mt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>Fattening</span>
+                <span className={`font-mono font-black ${isSwine ? 'text-[#1B4332]' : 'text-white'}`}>{currentSwineFattening}</span>
               </div>
-              <div className="flex justify-between font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-white/80'}>Breeding (Anay):</span>
-                <span className="font-mono font-black">{currentSwineBreeding}</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>Breeding (Anay)</span>
+                <span className={`font-mono font-black ${isSwine ? 'text-[#1B4332]' : 'text-white'}`}>{currentSwineBreeding}</span>
               </div>
-              <div className="flex justify-between font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-white/80'}>For Dispersal:</span>
-                <span className="font-mono font-black text-amber-500">{currentSwineDispersal}</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>For Dispersal</span>
+                <span className={`font-mono font-black ${isSwine ? 'text-[#B26A00]' : 'text-amber-300'}`}>{currentSwineDispersal}</span>
               </div>
             </div>
           </div>
@@ -535,32 +535,32 @@ export default function LivestockMonitor({
           {/* CATTLE PORTFOLIO */}
           <div
             onClick={() => setSelected('Cattle Raising (Bakahan)')}
-            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${
               isCattle
-                ? 'bg-white text-slate-900 border-white shadow-md ring-2 ring-emerald-300'
-                : 'bg-white/10 hover:bg-white/15 text-white border-white/20'
+                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
+                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className={`text-xs font-black uppercase tracking-wider ${isCattle ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
                 🐂 Cattle / Baka
               </span>
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${isCattle ? 'bg-emerald-100 text-[#1B4332]' : 'bg-white/20 text-white'}`}>
-                {totalCattle} Heads
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ${isCattle ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
+                {totalCattle} Head
               </span>
             </div>
-            <div className="mt-2.5 space-y-1 text-xs">
-              <div className="flex justify-between font-bold">
-                <span className={isCattle ? 'text-slate-600' : 'text-white/80'}>Fattening:</span>
-                <span className="font-mono font-black">{currentCattleFattening}</span>
+            <div className="mt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>Fattening</span>
+                <span className={`font-mono font-black ${isCattle ? 'text-[#1B4332]' : 'text-white'}`}>{currentCattleFattening}</span>
               </div>
-              <div className="flex justify-between font-bold">
-                <span className={isCattle ? 'text-slate-600' : 'text-white/80'}>For Dispersal:</span>
-                <span className="font-mono font-black text-amber-500">{currentCattleDispersal}</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>For Dispersal</span>
+                <span className={`font-mono font-black ${isCattle ? 'text-[#B26A00]' : 'text-amber-300'}`}>{currentCattleDispersal}</span>
               </div>
-              <div className="flex justify-between font-bold opacity-60">
-                <span>Status:</span>
-                <span>Active Livelihood</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>Status</span>
+                <span className={`font-mono font-black ${isCattle ? 'text-slate-500' : 'text-emerald-200/80'}`}>Active Livelihood</span>
               </div>
             </div>
           </div>
@@ -568,32 +568,32 @@ export default function LivestockMonitor({
           {/* POULTRY / RTL PORTFOLIO */}
           <div
             onClick={() => setSelected('Poultry Raising (RTL)')}
-            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${
               isPoultry
-                ? 'bg-white text-slate-900 border-white shadow-md ring-2 ring-emerald-300'
-                : 'bg-white/10 hover:bg-white/15 text-white border-white/20'
+                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
+                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className={`text-xs font-black uppercase tracking-wider ${isPoultry ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
-                🐔 Poultry / Manokan
+                🐔 Poultry / Manok
               </span>
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${isPoultry ? 'bg-emerald-100 text-[#1B4332]' : 'bg-white/20 text-white'}`}>
-                {currentRtl} Heads
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ${isPoultry ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
+                {currentRtl} Head
               </span>
             </div>
-            <div className="mt-2.5 space-y-1 text-xs">
-              <div className="flex justify-between font-bold">
-                <span className={isPoultry ? 'text-slate-600' : 'text-white/80'}>Ready-to-Lay (RTL):</span>
-                <span className="font-mono font-black">{currentRtl}</span>
+            <div className="mt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Ready-to-Lay (RTL)</span>
+                <span className={`font-mono font-black ${isPoultry ? 'text-[#1B4332]' : 'text-white'}`}>{currentRtl}</span>
               </div>
-              <div className="flex justify-between font-bold">
-                <span className={isPoultry ? 'text-slate-600' : 'text-white/80'}>Egg Production:</span>
-                <span className="font-mono font-black text-emerald-600">Active</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Egg Production</span>
+                <span className={`font-mono font-black ${isPoultry ? 'text-[#2D6A4F]' : 'text-emerald-300'}`}>Active</span>
               </div>
-              <div className="flex justify-between font-bold opacity-60">
-                <span>Coop Setup:</span>
-                <span>Layer Cages</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Coop Setup</span>
+                <span className={`font-mono font-black ${isPoultry ? 'text-slate-500' : 'text-emerald-200/80'}`}>Layer Cages</span>
               </div>
             </div>
           </div>
@@ -958,9 +958,6 @@ export default function LivestockMonitor({
       {showEditHeadcounts && (
         <Modal title="Update Livestock Headcounts" onClose={() => setShowEditHeadcounts(false)}>
           <form onSubmit={saveHeadcounts} className="space-y-4 text-left">
-            <p className="text-xs text-slate-600 font-semibold leading-relaxed">
-              Auditor, Treasurer, President, and VP can calibrate the association’s live animal counts directly:
-            </p>
 
             {/* Swine Section */}
             <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">

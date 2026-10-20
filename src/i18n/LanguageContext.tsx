@@ -3,11 +3,14 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 /**
  * Global language mode for the whole application.
  *
- *  - 'mixed' (default): English labels with Bisaya (Cebuano) support text
+ *  - 'mixed' (DEFAULT): English + Bisaya UI text, as the association writes it
  *  - 'en'             : English only
  *
- * Every dashboard/component reads this through `useLanguage()` so the toggle in
- * the header applies app-wide, not just on the login screen.
+ * Rules:
+ *  - `t(bisaya, english)` swaps UI chrome (labels, buttons, headings, helper text).
+ *  - Content typed by officers — member names, announcement titles, activity
+ *    descriptions, product names, notes, remarks — is rendered as-is and is
+ *    NEVER passed through `t()`. It is data, not interface.
  */
 export type LanguageMode = 'mixed' | 'en';
 
@@ -15,11 +18,13 @@ interface LanguageContextValue {
   language: LanguageMode;
   setLanguage: (mode: LanguageMode) => void;
   toggleLanguage: () => void;
+  resetToDefault: () => void;
   isEnglish: boolean;
   /** Pick between a Bisaya variant (mixed mode) and an English-only variant. */
   t: (bisaya: string, english: string) => string;
 }
 
+export const DEFAULT_LANGUAGE: LanguageMode = 'mixed';
 const STORAGE_KEY = 'bafa_language_mode';
 
 const LanguageContext = createContext<LanguageContextValue | undefined>(undefined);
@@ -31,7 +36,7 @@ function readStoredLanguage(): LanguageMode {
   } catch {
     /* ignore */
   }
-  return 'mixed';
+  return DEFAULT_LANGUAGE;
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
@@ -54,8 +59,9 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     const isEnglish = language === 'en';
     return {
       language,
-      setLanguage,
+      setLanguage: (mode: LanguageMode) => setLanguageState(mode),
       toggleLanguage: () => setLanguageState((prev) => (prev === 'en' ? 'mixed' : 'en')),
+      resetToDefault: () => setLanguageState(DEFAULT_LANGUAGE),
       isEnglish,
       t: (bisaya: string, english: string) => (isEnglish ? english : bisaya),
     };
@@ -66,21 +72,22 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
 /**
  * Access the global language. Safe to call outside the provider: it falls back
- * to the default mixed mode rather than crashing older/standalone renders.
+ * to the default (mixed) mode rather than crashing standalone renders.
  */
 export function useLanguage(): LanguageContextValue {
   const ctx = useContext(LanguageContext);
   if (ctx) return ctx;
   return {
-    language: 'mixed',
+    language: DEFAULT_LANGUAGE,
     setLanguage: () => undefined,
     toggleLanguage: () => undefined,
+    resetToDefault: () => undefined,
     isEnglish: false,
     t: (bisaya: string) => bisaya,
   };
 }
 
-/** Small, consistent language switch button used in headers across the app. */
+/** Consistent language switch button used in headers across the app. */
 export function LanguageToggle({
   className = '',
   onDark = false,
@@ -93,8 +100,8 @@ export function LanguageToggle({
     <button
       type="button"
       onClick={toggleLanguage}
-      title={isEnglish ? 'Show English + Bisaya (default)' : 'Show English only'}
-      aria-label={isEnglish ? 'Switch to English and Bisaya' : 'Switch to English only'}
+      title={isEnglish ? 'Balik sa English + Bisaya (default)' : 'Translate everything to English'}
+      aria-label={isEnglish ? 'Switch back to English and Bisaya' : 'Switch to English only'}
       className={
         className ||
         [
@@ -113,7 +120,7 @@ export function LanguageToggle({
         <path d="m22 22-5-10-5 10" />
         <path d="M14 18h6" />
       </svg>
-      <span>{isEnglish ? 'English + Bisaya' : 'Translate to English'}</span>
+      <span>{isEnglish ? 'English + Bisaya' : 'Translate'}</span>
     </button>
   );
 }

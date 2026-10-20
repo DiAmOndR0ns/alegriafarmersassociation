@@ -218,12 +218,12 @@ export default function GuestPortal({
           <div className="relative w-full flex items-center">
             <div className="w-full flex justify-start sm:justify-center gap-1 sm:gap-2 overflow-x-auto py-1 select-none scrollbar-thin scrollbar-thumb-[#1B4332]/20 px-3 sm:px-6">
               {[
-                { id: 'home', label: en ? 'Overview' : 'Kabuuan', icon: Sparkles },
-                { id: 'announcements', label: en ? 'Announcements' : 'Mga Pahibalo', icon: Megaphone },
-                { id: 'activities', label: en ? 'Activities' : 'Mga Kalihokan', icon: Calendar },
-                { id: 'products', label: en ? 'Products' : 'Mga Produkto', icon: Coffee },
-                { id: 'achievements', label: en ? 'Achievements' : 'Mga Kalampusan', icon: Trophy },
-                { id: 'history', label: en ? 'History' : 'Kasaysayan', icon: BookOpen }
+                { id: 'home', label: 'Overview', icon: Sparkles },
+                { id: 'announcements', label: 'Announcements', icon: Megaphone },
+                { id: 'activities', label: 'Activities', icon: Calendar },
+                { id: 'products', label: 'Products', icon: Coffee },
+                { id: 'achievements', label: 'Achievements', icon: Trophy },
+                { id: 'history', label: 'History', icon: BookOpen }
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -418,9 +418,6 @@ export default function GuestPortal({
                   <Milestone className="w-5 h-5 sm:w-6 sm:h-6 text-[#FFB300] shrink-0" />
                   <span>Are you a Registered AFA Member or Officer?</span>
                 </h4>
-                <p className="text-xs sm:text-sm text-[#7D5C4F] font-semibold break-words">
-                  Sign in to access your personal dashboard, log caretaker chores, view dividends, and print certified credentials.
-                </p>
               </div>
               <button
                 onClick={onEnterLogin}
@@ -807,123 +804,142 @@ export default function GuestPortal({
         </div>
       </footer>
 
-      {/* GUEST PRODUCT & RENTAL DETAILS MODAL (STRICTLY REFLECTS DATABASE) */}
+      {/* PRODUCT DETAIL MODAL */}
       {selectedProductModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 overflow-y-auto p-3 sm:p-4 flex items-center justify-center animate-fade-in">
-          <div className="bg-white border-2 border-[#D5CFC1] rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
-            {/* Header */}
-            <div className="bg-[#1B4332] px-5 py-4 flex items-center justify-between text-white shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-2 rounded-xl bg-white/15 text-white shrink-0">
-                  <Boxes className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-base font-black truncate">{selectedProductModal.name}</h3>
-                  <p className="text-xs text-emerald-200 truncate">{selectedProductModal.cebName || 'Opisyal nga Produkto / Gamit sa Asosasyon'}</p>
-                </div>
-              </div>
+        <div
+          className="fixed inset-0 bg-[#0B1F17]/80 backdrop-blur-sm z-50 overflow-y-auto p-3 sm:p-4 flex items-center justify-center animate-fade-in"
+          onClick={() => setSelectedProductModal(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto"
+          >
+            {/* HEADER */}
+            <div className="relative bg-[#1B4332] px-5 py-4 sm:px-6 sm:py-5 text-white shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedProductModal(null)}
-                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer text-xl font-bold shrink-0 ml-2"
+                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
                 aria-label="Close"
               >
-                &times;
+                <X className="w-4 h-4" />
               </button>
+
+              <div className="flex items-start gap-3 sm:gap-4 pr-10 min-w-0">
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-white/15 text-white shrink-0">
+                  {selectedProductModal.category?.includes('Rental') ? <Boxes className="w-6 h-6" /> : <Coffee className="w-6 h-6" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-100 border border-emerald-300/30">
+                      {selectedProductModal.category || 'General'}
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${selectedProductModal.category?.includes('Rental') ? 'bg-amber-300 text-amber-950' : 'bg-white/20 text-white'}`}>
+                      {selectedProductModal.category?.includes('Rental') ? t('Abangan sa Tanan', 'Rentable by All') : selectedProductModal.stockStatus || 'Available'}
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-black leading-tight break-words">{selectedProductModal.name}</h3>
+                  {selectedProductModal.cebName && (
+                    <p className="text-xs sm:text-sm text-emerald-100/80 mt-0.5 break-words">{selectedProductModal.cebName}</p>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-5 sm:p-6 overflow-y-auto space-y-4 text-left flex-1 text-slate-800">
-              {/* Category & Status */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 bg-emerald-100 text-[#1B4332] border border-emerald-300 rounded-full text-xs font-black uppercase tracking-wider">
-                  {selectedProductModal.category || 'Rental & Produce'}
-                </span>
-                {selectedProductModal.category?.includes('Rental') && (
-                  <span className="px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-xs font-black">
-                    Bukas Abangan Alang sa Tanan (Rentable by Everyone)
-                  </span>
-                )}
-                <span className="px-3 py-1 bg-sky-100 text-sky-900 border border-sky-300 rounded-full text-xs font-bold font-mono">
-                  {selectedProductModal.stockStatus || 'In Stock'}
-                </span>
-              </div>
+            {/* BODY */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-left">
 
-              {/* Price & Quantity Available Card */}
-              <div className="bg-[#FAF7F2] border border-[#E8E2D5] p-4 rounded-2xl flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-black tracking-wider block">Standard Presyo / Rental Rate:</span>
-                  <span className="text-xl sm:text-2xl font-black text-[#BF360C] font-mono">
-                    {typeof selectedProductModal.price === 'number' 
-                      ? `PHP ${selectedProductModal.price.toLocaleString()} / ${selectedProductModal.unit || 'unit'}` 
+              {/* PRICE + STOCK TILES */}
+              <div className="grid grid-cols-2 gap-3 items-stretch">
+                <div className="rounded-2xl border-2 border-[#F0D5B4] bg-[#FFF7EC] px-4 py-3 flex flex-col justify-between">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-[#8A5A1E]">
+                    {en ? 'Rental Rate' : 'Presyo / Rate'}
+                  </span>
+                  <span className="block text-xl sm:text-2xl font-black font-mono text-[#BF360C] mt-1 break-words leading-tight">
+                    {typeof selectedProductModal.price === 'number'
+                      ? `PHP ${selectedProductModal.price.toLocaleString()}`
                       : selectedProductModal.price}
                   </span>
+                  {selectedProductModal.unit && (
+                    <span className="block text-[11px] font-bold text-[#8A5A1E]/80 mt-0.5 break-words">{selectedProductModal.unit}</span>
+                  )}
                 </div>
-                <div className="sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200">
-                  <span className="text-[10px] text-slate-500 uppercase font-black tracking-wider block">Magamit nga Stock (Available):</span>
-                  <span className="text-sm font-black text-[#1B4332]">
-                    {selectedProductModal.quantityAvailable || selectedProductModal.specs || selectedProductModal.unit || 'Available in stock'}
+
+                <div className="rounded-2xl border-2 border-[#CFE6D6] bg-[#F1F9F3] px-4 py-3 flex flex-col justify-between">
+                  <span className="block text-[10px] font-black uppercase tracking-wider text-[#2D6A4F]">
+                    {en ? 'Available' : 'Magamit'}
+                  </span>
+                  <span className="block text-sm sm:text-base font-black text-[#1B4332] mt-1 break-words leading-snug">
+                    {selectedProductModal.quantityAvailable || selectedProductModal.stockStatus || (en ? 'In stock' : 'Naa sa stock')}
                   </span>
                 </div>
               </div>
 
-              {/* Description */}
-              <div className="space-y-1.5">
-                <h5 className="text-xs font-black text-slate-700 uppercase tracking-wider">Deskripsyon & Gamit:</h5>
-                <p className="text-sm text-slate-700 leading-relaxed font-medium bg-white p-3.5 rounded-2xl border border-slate-200">
-                  {selectedProductModal.desc || selectedProductModal.description || 'De-kalidad nga produkto o kagamitan gikan sa Alegria Farmers Association.'}
-                </p>
-              </div>
-
-              {/* Specs */}
-              {selectedProductModal.specs && (
+              {/* DESCRIPTION */}
+              {(selectedProductModal.desc || selectedProductModal.description) && (
                 <div className="space-y-1.5">
-                  <h5 className="text-xs font-black text-slate-700 uppercase tracking-wider">Kapasidad / Detalye (Specs):</h5>
-                  <div className="text-xs font-semibold text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono">
-                    {selectedProductModal.specs}
-                  </div>
+                  <h4 className="text-[11px] font-black uppercase tracking-wider text-[#4A5F57]">
+                    {t('Deskripsyon', 'Description')}
+                  </h4>
+                  <p className="text-sm text-slate-800 leading-relaxed font-medium break-words">
+                    {selectedProductModal.desc || selectedProductModal.description}
+                  </p>
                 </div>
               )}
 
-              {/* Farmer / Custodian Contact Box */}
-              <div className="bg-[#EAF4EC] border border-[#B7E3C4] p-4 rounded-2xl space-y-2">
-                <h5 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-[#1B4332]" />
-                  <span>Nalambigit nga Mag-uuma / Custodian:</span>
-                </h5>
-                <div className="text-sm font-black text-[#1B4332]">
-                  {selectedProductModal.farmerName || selectedProductModal.contactPerson || 'AFA Logistics & Custodian Committee'}
+              {/* SPECS */}
+              {selectedProductModal.specs && (
+                <div className="space-y-1.5">
+                  <h4 className="text-[11px] font-black uppercase tracking-wider text-[#4A5F57]">
+                    {t('Detalye', 'Specifications')}
+                  </h4>
+                  <p className="text-xs font-semibold text-slate-700 bg-[#FAF8F5] border border-[#E9E4D9] rounded-xl px-3 py-2 break-words">
+                    {selectedProductModal.specs}
+                  </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700 font-semibold pt-1">
+              )}
+
+              {/* CUSTODIAN */}
+              <div className="rounded-2xl border-2 border-[#E9E4D9] bg-[#FAF8F5] px-4 py-3 space-y-2">
+                <h4 className="text-[11px] font-black uppercase tracking-wider text-[#4A5F57] flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  <span>{t('Magtatag-iya / Custodian', 'Custodian')}</span>
+                </h4>
+                <p className="text-sm font-black text-[#1B4332] break-words">
+                  {selectedProductModal.farmerName || selectedProductModal.contactPerson || 'AFA Committee'}
+                </p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-700">
                   {selectedProductModal.farmerSitio && (
                     <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#1B4332]" />
-                      <span>{selectedProductModal.farmerSitio}</span>
+                      <MapPin className="w-3.5 h-3.5 text-[#2D6A4F] shrink-0" /> {selectedProductModal.farmerSitio}
                     </span>
                   )}
-                  {(selectedProductModal.farmerPhone || selectedProductModal.contactPerson) && (
-                    <span className="flex items-center gap-1 font-mono font-bold text-[#BF360C]">
-                      <Phone className="w-3.5 h-3.5 text-[#BF360C]" />
-                      <span>{selectedProductModal.farmerPhone || selectedProductModal.contactPerson}</span>
+                  {selectedProductModal.farmerPhone && (
+                    <span className="flex items-center gap-1 font-mono text-[#BF360C]">
+                      <Phone className="w-3.5 h-3.5 shrink-0" /> {selectedProductModal.farmerPhone}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Order/Rental Instructions */}
-              <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 leading-relaxed">
-                <strong>Pahibalo sa Pag-abang o Pagpalit:</strong> Ang mga kagamitan sama sa lingkoranan ug sako, ingon man ang mga lab-as nga abot, bukas abangan ug paliton sa tanang lumulupyo ug bisita. Pakig-alayon lamang sa giasayn nga mag-uuma o bisitaha ang Alegria Farmers Center.
+              {/* HOW TO ORDER */}
+              <div className="rounded-2xl bg-[#EAF4EC] border-2 border-[#B7E3C4] px-4 py-3 flex items-start gap-2.5">
+                <Check className="w-4 h-4 text-[#1B4332] shrink-0 mt-0.5" />
+                <p className="text-xs font-bold text-[#1B4332] leading-relaxed">
+                  {t('Pakigkita sa opisyal sa AFA o sa Alegria Farmers Center aron mo-order o moabang.',
+                     'Contact an AFA officer or visit the Alegria Farmers Center to order or rent.')}
+                </p>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 flex justify-end shrink-0">
+            {/* FOOTER */}
+            <div className="bg-[#FAF8F5] px-4 sm:px-6 py-3 border-t border-[#E9E4D9] shrink-0">
               <button
                 type="button"
                 onClick={() => setSelectedProductModal(null)}
-                className="px-5 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs sm:text-sm font-black rounded-xl cursor-pointer transition-all shadow-sm"
+                className="w-full py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white text-sm font-black rounded-xl cursor-pointer transition-colors"
               >
-                Sirad-i (Close)
+                {t('Sirad-i', 'Close')}
               </button>
             </div>
           </div>
