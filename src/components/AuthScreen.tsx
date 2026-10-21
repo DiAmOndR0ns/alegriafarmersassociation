@@ -10,7 +10,7 @@ import {
   MAX_LOGIN_ATTEMPTS,
   LOCKOUT_DURATION_MS
 } from '../utils/passwordPolicy';
-import { generateTotpSecret, getTotpUri, verifyTotpCode } from '../utils/totp';
+import { getTotpUri, verifyTotpCode } from '../utils/totp';
 import {
   Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
   UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
@@ -109,7 +109,7 @@ export default function AuthScreen({
       }
       return;
     }
-    onRegister({
+    onRegister?.({
       name: adminName.trim(),
       username: adminUsername.trim().toLowerCase(),
       password: adminPassword.trim(),

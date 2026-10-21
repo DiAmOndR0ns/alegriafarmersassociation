@@ -1,4 +1,3 @@
-import { getPool, isDatabaseConfigured, fetchAllDataFromPostgres } from '../api/db';
 import { getSecureItem, setSecureItem } from './secureStorage';
 
 export interface BackupRecord {
@@ -31,9 +30,24 @@ export async function createSystemSnapshot(source: 'automatic-nightly' | 'manual
   const timestamp = new Date().toISOString();
   let data: Record<string, any> = {};
 
-  if (isDatabaseConfigured()) {
+  try {
+    const res = await fetch('/api/sync/pull');
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.data) {
+        data = json.data;
+      }
+    }
+  } catch {
+    // If offline or network unavailable, snapshot client cached state
     try {
-      data = (await fetchAllDataFromPostgres(getPool())) as Record<string, any>;
+      const keys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_inventory', 'bafa_users'];
+      for (const key of keys) {
+        const item = await getSecureItem<any[]>(key);
+        if (item) {
+          data[key.replace('bafa_', '')] = item;
+        }
+      }
     } catch {
       data = {};
     }

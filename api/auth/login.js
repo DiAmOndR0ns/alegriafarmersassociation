@@ -674,6 +674,7 @@ function verifyTotp(secret, supplied, nowMs = Date.now(), lastStep) {
   if (!/^\d{6}$/.test(supplied)) return null;
   const currentStep = Math.floor(nowMs / 1e3 / TOTP_STEP_SECONDS);
   for (let step = currentStep - 1; step <= currentStep + 1; step++) {
+    if (step < 0) continue;
     const expected = totpForStep(secret, step);
     const a = Buffer.from(expected);
     const b = Buffer.from(supplied);
