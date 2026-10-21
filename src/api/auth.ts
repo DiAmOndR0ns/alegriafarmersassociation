@@ -380,7 +380,7 @@ export async function mfaConfirmHandler(req: any, res: any) {
 
 export async function bootstrapHandler(req: any, res: any) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
-  const bootstrapSecret = process.env.FAMS_BOOTSTRAP_SECRET || '';
+  const bootstrapSecret = process.env.FAMS_BOOTSTRAP_SECRET || process.env.BOOTSTRAP_SECRET || '';
   if (!bootstrapSecret || bootstrapSecret.length < 32) return errorResponse(res, 503, 'Bootstrap is not configured.');
   let pool: Pool;
   try {
