@@ -562,7 +562,7 @@ var LOCKOUT_DURATION_MS = 15 * 60 * 1e3;
 // src/api/auth.ts
 var SESSION_COOKIE = "fams_session";
 var SESSION_SECONDS = 8 * 60 * 60;
-var CHALLENGE_SECONDS = 5 * 60;
+var CHALLENGE_SECONDS = 15 * 60;
 var TOTP_STEP_SECONDS = 30;
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
@@ -674,7 +674,7 @@ function totpForStep(secret, step) {
 function verifyTotp(secret, supplied, nowMs = Date.now(), lastStep) {
   if (!/^\d{6}$/.test(supplied)) return null;
   const currentStep = Math.floor(nowMs / 1e3 / TOTP_STEP_SECONDS);
-  for (let step = currentStep - 1; step <= currentStep + 1; step++) {
+  for (let step = currentStep - 2; step <= currentStep + 2; step++) {
     if (step < 0) continue;
     const expected = totpForStep(secret, step);
     const a = Buffer.from(expected);

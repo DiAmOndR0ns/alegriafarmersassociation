@@ -205,8 +205,8 @@ export async function verifyTotpCode(
   const cleanCode = code.trim();
   if (!/^\d{6}$/.test(cleanCode)) return false;
 
-  // Check current window and +/- 1 window (90s tolerance)
-  for (const delta of [0, -STEP_SECONDS * 1000, STEP_SECONDS * 1000]) {
+  // Check current window and +/- 2 windows (150s tolerance)
+  for (const delta of [0, -STEP_SECONDS * 1000, STEP_SECONDS * 1000, -STEP_SECONDS * 2000, STEP_SECONDS * 2000]) {
     try {
       const expected = await generateTotpCode(secret, timestampMs + delta);
       if (expected === cleanCode) return true;

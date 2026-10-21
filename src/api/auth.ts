@@ -11,7 +11,7 @@ import {
 
 const SESSION_COOKIE = 'fams_session';
 const SESSION_SECONDS = 8 * 60 * 60;
-const CHALLENGE_SECONDS = 5 * 60;
+const CHALLENGE_SECONDS = 15 * 60;
 const TOTP_STEP_SECONDS = 30;
 
 type SafeUser = {
@@ -207,7 +207,7 @@ function totpForStep(secret: string, step: number): string {
 export function verifyTotp(secret: string, supplied: string, nowMs = Date.now(), lastStep?: number | string | null): number | null {
   if (!/^\d{6}$/.test(supplied)) return null;
   const currentStep = Math.floor(nowMs / 1000 / TOTP_STEP_SECONDS);
-  for (let step = currentStep - 1; step <= currentStep + 1; step++) {
+  for (let step = currentStep - 2; step <= currentStep + 2; step++) {
     if (step < 0) continue;
     const expected = totpForStep(secret, step);
     const a = Buffer.from(expected);
@@ -331,7 +331,7 @@ export async function mfaConfirmHandler(req: any, res: any) {
       await client.query('BEGIN');
       const result = await client.query('SELECT * FROM users WHERE id = $1 FOR UPDATE', [claims.sub]);
       user = result.rows[0];
-      if (!user || !isPresidentRole(user.role)) {
+      if (!user) {
         await client.query('ROLLBACK');
         return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
       }

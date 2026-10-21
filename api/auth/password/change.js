@@ -745,7 +745,7 @@ function createLegacySha256(password) {
 // src/api/auth.ts
 var SESSION_COOKIE = "fams_session";
 var SESSION_SECONDS = 8 * 60 * 60;
-var CHALLENGE_SECONDS = 5 * 60;
+var CHALLENGE_SECONDS = 15 * 60;
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {

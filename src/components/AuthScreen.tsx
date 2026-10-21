@@ -265,6 +265,12 @@ export default function AuthScreen({
       });
       const result = await response.json();
       if (!response.ok || !result?.success || !result?.user) {
+        if (response.status === 401 && (result?.message?.toLowerCase().includes('expired') || result?.message?.toLowerCase().includes('challenge'))) {
+          setAuthChallenge(null);
+          setMfaCode('');
+          toast('Verification window expired or invalid. Please sign in again to receive a fresh verification challenge.', 'error');
+          return;
+        }
         toast(result?.message || 'Authenticator code was rejected.', 'error');
         return;
       }
