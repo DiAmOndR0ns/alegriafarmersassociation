@@ -833,6 +833,10 @@ function safeUser(row) {
 function isPresidentRole(role) {
   return role.trim().toLowerCase().replace(/\s+/g, "_") === "president";
 }
+function isSecretaryRole(role) {
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
+  return normalized === "secretary" || normalized === "assistant_secretary";
+}
 function passwordPolicyError(password, username, role, oldHash, history) {
   const error = validatePasswordPolicy(password, username, role, Array.isArray(history) ? history : []);
   if (error) return error;
@@ -864,7 +868,7 @@ async function passwordResetHandler(req, res) {
     return errorResponse(res, 503, "Authentication is not configured or unavailable.");
   }
   if (!actor) return errorResponse(res, 401, "Authentication required.");
-  if (!isPresidentRole(actor.role)) return errorResponse(res, 403, "President access is required.");
+  if (!isPresidentRole(actor.role) && !isSecretaryRole(actor.role)) return errorResponse(res, 403, "President or Secretary access is required.");
   const body = await readBody(req);
   if (!body || typeof body.targetUserId !== "string" || typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
     return errorResponse(res, 400, "Current password, target user, and new password are required.");
@@ -889,6 +893,10 @@ async function passwordResetHandler(req, res) {
       if (isPresidentRole(target.role)) {
         await client.query("ROLLBACK");
         return errorResponse(res, 403, "President accounts cannot be reset through this endpoint.");
+      }
+      if (isSecretaryRole(actorRow.role) && target.role.trim().toLowerCase() !== "member") {
+        await client.query("ROLLBACK");
+        return errorResponse(res, 403, "Secretary access can reset Member accounts only.");
       }
       const history = Array.isArray(target.password_history) ? target.password_history : [];
       const policyError = passwordPolicyError(body.newPassword, target.username, target.role, target.password, history);

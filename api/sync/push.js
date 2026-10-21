@@ -1,8 +1,3 @@
-// Delegated to shared TypeScript handler
-import pushHandler from "../../src/api/push.ts";
-
-export default pushHandler;
-
 // src/api/db.ts
 import pg from "pg";
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
@@ -1493,6 +1488,9 @@ async function requireAuthenticated(req, res) {
 }
 
 // src/api/push.ts
+function isValidSyncState(state) {
+  return typeof state === "object" && state !== null && !Array.isArray(state);
+}
 async function handler(req, res) {
   if (req.method && req.method !== "POST") return sendResponse(res, 405, { success: false, message: "Method not allowed." });
   if (rejectCrossOriginMutation(req)) return sendResponse(res, 403, { success: false, message: "Cross-origin requests are not allowed." });
@@ -1501,10 +1499,11 @@ async function handler(req, res) {
   if (!isPresidentRole(user.role)) return sendResponse(res, 403, { success: false, message: "President access is required for bulk synchronization." });
   if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: "Database is not configured." });
   try {
-    const state = await parseRequestBody(req);
-    if (!state || typeof state !== "object" || Array.isArray(state)) {
-      return sendResponse(res, 400, { success: false, message: "A state object is required." });
+    const rawState = await parseRequestBody(req);
+    if (!isValidSyncState(rawState)) {
+      return sendResponse(res, 400, { success: false, message: "A valid state object is required." });
     }
+    const state = rawState;
     if (state.deleteItem && ["user", "users", "officer", "officers"].includes(String(state.deleteItem.entity).toLowerCase())) {
       return sendResponse(res, 403, { success: false, message: "User accounts cannot be deleted through bulk synchronization." });
     }
@@ -1523,7 +1522,6 @@ async function handler(req, res) {
     });
   }
 }
-// Replaced by top-level delegation to src/api/push.ts
-// export {
-//   handler as default
-// };
+export {
+  handler as default
+};

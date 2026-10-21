@@ -490,7 +490,7 @@ export default function AuthScreen({
                   </button>
                 </div>
               </form>
-            ) : !showMemberGuide ? (
+            ) : (
               <div className="space-y-6 text-left">
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1.5">
