@@ -31,6 +31,7 @@ const ProductManagementModal = lazy(() => import('./components/ProductManagement
 const PasswordChangePrompt = lazy(() => import('./components/PasswordChangePrompt'));
 import { buildAuditChain, hashPassword, verifyPassword, sanitizeUserForStorage } from './utils/audit';
 import { generateInitialPassword, getPasswordExpiryStatus, hashPassword as hashPolicyPassword, isLegacyPasswordHash, validatePasswordPolicy } from './utils/passwordPolicy';
+import { LanguageToggle } from './i18n/LanguageContext';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
 import { runNightlyBackupCheck } from './utils/backupSystem';
 import {
@@ -2651,8 +2652,8 @@ export default function App() {
         <header className="bg-[#1B4332] border-b-2 border-[#122E22] py-3 sm:py-4 px-3.5 sm:px-6 shrink-0 shadow-md text-white no-print">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 max-w-full">
-              <div className="bg-[#D8F3DC] rounded-2xl shadow-inner text-[#1B4332] shrink-0 overflow-hidden border border-[#a8d5b0]">
-                <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-10 h-10 sm:w-12 sm:h-12 object-cover block" />
+              <div className="bg-[#D8F3DC] p-1 rounded-full shadow-inner text-[#1B4332] shrink-0 overflow-hidden border-2 border-[#a8d5b0]">
+                <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full bg-white" />
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -2666,6 +2667,7 @@ export default function App() {
             </div>
 
             <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 sm:gap-2.5 w-full sm:w-auto max-w-full">
+              <LanguageToggle onDark />
               {/* Active session bar with prominent Logout button */}
               <div className="flex items-center justify-between gap-2.5 bg-[#081C15] px-3 py-1.5 rounded-2xl border-2 border-[#52B788] w-full sm:w-auto min-w-0 shrink-0 shadow-sm">
                 <div className="flex items-center gap-2 min-w-0">
@@ -2800,8 +2802,8 @@ export default function App() {
       <header className="bg-[#1B4332] border-b-2 border-[#122E22] py-3 sm:py-4 px-3.5 sm:px-6 shrink-0 shadow-md text-white">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 max-w-full">
-            <div className="bg-[#D8F3DC] rounded-2xl shadow-inner text-[#1B4332] shrink-0 overflow-hidden border border-[#a8d5b0]">
-              <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-10 h-10 sm:w-12 sm:h-12 object-cover block" />
+            <div className="bg-[#D8F3DC] p-1 rounded-full shadow-inner text-[#1B4332] shrink-0 overflow-hidden border-2 border-[#a8d5b0]">
+              <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full bg-white" />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -2815,6 +2817,7 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2 sm:gap-2.5 w-full lg:w-auto max-w-full">
+            <LanguageToggle onDark />
             {/* Active session bar */}
             <div className="flex items-center justify-between gap-2 bg-[#081C15] px-3 py-1.5 rounded-2xl border-2 border-[#52B788] w-full sm:w-auto min-w-0 shrink-0 shadow-sm">
               <div className="flex items-center gap-2 min-w-0">
@@ -2993,7 +2996,7 @@ export default function App() {
                       : 'border-transparent text-slate-700 hover:text-[#1B4332] hover:bg-[#F2EFE9]'
                   }`}
                 >
-                  <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-4 h-4 object-cover rounded-sm shrink-0" />
+                  <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
                   <span>Officer Task Panel</span>
                 </button>
 
@@ -3247,7 +3250,7 @@ export default function App() {
           )}
 
           {officerTab === 'products' && (
-            <div id="officer-products-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
+            <div id="officer-products-window" className="w-full">
               <ProductManagementModal
                 products={products}
                 currentRole={currentRole}
@@ -3291,10 +3294,7 @@ export default function App() {
                     <Users className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-[#1B4332]">My Member Dashboard & ID </h2>
-                    <p className="text-xs text-slate-600 font-bold">
-                      View and manage your personal AFA member credentials, digital ID badge, and benefits ({currentUser?.role.replace('_', ' ')}).
-                    </p>
+                    <h2 className="text-base font-black text-[#1B4332]">My Member Dashboard & ID</h2>
                   </div>
                 </div>
                 <button
@@ -3305,7 +3305,7 @@ export default function App() {
                   }}
                   className="px-4 py-2 bg-[#1B4332] hover:bg-[#122e22] text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
-                  <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-4 h-4 object-cover rounded-sm shrink-0" />
+                  <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
                   <span>Back to Officer Suite</span>
                 </button>
               </div>
@@ -3417,7 +3417,6 @@ export default function App() {
               </div>
               <div>
                 <h3 className="font-extrabold text-[#1B4332] text-base">I-delete ang Tanan nga Demo / Seed Data?</h3>
-                <p className="text-xs text-[#4A5F57]">Purge Demo Records from Database & Storage</p>
               </div>
             </div>
 
@@ -3461,7 +3460,6 @@ export default function App() {
               </div>
               <div>
                 <h3 className="font-extrabold text-[#1B4332] text-base">Limpyohan ang Local Browser Cache?</h3>
-                <p className="text-xs text-[#4A5F57]">Enforce Zero-Residual Confidential Storage</p>
               </div>
             </div>
 

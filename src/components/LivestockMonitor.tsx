@@ -471,19 +471,16 @@ export default function LivestockMonitor({
       {/* 1. MASTER ASSOCIATION LIVESTOCK STATUS BAR (EXECUTIVE OVERVIEW)           */}
       {/* ========================================================================= */}
       <section className="bg-gradient-to-br from-[#1B4332] via-[#204F3B] to-[#143326] text-white rounded-3xl p-5 sm:p-6 shadow-lg space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/15 pb-4">
-          <div>
+        <div className="flex min-w-0 flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/15 pb-4">
+          <div className="min-w-0 w-full sm:w-auto">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                 Live Cooperative Assets
               </span>
-              <span className="text-[10px] font-bold text-white/60">
-                Auditor • Treasurer • President • VP Access
-              </span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight mt-1 text-white flex items-center gap-2">
-              <Briefcase className="w-6 h-6 text-emerald-300" />
-              <span>AFA Livestock & IGP Monitoring</span>
+            <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight mt-2 text-white flex items-start sm:items-center gap-2 min-w-0">
+              <Briefcase className="w-6 h-6 text-emerald-300 shrink-0 mt-0.5 sm:mt-0" />
+              <span className="min-w-0 break-words [overflow-wrap:anywhere] leading-tight">AFA Livestock &amp; IGP Monitoring</span>
             </h2>
           </div>
 
@@ -491,7 +488,7 @@ export default function LivestockMonitor({
             <button
               type="button"
               onClick={openHeadcountModal}
-              className="px-4 py-2.5 rounded-xl bg-white text-[#1B4332] hover:bg-emerald-50 text-xs font-black shadow-md transition-all cursor-pointer flex items-center gap-2 shrink-0"
+              className="min-h-11 px-4 py-2.5 rounded-xl bg-white text-[#1B4332] hover:bg-emerald-50 text-sm font-bold shadow-md transition-all cursor-pointer flex items-center gap-2 shrink-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
             >
               <Pencil className="w-4 h-4 text-emerald-700" />
               <span>Update Livestock Headcounts</span>
@@ -503,103 +500,109 @@ export default function LivestockMonitor({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
 
           {/* SWINE PORTFOLIO */}
-          <div
+          <button
+            type="button"
+            aria-pressed={isSwine}
             onClick={() => setSelected('Swine Raising (Baboyan)')}
-            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/70 ${
               isSwine
-                ? 'bg-white text-slate-900 border-white shadow-md ring-2 ring-emerald-300'
-                : 'bg-white/10 hover:bg-white/15 text-white border-white/20'
+                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
+                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className={`text-xs font-black uppercase tracking-wider ${isSwine ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`min-w-0 text-sm font-black uppercase tracking-wider leading-snug break-words ${isSwine ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
                 🐖 Swine / Baboy
               </span>
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${isSwine ? 'bg-emerald-100 text-[#1B4332]' : 'bg-white/20 text-white'}`}>
-                {totalSwine} Heads
+              <span className={`text-xs font-mono font-bold px-2 py-1 rounded-full shrink-0 ${isSwine ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
+                {totalSwine} Head
               </span>
             </div>
-            <div className="mt-2.5 space-y-1 text-xs">
-              <div className="flex justify-between font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-white/80'}>Fattening:</span>
-                <span className="font-mono font-black">{currentSwineFattening}</span>
+            <div className="mt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>Fattening</span>
+                <span className={`font-mono font-black ${isSwine ? 'text-[#1B4332]' : 'text-white'}`}>{currentSwineFattening}</span>
               </div>
-              <div className="flex justify-between font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-white/80'}>Breeding (Anay):</span>
-                <span className="font-mono font-black">{currentSwineBreeding}</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>Breeding (Anay)</span>
+                <span className={`font-mono font-black ${isSwine ? 'text-[#1B4332]' : 'text-white'}`}>{currentSwineBreeding}</span>
               </div>
-              <div className="flex justify-between font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-white/80'}>For Dispersal:</span>
-                <span className="font-mono font-black text-amber-500">{currentSwineDispersal}</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>For Dispersal</span>
+                <span className={`font-mono font-black ${isSwine ? 'text-[#B26A00]' : 'text-amber-300'}`}>{currentSwineDispersal}</span>
               </div>
             </div>
-          </div>
+          </button>
 
           {/* CATTLE PORTFOLIO */}
-          <div
+          <button
+            type="button"
+            aria-pressed={isCattle}
             onClick={() => setSelected('Cattle Raising (Bakahan)')}
-            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/70 ${
               isCattle
-                ? 'bg-white text-slate-900 border-white shadow-md ring-2 ring-emerald-300'
-                : 'bg-white/10 hover:bg-white/15 text-white border-white/20'
+                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
+                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className={`text-xs font-black uppercase tracking-wider ${isCattle ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`min-w-0 text-sm font-black uppercase tracking-wider leading-snug break-words ${isCattle ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
                 🐂 Cattle / Baka
               </span>
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${isCattle ? 'bg-emerald-100 text-[#1B4332]' : 'bg-white/20 text-white'}`}>
-                {totalCattle} Heads
+              <span className={`text-xs font-mono font-bold px-2 py-1 rounded-full shrink-0 ${isCattle ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
+                {totalCattle} Head
               </span>
             </div>
-            <div className="mt-2.5 space-y-1 text-xs">
-              <div className="flex justify-between font-bold">
-                <span className={isCattle ? 'text-slate-600' : 'text-white/80'}>Fattening:</span>
-                <span className="font-mono font-black">{currentCattleFattening}</span>
+            <div className="mt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>Fattening</span>
+                <span className={`font-mono font-black ${isCattle ? 'text-[#1B4332]' : 'text-white'}`}>{currentCattleFattening}</span>
               </div>
-              <div className="flex justify-between font-bold">
-                <span className={isCattle ? 'text-slate-600' : 'text-white/80'}>For Dispersal:</span>
-                <span className="font-mono font-black text-amber-500">{currentCattleDispersal}</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>For Dispersal</span>
+                <span className={`font-mono font-black ${isCattle ? 'text-[#B26A00]' : 'text-amber-300'}`}>{currentCattleDispersal}</span>
               </div>
-              <div className="flex justify-between font-bold opacity-60">
-                <span>Status:</span>
-                <span>Active Livelihood</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>Status</span>
+                <span className={`font-mono font-black ${isCattle ? 'text-slate-500' : 'text-emerald-200/80'}`}>Active Livelihood</span>
               </div>
             </div>
-          </div>
+          </button>
 
           {/* POULTRY / RTL PORTFOLIO */}
-          <div
+          <button
+            type="button"
+            aria-pressed={isPoultry}
             onClick={() => setSelected('Poultry Raising (RTL)')}
-            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/70 ${
               isPoultry
-                ? 'bg-white text-slate-900 border-white shadow-md ring-2 ring-emerald-300'
-                : 'bg-white/10 hover:bg-white/15 text-white border-white/20'
+                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
+                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className={`text-xs font-black uppercase tracking-wider ${isPoultry ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
-                🐔 Poultry / Manokan
+            <div className="flex items-center justify-between gap-2">
+              <span className={`min-w-0 text-sm font-black uppercase tracking-wider leading-snug break-words ${isPoultry ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
+                🐔 Poultry / Manok
               </span>
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${isPoultry ? 'bg-emerald-100 text-[#1B4332]' : 'bg-white/20 text-white'}`}>
-                {currentRtl} Heads
+              <span className={`text-xs font-mono font-bold px-2 py-1 rounded-full shrink-0 ${isPoultry ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
+                {currentRtl} Head
               </span>
             </div>
-            <div className="mt-2.5 space-y-1 text-xs">
-              <div className="flex justify-between font-bold">
-                <span className={isPoultry ? 'text-slate-600' : 'text-white/80'}>Ready-to-Lay (RTL):</span>
-                <span className="font-mono font-black">{currentRtl}</span>
+            <div className="mt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Ready-to-Lay (RTL)</span>
+                <span className={`font-mono font-black ${isPoultry ? 'text-[#1B4332]' : 'text-white'}`}>{currentRtl}</span>
               </div>
-              <div className="flex justify-between font-bold">
-                <span className={isPoultry ? 'text-slate-600' : 'text-white/80'}>Egg Production:</span>
-                <span className="font-mono font-black text-emerald-600">Active</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Egg Production</span>
+                <span className={`font-mono font-black ${isPoultry ? 'text-[#2D6A4F]' : 'text-emerald-300'}`}>Active</span>
               </div>
-              <div className="flex justify-between font-bold opacity-60">
-                <span>Coop Setup:</span>
-                <span>Layer Cages</span>
+              <div className="flex justify-between items-center gap-2 font-bold">
+                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Coop Setup</span>
+                <span className={`font-mono font-black ${isPoultry ? 'text-slate-500' : 'text-emerald-200/80'}`}>Layer Cages</span>
               </div>
             </div>
-          </div>
+          </button>
 
         </div>
       </section>
@@ -618,7 +621,8 @@ export default function LivestockMonitor({
               key={p}
               type="button"
               onClick={() => setSelected(p)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+              aria-pressed={selected === p}
+              className={`min-h-11 px-3.5 py-2 rounded-xl text-sm font-bold border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                 selected === p
                   ? 'bg-[#1B4332] text-white border-[#1B4332] shadow-sm'
                   : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF4EC]'
@@ -673,34 +677,27 @@ export default function LivestockMonitor({
             <div className="text-2xl font-black text-[#1B4332] font-mono mt-1">
               {isSwine ? `${totalSwine} heads` : isCattle ? `${totalCattle} heads` : isPoultry ? `${currentRtl} birds` : 'Active'}
             </div>
-            <span className="text-[10px] font-bold text-slate-500 block mt-0.5">
-              {isSwine ? `${currentSwineFattening} Fattening · ${currentSwineBreeding} Breeding · ${currentSwineDispersal} Dispersal`
-                : isCattle ? `${currentCattleFattening} Fattening · ${currentCattleDispersal} Dispersal`
-                : isPoultry ? 'Ready-to-Lay Layers' : 'Equipment / Rentals'}
-            </span>
+
           </div>
 
           {/* Revenue Card */}
           <div className="p-4 rounded-2xl border border-emerald-200 bg-white">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 block">Gross Revenue</span>
+            <span className="text-sm font-bold uppercase tracking-wide text-slate-700 block">Gross Revenue</span>
             <div className="text-2xl font-black text-emerald-700 font-mono mt-1">{peso(totalRevenue)}</div>
-            <span className="text-[10px] font-bold text-slate-500 block mt-0.5">{sales.length} sales / rental transactions</span>
           </div>
 
           {/* Expenses Card */}
           <div className="p-4 rounded-2xl border border-rose-200 bg-white">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 block">Total Expenses</span>
+            <span className="text-sm font-bold uppercase tracking-wide text-slate-700 block">Total Expenses</span>
             <div className="text-2xl font-black text-rose-700 font-mono mt-1">{peso(totalExpenses)}</div>
-            <span className="text-[10px] font-bold text-slate-500 block mt-0.5">{expenses.length} operating disbursements</span>
           </div>
 
           {/* Net Margin Card */}
           <div className="p-4 rounded-2xl border border-[#D5CFC1] bg-white">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 block">Net Proceeds</span>
+            <span className="text-sm font-bold uppercase tracking-wide text-slate-700 block">Net Proceeds</span>
             <div className={`text-2xl font-black font-mono mt-1 ${net >= 0 ? 'text-[#1B4332]' : 'text-rose-700'}`}>
               {peso(net)}
             </div>
-            <span className="text-[10px] font-bold text-slate-500 block mt-0.5">Available for member dividends</span>
           </div>
         </div>
       </section>
@@ -713,21 +710,23 @@ export default function LivestockMonitor({
           <div className="flex rounded-xl border border-[#D5CFC1] overflow-hidden">
             <button
               type="button"
+              aria-pressed={view === 'ledger'}
               onClick={() => setView('ledger')}
-              className={`px-4 py-2 text-xs font-black cursor-pointer ${
+              className={`min-h-11 px-4 py-2 text-sm font-bold cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                 view === 'ledger' ? 'bg-[#1B4332] text-white' : 'bg-white text-[#1B4332] hover:bg-[#EAF4EC]'
               }`}
             >
-              Project Ledger & CRUD
+              Project Ledger
             </button>
             <button
               type="button"
+              aria-pressed={view === 'report'}
               onClick={() => setView('report')}
-              className={`px-4 py-2 text-xs font-black cursor-pointer ${
+              className={`min-h-11 px-4 py-2 text-sm font-bold cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                 view === 'report' ? 'bg-[#1B4332] text-white' : 'bg-white text-[#1B4332] hover:bg-[#EAF4EC]'
               }`}
             >
-              Quarterly Financial Report
+              Quarterly Report
             </button>
           </div>
 
@@ -747,7 +746,7 @@ export default function LivestockMonitor({
               <button
                 type="button"
                 onClick={openAddSale}
-                className="px-3.5 py-2 text-xs font-black rounded-xl bg-[#1B4332] text-white hover:bg-[#143326] cursor-pointer flex items-center gap-1.5 shadow-xs"
+                className="min-h-11 px-3.5 py-2 text-sm font-bold rounded-xl bg-[#1B4332] text-white hover:bg-[#143326] cursor-pointer flex items-center gap-1.5 shadow-xs focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Sale / Income</span>
@@ -760,12 +759,7 @@ export default function LivestockMonitor({
         {view === 'ledger' ? (
           ledger.length === 0 ? (
             <div className="text-center py-12 bg-[#FAF8F5] rounded-2xl border border-dashed border-[#D5CFC1] space-y-2">
-              <p className="text-xs font-bold text-slate-600">No transactions recorded for {selected} yet.</p>
-              {isTreasurerOrOfficer && (
-                <p className="text-xs text-emerald-800 font-semibold">
-                  Click {isTreasurer && (<><strong>+ Add Expense</strong> or </>)}<strong>+ Add Sale</strong> to create the first record.
-                </p>
-              )}
+              <p className="text-sm font-semibold text-slate-700">No transactions recorded for {selected} yet.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -800,7 +794,7 @@ export default function LivestockMonitor({
                           </span>
                         ) : '—'}
                       </td>
-                      <td className="py-2.5 pr-3 text-slate-700 max-w-xs truncate" title={r.detail}>{r.detail}</td>
+                      <td className="py-2.5 pr-3 text-slate-700 max-w-xs whitespace-normal break-words">{r.detail}</td>
                       <td className="py-2.5 pr-3 text-right font-mono font-bold text-slate-800">
                         {r.qty ? `${r.qty}` : '—'}
                       </td>
@@ -961,9 +955,6 @@ export default function LivestockMonitor({
       {showEditHeadcounts && (
         <Modal title="Update Livestock Headcounts" onClose={() => setShowEditHeadcounts(false)}>
           <form onSubmit={saveHeadcounts} className="space-y-4 text-left">
-            <p className="text-xs text-slate-600 font-semibold leading-relaxed">
-              Auditor, Treasurer, President, and VP can calibrate the association’s live animal counts directly:
-            </p>
 
             {/* Swine Section */}
             <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">
@@ -1074,7 +1065,8 @@ export default function LivestockMonitor({
                       key={stg}
                       type="button"
                       onClick={() => setExpStage(stg)}
-                      className={`py-2 text-xs font-black rounded-lg border cursor-pointer ${
+                      aria-pressed={expStage === stg}
+                      className={`min-h-11 py-2 text-sm font-bold rounded-lg border cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                         expStage === stg ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-white text-[#1B4332] border-[#D5CFC1]'
                       }`}
                     >
@@ -1094,7 +1086,8 @@ export default function LivestockMonitor({
                       key={stg}
                       type="button"
                       onClick={() => setExpStage(stg)}
-                      className={`py-2 text-xs font-black rounded-lg border cursor-pointer ${
+                      aria-pressed={expStage === stg}
+                      className={`min-h-11 py-2 text-sm font-bold rounded-lg border cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                         expStage === stg ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-white text-[#1B4332] border-[#D5CFC1]'
                       }`}
                     >
@@ -1151,7 +1144,7 @@ export default function LivestockMonitor({
                   value={expQty}
                   onChange={(e) => setExpQty(e.target.value)}
                   className={inputCls}
-                  placeholder="Number of animals bought (added to the headcount)"
+                  placeholder="Quantity"
                 />
               </div>
             )}
@@ -1190,7 +1183,7 @@ export default function LivestockMonitor({
                 value={expDesc}
                 onChange={(e) => setExpDesc(e.target.value)}
                 className={inputCls}
-                placeholder="e.g. 5 bags Starter feeds from Tuburan Agri-supply"
+                placeholder="Purchase description"
               />
             </div>
 
@@ -1222,7 +1215,8 @@ export default function LivestockMonitor({
                       key={stg}
                       type="button"
                       onClick={() => setSaleStage(stg)}
-                      className={`py-2 text-xs font-black rounded-lg border cursor-pointer ${
+                      aria-pressed={saleStage === stg}
+                      className={`min-h-11 py-2 text-sm font-bold rounded-lg border cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                         saleStage === stg ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-white text-[#1B4332] border-[#D5CFC1]'
                       }`}
                     >
@@ -1242,7 +1236,8 @@ export default function LivestockMonitor({
                       key={stg}
                       type="button"
                       onClick={() => setSaleStage(stg)}
-                      className={`py-2 text-xs font-black rounded-lg border cursor-pointer ${
+                      aria-pressed={saleStage === stg}
+                      className={`min-h-11 py-2 text-sm font-bold rounded-lg border cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                         saleStage === stg ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-white text-[#1B4332] border-[#D5CFC1]'
                       }`}
                     >
@@ -1262,7 +1257,8 @@ export default function LivestockMonitor({
                       key={stg}
                       type="button"
                       onClick={() => setSaleStage(stg)}
-                      className={`py-2 text-xs font-black rounded-lg border cursor-pointer ${
+                      aria-pressed={saleStage === stg}
+                      className={`min-h-11 py-2 text-sm font-bold rounded-lg border cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                         saleStage === stg ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-white text-[#1B4332] border-[#D5CFC1]'
                       }`}
                     >
@@ -1283,7 +1279,7 @@ export default function LivestockMonitor({
                   value={saleQty}
                   onChange={(e) => setSaleQty(e.target.value)}
                   className={inputCls}
-                  placeholder="Number of heads / units"
+                  placeholder="Quantity"
                 />
               </div>
               <div>
@@ -1321,7 +1317,7 @@ export default function LivestockMonitor({
                 value={saleNotes}
                 onChange={(e) => setSaleNotes(e.target.value)}
                 className={inputCls}
-                placeholder="e.g. Sold to Tuburan market buyer at ₱190/kg liveweight"
+                placeholder="Optional"
               />
             </div>
 
@@ -1354,12 +1350,12 @@ export default function LivestockMonitor({
                 value={newProject}
                 onChange={(e) => setNewProject(e.target.value)}
                 className={inputCls}
-                placeholder="e.g. Goat Raising, Tilapia Hatchery, Tractor Rental"
+                placeholder="Enter project name"
               />
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[10px] font-black uppercase text-slate-500 block">Quick Suggestions:</span>
+              <span className="text-sm font-semibold text-slate-700 block">Suggestions</span>
               <div className="flex flex-wrap gap-1.5">
                 {['Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Tent & Sound Rental', 'Corn Production'].map((s) => (
                   <button
@@ -1397,10 +1393,10 @@ export default function LivestockMonitor({
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-[70] text-left">
-      <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-lg rounded-3xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
+      <div role="dialog" aria-modal="true" aria-labelledby="igp-modal-title" className="bg-[#F7F4EF] border-[#D5CFC1] w-full max-w-4xl rounded-3xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4 border-b border-[#D5CFC1] pb-3">
-          <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wider">{title}</h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-[#4A5F57] hover:text-[#1B4332] cursor-pointer">
+          <h3 id="igp-modal-title" className="text-lg font-bold text-[#1B4332]">{title}</h3>
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-lg text-[#4A5F57] hover:bg-emerald-50 hover:text-[#1B4332] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1416,13 +1412,13 @@ function ModalActions({ onCancel, submitLabel }: { onCancel: () => void; submitL
       <button
         type="button"
         onClick={onCancel}
-        className="px-4 py-2 text-xs font-black rounded-xl border border-slate-300 bg-slate-100 text-[#1B4332] cursor-pointer hover:bg-slate-200 transition-colors"
+        className="min-h-11 px-4 py-2 text-sm font-bold rounded-xl border-slate-300 bg-slate-100 text-[#1B4332] cursor-pointer hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 transition-colors"
       >
         Cancel
       </button>
       <button
         type="submit"
-        className="px-4.5 py-2 text-xs font-black rounded-xl bg-[#1B4332] text-white hover:bg-[#143326] cursor-pointer shadow-md transition-colors"
+        className="min-h-11 px-5 py-2 text-sm font-bold rounded-xl bg-[#1B4332] text-white hover:bg-[#143326] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 cursor-pointer shadow-md transition-colors"
       >
         {submitLabel}
       </button>

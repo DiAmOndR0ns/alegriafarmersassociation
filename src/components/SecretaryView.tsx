@@ -929,7 +929,7 @@ export default function SecretaryView({
       {/* MEMBER MODAL - Compact and Scrollable */}
       {showMemberModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 overflow-y-auto p-2 sm:p-4 flex items-center justify-center animate-fade-in">
-          <div className="bg-white border border-slate-300 w-full max-w-lg max-h-[88vh] sm:max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
+          <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[88vh] sm:max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
             <div className="bg-[#EAF4EC] px-4 py-2.5 sm:px-5 sm:py-3 border-b border-[#D5CFC1] flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-lg bg-[#1B4332] flex items-center justify-center text-white shrink-0">
@@ -937,7 +937,6 @@ export default function SecretaryView({
                 </div>
                 <div>
                   <h3 className="font-bold text-[#1B4332] text-sm leading-tight">Register Association Farmer</h3>
-                  <p className="text-[10px] text-[#3A4A42]">Official AFA Membership & RSBSA Enrollment</p>
                 </div>
               </div>
               <button
@@ -1227,7 +1226,7 @@ export default function SecretaryView({
       {/* EDIT MEMBER MODAL */}
       {editingMember && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 overflow-y-auto p-2 sm:p-4 flex items-center justify-center animate-fade-in">
-          <div className="bg-white border border-slate-300 w-full max-w-xl max-h-[88vh] sm:max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
+          <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[88vh] sm:max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
             <div className="bg-[#EAF4EC] px-4 py-2.5 sm:px-5 sm:py-3 border-b border-[#D5CFC1] flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-lg bg-[#1B4332] flex items-center justify-center text-white shrink-0">
@@ -1434,7 +1433,7 @@ export default function SecretaryView({
       {/* MEETING MINUTES MODAL */}
       {showMeetingModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-[#EAF4EC] px-6 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
               <div>
                 <h3 className="font-extrabold text-[#1B4332] text-base">Log Assembly / Meeting Minutes</h3>
@@ -1592,7 +1591,7 @@ export default function SecretaryView({
       {/* RESOLUTION MODAL */}
       {showResModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in text-left">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-[#EAF4EC] px-6 py-4 border-b border-[#D5CFC1] flex justify-between items-center">
               <div>
                 <h3 className="font-extrabold text-[#1B4332] text-base">Draft New Association Resolution</h3>

@@ -9,6 +9,7 @@ import {
 import { buildAuditChain } from '../utils/audit';
 import { generateInitialPassword } from '../utils/passwordPolicy';
 import PrintMinutesModal from './PrintMinutesModal';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface ExecutiveViewProps {
   members: Member[];
@@ -70,6 +71,7 @@ export default function ExecutiveView({
   onPresidentReturnTransaction,
   onUpdateUser
 }: ExecutiveViewProps) {
+  const { t, isEnglish } = useLanguage();
   const [showMeetingsModal, setShowMeetingsModal] = useState<boolean>(false);
   const [selectedMeetingForPrint, setSelectedMeetingForPrint] = useState<Meeting | null>(null);
 
@@ -313,9 +315,6 @@ export default function ExecutiveView({
                 : 'Vice President\'s Desk'}
             </span>
           </h2>
-          <p className="text-xs sm:text-sm text-[#B7E4C7] mt-1 font-medium max-w-xl break-words">
-            Review farmer registrations, manage credentials, and approve association resolutions.
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto min-w-0">
           {onOpenReportModal && (
@@ -350,9 +349,6 @@ export default function ExecutiveView({
             <Users className="w-5 h-5 text-[#1B4332]" />
           </div>
           <div className="text-3xl font-black font-display text-[#1B4332]">{totalMembers}</div>
-          <div className="text-[10px] sm:text-xs text-[#5D6B54] mt-1">
-            <span className="text-[#2E7D32] font-bold">{activeMembers} Active</span> • {totalMembers - activeMembers} Inactive
-          </div>
         </div>
 
         {/* Association Funds */}
@@ -363,9 +359,6 @@ export default function ExecutiveView({
           </div>
           <div className="text-2xl sm:text-3xl font-black font-display text-[#1B4332] tracking-tight">
             PHP {currentBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-          </div>
-          <div className="text-[10px] sm:text-xs text-[#5D6B54] mt-1">
-            From Member Dues & Allocations
           </div>
         </div>
 
@@ -382,9 +375,6 @@ export default function ExecutiveView({
             <span>{meetings.length}</span>
             <span className="text-[10px] font-bold text-[#0D47A1] hover:underline">View / Print</span>
           </div>
-          <div className="text-[10px] sm:text-xs text-[#5D6B54] mt-1">
-            Legislative & General Minutes
-          </div>
         </div>
 
         {/* Pending Approvals */}
@@ -394,9 +384,6 @@ export default function ExecutiveView({
             <FileCheck className="w-5 h-5 text-[#E65100]" />
           </div>
           <div className="text-3xl font-black font-display text-[#E65100]">{pendingResolutions.length}</div>
-          <div className="text-[10px] sm:text-xs text-[#5D6B54] mt-1">
-            Drafts nagpaabot sa imong Pirma
-          </div>
         </div>
 
         {/* Minutes of Meeting Awaiting President Approval (Secretary drafts → President approves) */}
@@ -409,9 +396,6 @@ export default function ExecutiveView({
             <BookOpen className="w-5 h-5 text-purple-700 group-hover:scale-110 transition-transform" />
           </div>
           <div className="text-3xl font-black font-display text-purple-700">{pendingMinutesMeetings.length}</div>
-          <div className="text-[10px] sm:text-xs text-[#5D6B54] mt-1">
-            Secretary minutes awaiting your signature
-          </div>
         </div>
 
         {/* Audited Financial Records Awaiting President Approval (Auditor → President) */}
@@ -424,9 +408,6 @@ export default function ExecutiveView({
             <Coins className="w-5 h-5 text-emerald-700 group-hover:scale-110 transition-transform" />
           </div>
           <div className="text-3xl font-black font-display text-emerald-700">{auditedPendingTx.length}</div>
-          <div className="text-[10px] sm:text-xs text-[#5D6B54] mt-1">
-            Audited records awaiting final approval
-          </div>
         </div>
       </div>
 
@@ -1231,88 +1212,77 @@ export default function ExecutiveView({
       <div className="order-1 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
 
         {/* LEFT COLUMN: RESOLUTIONS WAITLIST (7 Columns) */}
-        <div className="lg:col-span-7 self-start bg-white border border-[#E9E4D9] rounded-3xl p-5 shadow-sm space-y-3">
-          <div className="border-b border-[#F0EBE1] pb-3 text-left">
-            <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
-              <FileCheck className="w-5.5 h-5.5 text-[#1B4332]" />
+        <div className="lg:col-span-7 self-start bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
+          <div className=" flex items-center justify-between text-left">
+            <h3 className="text-sm font-extrabold font-display text-[#1B4332] flex items-center gap-2">
+              <FileCheck className="w-4 h-4 text-[#1B4332]" />
               <span>Resolutions for Signing</span>
             </h3>
+            <span className="text-[10px] font-black text-white bg-[#E65100] px-2 py-0.5 rounded-full">{pendingResolutions.length}</span>
           </div>
 
           {pendingResolutions.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
               {pendingResolutions.map(res => (
-                <div key={res.id} className="bg-[#FAF8F5] border border-[#E9E4D9] p-4 rounded-2xl text-left space-y-3 hover:border-[#85947E] transition-all">
-                  <div className="flex justify-between items-center flex-wrap gap-2">
-                    <span className="text-xs font-mono font-bold text-[#E65100] bg-[#FFF3E0] px-2.5 py-1 rounded-xl border border-[#FFE082]">
-                      {res.resolutionNumber}
-                    </span>
-                    <span className="text-[10px] text-[#85947E] font-medium">Gibuhat niadtong: {res.dateAgreed}</span>
-                  </div>
-
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-extrabold text-[#1B4332]">{res.title}</h4>
-                    <p className="text-xs text-[#5D6B54] leading-relaxed bg-white p-3 rounded-xl border border-[#E9E4D9] italic">
-                      "{res.description}"
+                <div key={res.id} className="bg-[#FAF8F5] border border-[#E9E4D9] px-3 py-2.5 rounded-xl text-left flex items-center justify-between gap-3 hover:border-[#85947E] transition-all">
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-mono font-bold text-[#E65100]">{res.resolutionNumber}</span>
+                      <span className="text-[10px] text-[#85947E]">{res.dateAgreed}</span>
+                    </div>
+                    <h4 className="text-xs font-extrabold text-[#1B4332] truncate">{res.title}</h4>
+                    <p className="text-[10px] text-[#5D6B54] truncate">
+                      {res.voteInFavor} {t('Uyon', 'For')} / {res.voteAgainst} {t('Dili', 'Against')} / {res.voteAbstain} {t('Abstain', 'Abstain')}
                     </p>
                   </div>
-
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-2 border-t border-[#F0EBE1] text-xs font-medium">
-                    <div className="text-[#5D6B54]">
-                      Giduso ni: <strong className="text-[#1B4332]">{res.movedBy}</strong> • Segundahan ni: <strong className="text-[#1B4332]">{res.secondedBy}</strong>
-                      <div className="text-[#2E7D32] text-[10px] font-bold mt-0.5">
-                        Tally sa Botasyon: {res.voteInFavor} Uyon / {res.voteAgainst} Dili / {res.voteAbstain} Abstain
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => onApproveResolution(res.id)}
-                      className="w-full sm:w-auto px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm shrink-0"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Pirmahan ug Ipatuman</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => onApproveResolution(res.id)}
+                    className="px-3 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white text-[11px] font-extrabold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                  >
+                    <Check className="w-3 h-3" />
+                    <span>{t('Pirmahi', 'Sign')}</span>
+                  </button>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="bg-[#FAF8F5]/50 border border-dashed border-[#D5CFC1] p-6 rounded-2xl text-center text-[#85947E] text-xs">
-              Walay mga resolusyon nga naghulat sa executive approval sa pagkakaron.
+            <div className="bg-[#FAF8F5]/50 border border-dashed border-[#D5CFC1] px-4 py-4 rounded-xl text-center text-[#85947E] text-xs">
+              {t('Walay resolusyon nga naghulat sa pirma.', 'No resolutions awaiting signature.')}
             </div>
           )}
         </div>
 
         {/* RIGHT COLUMN: SIMPLIFIED CHRONOLOGICAL AUDIT TRAIL LOGS (5 Columns) */}
-        <div className="lg:col-span-5 self-start bg-white border border-[#E9E4D9] rounded-3xl p-5 shadow-sm space-y-3">
-          <div className="border-b border-[#F0EBE1] pb-3 text-left">
-            <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
-              <Activity className="w-5.5 h-5.5 text-[#1B4332]" />
+        <div className="lg:col-span-5 self-start bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
+          <div className="flex items-center justify-between text-left">
+            <h3 className="text-sm font-extrabold font-display text-[#1B4332] flex items-center gap-2">
+              <Activity className="w-4 h-4 text-[#1B4332]" />
               <span>System Audit Trail</span>
             </h3>
+            <span className="text-[10px] font-black text-[#1B4332] bg-[#EAF4EC] px-2 py-0.5 rounded-full">{filteredLogs.length}</span>
           </div>
 
           {/* Search bar & Year Filter inside logs */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-left">
-            <div className="relative sm:col-span-8">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#85947E]" />
+          <div className="grid grid-cols-2 gap-2 text-left">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-[#85947E]" />
               <input
                 type="text"
-                placeholder="Pangitaa sa logs (e.g. Approved, Secretary)..."
+                placeholder={t('Pangitaa sa logs...', 'Search logs...')}
                 value={logSearch}
                 onChange={(e) => setLogSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-[#FAF8F5] border border-[#D5CFC1] rounded-xl text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans"
+                className="w-full pl-8 pr-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans"
               />
             </div>
-            <div className="sm:col-span-4">
+            <div>
               <select
                 value={selectedLogYear}
                 onChange={(e) => setSelectedLogYear(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-[#FAF8F5] border border-[#D5CFC1] rounded-xl text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans font-bold cursor-pointer"
+                className="w-full px-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans font-bold cursor-pointer"
               >
-                <option value="All">Tanan nga Tuig</option>
+                <option value="All">{t('Tanan nga Tuig', 'All Years')}</option>
                 {availableYears.map(yr => (
-                  <option key={yr} value={yr}>Tuig {yr} {closedLogYears.includes(yr) ? '🔒 (Sealed)' : '🔓'}</option>
+                  <option key={yr} value={yr}>{yr} {closedLogYears.includes(yr) ? '🔒' : '🔓'}</option>
                 ))}
               </select>
             </div>
@@ -1322,17 +1292,17 @@ export default function ExecutiveView({
           {selectedLogYear !== 'All' && (
             <div className="text-left animate-fade-in">
               {closedLogYears.includes(parseInt(selectedLogYear)) ? (
-                <div className="bg-[#EFEBE9] border border-[#D7CCC8] p-3 rounded-2xl flex items-center justify-between text-left gap-2 shadow-inner">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-[#5D4037]">
-                    <Lock className="w-4 h-4 text-[#5D4037] shrink-0" />
-                    <span>Ang digital trail sa {selectedLogYear} sirado na ug pormal nga gi-seal. (Immutable trail)</span>
+                <div className="bg-[#EFEBE9] border border-[#D7CCC8] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#5D4037]">
+                    <Lock className="w-3.5 h-3.5 text-[#5D4037] shrink-0" />
+                    <span>{t(`${selectedLogYear} sirado na.`, `${selectedLogYear} is sealed.`)}</span>
                   </div>
-                  <span className="bg-[#5D4037] text-white text-[8px] tracking-wider px-2 py-0.5 rounded-full font-bold shrink-0 uppercase">SEALED</span>
+                  <span className="bg-[#5D4037] text-white text-[8px] tracking-wider px-1.5 py-0.5 rounded-full font-bold shrink-0 uppercase">SEALED</span>
                 </div>
               ) : (
-                <div className="bg-[#FFF3E0] border border-[#FFE082] p-3 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between text-left gap-3">
+                <div className="bg-[#FFF3E0] border border-[#FFE082] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
                   <div className="text-[11px] font-semibold text-[#E65100]">
-                    Ang {selectedLogYear} digital trail kay aktibo pa. Mahimo kining i-seal ug i-lock aron tapuson ang talaan.
+                    {t(`${selectedLogYear} aktibo pa.`, `${selectedLogYear} is still active.`)}
                   </div>
                   {currentRole === 'President' && (
                     <button
@@ -1341,10 +1311,10 @@ export default function ExecutiveView({
                         setSealYearInput('');
                         setShowSealConfirm(true);
                       }}
-                      className="px-3 py-1.5 bg-[#BF360C] hover:bg-[#8D2300] text-white text-[10px] font-black rounded-xl transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-sm"
+                      className="px-2 py-1 bg-[#BF360C] hover:bg-[#8D2300] text-white text-[10px] font-black rounded-lg transition-colors cursor-pointer flex items-center gap-1 shrink-0"
                     >
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>TAPUSON & I-SEAL</span>
+                      <Lock className="w-3 h-3" />
+                      <span>{t('I-SEAL', 'SEAL')}</span>
                     </button>
                   )}
                 </div>
@@ -1353,41 +1323,37 @@ export default function ExecutiveView({
           )}
 
           {/* Logs scroll container */}
-          <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
             {filteredLogs.length > 0 ? (
               filteredLogs.map((log) => (
                 <div
                   key={log.id}
-                  className="text-xs bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-3.5 text-left space-y-1.5 transition-all hover:border-[#85947E]"
+                  className="text-xs bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-2 text-left space-y-0.5 transition-all hover:border-[#85947E]"
                 >
-                  <div className="flex justify-between items-center text-[10px] text-[#85947E] font-semibold">
+                  <div className="flex justify-between items-center gap-2 text-[9px] text-[#85947E] font-semibold">
                     <span className="flex items-center gap-1 font-mono">
-                      <Clock className="w-3 h-3 text-[#85947E]" />
+                      <Clock className="w-2.5 h-2.5" />
                       {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
-                    <span className="bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F]/20 px-2 py-0.5 rounded-full uppercase text-[8px] tracking-wider font-extrabold">
+                    <span className="bg-[#EAF4EC] text-[#1B4332] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0">
                       {log.role.replace('_', ' ')}
                     </span>
                   </div>
 
-                  <div className="font-extrabold text-[#2D3A22]">
-                    {log.user} • <span className="text-[#2E7D32] font-black">{log.action}</span>
+                  <div className="text-[11px] font-extrabold text-[#2D3A22] truncate">
+                    {log.user} • <span className="text-[#2E7D32]">{log.action}</span>
                   </div>
 
-                  <p className="text-[#5D6B54] leading-relaxed text-[11px] font-sans break-words bg-white p-2.5 rounded-xl border border-[#F0EBE1]">
+                  <p className="text-[#5D6B54] leading-snug text-[10px] font-sans line-clamp-2 break-words">
                     {log.details}
                   </p>
                 </div>
               ))
             ) : (
-              <div className="text-center py-6 text-[#85947E] text-xs">
-                Walay nakit-an nga logs nga nahiuyon sa imong gipangita.
+              <div className="text-center py-4 text-[#85947E] text-[11px]">
+                {t('Walay nakit-an nga logs.', 'No logs found.')}
               </div>
             )}
-          </div>
-
-          <div className="pt-3 border-t border-[#F0EBE1] text-center flex items-center justify-center gap-1 text-[#85947E] text-[10px]">
-            <span>Log records updated in real-time. Only actions within the system are tracked.</span>
           </div>
         </div>
 

@@ -168,9 +168,6 @@ export default function AuditorView({
               </div>
               <div>
                 <h2 className="text-lg font-black text-[#1B4332]">Association Inventory & Custodial Notes</h2>
-                <p className="mt-1 text-xs text-[#4A5F57]">
-                  Since there is no Property Custodian, the Auditor keeps the official notes of all association inventory — equipment, tools, rental assets, and supplies.
-                </p>
               </div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -417,7 +414,7 @@ export default function AuditorView({
       {/* ADD / EDIT INVENTORY ITEM MODAL */}
       {showInventoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="presentation">
-          <div role="dialog" aria-modal="true" className="w-full max-w-md overflow-hidden rounded-2xl border border-[#D5CFC1] bg-[#F7F4EF] shadow-2xl">
+          <div role="dialog" aria-modal="true" className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#D5CFC1] bg-[#F7F4EF] shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#D5CFC1] bg-[#EAF4EC] px-5 py-4">
               <h2 className="text-base font-bold text-[#1B4332]">{editingInventoryItem ? 'Edit Inventory Item & Notes' : 'Record Inventory Item & Notes'}</h2>
               <button type="button" onClick={() => setShowInventoryModal(false)} className="text-xl font-bold text-[#4A5F57] hover:text-[#1B4332]" aria-label="Close inventory dialog">&times;</button>
@@ -478,7 +475,7 @@ export default function AuditorView({
       {/* AUDIT VERDICT MODAL */}
       {selectedTransaction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="auditor-modal-title" className="w-full max-w-md overflow-hidden rounded-2xl border border-bafa-neutral-300 bg-white shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="auditor-modal-title" className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-bafa-neutral-300 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-bafa-neutral-300 bg-[#F7F4EF] px-5 py-4">
               <h2 id="auditor-modal-title" className="text-base font-bold text-[#1B4332]">Conduct Financial Audit</h2>
               <button type="button" onClick={() => setSelectedTransaction(null)} className="p-1 text-xl font-bold text-[#4A5F57] hover:text-[#1B4332]" aria-label="Close audit dialog">&times;</button>

@@ -389,8 +389,8 @@ export default function TreasurerView({
           <div className="text-xl font-bold text-emerald-700 font-mono">
             + PHP {totalIncome.toLocaleString('en-US')}
           </div>
-          <p className="text-[10px] text-[#4A5F57] mt-2">Dues, donations, sales & livelihood capital</p>
         </div>
+
 
         {/* Total Expenses */}
         <div className="bg-[#F7F4EF] border border-[#D5CFC1] p-5 rounded-2xl shadow-md relative overflow-hidden">
@@ -403,7 +403,6 @@ export default function TreasurerView({
           <div className="text-xl font-bold text-rose-600 font-mono">
             - PHP {totalExpenses.toLocaleString('en-US')}
           </div>
-          <p className="text-[10px] text-[#4A5F57] mt-2">Equipment, snacks, maintenance & seeds</p>
         </div>
       </div>
 
@@ -849,20 +848,20 @@ export default function TreasurerView({
                     {tx.auditedStatus !== 'Unaudited' && (
                       <div className={`mt-3 p-2.5 rounded-xl text-xs border ${
                         tx.auditedStatus === 'Flagged'
-                          ? 'bg-rose-100 border-rose-200 text-rose-900'
-                          : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-300'
+                          ? 'bg-rose-50 border-rose-200 text-rose-900'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-900'
                       }`}>
                         <div className="flex items-center gap-1.5 font-bold mb-0.5">
                           {tx.auditedStatus === 'Flagged' ? (
-                            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                           ) : (
-                            <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           )}
                           <span>
                             {tx.auditedStatus === 'Flagged' ? 'Audit Note / Flagged' : 'Audited and Approved'}
                           </span>
                         </div>
-                        <p className="leading-relaxed text-slate-300 italic">"{tx.auditNotes}"</p>
+                        <p className="leading-relaxed text-slate-700 italic">"{tx.auditNotes}"</p>
                         <p className="text-[9px] text-slate-500 mt-1 font-mono">
                           By: {tx.auditedBy} on {tx.auditedDate}
                         </p>
@@ -1304,7 +1303,7 @@ export default function TreasurerView({
       {/* ADD ORGANIZATION FUND MODAL */}
       {showAddFundModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+          <div className="bg-slate-800 border border-slate-700 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl">
             <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
@@ -1312,8 +1311,7 @@ export default function TreasurerView({
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">Pagdugang og Tinubdan sa Pundo (Add Fund Source)</h3>
-                </div>
-              </div>
+                </div>              </div>
               <button
                 onClick={() => setShowAddFundModal(false)}
                 className="text-slate-400 hover:text-white text-xl font-bold p-1 cursor-pointer"
