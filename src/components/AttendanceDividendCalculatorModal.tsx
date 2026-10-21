@@ -249,7 +249,7 @@ export default function AttendanceDividendCalculatorModal({
               <Calculator className="w-6 h-6 text-[#95D5B2]" />
             </div>
             <div>
-              <h3 className="text-base sm:text-xl font-black font-display tracking-wide flex items-center gap-2">
+              <h3 id="dividend-modal-title" className="text-base sm:text-xl font-bold font-display tracking-wide flex-wrap items-center gap-2">
                 <span>Net Income & Attendance-Weighted Dividend Engine</span>
                 <span className="text-[10px] bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase">
                   December Cut
@@ -268,7 +268,7 @@ export default function AttendanceDividendCalculatorModal({
 
         {/* MODAL BODY */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-          
+
           {/* TOP SUMMARY CARDS */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
@@ -276,7 +276,6 @@ export default function AttendanceDividendCalculatorModal({
               <div className="text-base sm:text-lg font-black text-emerald-800 font-mono mt-0.5">
                 ₱{totalRevenue.toLocaleString()}
               </div>
-              <span className="text-[10px] text-slate-500 mt-0.5 block">{sales.length} sales recorded</span>
             </div>
 
             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
@@ -284,7 +283,6 @@ export default function AttendanceDividendCalculatorModal({
               <div className="text-base sm:text-lg font-black text-rose-700 font-mono mt-0.5">
                 ₱{totalExpenses.toLocaleString()}
               </div>
-              <span className="text-[10px] text-slate-500 mt-0.5 block">Feeds, stock & vaccines</span>
             </div>
 
             <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl">
@@ -292,7 +290,6 @@ export default function AttendanceDividendCalculatorModal({
               <div className="text-base sm:text-lg font-black text-emerald-700 font-mono mt-0.5">
                 ₱{netIncome.toLocaleString()}
               </div>
-              <span className="text-[10px] text-emerald-800 font-bold mt-0.5 block">Available for sharing</span>
             </div>
 
             <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl">
@@ -300,7 +297,6 @@ export default function AttendanceDividendCalculatorModal({
               <div className="text-base sm:text-lg font-black text-blue-700 font-mono mt-0.5">
                 ₱{fcctGeneralMembershipPool.toLocaleString()}
               </div>
-              <span className="text-[10px] text-blue-800 font-bold mt-0.5 block">To divide by attendance</span>
             </div>
           </div>
 
@@ -314,9 +310,6 @@ export default function AttendanceDividendCalculatorModal({
               <div className="text-base font-black text-emerald-900 font-mono">
                 ₱{handlersShare.toLocaleString()}
               </div>
-              <p className="text-[10px] text-emerald-800 leading-tight">
-                Direct labor, caretaking & feeding rotation honorarium.
-              </p>
             </div>
 
             <div className="p-3.5 rounded-2xl border border-blue-300 bg-blue-50/70 space-y-1">
@@ -327,9 +320,6 @@ export default function AttendanceDividendCalculatorModal({
               <div className="text-base font-black text-blue-900 font-mono">
                 ₱{fcctGeneralMembershipPool.toLocaleString()}
               </div>
-              <p className="text-[10px] text-blue-800 leading-tight">
-                Deposited in FCCT Bank, distributed in December to active members.
-              </p>
             </div>
 
             <div className="p-3.5 rounded-2xl border border-amber-300 bg-amber-50/70 space-y-1">
@@ -340,9 +330,6 @@ export default function AttendanceDividendCalculatorModal({
               <div className="text-base font-black text-amber-900 font-mono">
                 ₱{associationTotalFund.toLocaleString()}
               </div>
-              <p className="text-[10px] text-amber-800 leading-tight">
-                Association operations + ₱10k buffer for other expenses.
-              </p>
             </div>
 
             <div className="p-3.5 rounded-2xl border border-purple-300 bg-purple-50/70 space-y-1">
@@ -353,9 +340,6 @@ export default function AttendanceDividendCalculatorModal({
               <div className="text-base font-black text-purple-900 font-mono">
                 ₱{dispersalInsurancePool.toLocaleString()}
               </div>
-              <p className="text-[10px] text-purple-800 leading-tight">
-                Livestock mortality insurance & emergency calf/piglet replacement.
-              </p>
             </div>
           </div>
 
