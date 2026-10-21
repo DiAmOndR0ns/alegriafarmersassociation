@@ -238,9 +238,9 @@ export default function AuthScreen({
                 type="button"
                 onClick={toggleLanguage}
                 title={en ? 'Show English + Bisaya (default)' : 'Show English only'}
-                className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wider border transition-colors cursor-pointer bg-[#EAF6EE] hover:bg-[#D4EEDC] text-[#1B4332] border-[#B7E3C4]"
+                className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors cursor-pointer whitespace-nowrap bg-[#EAF6EE] hover:bg-[#D4EEDC] text-[#1B4332] border-[#B7E3C4] shadow-sm"
               >
-                <Languages className="w-3.5 h-3.5" />
+                <Languages className="w-3.5 h-3.5 shrink-0" />
                 <span>{en ? 'English + Bisaya' : 'Translate to English'}</span>
               </button>
             </div>

@@ -105,14 +105,14 @@ export function LanguageToggle({
       className={
         className ||
         [
-          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider border-2 transition-all cursor-pointer',
+          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold normal-case tracking-normal border transition-colors cursor-pointer whitespace-nowrap shadow-sm',
           onDark
             ? 'bg-[#081C15] border-[#52B788] text-[#D8F3DC] hover:bg-[#143326]'
             : 'bg-[#EAF6EE] border-[#B7E3C4] text-[#1B4332] hover:bg-[#D4EEDC]',
         ].join(' ')
       }
     >
-      <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="m5 8 6 6" />
         <path d="m4 14 6-6 2-3" />
         <path d="M2 5h12" />

@@ -471,16 +471,16 @@ export default function LivestockMonitor({
       {/* 1. MASTER ASSOCIATION LIVESTOCK STATUS BAR (EXECUTIVE OVERVIEW)           */}
       {/* ========================================================================= */}
       <section className="bg-gradient-to-br from-[#1B4332] via-[#204F3B] to-[#143326] text-white rounded-3xl p-5 sm:p-6 shadow-lg space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/15 pb-4">
-          <div>
+        <div className="flex min-w-0 flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/15 pb-4">
+          <div className="min-w-0 w-full sm:w-auto">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                 Live Cooperative Assets
               </span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight mt-1 text-white flex items-center gap-2">
-              <Briefcase className="w-6 h-6 text-emerald-300" />
-              <span>AFA Livestock & IGP Monitoring</span>
+            <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight mt-2 text-white flex items-start sm:items-center gap-2 min-w-0">
+              <Briefcase className="w-6 h-6 text-emerald-300 shrink-0 mt-0.5 sm:mt-0" />
+              <span className="min-w-0 break-words [overflow-wrap:anywhere] leading-tight">AFA Livestock &amp; IGP Monitoring</span>
             </h2>
           </div>
 
