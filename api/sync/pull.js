@@ -93,6 +93,13 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested BOOLEAN DEFAULT FALSE;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_totp_secret TEXT;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_used_step BIGINT;`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
+      ON users (lower(replace(role, ' ', '_')))
+      WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
@@ -219,8 +226,15 @@ async function initDatabaseSchema(pool) {
         failed_login_attempts INTEGER DEFAULT 0,
         locked_until TIMESTAMPTZ,
         reset_requested BOOLEAN DEFAULT FALSE
+        ,totp_secret TEXT
+        ,pending_totp_secret TEXT
+        ,mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE
+        ,totp_last_used_step BIGINT
       );
     `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
+      ON users (lower(replace(role, ' ', '_')))
+      WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS members (
         id VARCHAR(100) PRIMARY KEY,
@@ -580,13 +594,6 @@ async function fetchAllDataFromPostgres(pool) {
     const users = usersRes.rows.map((r) => ({
       id: r.id,
       username: r.username,
-      passwordHash: r.password,
-      passwordHistory: Array.isArray(r.password_history) ? r.password_history : [],
-      passwordChangedAt: r.password_changed_at ? new Date(r.password_changed_at).toISOString() : void 0,
-      mustChangePassword: false,
-      failedLoginAttempts: r.failed_login_attempts ?? 0,
-      lockedUntil: r.locked_until ? new Date(r.locked_until).toISOString() : void 0,
-      resetRequested: Boolean(r.reset_requested),
       name: r.name,
       role: r.role,
       isApproved: r.is_approved,
@@ -729,6 +736,10 @@ async function fetchAllDataFromPostgres(pool) {
   }
 }
 
+// src/api/auth.ts
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import bcrypt2 from "bcryptjs";
+
 // src/api/helper.ts
 function sendResponse(res, statusCode, data) {
   try {
@@ -739,9 +750,6 @@ function sendResponse(res, statusCode, data) {
     res.statusCode = statusCode;
     if (typeof res.setHeader === "function") {
       res.setHeader("Content-Type", "application/json");
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     }
     return res.end(JSON.stringify(data));
   } catch (err) {
@@ -749,33 +757,108 @@ function sendResponse(res, statusCode, data) {
   }
 }
 
+// src/utils/passwordPolicy.ts
+import bcrypt from "bcryptjs";
+var LOCKOUT_DURATION_MS = 15 * 60 * 1e3;
+
+// src/api/auth.ts
+var SESSION_COOKIE = "fams_session";
+var SESSION_SECONDS = 8 * 60 * 60;
+var CHALLENGE_SECONDS = 5 * 60;
+function signingSecret() {
+  const value = process.env.SESSION_SECRET || "";
+  if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
+    throw new Error("SESSION_SECRET must be configured with at least 32 characters.");
+  }
+  return Buffer.from(value, "utf8");
+}
+function verifyToken(token) {
+  try {
+    const [payload, signature, extra] = token.split(".");
+    if (!payload || !signature || extra) return null;
+    const expected = createHmac("sha256", signingSecret()).update(payload).digest();
+    const actual = Buffer.from(signature, "base64url");
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!claims.sub || !Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1e3)) return null;
+    return claims;
+  } catch {
+    return null;
+  }
+}
+function getCookie(req, name) {
+  const header = String(req.headers?.cookie || "");
+  for (const entry of header.split(";")) {
+    const separator = entry.indexOf("=");
+    if (separator < 0) continue;
+    if (entry.slice(0, separator).trim() === name) {
+      try {
+        return decodeURIComponent(entry.slice(separator + 1).trim());
+      } catch {
+        return void 0;
+      }
+    }
+  }
+  return void 0;
+}
+async function getAuthenticatedUser(req) {
+  const secret = signingSecret();
+  void secret;
+  const token = getCookie(req, SESSION_COOKIE);
+  if (!token) return null;
+  const claims = verifyToken(token);
+  if (!claims || claims.kind !== "session") return null;
+  const pool = getPool();
+  await ensureDatabaseSchema(pool);
+  const result = await pool.query("SELECT * FROM users WHERE id = $1", [claims.sub]);
+  return result.rows[0] ? safeUser(result.rows[0]) : null;
+}
+function safeUser(row) {
+  return {
+    id: row.id,
+    username: row.username,
+    name: row.name,
+    role: row.role,
+    isApproved: Boolean(row.is_approved),
+    joinedDate: row.joined_date || void 0,
+    farmLocation: row.farm_location || void 0,
+    primaryCrops: Array.isArray(row.primary_crops) ? row.primary_crops : [],
+    contactNumber: row.contact_number || void 0,
+    status: row.status || void 0,
+    avatarUrl: row.avatar_url || void 0,
+    memberIdNumber: row.member_id_number || void 0,
+    rsbsaNumber: row.rsbsa_number || void 0,
+    isRsbsaRegistered: Boolean(row.is_rsbsa_registered),
+    mustChangePassword: Boolean(row.must_change_password),
+    mfaEnabled: Boolean(row.mfa_enabled)
+  };
+}
+function errorResponse(res, status, message) {
+  return sendResponse(res, status, { success: false, message });
+}
+async function requireAuthenticated(req, res) {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) errorResponse(res, 401, "Authentication required.");
+    return user;
+  } catch {
+    errorResponse(res, 503, "Authentication is not configured or unavailable.");
+    return null;
+  }
+}
+
 // src/api/pull.ts
 async function handler(req, res) {
+  if (req.method && req.method !== "GET") return sendResponse(res, 405, { success: false, message: "Method not allowed." });
+  const user = await requireAuthenticated(req, res);
+  if (!user) return;
+  if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: "Database is not configured." });
   try {
-    if (!isDatabaseConfigured()) {
-      return sendResponse(res, 200, {
-        success: false,
-        offlineMode: true,
-        message: "DATABASE_URL is not configured. Running in offline/local storage mode."
-      });
-    }
-    const pool = getPool();
-    const pullPromise = fetchAllDataFromPostgres(pool);
-    const timeoutPromise = new Promise(
-      (_, reject) => setTimeout(() => reject(new Error("Cloud DB query timed out after 30 seconds.")), 3e4)
-    );
-    const data = await Promise.race([pullPromise, timeoutPromise]);
-    return sendResponse(res, 200, {
-      success: true,
-      data
-    });
+    const data = await fetchAllDataFromPostgres(getPool());
+    return sendResponse(res, 200, { success: true, data });
   } catch (error) {
-    console.warn("[Cloud DB Pull Warning]:", error?.message || error);
-    return sendResponse(res, 200, {
-      success: false,
-      offlineMode: true,
-      message: `Offline fallback: ${error?.message || "Database unavailable"}`
-    });
+    console.error("[Cloud DB Pull Error]:", error?.message || error);
+    return sendResponse(res, 503, { success: false, message: "Unable to load synchronized data." });
   }
 }
 export {

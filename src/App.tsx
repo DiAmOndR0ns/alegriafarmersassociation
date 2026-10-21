@@ -32,6 +32,7 @@ const PasswordChangePrompt = lazy(() => import('./components/PasswordChangePromp
 import { buildAuditChain, hashPassword, verifyPassword, sanitizeUserForStorage } from './utils/audit';
 import { generateInitialPassword, getPasswordExpiryStatus, hashPassword as hashPolicyPassword, isLegacyPasswordHash, validatePasswordPolicy } from './utils/passwordPolicy';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
+import { runNightlyBackupCheck } from './utils/backupSystem';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
@@ -170,7 +171,19 @@ export default function App() {
         await migrateSecureItems(storageKeys);
       if (cancelled) return;
       const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers] = await Promise.all([
-        getSecureItem<any>('bafa_members'), getSecureItem<any>('bafa_meetings'), getSecureItem<any>('bafa_resolutions'), getSecureItem<any>('bafa_transactions'), getSecureItem<any>('bafa_announcements'), getSecureItem<any>('bafa_afa_igp'), getSecureItem<any>('bafa_products'), getSecureItem<any>('bafa_activities'), getSecureItem<any>('bafa_funds'), getSecureItem<any>('bafa_inventory'), getSecureItem<any>('bafa_sync_queue'), getSecureItem<any>('bafa_logs'), getSecureItem<any>('bafa_users')
+        getSecureItem<Member[]>('bafa_members'),
+        getSecureItem<Meeting[]>('bafa_meetings'),
+        getSecureItem<Resolution[]>('bafa_resolutions'),
+        getSecureItem<FinancialTransaction[]>('bafa_transactions'),
+        getSecureItem<Announcement[]>('bafa_announcements'),
+        getSecureItem<HogRaisingState>('bafa_afa_igp'),
+        getSecureItem<Product[]>('bafa_products'),
+        getSecureItem<AssociationActivity[]>('bafa_activities'),
+        getSecureItem<OrganizationFund[]>('bafa_funds'),
+        getSecureItem<InventoryItem[]>('bafa_inventory'),
+        getSecureItem<SyncQueueItem[]>('bafa_sync_queue'),
+        getSecureItem<SystemLog[]>('bafa_logs'),
+        getSecureItem<User[]>('bafa_users')
       ]);
 
       // Detect and clear legacy dummy seed data from previous versions (e.g. Roberto Cañete / m-001)
@@ -241,7 +254,23 @@ export default function App() {
 
       // Initial database status check
       checkDatabaseConnection();
+      void runNightlyBackupCheck();
       setIsHydrating(false);
+
+      fetch('/api/auth/session')
+        .then(response => response.ok ? response.json() : null)
+        .then(result => {
+          if (!result?.authenticated || !result.user) return;
+          const safeUser = { ...result.user } as User;
+          delete safeUser.password;
+          delete safeUser.passwordHash;
+          delete safeUser.passwordHistory;
+          setCurrentUser(safeUser);
+          if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
+          setGuestMode(false);
+          setUsers(previous => [safeUser, ...previous.filter(user => user.id !== safeUser.id)]);
+        })
+        .catch(() => undefined);
 
       // Attempt pulling fresh data from PostgreSQL Cloud Database if online
       fetch('/api/sync/pull')
@@ -325,7 +354,7 @@ export default function App() {
             }));
 
             // If there were pending offline operations or pending deletions queued in local storage, sync them immediately
-            const hasQueuedItems = storedQueue && JSON.parse(storedQueue || '[]').length > 0;
+            const hasQueuedItems = Array.isArray(storedQueue) ? storedQueue.length > 0 : Boolean(storedQueue);
             const hasQueuedDeletions = Object.values(bootDeletedIds).some(arr => Array.isArray(arr) && arr.length > 0);
 
             if (hasQueuedItems || hasQueuedDeletions) {
@@ -1855,7 +1884,13 @@ export default function App() {
   };
 
   // USER AUTHENTICATION & MANAGEMENT ACTIONS
-  const handleLogin = (user: User, password: string) => {
+  const handleLogin = (user: User, password: string, serverAuthenticated = false) => {
+    if (import.meta.env.PROD || serverAuthenticated || dbStatus.configured) {
+      void password;
+      window.location.reload();
+      return;
+    }
+
     const { password: legacyPassword, passwordHash, passwordHistory, ...safeUser } = user;
     const wasLegacy = isLegacyPasswordHash(passwordHash) || !passwordHash;
     const upgradedHash = wasLegacy ? hashPolicyPassword(password) : passwordHash;
@@ -1864,7 +1899,7 @@ export default function App() {
       passwordHash: upgradedHash,
       passwordHistory: user.passwordHistory || [],
       passwordChangedAt: user.passwordChangedAt || new Date().toISOString(),
-      mustChangePassword: false,
+      mustChangePassword: Boolean(user.mustChangePassword) || wasLegacy,
       failedLoginAttempts: 0,
       lockedUntil: undefined
     };
@@ -1872,8 +1907,8 @@ export default function App() {
 
     const upgradedUsers = users.map((candidate) => candidate.id === user.id ? upgradedUser : candidate);
     setUsers(upgradedUsers);
-    setCurrentUser({ ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, passwordHistory: upgradedUser.passwordHistory, mustChangePassword: false } as User);
-    updateStorage('bafa_current_user', { ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, mustChangePassword: false });
+    setCurrentUser({ ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, passwordHistory: upgradedUser.passwordHistory, mustChangePassword: upgradedUser.mustChangePassword } as User);
+    updateStorage('bafa_current_user', { ...safeUser, passwordChangedAt: upgradedUser.passwordChangedAt, mustChangePassword: upgradedUser.mustChangePassword });
     updateStorage('bafa_users', upgradedUsers);
     if (isOnline) pushAllDataToCloud({ users: upgradedUsers }, { silent: true, source: 'Password Hash Migration' });
 
@@ -1887,6 +1922,29 @@ export default function App() {
     if (!currentUser) return;
     const account = users.find((candidate) => candidate.id === currentUser.id);
     if (!account) return;
+    if (import.meta.env.PROD || dbStatus.configured) {
+      try {
+        const response = await fetch('/api/auth/password/change', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newPassword })
+        });
+        const result = await response.json();
+        if (!response.ok || !result?.success) {
+          showToastMessage(result?.message || 'Password could not be updated. Please try again.', 'error');
+          return;
+        }
+        const updatedCurrent = { ...currentUser, mustChangePassword: false, passwordChangedAt: result.user?.passwordChangedAt || new Date().toISOString() };
+        setCurrentUser(updatedCurrent);
+        setUsers(previous => previous.map(candidate => candidate.id === currentUser.id ? updatedCurrent : candidate));
+        updateStorage('bafa_current_user', updatedCurrent);
+        setDismissedPasswordWarningFor(null);
+        showToastMessage('Your password has been updated successfully.', 'success');
+      } catch {
+        showToastMessage('Password could not be updated because the server could not be reached.', 'error');
+      }
+      return;
+    }
     const policyError = validatePasswordPolicy(newPassword, account.username, account.role, account.passwordHistory);
     if (policyError) {
       showToastMessage(policyError, 'error');
@@ -1921,6 +1979,9 @@ export default function App() {
     setCurrentUser(null);
     removeSecureItem('bafa_current_user');
     setGuestMode(true);
+    if (import.meta.env.PROD || dbStatus.configured) {
+      void fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    }
     showToastMessage('You have been signed out securely. Session ended.', 'info');
   };
 
@@ -1941,6 +2002,11 @@ export default function App() {
       return;
     }
     const hasPresidentAlready = users.some((user) => user.role === 'President');
+    if (hasPresidentAlready && copy.role === 'President') {
+      // Prevent privilege escalation: only the first setup may claim the President role.
+      // Subsequent registrations are forced to Member status pending officer review.
+      copy.role = 'Member';
+    }
     const isInitialAdminBootstrap = !hasPresidentAlready && copy.role === 'President';
 
     copy.passwordHash = hashPolicyPassword(rawPassword);
@@ -2008,24 +2074,51 @@ export default function App() {
     showToastMessage('Kung adunay account nga motakdo, ipadala ang password reset instructions.', 'success');
   };
 
-  const handleResetPassword = (userId: string, newPass: string): boolean => {
+  const handleResetPassword = async (userId: string, newPass: string, currentPassword = ''): Promise<boolean> => {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return false;
 
-    // Authority guard: the President and Vice President (or Secretary for Member accounts) may reset passwords,
+    // The President may reset officer credentials; the Secretary may reset member credentials.
     // but the President's own account can never be reset from this desk.
     const canResetPasswords =
       !!currentUser && (
         currentUser.role === 'President' ||
-        currentUser.role === 'Vice_President' ||
         (['Secretary', 'Assistant_Secretary'].includes(currentUser.role) && targetUser.role === 'Member')
       );
     if (!canResetPasswords) {
-      showToastMessage('Only the President, Vice President, Secretary, or Assistant Secretary may reset the permitted account passwords.', 'error');
+      showToastMessage('Only the President may reset officer credentials; the Secretary may reset member credentials.', 'error');
       return false;
     }
     if (targetUser.role === 'President') {
       showToastMessage('Dili ma-reset ang password sa Presidente. (The President\'s password cannot be reset.)', 'error');
+      return false;
+    }
+
+    if (import.meta.env.PROD || dbStatus.configured) {
+      try {
+        const response = await fetch('/api/auth/password/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, targetUserId: userId, newPassword: newPass, currentPassword })
+        });
+        const result = await response.json();
+        if (!response.ok || !result?.success) {
+          showToastMessage(result?.message || 'Password reset was rejected.', 'error');
+          return false;
+        }
+        const updatedTarget = { ...targetUser, mustChangePassword: true, resetRequested: false, failedLoginAttempts: 0, lockedUntil: undefined };
+        setUsers(previous => previous.map(user => user.id === userId ? updatedTarget : user));
+        updateStorage('bafa_users', users.map(user => user.id === userId ? updatedTarget : user));
+        showToastMessage(`A temporary password was created for ${targetUser.name}; it must be changed at next sign-in.`, 'success');
+        return true;
+      } catch {
+        showToastMessage('Password reset could not be completed because the server could not be reached.', 'error');
+        return false;
+      }
+    }
+
+    if (!currentUser || !verifyPassword(currentPassword, currentUser.passwordHash, currentUser.password)) {
+      showToastMessage('Your current password is incorrect.', 'error');
       return false;
     }
 
@@ -2045,7 +2138,7 @@ export default function App() {
           passwordHash: resetHash,
           passwordHistory: [...safeHistory, ...(targetUser.passwordHash ? [{ hash: targetUser.passwordHash, changedAt: targetUser.passwordChangedAt || new Date(0).toISOString() }] : [])].slice(-5),
           passwordChangedAt: resetChangedAt,
-          mustChangePassword: false,
+          mustChangePassword: true,
           resetRequested: false,
           failedLoginAttempts: 0,
           lockedUntil: undefined
@@ -2188,6 +2281,19 @@ export default function App() {
       return;
     }
 
+    if (targetUser.role === 'President' || newRole === 'President') {
+      showToastMessage('Presidential role changes must use the verified turnover workflow.', 'error');
+      return;
+    }
+    if (
+      newRole !== 'Member' &&
+      newRole !== 'Board_Member' &&
+      users.some(user => user.id !== id && user.role === newRole)
+    ) {
+      showToastMessage(`The ${newRole.replace('_', ' ')} position is already filled.`, 'error');
+      return;
+    }
+
     const oldRoleName = targetUser.role.replace('_', ' ');
     const newRoleName = newRole.replace('_', ' ');
 
@@ -2220,6 +2326,17 @@ export default function App() {
   const handleAddOfficer = (officerData: { name: string; username: string; password: string; role: OfficerRole }) => {
     if (!currentUser || currentUser.role !== 'President') {
       showToastMessage('Wala kay katungod sa pagdugang og opisyal. Ang Presidente/Admin lamang ang makahimo niini.', 'error');
+      return false;
+    }
+    if (officerData.role === 'President') {
+      showToastMessage('The President position can only be assigned through the verified turnover workflow.', 'error');
+      return false;
+    }
+    if (
+      officerData.role !== 'Board_Member' &&
+      users.some(user => user.role === officerData.role)
+    ) {
+      showToastMessage(`The ${officerData.role.replace('_', ' ')} position is already filled.`, 'error');
       return false;
     }
 
@@ -2331,6 +2448,10 @@ export default function App() {
     turnoverNotes: string,
     outgoingNewRole: 'Member' | 'Vice_President' | 'Secretary' | 'Assistant_Secretary' | 'Board_Member' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'
   ) => {
+    if (!currentUser || currentUser.role !== 'President') {
+      showToastMessage('Only the currently authenticated President can complete officer turnover.', 'error');
+      return;
+    }
     const currentPresident = (currentUser && currentUser.role === 'President' ? users.find(u => u.id === currentUser.id) : null) || users.find(u => u.role === 'President');
     if (!currentPresident) {
       showToastMessage('Error: No active President found in the system.', 'error');
@@ -2342,8 +2463,28 @@ export default function App() {
       showToastMessage('Error: Selected new President user not found.', 'error');
       return;
     }
+    if (!newPresidentUser.isApproved || newPresidentUser.role === 'Member') {
+      showToastMessage('Only an approved officer may receive the presidency.', 'error');
+      return;
+    }
+    if (newPresidentUser.id === currentPresident.id) {
+      showToastMessage('Select a different officer to receive the presidency.', 'error');
+      return;
+    }
 
     const resolvedOutgoingRole = (outgoingNewRole === 'None' ? 'Member' : outgoingNewRole) as OfficerRole | 'Member';
+    if (
+      resolvedOutgoingRole !== 'Member' &&
+      resolvedOutgoingRole !== 'Board_Member' &&
+      users.some(user =>
+        user.id !== currentPresident.id &&
+        user.id !== newPresidentUser.id &&
+        user.role === resolvedOutgoingRole
+      )
+    ) {
+      showToastMessage(`The ${resolvedOutgoingRole.replace('_', ' ')} position is already filled.`, 'error');
+      return;
+    }
 
     const updatedUsers = users.map(user => {
       if (user.id === currentPresident.id) {
@@ -2474,6 +2615,7 @@ export default function App() {
           <AuthScreen
             users={users}
             onLogin={handleLogin}
+            serverAuthRequired={import.meta.env.PROD || dbStatus.configured || dbStatus.checking}
             onRegister={handleRegister}
             onLoginFailed={handleLoginFailed}
             toast={showToastMessage}
@@ -2569,6 +2711,13 @@ export default function App() {
         </header>
 
         <Suspense fallback={null}>
+          {currentUser.mustChangePassword && (
+            <PasswordChangePrompt
+              user={currentUser}
+              forced
+              onSubmit={handleChangeOwnPassword}
+            />
+          )}
           {!currentUser.mustChangePassword && !dismissedPasswordWarningFor && currentUser.passwordChangedAt && (() => {
             const expiry = getPasswordExpiryStatus(currentUser.passwordChangedAt);
             return expiry.warning ? <PasswordChangePrompt user={users.find((candidate) => candidate.id === currentUser.id) || currentUser} forced={false} warningDays={expiry.daysRemaining} onSubmit={handleChangeOwnPassword} onClose={() => setDismissedPasswordWarningFor(currentUser.id)} /> : null;
@@ -2634,6 +2783,13 @@ export default function App() {
         </div>
       )}
       <Suspense fallback={null}>
+        {currentUser.mustChangePassword && (
+          <PasswordChangePrompt
+            user={currentUser}
+            forced
+            onSubmit={handleChangeOwnPassword}
+          />
+        )}
         {!currentUser.mustChangePassword && !dismissedPasswordWarningFor && currentUser.passwordChangedAt && (() => {
           const expiry = getPasswordExpiryStatus(currentUser.passwordChangedAt);
           return expiry.warning ? <PasswordChangePrompt user={users.find((candidate) => candidate.id === currentUser.id) || currentUser} forced={false} warningDays={expiry.daysRemaining} onSubmit={handleChangeOwnPassword} onClose={() => setDismissedPasswordWarningFor(currentUser.id)} /> : null;
@@ -2966,6 +3122,21 @@ export default function App() {
                 onReturnMeetingMinutes={handleReturnMeetingMinutes}
                 onPresidentApproveTransaction={handlePresidentApproveTransaction}
                 onPresidentReturnTransaction={handlePresidentReturnTransaction}
+                onUpdateUser={(updatedUser) => {
+                  const updated = users.map(u => u.id === updatedUser.id ? updatedUser : u);
+                  setUsers(updated);
+                  updateStorage('bafa_users', updated);
+                  if (currentUser?.id === updatedUser.id) {
+                    setCurrentUser(updatedUser);
+                    updateStorage('bafa_current_user', updatedUser);
+                  }
+                  showToastMessage(
+                    updatedUser.mfaEnabled
+                      ? 'Two-factor authentication (2FA) is now required for the President account.'
+                      : 'Two-factor authentication requirement disabled.',
+                    'info'
+                  );
+                }}
               />
             )}
 

@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { sendResponse } from './helper';
+import { requireAuthenticated } from './auth';
 
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
 const PgPool = (pg as any)?.Pool || (pg as any)?.default?.Pool || (pg as any)?.default || pg;
@@ -87,6 +88,8 @@ async function getLiveTableStats(pool: pg.Pool) {
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== 'GET') return sendResponse(res, 405, { error: 'Method not allowed' });
+    const user = await requireAuthenticated(req, res);
+    if (!user) return;
 
     const rawUrl = (process.env.DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');
 

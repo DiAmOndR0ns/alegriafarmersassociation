@@ -1,57 +1,72 @@
+import type { IncomingMessage, ServerResponse } from 'http';
+import type { Request, Response } from 'express';
 import { getPool, isDatabaseConfigured, saveFullStateToPostgres } from './db';
-import { sendResponse, parseRequestBody } from './helper';
+import { isPresidentRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
+import { parseRequestBody, sendResponse } from './helper';
 
-export default async function handler(req: any, res: any) {
+export type PushApiRequest = Request | (IncomingMessage & {
+  body?: unknown;
+  method?: string;
+  headers?: Record<string, string | string[] | undefined>;
+});
+
+export type PushApiResponse = Response | ServerResponse;
+
+export interface PushSyncState {
+  members?: unknown[];
+  meetings?: unknown[];
+  resolutions?: unknown[];
+  transactions?: unknown[];
+  financialTransactions?: unknown[];
+  announcements?: unknown[];
+  products?: unknown[];
+  activities?: unknown[];
+  funds?: unknown[];
+  organizationFunds?: unknown[];
+  auditorReports?: unknown[];
+  delegationRequests?: unknown[];
+  hogRaising?: Record<string, unknown>;
+  systemLogs?: unknown[];
+  logs?: unknown[];
+  deleteItem?: { entity?: string; id?: string };
+  deletedIds?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+function isValidSyncState(state: unknown): state is PushSyncState {
+  return typeof state === 'object' && state !== null && !Array.isArray(state);
+}
+
+export default async function handler(req: PushApiRequest, res: PushApiResponse) {
+  if (req.method && req.method !== 'POST') return sendResponse(res, 405, { success: false, message: 'Method not allowed.' });
+  if (rejectCrossOriginMutation(req)) return sendResponse(res, 403, { success: false, message: 'Cross-origin requests are not allowed.' });
+  const user = await requireAuthenticated(req, res);
+  if (!user) return;
+  // Fine-grained write authorization has not yet been implemented, so bulk writes fail closed for non-presidents.
+  if (!isPresidentRole(user.role)) return sendResponse(res, 403, { success: false, message: 'President access is required for bulk synchronization.' });
+  if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: 'Database is not configured.' });
   try {
-  /*  return sendResponse(res, 503, {
-      success: false,
-      offlineMode: true,
-      message: 'Cloud sync is temporarily disabled until server-side authentication and authorization are configured.',
-    }); */
-
-    if (!isDatabaseConfigured()) {
-      return sendResponse(res, 200, {
-        success: true,
-        offlineMode: true,
-        message: 'Saved to local offline storage (DATABASE_URL not configured).',
-      });
+    const rawState = await parseRequestBody(req);
+    if (!isValidSyncState(rawState)) {
+      return sendResponse(res, 400, { success: false, message: 'A valid state object is required.' });
     }
-
-    const pool = getPool();
-    const body = await parseRequestBody(req);
-
-    // Save full state directly to PostgreSQL
-    const savePromise = saveFullStateToPostgres(pool, body);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Cloud DB push timed out after 30 seconds.')), 30000)
-    );
-
-    const result = await Promise.race([savePromise, timeoutPromise]);
-    console.log('[PUSH DEBUG] Save result:', result);
-    
-    return sendResponse(res, 200, {
-      success: true,
-      offlineMode: false,
-      message: 'State successfully synced to PostgreSQL Cloud DB!',
-    });
+    const state = rawState;
+    if (state.deleteItem && ['user', 'users', 'officer', 'officers'].includes(String(state.deleteItem.entity).toLowerCase())) {
+      return sendResponse(res, 403, { success: false, message: 'User accounts cannot be deleted through bulk synchronization.' });
+    }
+    // Accounts, roles, hashes, MFA, lockout, and policy state are managed only by dedicated auth endpoints.
+    const { users: _submittedUsers, ...safeState } = state;
+    if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
+      const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds as Record<string, unknown>;
+      safeState.deletedIds = safeDeletedIds;
+    }
+    await saveFullStateToPostgres(getPool(), safeState);
+    return sendResponse(res, 200, { success: true, offlineMode: false, message: 'State successfully synced.' });
   } catch (error: any) {
-    console.error('[PUSH DEBUG] Full error:', {
-      message: error?.message,
-      code: error?.code,
-      detail: error?.detail,
-      hint: error?.hint,
-      where: error?.where,
-      stack: error?.stack?.substring(0, 2000)
-    });
-    
-    return sendResponse(res, 200, {
+    console.error('[Cloud DB Push Error]:', error?.message || error);
+    return sendResponse(res, error?.statusCode === 413 ? 413 : 500, {
       success: false,
-      offlineMode: true,
-      message: `Failed to sync: ${error?.message || 'Database unavailable'}`,
-      error: error?.message,
-      detail: error?.detail,
-      hint: error?.hint,
-      where: error?.where
+      message: error?.statusCode === 413 ? 'Request body exceeds the allowed limit.' : 'Unable to sync state.',
     });
   }
 }

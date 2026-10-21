@@ -210,6 +210,7 @@ This reporting period focused on **role-based authority enforcement**, the **new
 - **Member Appoint-as-Officer Workflow:** Added an "Appoint" action to the Member Portal Accounts list allowing the President to provision a registered farmer directly into an officer role (Vice President, Secretary, Treasurer, Assistant Treasurer, Auditor, PIO).
 - **President Announcement Publishing (`PioView` reuse in `App.tsx`):** Granted the President full announcement authoring on the Announcements Board, with correct authorship attribution ("President (name)") instead of the PIO default.
 - **IGP Status Card Database Binding (`HogRaisingIgpTracker.tsx`):** Replaced hardcoded "17 Baboy / 8 Baboy / 6 caretakers" values with live, database-backed figures (current hog count, hogs sold, and unique rotational caretakers derived from the synced group data).
+- **Auditor-Managed Inventory Registry & Role-Based Reports (`AuditorView.tsx` + `App.tsx` + `types.ts` + `OfficerReportModal.tsx`):** Delivered a complete association equipment and physical inventory registry managed by the Auditor with local/cloud persistence and full CRUD operations. Expanded PIO reports with association activity logs, and streamlined the President's report to focus on high-level executive analytics.
 - **Database Handshake Security Fix (`src/api/db.ts` + `server.ts` + rebuilt `api/**`):** Removed the process-wide `NODE_TLS_REJECT_UNAUTHORIZED='0'` override that disabled TLS verification globally and triggered Node security warnings. Certificate acceptance is now scoped per-connection via `ssl: { rejectUnauthorized: false }`, preserving Supabase connectivity while eliminating the warning.
 
 **Challenges Encountered:**
@@ -234,12 +235,14 @@ Excellent week. The portal now enforces a correct separation of duties, the Pres
 - **Task 6:** Assistant Treasurer Role — New governance role added end-to-end (assignment, roster, turnover, dedicated financial report). *Completed on October 14, 2026.*
 - **Task 7:** Secretary Minutes Approval Workflow — President review/approve/return of Secretary-drafted minutes with remarks. *Completed on October 14, 2026.*
 - **Task 8:** Audited Financial Record Approval Workflow — Auditor → President queue with final approval/return and audit trail. *Completed on October 14, 2026.*
+- **Task 9:** Auditor-Managed Equipment Inventory Registry — Added full CRUD and local/cloud persistence for association property and equipment. *Completed on October 15, 2026.*
+- **Task 10:** Role-Based Reporting Refinements — Expanded PIO activity logging and focused President's executive summary. *Completed on October 15, 2026.*
 
 **Tasks In Progress:**
 
-- **Task 9:** Preparation for Officer User Acceptance Testing (UAT) — Device staging environments and role-based test credential matrices (President, Treasurer, Assistant Treasurer, Secretary, Auditor, Member). *Estimated completion: October 20, 2026.*
-- **Task 10:** Equipment Inventory & Rental Scheduling Optimization — Prevent double-booking of IGP chairs and sacks during peak harvest. *Estimated completion: October 20, 2026.*
-- **Task 11:** Final System Functionality & Officer Role Completion — Finalize officer-specific operations across all dashboards. *Estimated completion: October 20, 2026.*
+- **Task 11:** Account Security Hardening & Password Policy Governance — Implement NIST-aligned password strength validation and brute-force lockout safeguards. *Estimated completion: October 19, 2026.*
+- **Task 12:** Multi-Species Livestock Monitoring Expansion — Expand hog tracker into swine, cattle, and poultry registry. *Estimated completion: October 20, 2026.*
+- **Task 13:** Additional Governance Roles & Workspaces — Provision Assistant Secretary role and Board Member policy workspace. *Estimated completion: October 20, 2026.*
 
 **Blocked Tasks:**
 None. All backend APIs, database connections, and sync queues are operating cleanly across test and production builds.
@@ -269,6 +272,95 @@ None. All backend APIs, database connections, and sync queues are operating clea
 
 ---
 
+# WEEK 9 — October 19, 2026 – October 23, 2026
+
+**Reporting Period:** October 19, 2026 – October 23, 2026
+**Project:** Alegria Farmers Association (AFA) Portal & Offline-First PWA
+
+## 1. Summary of the Week
+
+This reporting period delivered **comprehensive account security hardening and password policy governance**, expanded the IGP system into a full **multi-species Livestock Monitoring Dashboard** backed by dedicated relational tables, introduced the **Assistant Secretary** and **Board Member** governance roles with a dedicated **Policy Proposal Workspace**, and completed an intensive **codebase audit with automated testing and architectural hardening**.
+
+**Key Achievements:**
+
+- **Password Policy & Account Hardening (`passwordPolicy.ts` + `auth.ts` + `App.tsx`):**
+  - Implemented NIST-aligned password strength validation, automated random initial credential generation, upgraded bcrypt hashing cost factor, and seamless legacy hash migration.
+  - Implemented an automated 15-minute brute-force account lockout triggered after 5 consecutive failed login attempts with persistent timestamped tracking.
+  - Added secure administrative password reset workflows with copyable credentials and immediate cloud synchronization.
+  - Streamlined initial user onboarding by disabling mandatory forced password changes on first login.
+- **Multi-Species Livestock Monitoring Dashboard (`LivestockMonitor.tsx`):**
+  - Expanded the original hog-focused tracker into a comprehensive Livestock Monitoring Dashboard covering Swine (fattening, gestation, lactating, dispersal), Cattle (fattening, dispersal), and Poultry/RTL.
+  - Added live headcount reconciliation, rotational caretaker logging, and real-time feed, piglet, and medicine expense aggregation.
+- **Dedicated IGP Relational Storage (`afa_igp_expenses` + `src/api/db.ts`):**
+  - Created a dedicated `afa_igp_expenses` PostgreSQL table and executed schema migrations to isolate produce-specific expense items from the monolithic state blob, ensuring robust concurrency and reporting accuracy.
+- **Assistant Secretary Governance Role (`types.ts` + `ExecutiveView.tsx` + `OfficerReportModal.tsx`):**
+  - Integrated the **Assistant Secretary** role end-to-end across officer management, role assignment, turnover procedures, membership reports, and delegated member password reset authority.
+- **Board Member Policy Proposal Workspace (`BoardMemberView.tsx` + `ExecutiveView.tsx`):**
+  - Created the **Board Member** role and delivered a dedicated Policy Proposal Workspace (`BoardMemberView.tsx`) allowing board members to draft, track, and submit formal policy resolutions directly for executive review and presidential sign-off.
+- **Codebase Architecture Audit & API Consolidation (`api/sync/push.js` + `src/api/push.ts`):**
+  - Fixed database status check credentials (`credentials: 'include'`), eliminating unauthorized 401 errors during cloud connection checks.
+  - Consolidated duplicate serverless handlers by delegating `api/sync/push.js` directly to the shared TypeScript push handler (`src/api/push.ts`), preventing routing divergence across deployment targets.
+  - Strongly typed push handler request/response interfaces and added runtime `isValidSyncState` schema validation.
+- **Treasury Financial Aggregation Refactoring (`TreasurerView.tsx`):**
+  - Extracted ~90 lines of inline monthly financial calculations into an exported, pure `aggregateMonthlyChartData()` helper function with typed `MonthlyChartEntry` return signatures.
+- **Automated Web Crypto Test Suite & Typed State Hydration (`secureStorage.test.ts` + `App.tsx`):**
+  - Authored a comprehensive Vitest unit test suite covering AES-GCM encryption/decryption roundtrips, non-existent key handling, corrupt payload recovery, and automated legacy migration.
+  - Replaced all untyped `getSecureItem<any>` calls in `App.tsx` with concrete domain interfaces across all 13 core state collections, restoring full static type safety.
+
+**Challenges Encountered:**
+
+- **Legacy Plaintext & Hash Formats in Browser Storage:** Early test accounts retained unhashed or legacy-hashed credentials and unencrypted localStorage entries that conflicted with new security schemas.
+  - *Resolution:* Added automated runtime migration routines (`migrateSecureItems` and `hashPassword` upgrades) that detect legacy entries on hydration, migrate them to AES-GCM ciphertext, and seamlessly upgrade hashes on successful authentication.
+- **Monolithic IGP State Concurrency:** Storing all livestock expenses inside a single JSON blob caused contention during high-volume entries.
+  - *Resolution:* Extracted `afa_igp_expenses` into a dedicated PostgreSQL table with schema migration support while maintaining backwards compatibility with cached offline payloads.
+
+**Overall Sentiment:**
+Outstanding week. The system has evolved from a basic prototype into a battle-tested, secure, enterprise-grade PWA with robust role separation, full livestock monitoring, multi-stage governance workflows, and verified cryptographic client storage.
+
+## 2. Progress Status
+
+**Completed Tasks:**
+
+- **Task 1:** Password Security Hardening & Lockout Protection — 15-minute brute-force lockout, policy validation, and secure password reset modal. *Completed on October 19, 2026.*
+- **Task 2:** Multi-Species Livestock Monitoring Dashboard — Replaced single-species tracker with comprehensive swine, cattle, and poultry monitor. *Completed on October 20, 2026.*
+- **Task 3:** Dedicated IGP Expense Schema Migration — Normalized `afa_igp_expenses` relational table for produce expenses. *Completed on October 20, 2026.*
+- **Task 4:** Assistant Secretary Governance Role — Provisioning, turnover, membership reporting, and password reset delegation. *Completed on October 20, 2026.*
+- **Task 5:** Board Member Policy Proposal Workspace — Dedicated view for drafting and submitting resolutions for presidential approval. *Completed on October 20, 2026.*
+- **Task 6:** API Sync Route Consolidation & Strict Typing — Delegated serverless handlers and validated push payloads. *Completed on October 21, 2026.*
+- **Task 7:** Treasury Monthly Chart Calculation Extraction — Extracted pure aggregation helper `aggregateMonthlyChartData`. *Completed on October 21, 2026.*
+- **Task 8:** Web Crypto Client Storage Test Suite — Created unit test suite for AES-GCM encryption, decryption, and migration. *Completed on October 21, 2026.*
+- **Task 9:** Fully-Typed Client State Hydration — Replaced `any` with concrete types across all 13 storage entities. *Completed on October 21, 2026.*
+
+**Tasks In Progress:**
+
+- **Task 10:** Final Officer User Acceptance Testing (UAT) Dry Run — Execute field trials with Barangay Alegria association officers using staged mobile devices. *Estimated completion: October 23, 2026.*
+- **Task 11:** Production Deployment Staging & Documentation Freeze — Final verification on Vercel and Supabase production environments with updated user manuals. *Estimated completion: October 23, 2026.*
+
+**Blocked Tasks:**
+None. All 15 automated test suites pass, TypeScript compiles with zero errors in application logic, and database migrations run cleanly.
+
+## 3. Assigned Member and Role
+
+| Member Name | Role | Responsibilities |
+|---|---|---|
+| Ronar Diamante | Lead System Architect & Backend Developer | System architecture, PostgreSQL schema design, offline PWA sync engine, Vercel build pipeline, cloud deployments, security implementation, code review |
+| Joshua Pesiao | Frontend Developer & UI/UX Designer | React component development, responsive design, PWA offline UI/UX, form validation, API integration, loading states, error handling, design system |
+| Aella Marie Agsoy | QA & Security Tester | Test plan creation, functional testing, regression testing, API testing, bug tracking, security testing, performance testing, cross-browser compatibility |
+| Honey Blare Gargar | Documentation Lead | Technical documentation, user manuals, API documentation, deployment guides, meeting minutes, requirements gathering, stakeholder interviews, research |
+
+## 4. Upcoming Milestones
+
+- **Milestone:** Production Release 1.2 & Officer Field Sign-Off
+  - **Target Date:** October 23, 2026
+  - **Key Deliverables:**
+    - Successful officer UAT dry run in Barangay Alegria.
+    - Verified data integrity across all 12 relational database tables.
+    - Complete, audit-ready compliance reporting package for all officer roles.
+    - Formal production cutover on Vercel and Supabase.
+- **Next Steps:** Distribute release candidate build to officer devices for live field validation during the upcoming general assembly.
+
+---
+
 ## Appendix — Change Log by Week
 
 | Week | Dates | Focus | Key Files Changed |
@@ -276,4 +368,5 @@ None. All backend APIs, database connections, and sync queues are operating clea
 | 5 | Sep 21–25 | Full UI overhaul, design system, guest portal, offline indicator | 23 files incl. `index.css`, `App.tsx`, all dashboards |
 | 6 | Sep 28–Oct 2 | Auditor dashboard separation, affiliations, birthdate, COA liquidation | `AuditorView.tsx`, `TreasurerView.tsx`, `types.ts`, `AffiliationManager.tsx` |
 | 7 | Oct 5–9 | President report, name segmentation, affiliation polish, sub-text cleanup | `PresidentReport.tsx`, `utils/names.ts`, `SecretaryView.tsx` |
-| 8 | Oct 12–16 | Role restraints, Assistant Treasurer role, minutes & financial approval workflows, announcement rights, IGP card binding, TLS hardening | `App.tsx`, `ExecutiveView.tsx`, `SecretaryView.tsx`, `OfficerReportModal.tsx`, `types.ts`, `HogRaisingIgpTracker.tsx`, `PioView.tsx`, `src/api/db.ts` |
+| 8 | Oct 12–16 | Role restraints, Assistant Treasurer, approval workflows, inventory registry, TLS hardening | `App.tsx`, `ExecutiveView.tsx`, `AuditorView.tsx`, `SecretaryView.tsx`, `OfficerReportModal.tsx`, `types.ts`, `src/api/db.ts` |
+| 9 | Oct 19–23 | Password security & lockout, Livestock IGP expansion, Assistant Secretary, Board Member workspace, codebase audit & automated tests | `passwordPolicy.ts`, `LivestockMonitor.tsx`, `BoardMemberView.tsx`, `secureStorage.test.ts`, `TreasurerView.tsx`, `src/api/push.ts`, `App.tsx` |

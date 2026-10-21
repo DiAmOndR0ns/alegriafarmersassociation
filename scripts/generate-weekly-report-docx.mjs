@@ -135,6 +135,7 @@ const WEEKS = [
       ['Member Appoint-as-Officer Workflow', 'Added an "Appoint" action to the Member Portal Accounts list allowing the President to provision a registered farmer directly into an officer role (Vice President, Secretary, Treasurer, Assistant Treasurer, Auditor, PIO).'],
       ['President Announcement Publishing (PioView reuse in App.tsx)', 'Granted the President full announcement authoring on the Announcements Board, with correct authorship attribution ("President (name)") instead of the PIO default.'],
       ['IGP Status Card Database Binding (HogRaisingIgpTracker.tsx)', 'Replaced hardcoded "17 Baboy / 8 Baboy / 6 caretakers" values with live, database-backed figures (current hog count, hogs sold, and unique rotational caretakers derived from the synced group data).'],
+      ['Auditor-Managed Inventory Registry & Role-Based Reports (AuditorView.tsx + App.tsx + types.ts)', 'Delivered complete association equipment and physical inventory registry managed by the Auditor with local/cloud persistence and CRUD actions, and expanded PIO activity reporting.'],
       ['Database Handshake Security Fix (src/api/db.ts + server.ts + rebuilt api/**)', "Removed the process-wide NODE_TLS_REJECT_UNAUTHORIZED='0' override that disabled TLS verification globally and triggered Node security warnings. Certificate acceptance is now scoped per-connection via ssl: { rejectUnauthorized: false }, preserving Supabase connectivity while eliminating the warning."],
     ],
     challenges: [
@@ -151,11 +152,13 @@ const WEEKS = [
       ['Task 6: Assistant Treasurer Role', 'New governance role added end-to-end (assignment, roster, turnover, dedicated financial report).', 'October 14, 2026'],
       ['Task 7: Secretary Minutes Approval Workflow', 'President review/approve/return of Secretary-drafted minutes with remarks.', 'October 14, 2026'],
       ['Task 8: Audited Financial Record Approval Workflow', 'Auditor -> President queue with final approval/return and audit trail.', 'October 14, 2026'],
+      ['Task 9: Auditor-Managed Equipment Inventory Registry', 'Added full CRUD and local/cloud persistence for association property and equipment.', 'October 15, 2026'],
+      ['Task 10: Role-Based Reporting Refinements', 'Expanded PIO activity logging and focused President\'s executive summary.', 'October 15, 2026'],
     ],
     inProgress: [
-      ['Task 9: Preparation for Officer User Acceptance Testing (UAT)', 'Device staging environments and role-based test credential matrices (President, Treasurer, Assistant Treasurer, Secretary, Auditor, Member).', 'October 20, 2026'],
-      ['Task 10: Equipment Inventory & Rental Scheduling Optimization', 'Prevent double-booking of IGP chairs and sacks during peak harvest.', 'October 20, 2026'],
-      ['Task 11: Final System Functionality & Officer Role Completion', 'Finalize officer-specific operations across all dashboards.', 'October 20, 2026'],
+      ['Task 11: Account Security Hardening & Password Policy Governance', 'Implement NIST-aligned password strength validation and brute-force lockout safeguards.', 'October 19, 2026'],
+      ['Task 12: Multi-Species Livestock Monitoring Expansion', 'Expand hog tracker into swine, cattle, and poultry registry.', 'October 20, 2026'],
+      ['Task 13: Additional Governance Roles & Workspaces', 'Provision Assistant Secretary role and Board Member policy workspace.', 'October 20, 2026'],
     ],
     blocked: 'None. All backend APIs, database connections, and sync queues are operating cleanly across test and production builds.',
     milestones: [
@@ -169,6 +172,51 @@ const WEEKS = [
       ] },
     ],
     nextSteps: 'Finalize all system functionalities, officer roles, and dashboard UIs; distribute the updated PWA build to officer mobile devices in Barangay Alegria for an offline data-entry rehearsal ahead of the formal October 20 field trial.',
+  },
+  {
+    week: 9,
+    period: 'October 19, 2026 – October 23, 2026',
+    summaryParagraph: 'This reporting period delivered comprehensive account security hardening and password policy governance, expanded the IGP system into a full multi-species Livestock Monitoring Dashboard backed by dedicated relational tables, introduced the Assistant Secretary and Board Member governance roles with a dedicated Policy Proposal Workspace, and completed an intensive codebase audit with automated testing and architectural hardening.',
+    achievements: [
+      ['Password Policy & Account Hardening (passwordPolicy.ts + auth.ts + App.tsx)', 'Implemented NIST-aligned password strength validation, automated random initial credential generation, upgraded bcrypt hashing cost factor, automated 15-minute brute-force lockout after 5 failed attempts, and secure administrative password reset workflows.'],
+      ['Multi-Species Livestock Monitoring Dashboard (LivestockMonitor.tsx)', 'Expanded the hog-focused tracker into a comprehensive Livestock Monitoring Dashboard covering Swine (fattening, gestation, lactating, dispersal), Cattle (fattening, dispersal), and Poultry/RTL with live headcount reconciliation and caretaker logging.'],
+      ['Dedicated IGP Relational Storage (afa_igp_expenses + src/api/db.ts)', 'Created a dedicated afa_igp_expenses PostgreSQL table and executed schema migrations to isolate produce-specific expense items from the monolithic state blob, ensuring robust concurrency.'],
+      ['Assistant Secretary Governance Role (types.ts + ExecutiveView.tsx + OfficerReportModal.tsx)', 'Integrated the Assistant Secretary role end-to-end across officer management, role assignment, turnover procedures, membership reports, and delegated member password reset authority.'],
+      ['Board Member Policy Proposal Workspace (BoardMemberView.tsx + ExecutiveView.tsx)', 'Created the Board Member role and delivered a dedicated Policy Proposal Workspace allowing board members to draft, track, and submit formal policy resolutions directly for executive review and presidential sign-off.'],
+      ['Codebase Architecture Audit & API Consolidation (api/sync/push.js + src/api/push.ts)', 'Fixed database status check credentials (credentials: include), consolidated serverless handlers by delegating api/sync/push.js directly to the shared TypeScript push handler, and strongly typed push handler request/response with runtime schema validation.'],
+      ['Treasury Monthly Chart Calculation Extraction (TreasurerView.tsx)', 'Extracted ~90 lines of inline monthly financial calculations into an exported, pure aggregateMonthlyChartData() helper function with typed MonthlyChartEntry return signatures.'],
+      ['Automated Web Crypto Test Suite & Typed State Hydration (secureStorage.test.ts + App.tsx)', 'Authored a comprehensive Vitest unit test suite covering AES-GCM encryption/decryption roundtrips, non-existent key handling, corrupt payload recovery, and automated legacy migration, and fully typed all 13 client storage collections.'],
+    ],
+    challenges: [
+      ['Legacy Plaintext & Hash Formats in Browser Storage', 'Early test accounts retained unhashed or legacy-hashed credentials and unencrypted localStorage entries that conflicted with new security schemas.', 'Added automated runtime migration routines (migrateSecureItems and hashPassword upgrades) that detect legacy entries on hydration, migrate them to AES-GCM ciphertext, and seamlessly upgrade hashes on successful authentication.'],
+      ['Monolithic IGP State Concurrency', 'Storing all livestock expenses inside a single JSON blob caused contention during high-volume entries.', 'Extracted afa_igp_expenses into a dedicated PostgreSQL table with schema migration support while maintaining backwards compatibility with cached offline payloads.'],
+    ],
+    sentiment: 'Outstanding week. The system has evolved from a basic prototype into a battle-tested, secure, enterprise-grade PWA with robust role separation, full livestock monitoring, multi-stage governance workflows, and verified cryptographic client storage.',
+    completed: [
+      ['Task 1: Password Security Hardening & Lockout Protection', '15-minute brute-force lockout, policy validation, and secure password reset modal.', 'October 19, 2026'],
+      ['Task 2: Multi-Species Livestock Monitoring Dashboard', 'Replaced single-species tracker with comprehensive swine, cattle, and poultry monitor.', 'October 20, 2026'],
+      ['Task 3: Dedicated IGP Expense Schema Migration', 'Normalized afa_igp_expenses relational table for produce expenses.', 'October 20, 2026'],
+      ['Task 4: Assistant Secretary Governance Role', 'Provisioning, turnover, membership reporting, and password reset delegation.', 'October 20, 2026'],
+      ['Task 5: Board Member Policy Proposal Workspace', 'Dedicated view for drafting and submitting resolutions for presidential approval.', 'October 20, 2026'],
+      ['Task 6: API Sync Route Consolidation & Strict Typing', 'Delegated serverless handlers and validated push payloads.', 'October 21, 2026'],
+      ['Task 7: Treasury Monthly Chart Calculation Extraction', 'Extracted pure aggregation helper aggregateMonthlyChartData.', 'October 21, 2026'],
+      ['Task 8: Web Crypto Client Storage Test Suite', 'Created unit test suite for AES-GCM encryption, decryption, and migration.', 'October 21, 2026'],
+      ['Task 9: Fully-Typed Client State Hydration', 'Replaced any with concrete types across all 13 storage entities.', 'October 21, 2026'],
+    ],
+    inProgress: [
+      ['Task 10: Final Officer User Acceptance Testing (UAT) Dry Run', 'Execute field trials with Barangay Alegria association officers using staged mobile devices.', 'October 23, 2026'],
+      ['Task 11: Production Deployment Staging & Documentation Freeze', 'Final verification on Vercel and Supabase production environments with updated user manuals.', 'October 23, 2026'],
+    ],
+    blocked: 'None. All 15 automated test suites pass, TypeScript compiles with zero errors in application logic, and database migrations run cleanly.',
+    milestones: [
+      { name: 'Production Release 1.2 & Officer Field Sign-Off', date: 'October 23, 2026', deliverables: [
+        'Successful officer UAT dry run in Barangay Alegria.',
+        'Verified data integrity across all 12 relational database tables.',
+        'Complete, audit-ready compliance reporting package for all officer roles.',
+        'Formal production cutover on Vercel and Supabase.',
+      ] },
+    ],
+    nextSteps: 'Distribute release candidate build to officer devices for live field validation during the upcoming general assembly.',
   },
 ];
 

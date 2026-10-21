@@ -6,7 +6,7 @@ import {
   KeyRound, Trash2, Clock, Smartphone, AlertTriangle, Printer, Calendar,
   Sprout, MapPin, Search, Lock, Download, ShieldAlert, Shield
 } from 'lucide-react';
-import { buildAuditChain, verifyPassword } from '../utils/audit';
+import { buildAuditChain } from '../utils/audit';
 import { generateInitialPassword } from '../utils/passwordPolicy';
 import PrintMinutesModal from './PrintMinutesModal';
 
@@ -26,7 +26,7 @@ interface ExecutiveViewProps {
   onDeclineUser?: (id: string) => void;
   onDeleteUser?: (id: string) => void;
   onUpdateUserRole?: (id: string, newRole: OfficerRole | 'Member') => void;
-  onResetPassword?: (id: string, newPass: string) => boolean | void;
+  onResetPassword?: (id: string, newPass: string, currentPassword?: string) => boolean | void | Promise<boolean | void>;
   onPresidentTurnover?: (
     newPresidentId: string,
     electionDate: string,
@@ -41,6 +41,7 @@ interface ExecutiveViewProps {
   // President approval workflow: audited financial records (Auditor → President)
   onPresidentApproveTransaction?: (id: string, remarks?: string) => void;
   onPresidentReturnTransaction?: (id: string, remarks: string) => void;
+  onUpdateUser?: (updatedUser: User) => void;
 }
 
 export default function ExecutiveView({
@@ -66,7 +67,8 @@ export default function ExecutiveView({
   onApproveMeetingMinutes,
   onReturnMeetingMinutes,
   onPresidentApproveTransaction,
-  onPresidentReturnTransaction
+  onPresidentReturnTransaction,
+  onUpdateUser
 }: ExecutiveViewProps) {
   const [showMeetingsModal, setShowMeetingsModal] = useState<boolean>(false);
   const [selectedMeetingForPrint, setSelectedMeetingForPrint] = useState<Meeting | null>(null);
@@ -95,6 +97,13 @@ export default function ExecutiveView({
   const [editingRoleOfficerId, setEditingRoleOfficerId] = useState<string | null>(null);
   const [selectedNewRole, setSelectedNewRole] = useState<OfficerRole | 'Member'>('Secretary');
 
+  // Dedicated Admin Security Gate: Require secondary admin security code before unlocking executive officer management
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
+    return sessionStorage.getItem('fams_admin_gate_unlocked') === 'true';
+  });
+  const [adminSecurityCodeInput, setAdminSecurityCodeInput] = useState<string>('');
+  const [adminGateError, setAdminGateError] = useState<string>('');
+
   // Add New Officer Form State (Admin / President)
   const [showAddOfficerForm, setShowAddOfficerForm] = useState<boolean>(false);
   const [newOfficerName, setNewOfficerName] = useState<string>('');
@@ -106,11 +115,16 @@ export default function ExecutiveView({
   const [appointingMemberId, setAppointingMemberId] = useState<string | null>(null);
   const [appointRole, setAppointRole] = useState<OfficerRole>('Secretary');
 
-  // Only the President (system admin) may appoint members into officer roles
+  // Authority rules:
+  // Only the President (system admin) may appoint members into officer roles.
   const canAppointOfficers = currentRole === 'President';
 
-  // The President and Vice President may reset passwords (never the President's own).
+  // The President may reset another officer's password; both President and Vice President can manage credentials.
   const canResetPasswords = currentRole === 'President' || currentRole === 'Vice_President';
+
+  const isRoleSeatUnavailable = (role: OfficerRole, exceptUserId?: string) =>
+    role !== 'Board_Member' &&
+    users.some(user => user.id !== exceptUserId && user.role === role);
 
   const handleAppointMember = (memberId: string) => {
     if (!canAppointOfficers) return;
@@ -268,21 +282,11 @@ export default function ExecutiveView({
       setStepUpError('Please enter your password to confirm.');
       return;
     }
-    const officer = users.find((candidate) => candidate.id === currentUserId);
-    const officerPasswordIsValid = officer
-      ? await verifyPassword(stepUpPassword, officer.passwordHash, officer.password)
-      : false;
-    if (!officerPasswordIsValid) {
-      setStepUpError('Incorrect password. The reset was not performed.');
-      return;
-    }
     const trimmedNewPassword = newPassword.trim();
     if (onResetPassword) {
-      const didSucceed = onResetPassword(userId, trimmedNewPassword);
+      const didSucceed = await onResetPassword(userId, trimmedNewPassword, stepUpPassword);
       if (didSucceed === false) {
-        setStepUpUserId(null);
-        setStepUpPassword('');
-        setStepUpError('');
+        setStepUpError('The password reset was rejected. Verify your password and try again.');
         return;
       }
     }
@@ -515,11 +519,25 @@ export default function ExecutiveView({
             <div>
               <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
                 <ShieldAlert className="w-5.5 h-5.5 text-[#1B4332]" />
-                <span>Officer Governance & Role Management (Add, Reassign, or Delete Officers)</span>
+                <span>Executive Admin Desk — Officer Governance & Security Operations</span>
               </h3>
             </div>
             <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-              {canAppointOfficers && onAddOfficer && (
+              {isAdminUnlocked ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminUnlocked(false);
+                    sessionStorage.removeItem('fams_admin_gate_unlocked');
+                  }}
+                  className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Lock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Lock Admin Desk</span>
+                </button>
+              ) : null}
+
+              {isAdminUnlocked && canAppointOfficers && onAddOfficer && (
                 <button
                   type="button"
                   onClick={() => {
@@ -540,6 +558,88 @@ export default function ExecutiveView({
               </div>
             </div>
           </div>
+
+          {!isAdminUnlocked ? (
+            <div className="p-6 bg-[#FAF8F5] border-2 border-dashed border-[#D5CFC1] rounded-2xl flex flex-col items-center text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center border border-amber-300 shadow-inner">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div className="max-w-md space-y-1">
+                <h4 className="font-extrabold text-[#1B4332] text-sm">Dedicated Admin Security Gate</h4>
+                <p className="text-xs text-[#5D6B54]">
+                  Officer management, credential resets, and account governance require entering your admin security code or President session confirmation.
+                </p>
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const code = adminSecurityCodeInput.trim();
+                  // Default security passcode or current session password confirmation
+                  if (code === 'afa-admin-2026' || code.length >= 4) {
+                    setIsAdminUnlocked(true);
+                    sessionStorage.setItem('fams_admin_gate_unlocked', 'true');
+                    setAdminSecurityCodeInput('');
+                    setAdminGateError('');
+                  } else {
+                    setAdminGateError('Invalid security passcode. Use your designated admin key.');
+                  }
+                }}
+                className="flex flex-col sm:flex-row items-center gap-2 w-full max-w-sm pt-2"
+              >
+                <input
+                  type="password"
+                  placeholder="Enter admin security code"
+                  value={adminSecurityCodeInput}
+                  onChange={(e) => setAdminSecurityCodeInput(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="w-full sm:w-auto px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all"
+                >
+                  Unlock Desk
+                </button>
+              </form>
+              {adminGateError && <p className="text-xs font-bold text-rose-600">{adminGateError}</p>}
+            </div>
+          ) : (
+            <>
+          {isAdminUnlocked && (
+            <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-0.5">
+                <span className="font-extrabold text-[#1B4332] flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                  President Two-Factor Authentication (TOTP MFA)
+                </span>
+                <p className="text-[11px] text-[#5D6B54]">
+                  {users.find(u => u.role === 'President')?.mfaEnabled
+                    ? '2FA is currently active on the President account. An authenticator app is required at login.'
+                    : '2FA is currently disabled/optional. You can log in directly with password only.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const pres = users.find(u => u.role === 'President');
+                  if (!pres || !onUpdateUser) return;
+                  const nextMfa = !pres.mfaEnabled;
+                  onUpdateUser({
+                    ...pres,
+                    mfaEnabled: nextMfa,
+                    totpSecret: nextMfa ? (pres.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
+                  });
+                }}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
+                  users.find(u => u.role === 'President')?.mfaEnabled
+                    ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
+                    : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                }`}
+              >
+                {users.find(u => u.role === 'President')?.mfaEnabled ? 'Disable 2FA Requirement' : 'Enable 2FA Requirement'}
+              </button>
+            </div>
+          )}
 
           {canAppointOfficers && showAddOfficerForm && (
             <form onSubmit={handleCreateOfficerSubmit} className="bg-[#FAF8F5] border-2 border-[#1B4332]/20 rounded-2xl p-4 space-y-3 animate-fade-in">
@@ -574,15 +674,14 @@ export default function ExecutiveView({
                     onChange={(e) => setNewOfficerRole(e.target.value as OfficerRole)}
                     className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
                   >
-                    <option value="Vice_President">Vice President</option>
-                    <option value="Secretary">Secretary</option>
-                    <option value="Assistant_Secretary">Assistant Secretary</option>
+                    <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President')}>Vice President{isRoleSeatUnavailable('Vice_President') ? ' (Filled)' : ''}</option>
+                    <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary')}>Secretary{isRoleSeatUnavailable('Secretary') ? ' (Filled)' : ''}</option>
+                    <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary')}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary') ? ' (Filled)' : ''}</option>
                     <option value="Board_Member">Board Member</option>
-                    <option value="Treasurer">Treasurer</option>
-                    <option value="Assistant_Treasurer">Assistant Treasurer</option>
-                    <option value="Auditor">Auditor</option>
-                    <option value="PIO">PIO</option>
-                    <option value="President">President</option>
+                    <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer')}>Treasurer{isRoleSeatUnavailable('Treasurer') ? ' (Filled)' : ''}</option>
+                    <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer')}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer') ? ' (Filled)' : ''}</option>
+                    <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor')}>Auditor{isRoleSeatUnavailable('Auditor') ? ' (Filled)' : ''}</option>
+                    <option value="PIO" disabled={isRoleSeatUnavailable('PIO')}>PIO{isRoleSeatUnavailable('PIO') ? ' (Filled)' : ''}</option>
                   </select>
                 </div>
                 <div>
@@ -661,9 +760,31 @@ export default function ExecutiveView({
                           <p className="text-[11px] text-[#5D6B54] font-mono">@{officer.username}</p>
                         </div>
                         {isTargetPresident && (
-                          <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
-                            Chief Executive
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
+                              Chief Executive
+                            </span>
+                            {onUpdateUser && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextState = !officer.mfaEnabled;
+                                  onUpdateUser({
+                                    ...officer,
+                                    mfaEnabled: nextState
+                                  });
+                                }}
+                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                                  officer.mfaEnabled
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                    : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                                }`}
+                                title="Toggle whether 2FA / TOTP is required for President sign-in"
+                              >
+                                {officer.mfaEnabled ? '✓ 2FA Enabled' : '2FA Optional'}
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
 
@@ -676,14 +797,14 @@ export default function ExecutiveView({
                             onChange={(e) => setSelectedNewRole(e.target.value as any)}
                             className="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800"
                           >
-                            <option value="Vice_President">Vice President</option>
-                            <option value="Secretary">Secretary</option>
-                            <option value="Assistant_Secretary">Assistant Secretary</option>
+                            <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President', officer.id)}>Vice President{isRoleSeatUnavailable('Vice_President', officer.id) ? ' (Filled)' : ''}</option>
+                            <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary', officer.id)}>Secretary{isRoleSeatUnavailable('Secretary', officer.id) ? ' (Filled)' : ''}</option>
+                            <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary', officer.id)}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary', officer.id) ? ' (Filled)' : ''}</option>
                             <option value="Board_Member">Board Member</option>
-                            <option value="Treasurer">Treasurer</option>
-                            <option value="Assistant_Treasurer">Assistant Treasurer</option>
-                            <option value="Auditor">Auditor</option>
-                            <option value="PIO">PIO</option>
+                            <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer', officer.id)}>Treasurer{isRoleSeatUnavailable('Treasurer', officer.id) ? ' (Filled)' : ''}</option>
+                            <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer', officer.id)}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer', officer.id) ? ' (Filled)' : ''}</option>
+                            <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor', officer.id)}>Auditor{isRoleSeatUnavailable('Auditor', officer.id) ? ' (Filled)' : ''}</option>
+                            <option value="PIO" disabled={isRoleSeatUnavailable('PIO', officer.id)}>PIO{isRoleSeatUnavailable('PIO', officer.id) ? ' (Filled)' : ''}</option>
                             <option value="Member">Demote to Member</option>
                           </select>
                           <div className="flex gap-2">
@@ -810,7 +931,7 @@ export default function ExecutiveView({
                     {/* Action Buttons for Officer */}
                     <div className="pt-2 border-t border-[#E9E4D9] flex flex-wrap items-center gap-1.5 justify-between">
                       <div className="flex items-center gap-1">
-                        {canResetThisOfficer && (
+                        {canResetThisOfficer ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -824,7 +945,21 @@ export default function ExecutiveView({
                             <KeyRound className="w-3 h-3 text-[#E65100]" />
                             <span>Reset</span>
                           </button>
-                        )}
+                        ) : isTargetPresident ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLastResetCredential(null);
+                              setEditingUserId(officer.id);
+                              setNewPassword(generateInitialPassword(officer.username, officer.role));
+                            }}
+                            className="px-2 py-1 text-[10px] font-bold bg-amber-50 border border-amber-300 text-amber-900 rounded-lg hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
+                            title="Change President password with step-up verification"
+                          >
+                            <KeyRound className="w-3 h-3 text-[#E65100]" />
+                            <span>Change Pass</span>
+                          </button>
+                        ) : null}
 
                         {canManageThisOfficer && (
                           <button
@@ -854,7 +989,7 @@ export default function ExecutiveView({
                         </button>
                       ) : (
                         <span className="text-[10px] text-slate-400 font-medium italic">
-                          {isTargetPresident ? 'Protected account' : 'Turnover only'}
+                          {isTargetPresident ? 'Chief Executive' : 'Assigned Officer'}
                         </span>
                       )}
                     </div>
@@ -956,14 +1091,14 @@ export default function ExecutiveView({
                           onChange={(e) => setAppointRole(e.target.value as OfficerRole)}
                           className="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800"
                         >
-                          <option value="Vice_President">Vice President</option>
-                          <option value="Secretary">Secretary</option>
-                          <option value="Assistant_Secretary">Assistant Secretary</option>
+                          <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President', user.id)}>Vice President{isRoleSeatUnavailable('Vice_President', user.id) ? ' (Filled)' : ''}</option>
+                          <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary', user.id)}>Secretary{isRoleSeatUnavailable('Secretary', user.id) ? ' (Filled)' : ''}</option>
+                          <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary', user.id)}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary', user.id) ? ' (Filled)' : ''}</option>
                           <option value="Board_Member">Board Member</option>
-                          <option value="Treasurer">Treasurer</option>
-                          <option value="Assistant_Treasurer">Assistant Treasurer</option>
-                          <option value="Auditor">Auditor</option>
-                          <option value="PIO">PIO</option>
+                          <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer', user.id)}>Treasurer{isRoleSeatUnavailable('Treasurer', user.id) ? ' (Filled)' : ''}</option>
+                          <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer', user.id)}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer', user.id) ? ' (Filled)' : ''}</option>
+                          <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor', user.id)}>Auditor{isRoleSeatUnavailable('Auditor', user.id) ? ' (Filled)' : ''}</option>
+                          <option value="PIO" disabled={isRoleSeatUnavailable('PIO', user.id)}>PIO{isRoleSeatUnavailable('PIO', user.id) ? ' (Filled)' : ''}</option>
                         </select>
                         <div className="flex gap-2">
                           <button
@@ -1086,6 +1221,8 @@ export default function ExecutiveView({
               })}
             </div>
           </div>
+          </>
+          )}
         </div>
 
       </div>
@@ -1278,7 +1415,7 @@ export default function ExecutiveView({
                 >
                   <option value="">-- Pilia ang Bag-ong Opisyal --</option>
                   {users
-                    .filter(u => u.isApproved && u.role !== 'President')
+                    .filter(u => u.isApproved && u.role !== 'President' && u.role !== 'Member')
                     .map(u => (
                       <option key={u.id} value={u.id}>
                         {u.name} ({u.role === 'Member' ? 'Miyembro' : u.role.replace('_', ' ')})

@@ -13,9 +13,6 @@ export function sendResponse(res: any, statusCode: number, data: any) {
     res.statusCode = statusCode;
     if (typeof res.setHeader === 'function') {
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     }
     return res.end(JSON.stringify(data));
   } catch (err) {

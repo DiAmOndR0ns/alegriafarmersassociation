@@ -41,6 +41,9 @@ export interface User {
   failedLoginAttempts?: number; // Consecutive failed sign-in attempts; resets to 0 on success
   lockedUntil?: string; // ISO timestamp until which sign-in is blocked after too many failures
   affiliations?: MemberAffiliation[]; // Other IDs or organizations aside from RSBSA
+  totpSecret?: string; // RFC 6238 Base32 TOTP secret for multi-factor authentication
+  mfaEnabled?: boolean; // Whether 2FA is required and verified for this account
+  adminPasscode?: string; // Administrative security gate passcode for executive actions
 }
 
 export interface Member {

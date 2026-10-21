@@ -5,12 +5,22 @@ import { createServer as createViteServer } from "vite";
 import { 
   getPool, 
   isDatabaseConfigured, 
-  fetchAllDataFromPostgres, 
-  saveFullStateToPostgres,
-  deleteEntityFromPostgres,
   ensureDatabaseSchema,
   getTableStats
 } from "./src/api/db";
+import pullHandler from "./src/api/pull";
+import pushHandler from "./src/api/push";
+import deleteHandler from "./src/api/delete";
+import {
+  bootstrapHandler,
+  loginHandler,
+  logoutHandler,
+  mfaConfirmHandler,
+  passwordChangeHandler,
+  passwordResetHandler,
+  requireAuthenticated,
+  sessionHandler,
+} from "./src/api/auth";
 
 dotenv.config();
 
@@ -19,8 +29,18 @@ export async function createApp() {
 
   app.use(express.json({ limit: '15mb' }));
 
+  app.post("/api/auth/login", loginHandler);
+  app.post("/api/auth/mfa/confirm", mfaConfirmHandler);
+  app.get("/api/auth/session", sessionHandler);
+  app.post("/api/auth/logout", logoutHandler);
+  app.post("/api/auth/bootstrap", bootstrapHandler);
+  app.post("/api/auth/password/change", passwordChangeHandler);
+  app.post("/api/auth/password/reset", passwordResetHandler);
+
   // API to Check Live Cloud Database (Supabase / PostgreSQL) Status
   app.get("/api/db/status", async (req, res) => {
+    const user = await requireAuthenticated(req, res);
+    if (!user) return;
     const rawUrl = (process.env.DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');
 
     if (!rawUrl) {
@@ -112,156 +132,10 @@ export async function createApp() {
     }
   });
 
-  app.get("/api/sync/pull", async (_req, res) => {
-    try {
-      if (!isDatabaseConfigured()) {
-        return res.json({
-          success: false,
-          offlineMode: true,
-          message: 'DATABASE_URL is not configured. Running in offline/local storage mode.',
-        });
-      }
-
-      const pool = getPool();
-      const pullPromise = fetchAllDataFromPostgres(pool);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Cloud DB query timed out after 30 seconds.')), 30000)
-      );
-
-      const data = await Promise.race([pullPromise, timeoutPromise]);
-      return res.json({
-        success: true,
-        data,
-      });
-    } catch (error: any) {
-      console.warn('[Cloud DB Pull Warning]:', error?.message || error);
-      return res.json({
-        success: false,
-        offlineMode: true,
-        message: `Offline fallback: ${error?.message || 'Database unavailable'}`,
-      });
-    }
-  });
-
-  app.post("/api/sync/push", async (req, res) => {
-    try {
-      if (!isDatabaseConfigured()) {
-        return res.json({
-          success: true,
-          offlineMode: true,
-          message: 'Saved to local offline storage (DATABASE_URL not configured).',
-        });
-      }
-
-      const pool = getPool();
-      const body = req.body;
-
-      const savePromise = saveFullStateToPostgres(pool, body);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Cloud DB push timed out after 30 seconds.')), 30000)
-      );
-
-      await Promise.race([savePromise, timeoutPromise]);
-      return res.json({
-        success: true,
-        offlineMode: false,
-        message: 'State successfully synced to PostgreSQL Cloud DB!',
-      });
-    } catch (error: any) {
-      console.error('[PUSH DEBUG] Full error:', error?.message || error);
-      return res.json({
-        success: false,
-        offlineMode: true,
-        message: `Failed to sync: ${error?.message || 'Database unavailable'}`,
-        error: error?.message,
-      });
-    }
-  });
-
-  app.post(["/api/db/delete", "/api/sync/delete"], async (req, res) => {
-    try {
-      if (!isDatabaseConfigured()) {
-        return res.json({
-          success: false,
-          offlineMode: true,
-          message: 'DATABASE_URL is not configured. Stored in local offline deletion queue.',
-        });
-      }
-
-      const pool = getPool();
-      const body = req.body || {};
-
-      if (body.deletedIds && typeof body.deletedIds === 'object') {
-        let totalDeleted = 0;
-        for (const [entityKey, ids] of Object.entries(body.deletedIds)) {
-          if (Array.isArray(ids) && ids.length > 0) {
-            try {
-              const result = await deleteEntityFromPostgres(pool, entityKey, ids);
-              totalDeleted += result.deletedCount;
-            } catch (delErr: any) {
-              console.warn(`[Delete Batch Warning for ${entityKey}]:`, delErr?.message);
-            }
-          }
-        }
-        return res.json({
-          success: true,
-          deletedCount: totalDeleted,
-          message: `Successfully deleted ${totalDeleted} record(s) from database.`,
-        });
-      }
-
-      const entity = body.entity || req.query.entity;
-      const ids = body.ids || (body.id ? [body.id] : (req.query.id ? [String(req.query.id)] : []));
-
-      if (!entity || !ids || (Array.isArray(ids) && ids.length === 0)) {
-        return res.status(400).json({
-          success: false,
-          message: "Missing 'entity' or 'id'/'ids' parameter in request.",
-        });
-      }
-
-      const result = await deleteEntityFromPostgres(pool, String(entity), ids);
-      return res.json({
-        success: true,
-        deletedCount: result.deletedCount,
-        table: result.table,
-        message: `Successfully deleted ${result.deletedCount} record(s) from database table "${result.table}".`,
-      });
-    } catch (error: any) {
-      console.error('[Cloud DB Delete API Error]:', error?.message || error);
-      return res.status(500).json({
-        success: false,
-        message: `Failed to delete from database: ${error?.message || 'Internal server error'}`,
-      });
-    }
-  });
-
-  app.delete("/api/db/:entity/:id", async (req, res) => {
-    try {
-      if (!isDatabaseConfigured()) {
-        return res.json({
-          success: false,
-          offlineMode: true,
-          message: 'DATABASE_URL is not configured. Stored in local offline deletion queue.',
-        });
-      }
-
-      const pool = getPool();
-      const { entity, id } = req.params;
-      const result = await deleteEntityFromPostgres(pool, entity, [id]);
-      return res.json({
-        success: true,
-        deletedCount: result.deletedCount,
-        table: result.table,
-        message: `Successfully deleted ${result.deletedCount} record(s) from database table "${result.table}".`,
-      });
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        message: `Failed to delete from database: ${error?.message || 'Internal server error'}`,
-      });
-    }
-  });
+  app.get("/api/sync/pull", pullHandler);
+  app.post("/api/sync/push", pushHandler);
+  app.post(["/api/db/delete", "/api/sync/delete"], deleteHandler);
+  app.delete("/api/db/:entity/:id", deleteHandler);
 
 
   // Vite middleware for development vs static serve for production

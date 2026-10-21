@@ -133,6 +133,13 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested BOOLEAN DEFAULT FALSE;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_totp_secret TEXT;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_used_step BIGINT;`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
+      ON users (lower(replace(role, ' ', '_')))
+      WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
 
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
@@ -270,8 +277,15 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         failed_login_attempts INTEGER DEFAULT 0,
         locked_until TIMESTAMPTZ,
         reset_requested BOOLEAN DEFAULT FALSE
+        ,totp_secret TEXT
+        ,pending_totp_secret TEXT
+        ,mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE
+        ,totp_last_used_step BIGINT
       );
     `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
+      ON users (lower(replace(role, ' ', '_')))
+      WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`);
 
     // 2. Members
     await client.query(`
@@ -787,13 +801,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const users = usersRes.rows.map(r => ({
       id: r.id,
       username: r.username,
-      passwordHash: r.password,
-      passwordHistory: Array.isArray(r.password_history) ? r.password_history : [],
-      passwordChangedAt: r.password_changed_at ? new Date(r.password_changed_at).toISOString() : undefined,
-      mustChangePassword: false,
-      failedLoginAttempts: r.failed_login_attempts ?? 0,
-      lockedUntil: r.locked_until ? new Date(r.locked_until).toISOString() : undefined,
-      resetRequested: Boolean(r.reset_requested),
       name: r.name,
       role: r.role,
       isApproved: r.is_approved,
@@ -1509,21 +1516,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     }
 
     const saveMappings: SaveMapping[] = [
-      { table: 'users', deletedIds: deletedUserIds, fields: [
-        ['username', 'username', (r) => r.username], ['password', 'password', (r) => r.password || r.passwordHash],
-        ['name', 'name', (r) => r.name], ['role', 'role', (r) => r.role], ['is_approved', 'isApproved', (r) => r.isApproved],
-        ['joined_date', 'joinedDate', (r) => r.joinedDate || null], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],
-        ['primary_crops', 'primaryCrops', (r) => r.primaryCrops || []], ['contact_number', 'contactNumber', (r) => r.contactNumber || null],
-        ['status', 'status', (r) => r.status || 'Active'], ['avatar_url', 'avatarUrl', (r) => r.avatarUrl || null],
-        ['member_id_number', 'memberIdNumber', (r) => r.memberIdNumber || null], ['rsbsa_number', 'rsbsaNumber', (r) => r.rsbsaNumber || null],
-        ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)],
-        ['password_history', 'passwordHistory', (r) => JSON.stringify(Array.isArray(r.passwordHistory) ? r.passwordHistory : [])],
-        ['password_changed_at', 'passwordChangedAt', (r) => r.passwordChangedAt || null],
-        ['must_change_password', 'mustChangePassword', () => false],
-        ['failed_login_attempts', 'failedLoginAttempts', (r) => r.failedLoginAttempts ?? 0],
-        ['locked_until', 'lockedUntil', (r) => r.lockedUntil || null],
-        ['reset_requested', 'resetRequested', (r) => Boolean(r.resetRequested)]
-      ] },
       { table: 'members', deletedIds: deletedMemberIds, fields: [
         ['name', 'name', (r) => r.name], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],
         ['primary_crops', 'primaryCrops', (r) => r.primaryCrops || []], ['contact_number', 'contactNumber', (r) => r.contactNumber || null],

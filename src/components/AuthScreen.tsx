@@ -10,6 +10,7 @@ import {
   MAX_LOGIN_ATTEMPTS,
   LOCKOUT_DURATION_MS
 } from '../utils/passwordPolicy';
+import { generateTotpSecret, getTotpUri, verifyTotpCode } from '../utils/totp';
 import {
   Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
   UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
@@ -19,7 +20,8 @@ import {
 
 interface AuthScreenProps {
   users: User[];
-  onLogin: (user: User, password: string) => void;
+  onLogin: (user: User, password: string, serverAuthenticated?: boolean) => void;
+  serverAuthRequired?: boolean;
   onRegister?: (userData: Omit<User, 'id' | 'isApproved'>) => void;
   toast: (message: string, type: 'success' | 'warning' | 'info' | 'error') => void;
   onRequestPasswordReset?: (username: string) => void;
@@ -30,6 +32,7 @@ interface AuthScreenProps {
 export default function AuthScreen({
   users,
   onLogin,
+  serverAuthRequired = false,
   onRegister,
   onLoginFailed,
   toast,
@@ -38,6 +41,16 @@ export default function AuthScreen({
 }: AuthScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [bootstrapSecret, setBootstrapSecret] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [authChallenge, setAuthChallenge] = useState<{
+    token: string;
+    setup: boolean;
+    secret?: string;
+    otpauthUrl?: string;
+  } | null>(null);
+  const [pendingOfflineUser, setPendingOfflineUser] = useState<User | null>(null);
+  const [pendingOfflinePassword, setPendingOfflinePassword] = useState('');
 
   // First-time Admin / President bootstrap state (only available when no President account exists)
   const hasPresidentAccount = users.some(u => u.role === 'President');
@@ -51,9 +64,9 @@ export default function AuthScreen({
   const [resetUsername, setResetUsername] = useState('');
   const [showMemberGuide, setShowMemberGuide] = useState(false);
 
-  const handleAdminSetupSubmit = (e: React.FormEvent) => {
+  const handleAdminSetupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!onRegister) return;
+    if (!serverAuthRequired && !onRegister) return;
     if (!adminName.trim() || !adminUsername.trim() || !adminPassword.trim()) {
       toast('Palihug kompletoha ang Admin Name, Username, ug Password.', 'error');
       return;
@@ -61,6 +74,36 @@ export default function AuthScreen({
     const policyErr = validatePasswordPolicy(adminPassword.trim(), adminUsername.trim(), 'President', []);
     if (policyErr) {
       toast(policyErr, 'error');
+      return;
+    }
+    if (serverAuthRequired) {
+      try {
+        const response = await fetch('/api/auth/bootstrap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bootstrapSecret,
+            name: adminName.trim(),
+            username: adminUsername.trim().toLowerCase(),
+            password: adminPassword
+          })
+        });
+        const result = await response.json();
+        if (!response.ok || !result?.success || !result?.challengeToken) {
+          toast(result?.message || 'Initial administrator setup was rejected.', 'error');
+          return;
+        }
+        setAuthChallenge({
+          token: result.challengeToken,
+          setup: true,
+          secret: result.secret,
+          otpauthUrl: result.otpauthUrl
+        });
+        setMfaCode('');
+        toast('Scan the authenticator setup details, then enter its current code to finish setup.', 'info');
+      } catch {
+        toast('Administrator setup could not reach the server.', 'error');
+      }
       return;
     }
     onRegister({
@@ -75,6 +118,40 @@ export default function AuthScreen({
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       toast('Palihug isulod ang imong username ug password (Please enter username and password).', 'error');
+      return;
+    }
+
+    if (serverAuthRequired) {
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.trim(), password })
+        });
+        const result = await response.json();
+        if (!response.ok || !result?.success) {
+          toast(result?.message || 'Invalid credentials.', 'error');
+          return;
+        }
+        if (result.challengeToken) {
+          setAuthChallenge({
+            token: result.challengeToken,
+            setup: Boolean(result.mfaSetupRequired),
+            secret: result.secret,
+            otpauthUrl: result.otpauthUrl
+          });
+          setMfaCode('');
+          return;
+        }
+        if (result.user) {
+          onLogin(result.user as User, '', true);
+          setPassword('');
+          return;
+        }
+        toast('The server returned an incomplete sign-in response.', 'error');
+      } catch {
+        toast('Sign-in could not reach the server. Try again when the connection is restored.', 'error');
+      }
       return;
     }
 
@@ -127,8 +204,74 @@ export default function AuthScreen({
       onLoginFailed(matchedUser.id, { failedLoginAttempts: 0 });
     }
 
+    // If 2FA requirement is active on this account, prompt for authenticator code
+    if (matchedUser.mfaEnabled && matchedUser.totpSecret) {
+      setAuthChallenge({
+        token: `offline-${matchedUser.id}`,
+        setup: false,
+        secret: matchedUser.totpSecret,
+        otpauthUrl: getTotpUri(matchedUser.totpSecret, matchedUser.username, 'FAMS')
+      });
+      setPendingOfflineUser(matchedUser);
+      setPendingOfflinePassword(password);
+      setMfaCode('');
+      return;
+    }
+
     onLogin(matchedUser, password);
     toast(`Welcome back, ${matchedUser.name}!`, 'success');
+  };
+
+  const handleMfaSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!authChallenge || !/^\d{6}$/.test(mfaCode)) {
+      toast('Enter the current 6-digit authenticator code.', 'error');
+      return;
+    }
+    if (authChallenge.token.startsWith('offline-') && pendingOfflineUser) {
+      const secret = authChallenge.secret || pendingOfflineUser.totpSecret;
+      if (!secret) {
+        toast('Authenticator configuration is missing.', 'error');
+        return;
+      }
+      const isValid = await verifyTotpCode(secret, mfaCode);
+      if (!isValid) {
+        toast('Invalid 6-digit authenticator code. Check your authenticator app and try again.', 'error');
+        return;
+      }
+      const updatedUser: User = {
+        ...pendingOfflineUser,
+        totpSecret: secret,
+        mfaEnabled: true
+      };
+      onLogin(updatedUser, pendingOfflinePassword);
+      setAuthChallenge(null);
+      setPendingOfflineUser(null);
+      setPendingOfflinePassword('');
+      setMfaCode('');
+      setPassword('');
+      toast(`Welcome back, ${updatedUser.name}! Two-factor authentication verified.`, 'success');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/mfa/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challengeToken: authChallenge.token, totpCode: mfaCode })
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.success || !result?.user) {
+        toast(result?.message || 'Authenticator code was rejected.', 'error');
+        return;
+      }
+      onLogin(result.user as User, '', true);
+      setAuthChallenge(null);
+      setMfaCode('');
+      setPassword('');
+    } catch {
+      toast('MFA verification could not reach the server.', 'error');
+    }
   };
 
   const handleResetRequestSubmit = (e: React.FormEvent) => {
@@ -284,6 +427,55 @@ export default function AuthScreen({
                   </div>
                 </form>
               </div>
+            ) : authChallenge ? (
+              <form onSubmit={handleMfaSubmit} className="space-y-4 animate-fade-in text-left">
+                <div className="rounded-2xl border border-[#B7E3C4] bg-[#EAF6EE] p-4 text-sm text-[#1B4332]">
+                  <h3 className="font-black">{authChallenge.setup ? 'Set up authenticator MFA' : 'Verify authenticator code'}</h3>
+                  <p className="mt-1 text-xs leading-relaxed">
+                    {authChallenge.setup
+                      ? 'Add this account to an authenticator app, then enter the current 6-digit code to complete setup.'
+                      : 'Enter the current 6-digit code from your authenticator app.'}
+                  </p>
+                  {authChallenge.setup && authChallenge.secret && (
+                    <div className="mt-3 space-y-2 rounded-xl border border-[#D5CFC1] bg-white p-3">
+                      <p className="text-[10px] font-bold uppercase text-[#4A5F57]">Authenticator setup key</p>
+                      <p className="select-all break-all font-mono text-sm font-bold">{authChallenge.secret}</p>
+                      {authChallenge.otpauthUrl && (
+                        <details className="text-[10px]">
+                          <summary className="cursor-pointer font-bold">Manual setup URI</summary>
+                          <p className="mt-1 select-all break-all font-mono">{authChallenge.otpauthUrl}</p>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <label className="block text-xs font-black uppercase tracking-wider text-[#4A5F57]">
+                  6-digit code
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    required
+                    value={mfaCode}
+                    onChange={event => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="mt-1 w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-3 font-mono text-lg tracking-[0.3em] text-[#1B4332] focus:border-emerald-600 focus:outline-none"
+                  />
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthChallenge(null); setMfaCode(''); }}
+                    className="flex-1 rounded-xl border border-[#D5CFC1] bg-white px-3 py-3 text-xs font-bold text-[#1B4332]"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="flex-1 rounded-xl bg-[#1B4332] px-3 py-3 text-xs font-black text-white">
+                    {authChallenge.setup ? 'Enable MFA & Continue' : 'Verify & Sign In'}
+                  </button>
+                </div>
+              </form>
             ) : !showMemberGuide ? (
               <div className="space-y-6 text-left">
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
@@ -341,7 +533,7 @@ export default function AuthScreen({
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
-                  {!hasPresidentAccount && onRegister && (
+                  {(!hasPresidentAccount || serverAuthRequired) && (onRegister || serverAuthRequired) && (
                     <button
                       type="button"
                       onClick={() => {
@@ -371,7 +563,7 @@ export default function AuthScreen({
                   )}
                 </form>
 
-                {!hasPresidentAccount && showAdminSetup && (
+                {(!hasPresidentAccount || serverAuthRequired) && showAdminSetup && (
                   <form onSubmit={handleAdminSetupSubmit} className="mt-4 p-4 bg-[#EAF6EE] border-2 border-[#2D6A4F] rounded-2xl space-y-3 animate-fade-in">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
@@ -401,6 +593,20 @@ export default function AuthScreen({
                           className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
                         />
                       </div>
+                      {serverAuthRequired && (
+                        <div>
+                          <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">One-time deployment bootstrap code</label>
+                          <input
+                            type="password"
+                            autoComplete="off"
+                            required
+                            value={bootstrapSecret}
+                            onChange={(e) => setBootstrapSecret(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                          />
+                          <p className="mt-1 text-[10px] text-[#4A5F57]">Obtain this from the deployment administrator. It is not the account password.</p>
+                        </div>
+                      )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
                           <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">Username</label>

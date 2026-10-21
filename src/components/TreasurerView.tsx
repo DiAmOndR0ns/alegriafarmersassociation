@@ -29,6 +29,102 @@ interface TreasurerViewProps {
   onOpenReportModal?: () => void;
 }
 
+export interface MonthlyChartEntry {
+  monthKey: string;
+  monthLabel: string;
+  shortMonth: string;
+  income: number;
+  expenses: number;
+  net: number;
+  hogsSold: number;
+  feedExpenses: number;
+  pigletExpenses: number;
+  medExpenses: number;
+}
+
+export function aggregateMonthlyChartData(
+  hogRaising?: HogRaisingState,
+  chartProduce: string = 'Hog Raising',
+  chartYear: string = 'all'
+): MonthlyChartEntry[] {
+  if (!hogRaising) return [];
+
+  const map: Record<string, MonthlyChartEntry> = {};
+
+  const targetExpenses = (hogRaising.expenses || []).filter(e => {
+    const matchesProduce = !chartProduce || chartProduce === 'all' || (e.produce || 'Hog Raising') === chartProduce;
+    const matchesYear = chartYear === 'all' || (e.date && e.date.startsWith(chartYear));
+    return matchesProduce && matchesYear;
+  });
+
+  const targetSales = (hogRaising.sales || []).filter(s => {
+    const matchesProduce = !chartProduce || chartProduce === 'all' || (s.produce || 'Hog Raising') === chartProduce;
+    const matchesYear = chartYear === 'all' || (s.date && s.date.startsWith(chartYear));
+    return matchesProduce && matchesYear;
+  });
+
+  targetExpenses.forEach(e => {
+    if (!e.date) return;
+    const monthKey = e.date.substring(0, 7);
+    if (!map[monthKey]) {
+      const [y, m] = monthKey.split('-');
+      const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+      const monthLabel = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      const shortMonth = d.toLocaleString('en-US', { month: 'short' });
+      map[monthKey] = {
+        monthKey,
+        monthLabel,
+        shortMonth: `${shortMonth} '${y.slice(2)}`,
+        income: 0,
+        expenses: 0,
+        net: 0,
+        hogsSold: 0,
+        feedExpenses: 0,
+        pigletExpenses: 0,
+        medExpenses: 0
+      };
+    }
+    const amt = Number(e.amount) || 0;
+    map[monthKey].expenses += amt;
+    if (e.category === 'Feeds') map[monthKey].feedExpenses += amt;
+    else if (e.category === 'Piglets') map[monthKey].pigletExpenses += amt;
+    else if (e.category === 'Vitamins/Medicines') map[monthKey].medExpenses += amt;
+  });
+
+  targetSales.forEach(s => {
+    if (!s.date) return;
+    const monthKey = s.date.substring(0, 7);
+    if (!map[monthKey]) {
+      const [y, m] = monthKey.split('-');
+      const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+      const monthLabel = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      const shortMonth = d.toLocaleString('en-US', { month: 'short' });
+      map[monthKey] = {
+        monthKey,
+        monthLabel,
+        shortMonth: `${shortMonth} '${y.slice(2)}`,
+        income: 0,
+        expenses: 0,
+        net: 0,
+        hogsSold: 0,
+        feedExpenses: 0,
+        pigletExpenses: 0,
+        medExpenses: 0
+      };
+    }
+    const rev = Number(s.revenue) || 0;
+    map[monthKey].income += rev;
+    map[monthKey].hogsSold += Number(s.hogsCount || s.produceCount || 0);
+  });
+
+  const sortedKeys = Object.keys(map).sort();
+  return sortedKeys.map(k => {
+    const item = map[k];
+    item.net = item.income - item.expenses;
+    return item;
+  });
+}
+
 export default function TreasurerView({
   transactions,
   funds = INITIAL_FUNDS,
@@ -139,95 +235,10 @@ export default function TreasurerView({
   }, [hogRaising]);
 
   // Aggregate monthly expenses and sales income for the Hog Raising IGP Project
-  const monthlyChartData = useMemo(() => {
-    if (!hogRaising) return [];
-
-    const map: Record<string, {
-      monthKey: string;
-      monthLabel: string;
-      shortMonth: string;
-      income: number;
-      expenses: number;
-      net: number;
-      hogsSold: number;
-      feedExpenses: number;
-      pigletExpenses: number;
-      medExpenses: number;
-    }> = {};
-
-    const targetExpenses = (hogRaising.expenses || []).filter(e => {
-      const matchesProduce = !chartProduce || chartProduce === 'all' || (e.produce || 'Hog Raising') === chartProduce;
-      const matchesYear = chartYear === 'all' || (e.date && e.date.startsWith(chartYear));
-      return matchesProduce && matchesYear;
-    });
-
-    const targetSales = (hogRaising.sales || []).filter(s => {
-      const matchesProduce = !chartProduce || chartProduce === 'all' || (s.produce || 'Hog Raising') === chartProduce;
-      const matchesYear = chartYear === 'all' || (s.date && s.date.startsWith(chartYear));
-      return matchesProduce && matchesYear;
-    });
-
-    targetExpenses.forEach(e => {
-      if (!e.date) return;
-      const monthKey = e.date.substring(0, 7);
-      if (!map[monthKey]) {
-        const [y, m] = monthKey.split('-');
-        const d = new Date(parseInt(y), parseInt(m) - 1, 1);
-        const monthLabel = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-        const shortMonth = d.toLocaleString('en-US', { month: 'short' });
-        map[monthKey] = {
-          monthKey,
-          monthLabel,
-          shortMonth: `${shortMonth} '${y.slice(2)}`,
-          income: 0,
-          expenses: 0,
-          net: 0,
-          hogsSold: 0,
-          feedExpenses: 0,
-          pigletExpenses: 0,
-          medExpenses: 0
-        };
-      }
-      const amt = Number(e.amount) || 0;
-      map[monthKey].expenses += amt;
-      if (e.category === 'Feeds') map[monthKey].feedExpenses += amt;
-      else if (e.category === 'Piglets') map[monthKey].pigletExpenses += amt;
-      else if (e.category === 'Vitamins/Medicines') map[monthKey].medExpenses += amt;
-    });
-
-    targetSales.forEach(s => {
-      if (!s.date) return;
-      const monthKey = s.date.substring(0, 7);
-      if (!map[monthKey]) {
-        const [y, m] = monthKey.split('-');
-        const d = new Date(parseInt(y), parseInt(m) - 1, 1);
-        const monthLabel = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-        const shortMonth = d.toLocaleString('en-US', { month: 'short' });
-        map[monthKey] = {
-          monthKey,
-          monthLabel,
-          shortMonth: `${shortMonth} '${y.slice(2)}`,
-          income: 0,
-          expenses: 0,
-          net: 0,
-          hogsSold: 0,
-          feedExpenses: 0,
-          pigletExpenses: 0,
-          medExpenses: 0
-        };
-      }
-      const rev = Number(s.revenue) || 0;
-      map[monthKey].income += rev;
-      map[monthKey].hogsSold += Number(s.hogsCount || s.produceCount || 0);
-    });
-
-    const sortedKeys = Object.keys(map).sort();
-    return sortedKeys.map(k => {
-      const item = map[k];
-      item.net = item.income - item.expenses;
-      return item;
-    });
-  }, [hogRaising, chartProduce, chartYear]);
+  const monthlyChartData = useMemo(
+    () => aggregateMonthlyChartData(hogRaising, chartProduce, chartYear),
+    [hogRaising, chartProduce, chartYear]
+  );
 
   // Overall totals for the active IGP chart selection
   const chartTotals = useMemo(() => {
