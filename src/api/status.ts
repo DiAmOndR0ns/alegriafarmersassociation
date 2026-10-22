@@ -5,7 +5,7 @@ import { sendResponse } from './helper';
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
 const PgPool = (pg as any)?.Pool || (pg as any)?.default?.Pool || (pg as any)?.default || pg;
 
-let poolInstance: pg.Pool | null = null;
+let poolInstance: any = null;
 let lastUsedConnectionString: string | null = null;
 
 function cleanDatabaseUrl(rawUrl: string): { connectionString: string; isSsl: boolean; hostInfo: string } {
@@ -44,6 +44,9 @@ function getStatusPool(): pg.Pool {
     });
     lastUsedConnectionString = connectionString;
   }
+  if (!poolInstance) {
+    throw new Error('Failed to initialize PostgreSQL pool');
+  }
   return poolInstance;
 }
 
@@ -55,7 +58,8 @@ const APP_TABLES = [
   'financial_transactions',
   'announcements',
   'system_logs',
-  'hog_raising',
+  'afa_igp',
+  'afa_igp_expenses',
   'products',
   'activities',
   'organization_funds',

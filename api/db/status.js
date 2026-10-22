@@ -57,6 +57,9 @@ function getStatusPool() {
     });
     lastUsedConnectionString = connectionString;
   }
+  if (!poolInstance) {
+    throw new Error("Failed to initialize PostgreSQL pool");
+  }
   return poolInstance;
 }
 var APP_TABLES = [
@@ -67,7 +70,8 @@ var APP_TABLES = [
   "financial_transactions",
   "announcements",
   "system_logs",
-  "hog_raising",
+  "afa_igp",
+  "afa_igp_expenses",
   "products",
   "activities",
   "organization_funds",
