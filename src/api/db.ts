@@ -1119,17 +1119,16 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       }
     }
 
-    if (false) {
     if (state.users && Array.isArray(state.users)) {
       const activeUsers = state.users.filter((u: any) => !deletedUserIds.has(u.id));
       console.log('[DB DEBUG] Saving', activeUsers.length, 'users...');
       for (const u of activeUsers) {
         await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled, totp_secret)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           ON CONFLICT (id) DO UPDATE SET
             username = EXCLUDED.username,
-            password = EXCLUDED.password,
+            password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
             name = EXCLUDED.name,
             role = EXCLUDED.role,
             is_approved = EXCLUDED.is_approved,
@@ -1141,13 +1140,17 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             avatar_url = EXCLUDED.avatar_url,
             member_id_number = EXCLUDED.member_id_number,
             rsbsa_number = EXCLUDED.rsbsa_number,
-            is_rsbsa_registered = EXCLUDED.is_rsbsa_registered;
+            is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
+            mfa_enabled = EXCLUDED.mfa_enabled,
+            totp_secret = EXCLUDED.totp_secret;
         `, [
-          u.id, u.username, u.password, u.name, u.role, u.isApproved,
+          u.id, u.username, u.passwordHash || u.password || '', u.name, u.role, Boolean(u.isApproved),
           u.joinedDate || null, u.farmLocation || null,
           u.primaryCrops || [], u.contactNumber || null, u.status || 'Active',
           u.avatarUrl || null, u.memberIdNumber || null, u.rsbsaNumber || null,
-          Boolean(u.isRsbsaRegistered)
+          Boolean(u.isRsbsaRegistered),
+          Boolean(u.mfaEnabled),
+          u.totpSecret || null
         ]);
       }
       console.log('[DB DEBUG] Users saved');
@@ -1512,7 +1515,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ]);
       }
       console.log('[DB DEBUG] Delegation requests saved');
-    }
     }
 
     const saveMappings: SaveMapping[] = [

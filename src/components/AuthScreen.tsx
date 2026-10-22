@@ -21,6 +21,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 
 interface AuthScreenProps {
   users: User[];
+  hasPresident?: boolean;
   onLogin: (user: User, password: string, serverAuthenticated?: boolean) => void;
   serverAuthRequired?: boolean;
   onRegister?: (userData: Omit<User, 'id' | 'isApproved'>) => void;
@@ -32,6 +33,7 @@ interface AuthScreenProps {
 
 export default function AuthScreen({
   users,
+  hasPresident,
   onLogin,
   serverAuthRequired = false,
   onRegister,
@@ -54,7 +56,7 @@ export default function AuthScreen({
   const [pendingOfflinePassword, setPendingOfflinePassword] = useState('');
 
   // First-time Admin / President bootstrap state (only available when no President account exists)
-  const hasPresidentAccount = users.some(u => u.role === 'President');
+  const hasPresidentAccount = Boolean(hasPresident || users.some(u => u.role?.toLowerCase() === 'president'));
   const [showAdminSetup, setShowAdminSetup] = useState(false);
   const [adminName, setAdminName] = useState('');
   const [adminUsername, setAdminUsername] = useState('admin');
@@ -554,7 +556,7 @@ export default function AuthScreen({
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
-                  {(!hasPresidentAccount || serverAuthRequired) && (onRegister || serverAuthRequired) && (
+                  {!hasPresidentAccount && (
                     <button
                       type="button"
                       onClick={() => {
@@ -583,7 +585,7 @@ export default function AuthScreen({
                   )}
                 </form>
 
-                {(!hasPresidentAccount || serverAuthRequired) && showAdminSetup && (
+                {!hasPresidentAccount && showAdminSetup && (
                   <form onSubmit={handleAdminSetupSubmit} className="mt-4 p-4 bg-[#EAF6EE] border-2 border-[#2D6A4F] rounded-2xl space-y-3 animate-fade-in">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">

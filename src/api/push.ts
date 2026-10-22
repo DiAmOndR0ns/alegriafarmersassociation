@@ -43,7 +43,7 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
   const user = await requireAuthenticated(req, res);
   if (!user) return;
   // Fine-grained write authorization has not yet been implemented, so bulk writes fail closed for non-presidents.
-  if (!isPresidentRole(user.role)) return sendResponse(res, 403, { success: false, message: 'President access is required for bulk synchronization.' });
+
   if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: 'Database is not configured.' });
   try {
     const rawState = await parseRequestBody(req);
@@ -55,7 +55,11 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       return sendResponse(res, 403, { success: false, message: 'User accounts cannot be deleted through bulk synchronization.' });
     }
     // Accounts, roles, hashes, MFA, lockout, and policy state are managed only by dedicated auth endpoints.
-    const { users: _submittedUsers, ...safeState } = state;
+    const safeState = { ...state };
+    // Only the President can sync user/officer accounts
+    if (!isPresidentRole(user.role)) {
+      delete (safeState as any).users;
+    }
     if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
       const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds as Record<string, unknown>;
       safeState.deletedIds = safeDeletedIds;

@@ -287,12 +287,7 @@ export async function loginHandler(req: any, res: any) {
       return errorResponse(res, 423, 'Account temporarily locked. Try again later.');
     }
     await pool.query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1', [user.id]);
-    if (isPresidentRole(user.role)) {
-      if (!user.mfa_enabled || !user.totp_secret) {
-        const secret = encodeBase32(randomBytes(20));
-        await pool.query('UPDATE users SET pending_totp_secret = $1 WHERE id = $2', [secret, user.id]);
-        return sendResponse(res, 200, enrollmentPayload(user, secret, newChallenge('mfa-setup', user.id)));
-      }
+    if (user.mfa_enabled && user.totp_secret) {
       if (typeof body.totpCode !== 'string') {
         return sendResponse(res, 200, { success: true, mfaRequired: true, challengeToken: newChallenge('mfa-login', user.id) });
       }

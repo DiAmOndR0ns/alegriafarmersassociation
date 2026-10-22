@@ -136,6 +136,7 @@ async function handler(req, res) {
     const pool = getStatusPool();
     const queryPromise = pool.query("SELECT NOW() as current_time, current_database() as db_name");
     const statsPromise = getLiveTableStats(pool);
+    const presPromise = pool.query("SELECT 1 FROM users WHERE lower(replace(role, ' ', '_')) = 'president' LIMIT 1").catch(() => ({ rowCount: 0 }));
     const timeoutPromise = new Promise(
       (_, reject) => setTimeout(() => {
         reject(new Error(
@@ -143,9 +144,10 @@ async function handler(req, res) {
         ));
       }, 4e3)
     );
-    const [result, stats] = await Promise.all([
+    const [result, stats, presRes] = await Promise.all([
       Promise.race([queryPromise, timeoutPromise]),
-      statsPromise
+      statsPromise,
+      presPromise
     ]);
     return sendResponse(res, 200, {
       connected: true,
@@ -155,6 +157,7 @@ async function handler(req, res) {
       timestamp: result.rows[0]?.current_time,
       tableCounts: stats.tableCounts,
       totalRecords: stats.totalRecords,
+      hasPresident: Boolean(presRes?.rowCount && presRes.rowCount > 0),
       message: `Connected to ${provider} (${result.rows[0]?.db_name || "postgres"}) \u2014 ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`
     });
   } catch (err) {

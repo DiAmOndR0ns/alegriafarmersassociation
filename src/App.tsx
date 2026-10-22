@@ -79,6 +79,7 @@ export default function App() {
         error: data.error,
         tableCounts: data.tableCounts,
         totalRecords: data.totalRecords,
+        hasPresident: Boolean(data.hasPresident),
         checking: false,
       });
     } catch {
@@ -714,7 +715,9 @@ export default function App() {
         });
 
         // Refresh database row stats and status
-        checkDatabaseConnection();
+        if (!options?.silent) {
+          checkDatabaseConnection();
+        }
 
         if (!options?.silent) {
           const prefix = options?.source ? `[${options.source}] ` : '';
@@ -813,11 +816,11 @@ export default function App() {
 
     // Periodic auto-sync heartbeat every 5 seconds: ensures officers never have to push a button
     const intervalId = setInterval(() => {
-      if (navigator.onLine && (syncQueue.length > 0 || hasPendingDeletions() || logs.some(l => l.syncStatus === 'pending'))) {
+      if (currentUser && navigator.onLine && (syncQueue.length > 0 || hasPendingDeletions() || logs.some(l => l.syncStatus === 'pending'))) {
         console.log('[Auto-Sync Heartbeat]: Automatically synchronizing pending items to database...');
         pushAllDataToCloud(undefined, { silent: true, source: 'Auto-Sync (Heartbeat)' });
       }
-    }, 5000);
+    }, 15000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -826,7 +829,7 @@ export default function App() {
       if (reactiveTimer) clearTimeout(reactiveTimer);
       clearInterval(intervalId);
     };
-  }, [isOnline, syncQueue.length]);
+  }, [isOnline, syncQueue.length, currentUser?.id]);
 
   // SECRETARY ACTION HANDLERS
   const handleAddMember = (
@@ -2615,6 +2618,7 @@ export default function App() {
         <Suspense fallback={<DashboardSkeleton variant="app" />}>
           <AuthScreen
             users={users}
+            hasPresident={Boolean(dbStatus.hasPresident || users.some(u => u.role?.toLowerCase() === 'president'))}
             onLogin={handleLogin}
             serverAuthRequired={import.meta.env.PROD || dbStatus.configured || dbStatus.checking}
             onRegister={handleRegister}
@@ -3112,7 +3116,7 @@ export default function App() {
                   updateStorage('bafa_logs', newLogs);
                 }}
                 users={users}
-                onAddOfficer={handleAddOfficer}
+            onAddOfficer={handleAddOfficer}
                 onApproveUser={handleApproveUser}
                 onDeclineUser={handleDeclineUser}
                 onDeleteUser={handleDeleteUser}
@@ -3156,7 +3160,7 @@ export default function App() {
               <SecretaryView
                 members={members}
                 users={users}
-                onAddMember={(memberData, loginCredentials) => {
+            onAddMember={(memberData, loginCredentials) => {
                   if (loginCredentials && users.some((user) => user.username.toLowerCase() === loginCredentials.username.toLowerCase())) {
                     showToastMessage('That username is already in use.', 'error');
                     return;
@@ -3388,7 +3392,7 @@ export default function App() {
               <PresidentReport
                 year={new Date().getFullYear()}
                 users={users}
-              />
+            />
             </Suspense>
           </div>
         </div>

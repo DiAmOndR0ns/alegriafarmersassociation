@@ -278,6 +278,7 @@ export interface DatabaseStatus {
   checking?: boolean;
   tableCounts?: Record<string, number>;
   totalRecords?: number;
+  hasPresident?: boolean;
 }
 
 export interface AuditorReport {

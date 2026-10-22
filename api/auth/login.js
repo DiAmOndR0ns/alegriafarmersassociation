@@ -619,9 +619,6 @@ function safeUser(row) {
     mfaEnabled: Boolean(row.mfa_enabled)
   };
 }
-function isPresidentRole(role) {
-  return role.trim().toLowerCase().replace(/\s+/g, "_") === "president";
-}
 function newChallenge(kind, userId) {
   return signToken({
     kind,
@@ -629,22 +626,6 @@ function newChallenge(kind, userId) {
     exp: Math.floor(Date.now() / 1e3) + CHALLENGE_SECONDS,
     nonce: randomBytes(12).toString("base64url")
   });
-}
-function encodeBase32(bytes) {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits = 0;
-  let value = 0;
-  let output = "";
-  for (const byte of bytes) {
-    value = value << 8 | byte;
-    bits += 8;
-    while (bits >= 5) {
-      output += alphabet[value >>> bits - 5 & 31];
-      bits -= 5;
-    }
-  }
-  if (bits > 0) output += alphabet[value << 5 - bits & 31];
-  return output;
 }
 function decodeBase32(value) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -684,12 +665,6 @@ function verifyTotp(secret, supplied, nowMs = Date.now(), lastStep) {
     }
   }
   return null;
-}
-function enrollmentPayload(user, secret, challengeToken) {
-  const issuer = "FAMS";
-  const label = encodeURIComponent(`${issuer}:${user.username}`);
-  const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
-  return { success: true, mfaSetupRequired: true, challengeToken, secret, otpauthUrl };
 }
 async function recordMfaFailure(pool, userId) {
   await pool.query(`UPDATE users SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
@@ -742,12 +717,7 @@ async function loginHandler(req, res) {
       return errorResponse(res, 423, "Account temporarily locked. Try again later.");
     }
     await pool.query("UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1", [user.id]);
-    if (isPresidentRole(user.role)) {
-      if (!user.mfa_enabled || !user.totp_secret) {
-        const secret = encodeBase32(randomBytes(20));
-        await pool.query("UPDATE users SET pending_totp_secret = $1 WHERE id = $2", [secret, user.id]);
-        return sendResponse(res, 200, enrollmentPayload(user, secret, newChallenge("mfa-setup", user.id)));
-      }
+    if (user.mfa_enabled && user.totp_secret) {
       if (typeof body.totpCode !== "string") {
         return sendResponse(res, 200, { success: true, mfaRequired: true, challengeToken: newChallenge("mfa-login", user.id) });
       }
