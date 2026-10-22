@@ -884,9 +884,9 @@ async function passwordResetHandler(req, res) {
       await client.query("BEGIN");
       const actorResult = await client.query("SELECT * FROM users WHERE id = $1 FOR UPDATE", [actor.id]);
       const actorRow = actorResult.rows[0];
-      if (!actorRow || !isPresidentRole(actorRow.role) || !await bcrypt2.compare(body.currentPassword, actorRow.password)) {
+      if (!actorRow || !await bcrypt2.compare(body.currentPassword, actorRow.password)) {
         await client.query("ROLLBACK");
-        return errorResponse(res, 401, "Current President password is incorrect.");
+        return errorResponse(res, 401, "Current password is incorrect.");
       }
       const targetResult = await client.query("SELECT * FROM users WHERE id = $1 FOR UPDATE", [body.targetUserId]);
       target = targetResult.rows[0];

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { Request, Response } from 'express';
 import { getPool, isDatabaseConfigured, saveFullStateToPostgres } from './db';
-import { isPresidentRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
+import { isPresidentRole, isSecretaryRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
 import { parseRequestBody, sendResponse } from './helper';
 
 export type PushApiRequest = Request | (IncomingMessage & {
@@ -56,9 +56,13 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
     }
     // Accounts, roles, hashes, MFA, lockout, and policy state are managed only by dedicated auth endpoints.
     const safeState = { ...state };
-    // Only the President can sync user/officer accounts
+    // President can sync all accounts; Secretary can sync Member portal accounts
     if (!isPresidentRole(user.role)) {
-      delete (safeState as any).users;
+      if (isSecretaryRole(user.role) && Array.isArray(safeState.users)) {
+        safeState.users = safeState.users.filter((u: any) => u && typeof u === 'object' && u.role === 'Member');
+      } else {
+        delete (safeState as any).users;
+      }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
       const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds as Record<string, unknown>;

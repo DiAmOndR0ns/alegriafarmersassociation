@@ -145,7 +145,7 @@ export function isPresidentRole(role: string): boolean {
   return role.trim().toLowerCase().replace(/\s+/g, '_') === 'president';
 }
 
-function isSecretaryRole(role: string): boolean {
+export function isSecretaryRole(role: string): boolean {
   const normalized = role.trim().toLowerCase().replace(/\s+/g, '_');
   return normalized === 'secretary' || normalized === 'assistant_secretary';
 }
@@ -511,9 +511,9 @@ export async function passwordResetHandler(req: any, res: any) {
       await client.query('BEGIN');
       const actorResult = await client.query('SELECT * FROM users WHERE id = $1 FOR UPDATE', [actor.id]);
       const actorRow = actorResult.rows[0];
-      if (!actorRow || !isPresidentRole(actorRow.role) || !await bcrypt.compare(body.currentPassword, actorRow.password)) {
+      if (!actorRow || !await bcrypt.compare(body.currentPassword, actorRow.password)) {
         await client.query('ROLLBACK');
-        return errorResponse(res, 401, 'Current President password is incorrect.');
+        return errorResponse(res, 401, 'Current password is incorrect.');
       }
       const targetResult = await client.query('SELECT * FROM users WHERE id = $1 FOR UPDATE', [body.targetUserId]);
       target = targetResult.rows[0];

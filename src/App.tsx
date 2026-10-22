@@ -862,6 +862,9 @@ export default function App() {
       pushAllDataToCloud({ members: updated, users: updatedUsers }, { silent: true });
     } else {
       addToSyncQueue('create', 'member', newMember);
+      if (accountCreated && updatedUsers[0]) {
+        addToSyncQueue('create', 'user', updatedUsers[0]);
+      }
       showToastMessage(`Registered ${newMember.name} offline. Ready to sync when connected.`);
     }
   };
@@ -2136,6 +2139,7 @@ export default function App() {
     setUsers(updated);
     updateStorage('bafa_users', updated);
 
+    let updatedMembers = members;
     // If they are a registered farmer member, enroll them into the primary members list too!
     if (targetUser.role === 'Member') {
       const alreadyInRoster = members.some(m => m.id === id || m.name.toLowerCase() === targetUser.name.toLowerCase());
@@ -2149,7 +2153,7 @@ export default function App() {
           status: 'Active',
           joinedDate: targetUser.joinedDate || new Date().toISOString().split('T')[0]
         };
-        const updatedMembers = [newMember, ...members];
+        updatedMembers = [newMember, ...members];
         setMembers(updatedMembers);
         updateStorage('bafa_members', updatedMembers);
       }
@@ -2157,6 +2161,12 @@ export default function App() {
 
     logAction('Approved Registration', `Approved portal registration for ${targetUser.name} (${targetUser.role})`);
     showToastMessage(`Approved registration for ${targetUser.name}!`, 'success');
+
+    if (isOnline) {
+      pushAllDataToCloud({ users: updated, members: updatedMembers }, { silent: true, source: 'Approve Registration' });
+    } else {
+      addToSyncQueue('update', 'user', { id, isApproved: true });
+    }
   };
 
   const handleDeclineUser = (id: string) => {

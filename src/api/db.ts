@@ -812,7 +812,8 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       avatarUrl: r.avatar_url,
       memberIdNumber: r.member_id_number,
       rsbsaNumber: r.rsbsa_number,
-      isRsbsaRegistered: Boolean(r.is_rsbsa_registered)
+      isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
+      resetRequested: Boolean(r.reset_requested)
     }));
 
     const meetings = meetingsRes.rows.map(r => ({
@@ -1123,6 +1124,13 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const activeUsers = state.users.filter((u: any) => !deletedUserIds.has(u.id));
       console.log('[DB DEBUG] Saving', activeUsers.length, 'users...');
       for (const u of activeUsers) {
+        if (!u || !u.username) continue;
+        const cleanUsername = String(u.username).trim().toLowerCase();
+        const existingRow = await client.query('SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1', [cleanUsername]);
+        const targetId = existingRow.rows[0]?.id || u.id;
+        const existingRole = existingRow.rows[0]?.role;
+        const targetRole = existingRole && existingRole.toLowerCase() !== 'member' ? existingRole : (u.role || 'Member');
+
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled, totp_secret)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
@@ -1130,7 +1138,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             username = EXCLUDED.username,
             password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
             name = EXCLUDED.name,
-            role = EXCLUDED.role,
+            role = CASE WHEN users.role != 'Member' THEN users.role ELSE EXCLUDED.role END,
             is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
@@ -1144,7 +1152,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             mfa_enabled = EXCLUDED.mfa_enabled,
             totp_secret = EXCLUDED.totp_secret;
         `, [
-          u.id, u.username, u.passwordHash || u.password || '', u.name, u.role, Boolean(u.isApproved),
+          targetId, cleanUsername, u.passwordHash || u.password || '', u.name, targetRole, Boolean(u.isApproved),
           u.joinedDate || null, u.farmLocation || null,
           u.primaryCrops || [], u.contactNumber || null, u.status || 'Active',
           u.avatarUrl || null, u.memberIdNumber || null, u.rsbsaNumber || null,

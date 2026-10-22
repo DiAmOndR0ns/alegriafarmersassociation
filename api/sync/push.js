@@ -663,6 +663,12 @@ async function saveFullStateToPostgres(pool, state) {
       const activeUsers = state.users.filter((u) => !deletedUserIds.has(u.id));
       console.log("[DB DEBUG] Saving", activeUsers.length, "users...");
       for (const u of activeUsers) {
+        if (!u || !u.username) continue;
+        const cleanUsername = String(u.username).trim().toLowerCase();
+        const existingRow = await client.query("SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1", [cleanUsername]);
+        const targetId = existingRow.rows[0]?.id || u.id;
+        const existingRole = existingRow.rows[0]?.role;
+        const targetRole = existingRole && existingRole.toLowerCase() !== "member" ? existingRole : u.role || "Member";
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled, totp_secret)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
@@ -670,7 +676,7 @@ async function saveFullStateToPostgres(pool, state) {
             username = EXCLUDED.username,
             password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
             name = EXCLUDED.name,
-            role = EXCLUDED.role,
+            role = CASE WHEN users.role != 'Member' THEN users.role ELSE EXCLUDED.role END,
             is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
@@ -684,11 +690,11 @@ async function saveFullStateToPostgres(pool, state) {
             mfa_enabled = EXCLUDED.mfa_enabled,
             totp_secret = EXCLUDED.totp_secret;
         `, [
-          u.id,
-          u.username,
+          targetId,
+          cleanUsername,
           u.passwordHash || u.password || "",
           u.name,
-          u.role,
+          targetRole,
           Boolean(u.isApproved),
           u.joinedDate || null,
           u.farmLocation || null,
@@ -1502,6 +1508,10 @@ function safeUser(row) {
 function isPresidentRole(role) {
   return role.trim().toLowerCase().replace(/\s+/g, "_") === "president";
 }
+function isSecretaryRole(role) {
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
+  return normalized === "secretary" || normalized === "assistant_secretary";
+}
 function errorResponse(res, status, message) {
   return sendResponse(res, status, { success: false, message });
 }
@@ -1537,7 +1547,11 @@ async function handler(req, res) {
     }
     const safeState = { ...state };
     if (!isPresidentRole(user.role)) {
-      delete safeState.users;
+      if (isSecretaryRole(user.role) && Array.isArray(safeState.users)) {
+        safeState.users = safeState.users.filter((u) => u && typeof u === "object" && u.role === "Member");
+      } else {
+        delete safeState.users;
+      }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
       const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds;
