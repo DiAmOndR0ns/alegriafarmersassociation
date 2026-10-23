@@ -207,6 +207,15 @@ export default function App() {
         delete safeCurrentUser.password;
         await setSecureItem('bafa_current_user', safeCurrentUser);
       }
+      if (storedCurr && !cancelled) {
+        const safeUser = { ...storedCurr };
+        delete safeUser.password;
+        delete safeUser.passwordHash;
+        delete safeUser.passwordHistory;
+        setCurrentUser(safeUser);
+        if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
+        setGuestMode(false);
+      }
 
       const rawLogs = storedLogs || INITIAL_LOGS;
       const needsChaining = rawLogs.some((l: any) => !l.hash || !l.previousHash);
@@ -216,25 +225,32 @@ export default function App() {
       }
       setLogs(activeLogs);
 
+      // Check authenticated session before completing hydration
+      try {
+        const sessionRes = await fetch('/api/auth/session');
+        if (sessionRes.ok) {
+          const result = await sessionRes.json();
+          if (result?.authenticated && result.user && !cancelled) {
+            const safeUser = { ...result.user } as User;
+            delete safeUser.password;
+            delete safeUser.passwordHash;
+            delete safeUser.passwordHistory;
+            setCurrentUser(safeUser);
+            if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
+            setGuestMode(false);
+            setUsers(previous => [safeUser, ...previous.filter(user => user.id !== safeUser.id)]);
+          }
+        }
+      } catch {
+        // Offline or session endpoint unreachable
+      }
+
       // Initial database status check
       checkDatabaseConnection();
       void runNightlyBackupCheck();
-      setIsHydrating(false);
-
-      fetch('/api/auth/session')
-        .then(response => response.ok ? response.json() : null)
-        .then(result => {
-          if (!result?.authenticated || !result.user) return;
-          const safeUser = { ...result.user } as User;
-          delete safeUser.password;
-          delete safeUser.passwordHash;
-          delete safeUser.passwordHistory;
-          setCurrentUser(safeUser);
-          if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
-          setGuestMode(false);
-          setUsers(previous => [safeUser, ...previous.filter(user => user.id !== safeUser.id)]);
-        })
-        .catch(() => undefined);
+      if (!cancelled) {
+        setIsHydrating(false);
+      }
 
       // Attempt pulling fresh data from PostgreSQL Cloud Database if online
       fetch('/api/sync/pull')
@@ -1856,7 +1872,16 @@ export default function App() {
   const handleLogin = (user: User, password: string, serverAuthenticated = false) => {
     if (import.meta.env.PROD || serverAuthenticated || dbStatus.configured) {
       void password;
-      window.location.reload();
+      const { password: _p, passwordHash: _ph, passwordHistory: _hist, ...safeUser } = user;
+      const cleanUser = safeUser as User;
+      setCurrentUser(cleanUser);
+      setGuestMode(false);
+      setUsers(previous => [cleanUser, ...previous.filter(candidate => candidate.id !== cleanUser.id)]);
+      updateStorage('bafa_current_user', cleanUser);
+      if (cleanUser.role !== 'Member') {
+        setCurrentRole(cleanUser.role as OfficerRole);
+      }
+      showToastMessage(`Maayong adlaw, ${cleanUser.name}! Successful login.`, 'success');
       return;
     }
 
