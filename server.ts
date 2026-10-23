@@ -16,6 +16,7 @@ import {
   loginHandler,
   logoutHandler,
   mfaConfirmHandler,
+  mfaToggleHandler,
   passwordChangeHandler,
   passwordResetHandler,
   requireAuthenticated,
@@ -31,6 +32,7 @@ export async function createApp() {
 
   app.post("/api/auth/login", loginHandler);
   app.post("/api/auth/mfa/confirm", mfaConfirmHandler);
+  app.post("/api/auth/mfa/toggle", mfaToggleHandler);
   app.get("/api/auth/session", sessionHandler);
   app.post("/api/auth/logout", logoutHandler);
   app.post("/api/auth/bootstrap", bootstrapHandler);

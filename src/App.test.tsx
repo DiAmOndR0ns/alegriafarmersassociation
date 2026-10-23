@@ -4,6 +4,9 @@ import { renderToString } from 'react-dom/server';
 import App from './App';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useDatabaseStatus } from './hooks/useDatabaseStatus';
+import { getTotpUri, verifyTotpCode, decodeBase32, encodeBase32 } from './utils/totp';
+import AuthScreen from './components/AuthScreen';
+import { User } from './types';
 
 describe('App Component', () => {
   beforeEach(() => {
@@ -112,5 +115,44 @@ describe('App Component', () => {
     const html = renderToString(<HookConsumer />);
     expect(html).toContain('Local Storage');
     expect(html).toContain('function');
+  });
+
+  it('generates valid TOTP URI with expected parameters', () => {
+    const uri = getTotpUri('JBSWY3DPEHPK3PXP', 'president', 'FAMS');
+    expect(uri).toContain('otpauth://totp/');
+    expect(uri).toContain('secret=JBSWY3DPEHPK3PXP');
+    expect(uri).toContain('digits=6');
+    expect(uri).toContain('period=30');
+  });
+
+  it('correctly encodes and decodes Base32 secret', () => {
+    const bytes = new Uint8Array([72, 101, 108, 108, 111]); // "Hello"
+    const encoded = encodeBase32(bytes);
+    const decoded = decodeBase32(encoded);
+    expect(Array.from(decoded)).toEqual(Array.from(bytes));
+  });
+
+  it('renders AuthScreen properly for MFA-configured President', () => {
+    const mockUsers: User[] = [{
+      id: 'user-pres-1',
+      username: 'president',
+      name: 'President Zenaida',
+      role: 'President',
+      isApproved: true,
+      mfaEnabled: true,
+      totpSecret: 'JBSWY3DPEHPK3PXP'
+    }];
+
+    const html = renderToString(
+      <AuthScreen
+        users={mockUsers}
+        hasPresident={true}
+        onLogin={() => {}}
+        toast={() => {}}
+      />
+    );
+
+    expect(html).toContain('username');
+    expect(html).toContain('password');
   });
 });

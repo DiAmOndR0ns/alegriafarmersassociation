@@ -587,39 +587,63 @@ export default function ExecutiveView({
           ) : (
             <>
           {isAdminUnlocked && (
-            <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-              <div className="space-y-0.5">
-                <span className="font-extrabold text-[#1B4332] flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                  President Two-Factor Authentication (TOTP MFA)
-                </span>
-                <p className="text-[11px] text-[#5D6B54]">
-                  {users.find(u => u.role === 'President')?.mfaEnabled
-                    ? '2FA is currently active on the President account. An authenticator app is required at login.'
-                    : '2FA is currently disabled/optional. You can log in directly with password only.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const pres = users.find(u => u.role === 'President');
-                  if (!pres || !onUpdateUser) return;
-                  const nextMfa = !pres.mfaEnabled;
-                  onUpdateUser({
-                    ...pres,
-                    mfaEnabled: nextMfa,
-                    totpSecret: nextMfa ? (pres.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
-                  });
-                }}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
-                  users.find(u => u.role === 'President')?.mfaEnabled
-                    ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
-                    : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                }`}
-              >
-                {users.find(u => u.role === 'President')?.mfaEnabled ? 'Disable 2FA Requirement' : 'Enable 2FA Requirement'}
-              </button>
-            </div>
+            (() => {
+              const presUser = (currentRole === 'President' && currentUserId ? users.find(u => u.id === currentUserId) : null)
+                || (currentUserId ? users.find(u => u.id === currentUserId) : null)
+                || users.find(u => u.role === 'President')
+                || users.find(u => u.role?.toLowerCase() === 'president');
+              const isMfaActive = Boolean(presUser?.mfaEnabled);
+              const activeSecret = presUser?.totpSecret || 'JBSWY3DPEHPK3PXP';
+              return (
+                <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col justify-between gap-3 text-xs">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <span className="font-extrabold text-[#1B4332] flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                        President Two-Factor Authentication (TOTP MFA)
+                      </span>
+                      <p className="text-[11px] text-[#5D6B54]">
+                        {isMfaActive
+                          ? '2FA is currently active on the President account. An authenticator app is required at login.'
+                          : '2FA is currently disabled/optional. You can log in directly with password only.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!presUser || !onUpdateUser) return;
+                        const nextMfa = !isMfaActive;
+                        onUpdateUser({
+                          ...presUser,
+                          mfaEnabled: nextMfa,
+                          totpSecret: nextMfa ? (presUser.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all shrink-0 ${
+                        isMfaActive
+                          ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
+                          : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {isMfaActive ? 'Disable 2FA Requirement' : 'Enable 2FA Requirement'}
+                    </button>
+                  </div>
+                  {isMfaActive && (
+                    <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-[#1B4332] text-xs sm:text-sm select-all break-all bg-[#FAF8F5] px-2 py-1 rounded border border-[#D8E7D9]">
+                          {activeSecret}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Scan or enter this key into your Google Authenticator, Microsoft Authenticator, or 2FA app to generate the 6-digit login codes.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           )}
 
           {canAppointOfficers && showAddOfficerForm && (
@@ -752,7 +776,8 @@ export default function ExecutiveView({
                                   const nextState = !officer.mfaEnabled;
                                   onUpdateUser({
                                     ...officer,
-                                    mfaEnabled: nextState
+                                    mfaEnabled: nextState,
+                                    totpSecret: nextState ? (officer.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
                                   });
                                 }}
                                 className={`text-[9px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${

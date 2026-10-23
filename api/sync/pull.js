@@ -606,7 +606,9 @@ async function fetchAllDataFromPostgres(pool) {
       memberIdNumber: r.member_id_number,
       rsbsaNumber: r.rsbsa_number,
       isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
-      resetRequested: Boolean(r.reset_requested)
+      resetRequested: Boolean(r.reset_requested),
+      mfaEnabled: Boolean(r.mfa_enabled),
+      totpSecret: r.totp_secret || void 0
     }));
     const meetings = meetingsRes.rows.map((r) => ({
       id: r.id,

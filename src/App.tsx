@@ -308,7 +308,13 @@ export default function App() {
                   // The database row is the source of truth for credentials. Older rows store a
                   // plaintext `password`; promote it into the hash column exactly once instead of
                   // letting it be dropped during storage sanitization.
-                  const upgraded = { ...user, passwordHistory: Array.isArray(user.passwordHistory) ? user.passwordHistory : [] };
+                  const local = (storedUsers || []).find((u: any) => u.id === user.id || u.username.toLowerCase() === user.username.toLowerCase());
+                  const upgraded = {
+                    ...user,
+                    mfaEnabled: Boolean(user.mfaEnabled || local?.mfaEnabled),
+                    totpSecret: user.totpSecret || local?.totpSecret,
+                    passwordHistory: Array.isArray(user.passwordHistory) ? user.passwordHistory : []
+                  };
                   if (upgraded.password) {
                     if (!upgraded.passwordHash?.startsWith('$2')) {
                       upgraded.passwordHash = hashPolicyPassword(upgraded.password);
@@ -405,8 +411,8 @@ export default function App() {
             copy.mustChangePassword = true;
             delete copy.password;
           }
-          const { password: _password, passwordHash: _passwordHash, passwordHistory: _passwordHistory, ...safeUser } = copy;
-          return safeUser;
+          const { password: _password, ...userToStore } = copy;
+          return userToStore;
         });
         await setSecureItem(key, sanitized);
         return;
@@ -1876,8 +1882,10 @@ export default function App() {
       const cleanUser = safeUser as User;
       setCurrentUser(cleanUser);
       setGuestMode(false);
-      setUsers(previous => [cleanUser, ...previous.filter(candidate => candidate.id !== cleanUser.id)]);
+      const updatedUsers = [cleanUser, ...users.filter(candidate => candidate.id !== cleanUser.id)];
+      setUsers(updatedUsers);
       updateStorage('bafa_current_user', cleanUser);
+      updateStorage('bafa_users', updatedUsers);
       if (cleanUser.role !== 'Member') {
         setCurrentRole(cleanUser.role as OfficerRole);
       }
@@ -3128,12 +3136,31 @@ export default function App() {
                 onPresidentApproveTransaction={handlePresidentApproveTransaction}
                 onPresidentReturnTransaction={handlePresidentReturnTransaction}
                 onUpdateUser={(updatedUser) => {
-                  const updated = users.map(u => u.id === updatedUser.id ? updatedUser : u);
+                  const exists = users.some(u => u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase());
+                  const updated = exists
+                    ? users.map(u => (u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase()) ? { ...u, ...updatedUser } : u)
+                    : [...users, updatedUser];
                   setUsers(updated);
                   updateStorage('bafa_users', updated);
-                  if (currentUser?.id === updatedUser.id) {
-                    setCurrentUser(updatedUser);
-                    updateStorage('bafa_current_user', updatedUser);
+                  if (currentUser?.id === updatedUser.id || currentUser?.username.toLowerCase() === updatedUser.username.toLowerCase()) {
+                    const updatedCurrent = { ...currentUser, ...updatedUser };
+                    setCurrentUser(updatedCurrent);
+                    updateStorage('bafa_current_user', updatedCurrent);
+                  }
+                  if (isOnline) {
+                    void fetch('/api/auth/mfa/toggle', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        userId: updatedUser.id,
+                        username: updatedUser.username,
+                        mfaEnabled: updatedUser.mfaEnabled,
+                        totpSecret: updatedUser.totpSecret
+                      })
+                    }).catch(() => undefined);
+                    pushAllDataToCloud({ users: updated }, { silent: true, source: '2FA Updated' });
+                  } else {
+                    addToSyncQueue('update', 'user', updatedUser);
                   }
                   showToastMessage(
                     updatedUser.mfaEnabled
