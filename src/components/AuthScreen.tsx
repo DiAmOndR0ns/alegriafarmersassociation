@@ -149,27 +149,6 @@ export default function AuthScreen({
           return;
         }
         if (result.user) {
-          const clientMatched = users.find(u => u.username.toLowerCase() === username.trim().toLowerCase());
-          const isMfaActive = Boolean(result.user.mfaEnabled || clientMatched?.mfaEnabled);
-          if (isMfaActive) {
-            const activeSecret = clientMatched?.totpSecret || result.user.totpSecret || 'JBSWY3DPEHPK3PXP';
-            setAuthChallenge({
-              token: `offline-${result.user.id || clientMatched?.id || 'pres'}`,
-              setup: false,
-              secret: activeSecret,
-              otpauthUrl: getTotpUri(activeSecret, username.trim(), 'FAMS')
-            });
-            setPendingOfflineUser({
-              ...(result.user as User),
-              ...clientMatched,
-              mfaEnabled: true,
-              totpSecret: activeSecret
-            });
-            setPendingOfflinePassword(password);
-            setMfaCode('');
-            return;
-          }
-
           onLogin(result.user as User, '', true);
           setPassword('');
           return;
@@ -231,15 +210,14 @@ export default function AuthScreen({
     }
 
     // If 2FA requirement is active on this account, prompt for authenticator code
-    if (matchedUser.mfaEnabled) {
-      const activeSecret = matchedUser.totpSecret || 'JBSWY3DPEHPK3PXP';
+    if (matchedUser.mfaEnabled && matchedUser.totpSecret) {
       setAuthChallenge({
         token: `offline-${matchedUser.id}`,
         setup: false,
-        secret: activeSecret,
-        otpauthUrl: getTotpUri(activeSecret, matchedUser.username, 'FAMS')
+        secret: matchedUser.totpSecret,
+        otpauthUrl: getTotpUri(matchedUser.totpSecret, matchedUser.username, 'FAMS')
       });
-      setPendingOfflineUser({ ...matchedUser, totpSecret: activeSecret });
+      setPendingOfflineUser(matchedUser);
       setPendingOfflinePassword(password);
       setMfaCode('');
       return;
@@ -256,7 +234,11 @@ export default function AuthScreen({
       return;
     }
     if (authChallenge.token.startsWith('offline-') && pendingOfflineUser) {
-      const secret = authChallenge.secret || pendingOfflineUser.totpSecret || 'JBSWY3DPEHPK3PXP';
+      const secret = authChallenge.secret || pendingOfflineUser.totpSecret;
+      if (!secret) {
+        toast('Authenticator configuration is missing.', 'error');
+        return;
+      }
       const isValid = await verifyTotpCode(secret, mfaCode);
       if (!isValid) {
         toast('Invalid 6-digit authenticator code. Check your authenticator app and try again.', 'error');
@@ -476,16 +458,14 @@ export default function AuthScreen({
                       ? 'Add this account to an authenticator app, then enter the current 6-digit code to complete setup.'
                       : 'Enter the current 6-digit code from your authenticator app.'}
                   </p>
-                  {authChallenge.secret && (
+                  {authChallenge.setup && authChallenge.secret && (
                     <div className="mt-3 space-y-2 rounded-xl border border-[#D5CFC1] bg-white p-3">
-                      <p className="text-[10px] font-bold uppercase text-[#4A5F57]">
-                        {authChallenge.setup ? 'Authenticator setup key' : 'Authenticator Key (Manual Entry)'}
-                      </p>
-                      <p className="select-all break-all font-mono text-sm font-bold text-[#1B4332]">{authChallenge.secret}</p>
+                      <p className="text-[10px] font-bold uppercase text-[#4A5F57]">Authenticator setup key</p>
+                      <p className="select-all break-all font-mono text-sm font-bold">{authChallenge.secret}</p>
                       {authChallenge.otpauthUrl && (
                         <details className="text-[10px]">
-                          <summary className="cursor-pointer font-bold text-[#2D6A4F]">Manual setup URI</summary>
-                          <p className="mt-1 select-all break-all font-mono text-slate-700">{authChallenge.otpauthUrl}</p>
+                          <summary className="cursor-pointer font-bold">Manual setup URI</summary>
+                          <p className="mt-1 select-all break-all font-mono">{authChallenge.otpauthUrl}</p>
                         </details>
                       )}
                     </div>

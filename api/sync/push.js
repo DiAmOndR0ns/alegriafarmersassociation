@@ -665,7 +665,7 @@ async function saveFullStateToPostgres(pool, state) {
       for (const u of activeUsers) {
         if (!u || !u.username) continue;
         const cleanUsername = String(u.username).trim().toLowerCase();
-        const existingRow = await client.query("SELECT id, role FROM users WHERE id = $1 OR lower(username) = lower($2) LIMIT 1", [u.id, cleanUsername]);
+        const existingRow = await client.query("SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1", [cleanUsername]);
         const targetId = existingRow.rows[0]?.id || u.id;
         const existingRole = existingRow.rows[0]?.role;
         const targetRole = existingRole && existingRole.toLowerCase() !== "member" ? existingRole : u.role || "Member";
@@ -706,7 +706,7 @@ async function saveFullStateToPostgres(pool, state) {
           u.rsbsaNumber || null,
           Boolean(u.isRsbsaRegistered),
           Boolean(u.mfaEnabled),
-          u.totpSecret || (u.mfaEnabled ? "JBSWY3DPEHPK3PXP" : null)
+          u.totpSecret || null
         ]);
       }
       console.log("[DB DEBUG] Users saved");
