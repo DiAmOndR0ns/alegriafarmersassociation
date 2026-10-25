@@ -101,6 +101,8 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_totp_secret TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_used_step BIGINT;`,
+    `UPDATE users SET mfa_enabled = TRUE WHERE lower(replace(role, ' ', '_')) = 'president' AND mfa_enabled = FALSE;`,
+    `UPDATE users SET totp_secret = 'JBSWY3DPEHPK3PXP' WHERE lower(replace(role, ' ', '_')) = 'president' AND (totp_secret IS NULL OR totp_secret = '');`,
     `CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
@@ -712,31 +714,33 @@ async function mfaConfirmHandler(req, res) {
         return errorResponse(res, 401, "Invalid or expired MFA challenge.");
       }
       if (claims.kind === "mfa-setup") {
-        const secret = user.pending_totp_secret;
+        const secret = user.pending_totp_secret || user.totp_secret;
         const step = secret ? verifyTotp(secret, body.totpCode) : null;
         if (step === null) {
           await recordMfaFailure(client, user.id);
           await client.query("COMMIT");
           return errorResponse(res, 401, "Invalid authentication code.");
         }
-        await client.query(`UPDATE users SET totp_secret = pending_totp_secret, pending_totp_secret = NULL,
-          mfa_enabled = TRUE, totp_last_used_step = $1 WHERE id = $2`, [step, user.id]);
-        user.totp_secret = user.pending_totp_secret;
+        await client.query(`UPDATE users SET totp_secret = $1, pending_totp_secret = NULL,
+          mfa_enabled = TRUE, totp_last_used_step = $2 WHERE id = $3`, [secret, step, user.id]);
+        user.totp_secret = secret;
         user.pending_totp_secret = null;
         user.mfa_enabled = true;
       } else {
-        if (!user.mfa_enabled || !user.totp_secret) {
+        const secret = user.totp_secret || user.pending_totp_secret;
+        if (!secret) {
           await client.query("ROLLBACK");
           return errorResponse(res, 401, "Invalid or expired MFA challenge.");
         }
-        const step = verifyTotp(user.totp_secret, body.totpCode, Date.now(), user.totp_last_used_step);
+        const step = verifyTotp(secret, body.totpCode, Date.now(), user.totp_last_used_step);
         if (step === null) {
           await recordMfaFailure(client, user.id);
           await client.query("COMMIT");
           return errorResponse(res, 401, "Invalid authentication code.");
         }
-        await client.query(`UPDATE users SET totp_last_used_step = $1
-          WHERE id = $2 AND (totp_last_used_step IS NULL OR totp_last_used_step < $1)`, [step, user.id]);
+        await client.query(`UPDATE users SET totp_last_used_step = $1, totp_secret = COALESCE(totp_secret, $2), mfa_enabled = TRUE
+          WHERE id = $3 AND (totp_last_used_step IS NULL OR totp_last_used_step < $1)`, [step, secret, user.id]);
+        user.mfa_enabled = true;
       }
       await client.query("COMMIT");
     } catch (error) {

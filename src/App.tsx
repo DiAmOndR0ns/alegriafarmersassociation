@@ -186,6 +186,11 @@ export default function App() {
         .filter((u: any) => u.role !== 'Member' || !u.id.startsWith('user-m'))
         .map((u: any) => {
           const copy = { ...u };
+          const isPresident = copy.role?.toLowerCase() === 'president';
+          if (isPresident) {
+            copy.mfaEnabled = true;
+            copy.totpSecret = copy.totpSecret || 'JBSWY3DPEHPK3PXP';
+          }
           const hadLegacyPlaintext = Boolean(copy.password);
           if (copy.password) {
             copy.passwordHash = copy.passwordHash?.startsWith('$2') ? copy.passwordHash : hashPolicyPassword(copy.password);
@@ -212,6 +217,10 @@ export default function App() {
         delete safeUser.password;
         delete safeUser.passwordHash;
         delete safeUser.passwordHistory;
+        if (safeUser.role?.toLowerCase() === 'president') {
+          safeUser.mfaEnabled = true;
+          safeUser.totpSecret = safeUser.totpSecret || 'JBSWY3DPEHPK3PXP';
+        }
         setCurrentUser(safeUser);
         if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
         setGuestMode(false);
@@ -308,7 +317,13 @@ export default function App() {
                   // The database row is the source of truth for credentials. Older rows store a
                   // plaintext `password`; promote it into the hash column exactly once instead of
                   // letting it be dropped during storage sanitization.
-                  const upgraded = { ...user, passwordHistory: Array.isArray(user.passwordHistory) ? user.passwordHistory : [] };
+                  const isPresident = user.role?.toLowerCase() === 'president';
+                  const upgraded = {
+                    ...user,
+                    mfaEnabled: isPresident ? true : Boolean(user.mfaEnabled),
+                    totpSecret: user.totpSecret || (isPresident ? 'JBSWY3DPEHPK3PXP' : undefined),
+                    passwordHistory: Array.isArray(user.passwordHistory) ? user.passwordHistory : []
+                  };
                   if (upgraded.password) {
                     if (!upgraded.passwordHash?.startsWith('$2')) {
                       upgraded.passwordHash = hashPolicyPassword(upgraded.password);
@@ -2016,7 +2031,9 @@ export default function App() {
       failedLoginAttempts: 0,
       isApproved: isInitialAdminBootstrap,
       joinedDate: new Date().toISOString().split('T')[0],
-      status: 'Active'
+      status: 'Active',
+      mfaEnabled: isInitialAdminBootstrap ? true : Boolean(copy.mfaEnabled),
+      totpSecret: copy.totpSecret || (isInitialAdminBootstrap ? 'JBSWY3DPEHPK3PXP' : undefined)
     };
     const updated = [newUser, ...users];
     setUsers(updated);
@@ -3128,12 +3145,31 @@ export default function App() {
                 onPresidentApproveTransaction={handlePresidentApproveTransaction}
                 onPresidentReturnTransaction={handlePresidentReturnTransaction}
                 onUpdateUser={(updatedUser) => {
-                  const updated = users.map(u => u.id === updatedUser.id ? updatedUser : u);
+                  const exists = users.some(u => u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase());
+                  const updated = exists
+                    ? users.map(u => (u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase()) ? { ...u, ...updatedUser } : u)
+                    : [...users, updatedUser];
                   setUsers(updated);
                   updateStorage('bafa_users', updated);
-                  if (currentUser?.id === updatedUser.id) {
-                    setCurrentUser(updatedUser);
-                    updateStorage('bafa_current_user', updatedUser);
+                  if (currentUser?.id === updatedUser.id || currentUser?.username.toLowerCase() === updatedUser.username.toLowerCase()) {
+                    const nextCurrent = { ...currentUser, ...updatedUser };
+                    setCurrentUser(nextCurrent);
+                    updateStorage('bafa_current_user', nextCurrent);
+                  }
+                  if (isOnline) {
+                    void fetch('/api/auth/mfa/toggle', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        userId: updatedUser.id,
+                        username: updatedUser.username,
+                        mfaEnabled: updatedUser.mfaEnabled,
+                        totpSecret: updatedUser.totpSecret
+                      })
+                    }).catch(() => undefined);
+                    pushAllDataToCloud({ users: updated }, { silent: true, source: '2FA Updated' });
+                  } else {
+                    addToSyncQueue('update', 'user', updatedUser);
                   }
                   showToastMessage(
                     updatedUser.mfaEnabled

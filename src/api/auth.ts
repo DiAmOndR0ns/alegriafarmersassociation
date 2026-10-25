@@ -287,16 +287,34 @@ export async function loginHandler(req: any, res: any) {
       return errorResponse(res, 423, 'Account temporarily locked. Try again later.');
     }
     await pool.query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1', [user.id]);
-    if (user.mfa_enabled && user.totp_secret) {
-      if (typeof body.totpCode !== 'string') {
-        return sendResponse(res, 200, { success: true, mfaRequired: true, challengeToken: newChallenge('mfa-login', user.id) });
+    const isMfaEnforced = isPresidentRole(user.role) || Boolean(user.mfa_enabled);
+    if (isMfaEnforced) {
+      const activeSecret = user.totp_secret || user.pending_totp_secret || encodeBase32(randomBytes(20));
+      if (!user.totp_secret) {
+        if (user.pending_totp_secret !== activeSecret) {
+          await pool.query('UPDATE users SET pending_totp_secret = $1 WHERE id = $2', [activeSecret, user.id]);
+          user.pending_totp_secret = activeSecret;
+        }
+        return sendResponse(res, 200, enrollmentPayload(user, activeSecret, newChallenge('mfa-setup', user.id)));
       }
-      const step = verifyTotp(user.totp_secret, body.totpCode, Date.now(), user.totp_last_used_step);
+      if (typeof body.totpCode !== 'string') {
+        const issuer = 'FAMS';
+        const label = encodeURIComponent(`${issuer}:${user.username}`);
+        const otpauthUrl = `otpauth://totp/${label}?secret=${activeSecret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+        return sendResponse(res, 200, {
+          success: true,
+          mfaRequired: true,
+          challengeToken: newChallenge('mfa-login', user.id),
+          secret: activeSecret,
+          otpauthUrl
+        });
+      }
+      const step = verifyTotp(activeSecret, body.totpCode, Date.now(), user.totp_last_used_step);
       if (step === null) {
         await recordMfaFailure(pool, user.id);
         return errorResponse(res, 401, 'Invalid authentication code.');
       }
-      const consumed = await pool.query(`UPDATE users SET totp_last_used_step = $1
+      const consumed = await pool.query(`UPDATE users SET totp_last_used_step = $1, mfa_enabled = TRUE
         WHERE id = $2 AND (totp_last_used_step IS NULL OR totp_last_used_step < $1) RETURNING id`, [step, user.id]);
       if (!consumed.rowCount) return errorResponse(res, 401, 'Authentication code already used.');
     }
@@ -331,31 +349,33 @@ export async function mfaConfirmHandler(req: any, res: any) {
         return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
       }
       if (claims.kind === 'mfa-setup') {
-        const secret = user.pending_totp_secret;
+        const secret = user.pending_totp_secret || user.totp_secret;
         const step = secret ? verifyTotp(secret, body.totpCode) : null;
         if (step === null) {
           await recordMfaFailure(client as any, user.id);
           await client.query('COMMIT');
           return errorResponse(res, 401, 'Invalid authentication code.');
         }
-        await client.query(`UPDATE users SET totp_secret = pending_totp_secret, pending_totp_secret = NULL,
-          mfa_enabled = TRUE, totp_last_used_step = $1 WHERE id = $2`, [step, user.id]);
-        user.totp_secret = user.pending_totp_secret;
+        await client.query(`UPDATE users SET totp_secret = $1, pending_totp_secret = NULL,
+          mfa_enabled = TRUE, totp_last_used_step = $2 WHERE id = $3`, [secret, step, user.id]);
+        user.totp_secret = secret;
         user.pending_totp_secret = null;
         user.mfa_enabled = true;
       } else {
-        if (!user.mfa_enabled || !user.totp_secret) {
+        const secret = user.totp_secret || user.pending_totp_secret;
+        if (!secret) {
           await client.query('ROLLBACK');
           return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
         }
-        const step = verifyTotp(user.totp_secret, body.totpCode, Date.now(), user.totp_last_used_step);
+        const step = verifyTotp(secret, body.totpCode, Date.now(), user.totp_last_used_step);
         if (step === null) {
           await recordMfaFailure(client as any, user.id);
           await client.query('COMMIT');
           return errorResponse(res, 401, 'Invalid authentication code.');
         }
-        await client.query(`UPDATE users SET totp_last_used_step = $1
-          WHERE id = $2 AND (totp_last_used_step IS NULL OR totp_last_used_step < $1)`, [step, user.id]);
+        await client.query(`UPDATE users SET totp_last_used_step = $1, totp_secret = COALESCE(totp_secret, $2), mfa_enabled = TRUE
+          WHERE id = $3 AND (totp_last_used_step IS NULL OR totp_last_used_step < $1)`, [step, secret, user.id]);
+        user.mfa_enabled = true;
       }
       await client.query('COMMIT');
     } catch (error) {
@@ -370,6 +390,58 @@ export async function mfaConfirmHandler(req: any, res: any) {
   } catch (error) {
     console.error('[Auth MFA confirm failure]', error);
     return errorResponse(res, 500, 'Unable to complete MFA verification.');
+  }
+}
+
+export async function mfaToggleHandler(req: any, res: any) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  try {
+    signingSecret();
+    const authedUser = await getAuthenticatedUser(req);
+    const body = await readBody(req);
+    if (!body || typeof body.mfaEnabled !== 'boolean') {
+      return errorResponse(res, 400, 'mfaEnabled (boolean) is required.');
+    }
+
+    const pool = getPool();
+    await initialize(pool);
+
+    const targetId = body.userId || authedUser?.id;
+    const targetUsername = body.username ? String(body.username).trim().toLowerCase() : (authedUser?.username?.toLowerCase() || '');
+
+    if (authedUser && !isPresidentRole(authedUser.role) && authedUser.id !== targetId && authedUser.username.toLowerCase() !== targetUsername) {
+      return errorResponse(res, 403, 'Only the President may manage 2FA for this account.');
+    }
+
+    const mfaEnabled = Boolean(body.mfaEnabled);
+    const secret = body.totpSecret || encodeBase32(randomBytes(20));
+
+    const result = await pool.query(
+      `UPDATE users
+       SET mfa_enabled = $1, totp_secret = CASE WHEN $1 THEN COALESCE(totp_secret, $2) ELSE totp_secret END
+       WHERE id = $3 OR lower(username) = lower($4)
+       RETURNING id, username, mfa_enabled, totp_secret`,
+      [mfaEnabled, secret, targetId, targetUsername]
+    );
+
+    if (result.rowCount === 0 && authedUser && isPresidentRole(authedUser.role)) {
+      await pool.query(
+        `UPDATE users
+         SET mfa_enabled = $1, totp_secret = CASE WHEN $1 THEN COALESCE(totp_secret, $2) ELSE totp_secret END
+         WHERE lower(replace(role, ' ', '_')) = 'president'`,
+        [mfaEnabled, secret]
+      );
+    }
+
+    return sendResponse(res, 200, {
+      success: true,
+      mfaEnabled,
+      totpSecret: secret,
+      message: mfaEnabled ? '2FA requirement has been enabled.' : '2FA requirement has been disabled.'
+    });
+  } catch (error: any) {
+    console.error('[Auth MFA toggle failure]', error);
+    return errorResponse(res, 500, 'Unable to update 2FA configuration.');
   }
 }
 

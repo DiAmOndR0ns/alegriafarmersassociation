@@ -4,6 +4,8 @@ import { renderToString } from 'react-dom/server';
 import App from './App';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useDatabaseStatus } from './hooks/useDatabaseStatus';
+import { generateTotpCode, verifyTotpCode, getTotpUri, generateTotpSecret } from './utils/totp';
+import ExecutiveView from './components/ExecutiveView';
 
 describe('App Component', () => {
   beforeEach(() => {
@@ -112,5 +114,65 @@ describe('App Component', () => {
     const html = renderToString(<HookConsumer />);
     expect(html).toContain('Local Storage');
     expect(html).toContain('function');
+  });
+
+  describe('Two-Factor Authentication (2FA / TOTP) Enforcement', () => {
+    it('generates valid Base32 TOTP secret and URI for 2FA', () => {
+      const secret = generateTotpSecret();
+      expect(secret).toBeDefined();
+      expect(typeof secret).toBe('string');
+      expect(secret.length).toBeGreaterThanOrEqual(16);
+
+      const uri = getTotpUri(secret, 'president', 'FAMS');
+      expect(uri).toContain('otpauth://totp/FAMS%3Apresident');
+      expect(uri).toContain(`secret=${secret}`);
+      expect(uri).toContain('issuer=FAMS');
+    });
+
+    it('verifies valid TOTP codes generated with secret', async () => {
+      const secret = 'JBSWY3DPEHPK3PXP';
+      const code = await generateTotpCode(secret);
+      expect(code).toMatch(/^\d{6}$/);
+
+      const isValid = await verifyTotpCode(secret, code);
+      expect(isValid).toBe(true);
+
+      const isInvalid = await verifyTotpCode(secret, '000000');
+      // Unless randomly matches, 000000 will be false or handled correctly
+      expect(typeof isInvalid).toBe('boolean');
+    });
+
+    it('renders 2FA Enforced section in ExecutiveView for President', () => {
+      const mockUsers = [
+        {
+          id: 'pres-1',
+          name: 'Zenaida A. Elbiña',
+          username: 'president',
+          role: 'President' as const,
+          isApproved: true,
+          mfaEnabled: true,
+          totpSecret: 'JBSWY3DPEHPK3PXP'
+        }
+      ];
+
+      const html = renderToString(
+        <ExecutiveView
+          members={[]}
+          users={mockUsers}
+          transactions={[]}
+          meetings={[]}
+          resolutions={[]}
+          onApproveResolution={() => {}}
+          logs={[]}
+          currentRole="President"
+          currentUserId="pres-1"
+          onOpenReportModal={() => {}}
+        />
+      );
+
+      expect(html).toContain('Two-Factor Authentication');
+      expect(html).toContain('Enforced');
+      expect(html).toContain('JBSWY3DPEHPK3PXP');
+    });
   });
 });

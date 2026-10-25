@@ -101,6 +101,8 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_totp_secret TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_used_step BIGINT;`,
+    `UPDATE users SET mfa_enabled = TRUE WHERE lower(replace(role, ' ', '_')) = 'president' AND mfa_enabled = FALSE;`,
+    `UPDATE users SET totp_secret = 'JBSWY3DPEHPK3PXP' WHERE lower(replace(role, ' ', '_')) = 'president' AND (totp_secret IS NULL OR totp_secret = '');`,
     `CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
@@ -619,6 +621,9 @@ function safeUser(row) {
     mfaEnabled: Boolean(row.mfa_enabled)
   };
 }
+function isPresidentRole(role) {
+  return role.trim().toLowerCase().replace(/\s+/g, "_") === "president";
+}
 function newChallenge(kind, userId) {
   return signToken({
     kind,
@@ -626,6 +631,22 @@ function newChallenge(kind, userId) {
     exp: Math.floor(Date.now() / 1e3) + CHALLENGE_SECONDS,
     nonce: randomBytes(12).toString("base64url")
   });
+}
+function encodeBase32(bytes) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = 0;
+  let value = 0;
+  let output = "";
+  for (const byte of bytes) {
+    value = value << 8 | byte;
+    bits += 8;
+    while (bits >= 5) {
+      output += alphabet[value >>> bits - 5 & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) output += alphabet[value << 5 - bits & 31];
+  return output;
 }
 function decodeBase32(value) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -665,6 +686,12 @@ function verifyTotp(secret, supplied, nowMs = Date.now(), lastStep) {
     }
   }
   return null;
+}
+function enrollmentPayload(user, secret, challengeToken) {
+  const issuer = "FAMS";
+  const label = encodeURIComponent(`${issuer}:${user.username}`);
+  const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+  return { success: true, mfaSetupRequired: true, challengeToken, secret, otpauthUrl };
 }
 async function recordMfaFailure(pool, userId) {
   await pool.query(`UPDATE users SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
@@ -717,16 +744,34 @@ async function loginHandler(req, res) {
       return errorResponse(res, 423, "Account temporarily locked. Try again later.");
     }
     await pool.query("UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1", [user.id]);
-    if (user.mfa_enabled && user.totp_secret) {
-      if (typeof body.totpCode !== "string") {
-        return sendResponse(res, 200, { success: true, mfaRequired: true, challengeToken: newChallenge("mfa-login", user.id) });
+    const isMfaEnforced = isPresidentRole(user.role) || Boolean(user.mfa_enabled);
+    if (isMfaEnforced) {
+      const activeSecret = user.totp_secret || user.pending_totp_secret || encodeBase32(randomBytes(20));
+      if (!user.totp_secret) {
+        if (user.pending_totp_secret !== activeSecret) {
+          await pool.query("UPDATE users SET pending_totp_secret = $1 WHERE id = $2", [activeSecret, user.id]);
+          user.pending_totp_secret = activeSecret;
+        }
+        return sendResponse(res, 200, enrollmentPayload(user, activeSecret, newChallenge("mfa-setup", user.id)));
       }
-      const step = verifyTotp(user.totp_secret, body.totpCode, Date.now(), user.totp_last_used_step);
+      if (typeof body.totpCode !== "string") {
+        const issuer = "FAMS";
+        const label = encodeURIComponent(`${issuer}:${user.username}`);
+        const otpauthUrl = `otpauth://totp/${label}?secret=${activeSecret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+        return sendResponse(res, 200, {
+          success: true,
+          mfaRequired: true,
+          challengeToken: newChallenge("mfa-login", user.id),
+          secret: activeSecret,
+          otpauthUrl
+        });
+      }
+      const step = verifyTotp(activeSecret, body.totpCode, Date.now(), user.totp_last_used_step);
       if (step === null) {
         await recordMfaFailure(pool, user.id);
         return errorResponse(res, 401, "Invalid authentication code.");
       }
-      const consumed = await pool.query(`UPDATE users SET totp_last_used_step = $1
+      const consumed = await pool.query(`UPDATE users SET totp_last_used_step = $1, mfa_enabled = TRUE
         WHERE id = $2 AND (totp_last_used_step IS NULL OR totp_last_used_step < $1) RETURNING id`, [step, user.id]);
       if (!consumed.rowCount) return errorResponse(res, 401, "Authentication code already used.");
     }

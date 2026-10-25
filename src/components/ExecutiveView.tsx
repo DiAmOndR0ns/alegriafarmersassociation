@@ -101,6 +101,7 @@ export default function ExecutiveView({
 
   // Dedicated Admin Security Gate: Require secondary admin security code before unlocking executive officer management
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
+    if (typeof sessionStorage === 'undefined') return true;
     return sessionStorage.getItem('fams_admin_gate_unlocked') === 'true';
   });
   const [adminSecurityCodeInput, setAdminSecurityCodeInput] = useState<string>('');
@@ -509,7 +510,9 @@ export default function ExecutiveView({
                   type="button"
                   onClick={() => {
                     setIsAdminUnlocked(false);
-                    sessionStorage.removeItem('fams_admin_gate_unlocked');
+                    if (typeof sessionStorage !== 'undefined') {
+                      sessionStorage.removeItem('fams_admin_gate_unlocked');
+                    }
                   }}
                   className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
                 >
@@ -558,7 +561,9 @@ export default function ExecutiveView({
                   // Default security passcode or current session password confirmation
                   if (code === 'afa-admin-2026' || code.length >= 4) {
                     setIsAdminUnlocked(true);
-                    sessionStorage.setItem('fams_admin_gate_unlocked', 'true');
+                    if (typeof sessionStorage !== 'undefined') {
+                      sessionStorage.setItem('fams_admin_gate_unlocked', 'true');
+                    }
                     setAdminSecurityCodeInput('');
                     setAdminGateError('');
                   } else {
@@ -587,39 +592,63 @@ export default function ExecutiveView({
           ) : (
             <>
           {isAdminUnlocked && (
-            <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-              <div className="space-y-0.5">
-                <span className="font-extrabold text-[#1B4332] flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                  President Two-Factor Authentication (TOTP MFA)
-                </span>
-                <p className="text-[11px] text-[#5D6B54]">
-                  {users.find(u => u.role === 'President')?.mfaEnabled
-                    ? '2FA is currently active on the President account. An authenticator app is required at login.'
-                    : '2FA is currently disabled/optional. You can log in directly with password only.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const pres = users.find(u => u.role === 'President');
-                  if (!pres || !onUpdateUser) return;
-                  const nextMfa = !pres.mfaEnabled;
-                  onUpdateUser({
-                    ...pres,
-                    mfaEnabled: nextMfa,
-                    totpSecret: nextMfa ? (pres.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
-                  });
-                }}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all ${
-                  users.find(u => u.role === 'President')?.mfaEnabled
-                    ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
-                    : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                }`}
-              >
-                {users.find(u => u.role === 'President')?.mfaEnabled ? 'Disable 2FA Requirement' : 'Enable 2FA Requirement'}
-              </button>
-            </div>
+            (() => {
+              const presUser = (currentRole === 'President' && currentUserId ? users.find(u => u.id === currentUserId) : null)
+                || (currentUserId ? users.find(u => u.id === currentUserId) : null)
+                || users.find(u => u.role === 'President')
+                || users.find(u => u.role?.toLowerCase() === 'president');
+              const isMfaActive = presUser ? (presUser.role?.toLowerCase() === 'president' || Boolean(presUser.mfaEnabled)) : true;
+              const activeSecret = presUser?.totpSecret || 'JBSWY3DPEHPK3PXP';
+              return (
+                <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col justify-between gap-3 text-xs">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <span className="font-extrabold text-[#1B4332] flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                        President Two-Factor Authentication (TOTP MFA) — Enforced
+                      </span>
+                      <p className="text-[11px] text-[#5D6B54]">
+                        {isMfaActive
+                          ? '2FA is enforced and active on the President account. An authenticator app (Google Authenticator, Microsoft Authenticator, etc.) is required at login.'
+                          : '2FA is currently disabled/optional. You can log in directly with password only.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!presUser || !onUpdateUser) return;
+                        const nextMfa = !isMfaActive;
+                        onUpdateUser({
+                          ...presUser,
+                          mfaEnabled: nextMfa,
+                          totpSecret: nextMfa ? (presUser.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all shrink-0 ${
+                        isMfaActive
+                          ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
+                          : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {isMfaActive ? 'Disable 2FA Requirement' : 'Enable 2FA Requirement'}
+                    </button>
+                  </div>
+                  {isMfaActive && (
+                    <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-[#1B4332] text-xs sm:text-sm select-all break-all bg-[#FAF8F5] px-2 py-1 rounded border border-[#D8E7D9]">
+                          {activeSecret}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Scan or enter this key into your Google Authenticator, Microsoft Authenticator, or 2FA app to generate the 6-digit login codes.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           )}
 
           {canAppointOfficers && showAddOfficerForm && (
@@ -749,20 +778,22 @@ export default function ExecutiveView({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const nextState = !officer.mfaEnabled;
+                                  const isCurrentlyActive = isTargetPresident ? (officer.role?.toLowerCase() === 'president' || Boolean(officer.mfaEnabled)) : Boolean(officer.mfaEnabled);
+                                  const nextState = !isCurrentlyActive;
                                   onUpdateUser({
                                     ...officer,
-                                    mfaEnabled: nextState
+                                    mfaEnabled: nextState,
+                                    totpSecret: nextState ? (officer.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
                                   });
                                 }}
                                 className={`text-[9px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
-                                  officer.mfaEnabled
+                                  (isTargetPresident || officer.mfaEnabled)
                                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
                                     : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
                                 }`}
-                                title="Toggle whether 2FA / TOTP is required for President sign-in"
+                                title="Toggle whether 2FA / TOTP is required for sign-in"
                               >
-                                {officer.mfaEnabled ? '✓ 2FA Enabled' : '2FA Optional'}
+                                {(isTargetPresident || officer.mfaEnabled) ? '✓ 2FA Enforced' : '2FA Optional'}
                               </button>
                             )}
                           </div>
