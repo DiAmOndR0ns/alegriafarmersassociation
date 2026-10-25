@@ -3157,17 +3157,7 @@ export default function App() {
                     updateStorage('bafa_current_user', nextCurrent);
                   }
                   if (isOnline) {
-                    void fetch('/api/auth/mfa/toggle', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        userId: updatedUser.id,
-                        username: updatedUser.username,
-                        mfaEnabled: updatedUser.mfaEnabled,
-                        totpSecret: updatedUser.totpSecret
-                      })
-                    }).catch(() => undefined);
-                    pushAllDataToCloud({ users: updated }, { silent: true, source: '2FA Updated' });
+                    pushAllDataToCloud({ users: updated }, { silent: true, source: 'User Updated' });
                   } else {
                     addToSyncQueue('update', 'user', updatedUser);
                   }

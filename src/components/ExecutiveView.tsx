@@ -597,7 +597,6 @@ export default function ExecutiveView({
                 || (currentUserId ? users.find(u => u.id === currentUserId) : null)
                 || users.find(u => u.role === 'President')
                 || users.find(u => u.role?.toLowerCase() === 'president');
-              const isMfaActive = presUser ? (presUser.role?.toLowerCase() === 'president' || Boolean(presUser.mfaEnabled)) : true;
               const activeSecret = presUser?.totpSecret || 'JBSWY3DPEHPK3PXP';
               return (
                 <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col justify-between gap-3 text-xs">
@@ -608,44 +607,24 @@ export default function ExecutiveView({
                         President Two-Factor Authentication (TOTP MFA) — Enforced
                       </span>
                       <p className="text-[11px] text-[#5D6B54]">
-                        {isMfaActive
-                          ? '2FA is enforced and active on the President account. An authenticator app (Google Authenticator, Microsoft Authenticator, etc.) is required at login.'
-                          : '2FA is currently disabled/optional. You can log in directly with password only.'}
+                        2FA is permanently enforced on the President account. An authenticator app (Google Authenticator, Microsoft Authenticator, etc.) is required at every login.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!presUser || !onUpdateUser) return;
-                        const nextMfa = !isMfaActive;
-                        onUpdateUser({
-                          ...presUser,
-                          mfaEnabled: nextMfa,
-                          totpSecret: nextMfa ? (presUser.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
-                        });
-                      }}
-                      className={`px-3 py-1.5 rounded-xl font-bold text-xs cursor-pointer border transition-all shrink-0 ${
-                        isMfaActive
-                          ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
-                          : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                      }`}
-                    >
-                      {isMfaActive ? 'Disable 2FA Requirement' : 'Enable 2FA Requirement'}
-                    </button>
+                    <span className="px-3 py-1.5 rounded-xl font-bold text-xs border border-emerald-300 bg-emerald-50 text-emerald-800 shrink-0">
+                      ✓ Enforced &amp; Active
+                    </span>
                   </div>
-                  {isMfaActive && (
-                    <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-black text-[#1B4332] text-xs sm:text-sm select-all break-all bg-[#FAF8F5] px-2 py-1 rounded border border-[#D8E7D9]">
-                          {activeSecret}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">
-                        Scan or enter this key into your Google Authenticator, Microsoft Authenticator, or 2FA app to generate the 6-digit login codes.
-                      </p>
+                  <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-black text-[#1B4332] text-xs sm:text-sm select-all break-all bg-[#FAF8F5] px-2 py-1 rounded border border-[#D8E7D9]">
+                        {activeSecret}
+                      </span>
                     </div>
-                  )}
+                    <p className="text-[10px] text-slate-500">
+                      Scan or enter this key into your Google Authenticator, Microsoft Authenticator, or 2FA app to generate the 6-digit login codes.
+                    </p>
+                  </div>
                 </div>
               );
             })()
@@ -774,28 +753,9 @@ export default function ExecutiveView({
                             <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
                               Chief Executive
                             </span>
-                            {onUpdateUser && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const isCurrentlyActive = isTargetPresident ? (officer.role?.toLowerCase() === 'president' || Boolean(officer.mfaEnabled)) : Boolean(officer.mfaEnabled);
-                                  const nextState = !isCurrentlyActive;
-                                  onUpdateUser({
-                                    ...officer,
-                                    mfaEnabled: nextState,
-                                    totpSecret: nextState ? (officer.totpSecret || 'JBSWY3DPEHPK3PXP') : undefined
-                                  });
-                                }}
-                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
-                                  (isTargetPresident || officer.mfaEnabled)
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                                    : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
-                                }`}
-                                title="Toggle whether 2FA / TOTP is required for sign-in"
-                              >
-                                {(isTargetPresident || officer.mfaEnabled) ? '✓ 2FA Enforced' : '2FA Optional'}
-                              </button>
-                            )}
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-300" title="2FA is required for President sign-in">
+                              ✓ 2FA Enforced
+                            </span>
                           </div>
                         )}
                       </div>

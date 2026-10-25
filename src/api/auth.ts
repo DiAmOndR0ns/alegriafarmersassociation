@@ -393,58 +393,6 @@ export async function mfaConfirmHandler(req: any, res: any) {
   }
 }
 
-export async function mfaToggleHandler(req: any, res: any) {
-  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
-  try {
-    signingSecret();
-    const authedUser = await getAuthenticatedUser(req);
-    const body = await readBody(req);
-    if (!body || typeof body.mfaEnabled !== 'boolean') {
-      return errorResponse(res, 400, 'mfaEnabled (boolean) is required.');
-    }
-
-    const pool = getPool();
-    await initialize(pool);
-
-    const targetId = body.userId || authedUser?.id;
-    const targetUsername = body.username ? String(body.username).trim().toLowerCase() : (authedUser?.username?.toLowerCase() || '');
-
-    if (authedUser && !isPresidentRole(authedUser.role) && authedUser.id !== targetId && authedUser.username.toLowerCase() !== targetUsername) {
-      return errorResponse(res, 403, 'Only the President may manage 2FA for this account.');
-    }
-
-    const mfaEnabled = Boolean(body.mfaEnabled);
-    const secret = body.totpSecret || encodeBase32(randomBytes(20));
-
-    const result = await pool.query(
-      `UPDATE users
-       SET mfa_enabled = $1, totp_secret = CASE WHEN $1 THEN COALESCE(totp_secret, $2) ELSE totp_secret END
-       WHERE id = $3 OR lower(username) = lower($4)
-       RETURNING id, username, mfa_enabled, totp_secret`,
-      [mfaEnabled, secret, targetId, targetUsername]
-    );
-
-    if (result.rowCount === 0 && authedUser && isPresidentRole(authedUser.role)) {
-      await pool.query(
-        `UPDATE users
-         SET mfa_enabled = $1, totp_secret = CASE WHEN $1 THEN COALESCE(totp_secret, $2) ELSE totp_secret END
-         WHERE lower(replace(role, ' ', '_')) = 'president'`,
-        [mfaEnabled, secret]
-      );
-    }
-
-    return sendResponse(res, 200, {
-      success: true,
-      mfaEnabled,
-      totpSecret: secret,
-      message: mfaEnabled ? '2FA requirement has been enabled.' : '2FA requirement has been disabled.'
-    });
-  } catch (error: any) {
-    console.error('[Auth MFA toggle failure]', error);
-    return errorResponse(res, 500, 'Unable to update 2FA configuration.');
-  }
-}
-
 export async function bootstrapHandler(req: any, res: any) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
   const bootstrapSecret = process.env.FAMS_BOOTSTRAP_SECRET || process.env.BOOTSTRAP_SECRET || '';

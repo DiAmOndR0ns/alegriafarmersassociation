@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/sync/delete",
+      "destination": "/api/db/delete"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
