@@ -209,6 +209,12 @@ export default function ExecutiveView({
   const activeMembers = members.filter(m => m.status === 'Active').length;
   const pendingResolutions = resolutions.filter(r => r.status === 'Pending Approval');
 
+  const activeOfficerUser = (currentUserId ? users.find(u => u.id === currentUserId) : null)
+    || (currentRole === 'President' ? users.find(u => u.role === 'President' || u.role?.toLowerCase() === 'president') : null)
+    || (currentRole === 'Vice_President' ? users.find(u => u.role === 'Vice_President' || u.role?.toLowerCase() === 'vice_president') : null);
+  const activeOfficerName = activeOfficerUser?.name
+    || (currentRole === 'President' ? 'President' : 'Vice President');
+
   // Digital Trail (Audit Logs) Year Ending and Filtering
   const [selectedLogYear, setSelectedLogYear] = useState<string>('All');
   const [closedLogYears, setClosedLogYears] = useState<number[]>([2024]);
@@ -335,7 +341,7 @@ export default function ExecutiveView({
               ACTIVE OFFICER
             </span>
             <span className="font-black text-xs sm:text-sm text-white break-words">
-              {currentRole === 'President' ? 'President (Zenaida)' : 'Vice President'}
+              {currentRole.replace('_', ' ')} ({activeOfficerName})
             </span>
           </div>
         </div>
