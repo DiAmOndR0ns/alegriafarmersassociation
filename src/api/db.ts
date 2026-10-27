@@ -138,7 +138,6 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_used_step BIGINT;`,
     `UPDATE users SET mfa_enabled = TRUE WHERE lower(replace(role, ' ', '_')) = 'president' AND mfa_enabled = FALSE;`,
-    `UPDATE users SET totp_secret = 'JBSWY3DPEHPK3PXP' WHERE lower(replace(role, ' ', '_')) = 'president' AND (totp_secret IS NULL OR totp_secret = '');`,
     `CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
@@ -816,8 +815,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       rsbsaNumber: r.rsbsa_number,
       isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
       resetRequested: Boolean(r.reset_requested),
-      mfaEnabled: Boolean(r.mfa_enabled),
-      totpSecret: r.totp_secret || undefined
+      mfaEnabled: Boolean(r.mfa_enabled)
     }));
 
     const meetings = meetingsRes.rows.map(r => ({
@@ -1136,8 +1134,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         const targetRole = existingRole && existingRole.toLowerCase() !== 'member' ? existingRole : (u.role || 'Member');
 
         await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled, totp_secret)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           ON CONFLICT (id) DO UPDATE SET
             username = EXCLUDED.username,
             password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
@@ -1153,16 +1151,14 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             member_id_number = EXCLUDED.member_id_number,
             rsbsa_number = EXCLUDED.rsbsa_number,
             is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
-            mfa_enabled = EXCLUDED.mfa_enabled,
-            totp_secret = EXCLUDED.totp_secret;
+            mfa_enabled = COALESCE(users.mfa_enabled, EXCLUDED.mfa_enabled);
         `, [
           targetId, cleanUsername, u.passwordHash || u.password || '', u.name, targetRole, Boolean(u.isApproved),
           u.joinedDate || null, u.farmLocation || null,
           u.primaryCrops || [], u.contactNumber || null, u.status || 'Active',
           u.avatarUrl || null, u.memberIdNumber || null, u.rsbsaNumber || null,
           Boolean(u.isRsbsaRegistered),
-          Boolean(u.mfaEnabled || (targetRole && targetRole.toLowerCase() === 'president')),
-          u.totpSecret || (u.mfaEnabled || (targetRole && targetRole.toLowerCase() === 'president') ? 'JBSWY3DPEHPK3PXP' : null)
+          Boolean(u.mfaEnabled || (targetRole && targetRole.toLowerCase() === 'president'))
         ]);
       }
       console.log('[DB DEBUG] Users saved');

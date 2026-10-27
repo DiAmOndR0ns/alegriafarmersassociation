@@ -151,7 +151,7 @@ describe('App Component', () => {
           role: 'President' as const,
           isApproved: true,
           mfaEnabled: true,
-          totpSecret: 'JBSWY3DPEHPK3PXP'
+          totpSecret: 'JBSWY3DPEHPK3PXPTESTFIXTURE'
         }
       ];
 
@@ -172,7 +172,7 @@ describe('App Component', () => {
 
       expect(html).toContain('Two-Factor Authentication');
       expect(html).toContain('Enforced');
-      expect(html).toContain('JBSWY3DPEHPK3PXP');
+      expect(html).toContain('JBSWY3DPEHPK3PXPTESTFIXTURE');
     });
   });
 });

@@ -189,7 +189,6 @@ export default function App() {
           const isPresident = copy.role?.toLowerCase() === 'president';
           if (isPresident) {
             copy.mfaEnabled = true;
-            copy.totpSecret = copy.totpSecret || 'JBSWY3DPEHPK3PXP';
           }
           const hadLegacyPlaintext = Boolean(copy.password);
           if (copy.password) {
@@ -219,7 +218,6 @@ export default function App() {
         delete safeUser.passwordHistory;
         if (safeUser.role?.toLowerCase() === 'president') {
           safeUser.mfaEnabled = true;
-          safeUser.totpSecret = safeUser.totpSecret || 'JBSWY3DPEHPK3PXP';
         }
         setCurrentUser(safeUser);
         if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
@@ -321,7 +319,6 @@ export default function App() {
                   const upgraded = {
                     ...user,
                     mfaEnabled: isPresident ? true : Boolean(user.mfaEnabled),
-                    totpSecret: user.totpSecret || (isPresident ? 'JBSWY3DPEHPK3PXP' : undefined),
                     passwordHistory: Array.isArray(user.passwordHistory) ? user.passwordHistory : []
                   };
                   if (upgraded.password) {
@@ -2032,8 +2029,7 @@ export default function App() {
       isApproved: isInitialAdminBootstrap,
       joinedDate: new Date().toISOString().split('T')[0],
       status: 'Active',
-      mfaEnabled: isInitialAdminBootstrap ? true : Boolean(copy.mfaEnabled),
-      totpSecret: copy.totpSecret || (isInitialAdminBootstrap ? 'JBSWY3DPEHPK3PXP' : undefined)
+      mfaEnabled: isInitialAdminBootstrap ? true : Boolean(copy.mfaEnabled)
     };
     const updated = [newUser, ...users];
     setUsers(updated);

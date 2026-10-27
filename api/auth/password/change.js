@@ -102,7 +102,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_used_step BIGINT;`,
     `UPDATE users SET mfa_enabled = TRUE WHERE lower(replace(role, ' ', '_')) = 'president' AND mfa_enabled = FALSE;`,
-    `UPDATE users SET totp_secret = 'JBSWY3DPEHPK3PXP' WHERE lower(replace(role, ' ', '_')) = 'president' AND (totp_secret IS NULL OR totp_secret = '');`,
+    
     `CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
@@ -751,7 +751,10 @@ var CHALLENGE_SECONDS = 15 * 60;
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
-    const seed = process.env.DATABASE_URL || "afa-farmers-association-session-secret-seed-key-tuburan-cebu";
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SESSION_SECRET must be configured with at least 32 characters.");
+    }
+    const seed = "afa-farmers-association-development-secret-key-tuburan-cebu";
     return createHash("sha256").update(seed).digest();
   }
   return Buffer.from(value, "utf8");

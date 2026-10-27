@@ -212,10 +212,15 @@ export default function AuthScreen({
     // If 2FA requirement is active on this account or role is President, enforce authenticator code
     const isMfaEnforced = matchedUser.role?.toLowerCase() === 'president' || Boolean(matchedUser.mfaEnabled);
     if (isMfaEnforced) {
-      const activeSecret = matchedUser.totpSecret || 'JBSWY3DPEHPK3PXP';
+      const activeSecret = matchedUser.totpSecret;
+      if (!activeSecret) {
+        // Never fall back to a shared default secret: that would make MFA bypassable.
+        toast('Two-factor authentication is enforced for this account, but no authenticator has been enrolled yet. Connect to the internet once to complete 2FA setup.', 'error');
+        return;
+      }
       setAuthChallenge({
         token: `offline-${matchedUser.id}`,
-        setup: !matchedUser.totpSecret,
+        setup: false,
         secret: activeSecret,
         otpauthUrl: getTotpUri(activeSecret, matchedUser.username, 'FAMS')
       });
@@ -236,7 +241,7 @@ export default function AuthScreen({
       return;
     }
     if (authChallenge.token.startsWith('offline-') && pendingOfflineUser) {
-      const secret = authChallenge.secret || pendingOfflineUser.totpSecret || 'JBSWY3DPEHPK3PXP';
+      const secret = authChallenge.secret || pendingOfflineUser.totpSecret;
       const isValid = await verifyTotpCode(secret, mfaCode);
       if (!isValid) {
         toast('Invalid 6-digit authenticator code. Check your authenticator app and try again.', 'error');

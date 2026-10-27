@@ -98,7 +98,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_used_step BIGINT;`,
     `UPDATE users SET mfa_enabled = TRUE WHERE lower(replace(role, ' ', '_')) = 'president' AND mfa_enabled = FALSE;`,
-    `UPDATE users SET totp_secret = 'JBSWY3DPEHPK3PXP' WHERE lower(replace(role, ' ', '_')) = 'president' AND (totp_secret IS NULL OR totp_secret = '');`,
+    
     `CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
@@ -672,8 +672,8 @@ async function saveFullStateToPostgres(pool, state) {
         const existingRole = existingRow.rows[0]?.role;
         const targetRole = existingRole && existingRole.toLowerCase() !== "member" ? existingRole : u.role || "Member";
         await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled, totp_secret)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           ON CONFLICT (id) DO UPDATE SET
             username = EXCLUDED.username,
             password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
@@ -689,8 +689,7 @@ async function saveFullStateToPostgres(pool, state) {
             member_id_number = EXCLUDED.member_id_number,
             rsbsa_number = EXCLUDED.rsbsa_number,
             is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
-            mfa_enabled = EXCLUDED.mfa_enabled,
-            totp_secret = EXCLUDED.totp_secret;
+            mfa_enabled = COALESCE(users.mfa_enabled, EXCLUDED.mfa_enabled);
         `, [
           targetId,
           cleanUsername,
@@ -707,8 +706,7 @@ async function saveFullStateToPostgres(pool, state) {
           u.memberIdNumber || null,
           u.rsbsaNumber || null,
           Boolean(u.isRsbsaRegistered),
-          Boolean(u.mfaEnabled || targetRole && targetRole.toLowerCase() === "president"),
-          u.totpSecret || (u.mfaEnabled || targetRole && targetRole.toLowerCase() === "president" ? "JBSWY3DPEHPK3PXP" : null)
+          Boolean(u.mfaEnabled || targetRole && targetRole.toLowerCase() === "president")
         ]);
       }
       console.log("[DB DEBUG] Users saved");
@@ -1422,7 +1420,10 @@ var CHALLENGE_SECONDS = 15 * 60;
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
-    const seed = process.env.DATABASE_URL || "afa-farmers-association-session-secret-seed-key-tuburan-cebu";
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SESSION_SECRET must be configured with at least 32 characters.");
+    }
+    const seed = "afa-farmers-association-development-secret-key-tuburan-cebu";
     return createHash("sha256").update(seed).digest();
   }
   return Buffer.from(value, "utf8");

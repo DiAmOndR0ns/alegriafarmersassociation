@@ -66,6 +66,13 @@ const isSwineProject = (p: string) => /swine|hog|baboy/i.test(p);
 const isCattleProject = (p: string) => /cattle|baka/i.test(p);
 const isPoultryProject = (p: string) => /poultry|rtl|manok|chicken/i.test(p);
 
+const getProjectDisplayTitle = (p: string) => {
+  if (isSwineProject(p)) return 'Swine / Baboy';
+  if (isCattleProject(p)) return 'Cattle / Baka';
+  if (isPoultryProject(p)) return 'Poultry / Manok';
+  return p.replace(/[\p{Extended_Pictographic}\u2600-\u27BF]/gu, '').trim() || p;
+};
+
 const getExpenseCategories = (produce: string): string[] => {
   if (isSwineProject(produce)) return ['Feeds', 'Piglets / Stock', 'Breeding / AI Service', 'Vitamins & Medicines', 'Pen Care & Utilities', 'Other'];
   if (isCattleProject(produce)) return ['Feed Supplements / Silage', 'Calves / Cattle Stock', 'Veterinary Care & Vaccines', 'Pasture & Fencing', 'Other'];
@@ -191,49 +198,6 @@ export default function LivestockMonitor({
 
   // Poultry stage counts
   const currentRtl = Math.max(0, baseRtl + dRtl);
-
-  // Edit Headcounts Modal
-  const [showEditHeadcounts, setShowEditHeadcounts] = useState(false);
-  const [headcountInputs, setHeadcountInputs] = useState({
-    swineFattening: '44',
-    swineBreeding: '3',
-    swineDispersal: '4',
-    swineLactating: '0',
-    cattleFattening: '20',
-    cattleDispersal: '2',
-    rtlCount: '250',
-  });
-
-  const openHeadcountModal = () => {
-    setHeadcountInputs({
-      swineFattening: String(currentSwineFattening),
-      swineBreeding: String(currentSwineBreeding),
-      swineDispersal: String(currentSwineDispersal),
-      swineLactating: String(currentSwineLactating),
-      cattleFattening: String(currentCattleFattening),
-      cattleDispersal: String(currentCattleDispersal),
-      rtlCount: String(currentRtl),
-    });
-    setShowEditHeadcounts(true);
-  };
-
-  const saveHeadcounts = (e: React.FormEvent) => {
-    e.preventDefault();
-    // The typed numbers are the true counts today. Store each baseline as typed minus the ledger delta,
-    // so baseline + delta equals exactly what the officer typed (no double counting on later saves).
-    const updatedBreakdown: HogHerdBreakdown = {
-      fattening: toInt(headcountInputs.swineFattening) - dSwineFattening,
-      gestation: toInt(headcountInputs.swineBreeding) - dSwineBreeding,
-      lactating: toInt(headcountInputs.swineLactating) - dSwineLactating,
-      dispersal: toInt(headcountInputs.swineDispersal) - dSwineDispersal,
-      cattleFattening: toInt(headcountInputs.cattleFattening) - dCattleFattening,
-      cattleDispersal: toInt(headcountInputs.cattleDispersal) - dCattleDispersal,
-      rtlCount: toInt(headcountInputs.rtlCount) - dRtl,
-    };
-    const totalSwineCount = updatedBreakdown.fattening + updatedBreakdown.gestation + updatedBreakdown.lactating + (updatedBreakdown.dispersal || 0);
-    onUpdateOpeningHogCount?.(totalSwineCount, updatedBreakdown);
-    setShowEditHeadcounts(false);
-  };
 
   // ---------- Finance Totals ----------
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -487,123 +451,124 @@ export default function LivestockMonitor({
           {isTreasurerOrOfficer && (
             <button
               type="button"
-              onClick={openHeadcountModal}
+              onClick={() => setShowAddProject(true)}
               className="min-h-11 px-4 py-2.5 rounded-xl bg-white text-[#1B4332] hover:bg-emerald-50 text-sm font-bold shadow-md transition-all cursor-pointer flex items-center gap-2 shrink-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
             >
-              <Pencil className="w-4 h-4 text-emerald-700" />
-              <span>Update Livestock Headcounts</span>
+              <Plus className="w-4 h-4 text-emerald-700" />
+              <span>Add New IGP</span>
             </button>
           )}
         </div>
 
-        {/* The 3 Animal Portfolios of the Association */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        {/* All Association IGP Portfolios (Automatically renders a card for each active or added IGP) */}
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${
+          produces.length <= 2
+            ? 'lg:grid-cols-2'
+            : produces.length === 3
+            ? 'lg:grid-cols-3'
+            : 'lg:grid-cols-3 xl:grid-cols-4'
+        } gap-3.5`}>
+          {produces.map((p) => {
+            const isSelected = selected === p;
+            const isSwine = isSwineProject(p);
+            const isCattle = isCattleProject(p);
+            const isPoultry = isPoultryProject(p);
 
-          {/* SWINE PORTFOLIO */}
-          <button
-            type="button"
-            aria-pressed={isSwine}
-            onClick={() => setSelected('Swine Raising (Baboyan)')}
-            className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/70 ${
-              isSwine
-                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
-                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className={`min-w-0 text-sm font-black uppercase tracking-wider leading-snug break-words ${isSwine ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
-                🐖 Swine / Baboy
-              </span>
-              <span className={`text-xs font-mono font-bold px-2 py-1 rounded-full shrink-0 ${isSwine ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
-                {totalSwine} Head
-              </span>
-            </div>
-            <div className="mt-3 space-y-1.5 text-xs">
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>Fattening</span>
-                <span className={`font-mono font-black ${isSwine ? 'text-[#1B4332]' : 'text-white'}`}>{currentSwineFattening}</span>
-              </div>
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>Breeding (Anay)</span>
-                <span className={`font-mono font-black ${isSwine ? 'text-[#1B4332]' : 'text-white'}`}>{currentSwineBreeding}</span>
-              </div>
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isSwine ? 'text-slate-600' : 'text-emerald-100'}>For Dispersal</span>
-                <span className={`font-mono font-black ${isSwine ? 'text-[#B26A00]' : 'text-amber-300'}`}>{currentSwineDispersal}</span>
-              </div>
-            </div>
-          </button>
+            // Project financial & ledger summary
+            const pExpenses = state.expenses.filter((e) => (e.produce || produces[0]) === p);
+            const pSales = state.sales.filter((s) => (s.produce || produces[0]) === p);
+            const pTotalExp = pExpenses.reduce((sum, e) => sum + e.amount, 0);
+            const pTotalRev = pSales.reduce((sum, s) => sum + s.revenue, 0);
+            const pNet = pTotalRev - pTotalExp;
+            const pUnits = pSales.reduce((sum, s) => sum + toInt(s.produceCount || s.hogsCount), 0);
 
-          {/* CATTLE PORTFOLIO */}
-          <button
-            type="button"
-            aria-pressed={isCattle}
-            onClick={() => setSelected('Cattle Raising (Bakahan)')}
-            className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/70 ${
-              isCattle
-                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
-                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className={`min-w-0 text-sm font-black uppercase tracking-wider leading-snug break-words ${isCattle ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
-                🐂 Cattle / Baka
-              </span>
-              <span className={`text-xs font-mono font-bold px-2 py-1 rounded-full shrink-0 ${isCattle ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
-                {totalCattle} Head
-              </span>
-            </div>
-            <div className="mt-3 space-y-1.5 text-xs">
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>Fattening</span>
-                <span className={`font-mono font-black ${isCattle ? 'text-[#1B4332]' : 'text-white'}`}>{currentCattleFattening}</span>
-              </div>
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>For Dispersal</span>
-                <span className={`font-mono font-black ${isCattle ? 'text-[#B26A00]' : 'text-amber-300'}`}>{currentCattleDispersal}</span>
-              </div>
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isCattle ? 'text-slate-600' : 'text-emerald-100'}>Status</span>
-                <span className={`font-mono font-black ${isCattle ? 'text-slate-500' : 'text-emerald-200/80'}`}>Active Livelihood</span>
-              </div>
-            </div>
-          </button>
+            // Clean title without any livestock emoji
+            const displayTitle = getProjectDisplayTitle(p);
 
-          {/* POULTRY / RTL PORTFOLIO */}
-          <button
-            type="button"
-            aria-pressed={isPoultry}
-            onClick={() => setSelected('Poultry Raising (RTL)')}
-            className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/70 ${
-              isPoultry
-                ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
-                : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className={`min-w-0 text-sm font-black uppercase tracking-wider leading-snug break-words ${isPoultry ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
-                🐔 Poultry / Manok
-              </span>
-              <span className={`text-xs font-mono font-bold px-2 py-1 rounded-full shrink-0 ${isPoultry ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
-                {currentRtl} Head
-              </span>
-            </div>
-            <div className="mt-3 space-y-1.5 text-xs">
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Ready-to-Lay (RTL)</span>
-                <span className={`font-mono font-black ${isPoultry ? 'text-[#1B4332]' : 'text-white'}`}>{currentRtl}</span>
-              </div>
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Egg Production</span>
-                <span className={`font-mono font-black ${isPoultry ? 'text-[#2D6A4F]' : 'text-emerald-300'}`}>Active</span>
-              </div>
-              <div className="flex justify-between items-center gap-2 font-bold">
-                <span className={isPoultry ? 'text-slate-600' : 'text-emerald-100'}>Coop Setup</span>
-                <span className={`font-mono font-black ${isPoultry ? 'text-slate-500' : 'text-emerald-200/80'}`}>Layer Cages</span>
-              </div>
-            </div>
-          </button>
+            // Badge pill at top right
+            let badgeText = 'Active IGP';
+            if (isSwine) badgeText = `${totalSwine} Head`;
+            else if (isCattle) badgeText = `${totalCattle} Head`;
+            else if (isPoultry) badgeText = `${currentRtl} Head`;
+            else if (pUnits > 0) badgeText = `${pUnits} ${isRental(p) ? 'Rented' : 'Units'}`;
+            else if (pTotalRev > 0) badgeText = peso(pTotalRev);
 
+            // 3 structured metric rows
+            type MetricRow = { label: string; value: string; highlight?: 'emerald' | 'amber' };
+            let row1: MetricRow = { label: 'Revenue', value: peso(pTotalRev) };
+            let row2: MetricRow = { label: 'Expenses', value: peso(pTotalExp) };
+            let row3: MetricRow = {
+              label: 'Net Balance',
+              value: peso(pNet),
+              highlight: pNet >= 0 ? 'emerald' : 'amber'
+            };
+
+            if (isSwine) {
+              row1 = { label: 'Fattening', value: String(currentSwineFattening) };
+              row2 = { label: 'Breeding (Anay)', value: String(currentSwineBreeding) };
+              row3 = { label: 'For Dispersal', value: String(currentSwineDispersal), highlight: 'amber' };
+            } else if (isCattle) {
+              row1 = { label: 'Fattening', value: String(currentCattleFattening) };
+              row2 = { label: 'For Dispersal', value: String(currentCattleDispersal), highlight: 'amber' };
+              row3 = { label: 'Status', value: 'Active Livelihood' };
+            } else if (isPoultry) {
+              row1 = { label: 'Ready-to-Lay (RTL)', value: String(currentRtl) };
+              row2 = { label: 'Egg Production', value: 'Active', highlight: 'emerald' };
+              row3 = { label: 'Coop Setup', value: 'Layer Cages' };
+            } else if (pUnits > 0) {
+              row1 = { label: isRental(p) ? 'Units Rented' : 'Units Sold', value: String(pUnits) };
+              row2 = { label: 'Gross Revenue', value: peso(pTotalRev) };
+              row3 = { label: 'Net Balance', value: peso(pNet), highlight: pNet >= 0 ? 'emerald' : 'amber' };
+            }
+
+            return (
+              <button
+                key={p}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => setSelected(p)}
+                className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/70 flex flex-col justify-between ${
+                  isSelected
+                    ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
+                    : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
+                }`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className={`min-w-0 text-sm font-black uppercase tracking-wider leading-snug break-words ${isSelected ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
+                      {displayTitle}
+                    </span>
+                    <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full shrink-0 ${isSelected ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
+                      {badgeText}
+                    </span>
+                  </div>
+
+                  <div className="mt-3.5 space-y-1.5 text-xs">
+                    <div className="flex justify-between items-center gap-2 font-bold">
+                      <span className={isSelected ? 'text-slate-600' : 'text-emerald-100/90'}>{row1.label}</span>
+                      <span className={`font-mono font-black ${isSelected ? 'text-[#1B4332]' : 'text-white'}`}>{row1.value}</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2 font-bold">
+                      <span className={isSelected ? 'text-slate-600' : 'text-emerald-100/90'}>{row2.label}</span>
+                      <span className={`font-mono font-black ${isSelected ? 'text-[#1B4332]' : 'text-white'}`}>{row2.value}</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2 font-bold">
+                      <span className={isSelected ? 'text-slate-600' : 'text-emerald-100/90'}>{row3.label}</span>
+                      <span className={`font-mono font-black ${
+                        row3.highlight === 'amber'
+                          ? (isSelected ? 'text-[#B26A00]' : 'text-amber-300')
+                          : row3.highlight === 'emerald'
+                          ? (isSelected ? 'text-[#2D6A4F]' : 'text-emerald-300')
+                          : (isSelected ? 'text-slate-500' : 'text-emerald-200/80')
+                      }`}>
+                        {row3.value}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -628,7 +593,7 @@ export default function LivestockMonitor({
                   : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF4EC]'
               }`}
             >
-              {p}
+              {getProjectDisplayTitle(p)}
             </button>
           ))}
         </div>
@@ -651,7 +616,7 @@ export default function LivestockMonitor({
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-black uppercase tracking-wider text-[#1B4332]">
-            {selected} — Active Status
+            {getProjectDisplayTitle(selected)} — Active Status
           </h3>
           {isTreasurerOrOfficer && onDeleteProduce && produces.length > 1 && (
             <button
@@ -950,104 +915,7 @@ export default function LivestockMonitor({
       </section>
 
       {/* ========================================================================= */}
-      {/* 5. MODAL: UPDATE LIVESTOCK HEADCOUNTS                                     */}
-      {/* ========================================================================= */}
-      {showEditHeadcounts && (
-        <Modal title="Update Livestock Headcounts" onClose={() => setShowEditHeadcounts(false)}>
-          <form onSubmit={saveHeadcounts} className="space-y-4 text-left">
-
-            {/* Swine Section */}
-            <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">
-              <h4 className="text-xs font-black uppercase text-[#1B4332] flex items-center gap-1.5">
-                <span>🐖 Swine Headcount (Baboy)</span>
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <div>
-                  <label className={labelCls}>Fattening</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={headcountInputs.swineFattening}
-                    onChange={(e) => setHeadcountInputs({ ...headcountInputs, swineFattening: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Breeding (Anay)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={headcountInputs.swineBreeding}
-                    onChange={(e) => setHeadcountInputs({ ...headcountInputs, swineBreeding: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Dispersal</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={headcountInputs.swineDispersal}
-                    onChange={(e) => setHeadcountInputs({ ...headcountInputs, swineDispersal: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Cattle Section */}
-            <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">
-              <h4 className="text-xs font-black uppercase text-[#1B4332] flex items-center gap-1.5">
-                <span>🐂 Cattle Headcount (Baka)</span>
-              </h4>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={labelCls}>Cattle Fattening</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={headcountInputs.cattleFattening}
-                    onChange={(e) => setHeadcountInputs({ ...headcountInputs, cattleFattening: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>For Dispersal</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={headcountInputs.cattleDispersal}
-                    onChange={(e) => setHeadcountInputs({ ...headcountInputs, cattleDispersal: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Poultry Section */}
-            <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">
-              <h4 className="text-xs font-black uppercase text-[#1B4332] flex items-center gap-1.5">
-                <span>🐔 Poultry Headcount (Ready-to-Lay)</span>
-              </h4>
-              <div>
-                <label className={labelCls}>Ready-to-Lay (RTL) Heads</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={headcountInputs.rtlCount}
-                  onChange={(e) => setHeadcountInputs({ ...headcountInputs, rtlCount: e.target.value })}
-                  className={inputCls}
-                />
-              </div>
-            </div>
-
-            <ModalActions onCancel={() => setShowEditHeadcounts(false)} submitLabel="Save Headcounts" />
-          </form>
-        </Modal>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 6. MODAL: ADD / EDIT EXPENSE                                              */}
+      {/* 5. MODAL: ADD / EDIT EXPENSE                                              */}
       {/* ========================================================================= */}
       {showExpenseModal && (
         <Modal

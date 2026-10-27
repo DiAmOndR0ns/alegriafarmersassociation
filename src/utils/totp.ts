@@ -48,11 +48,11 @@ export function decodeBase32(str: string): Uint8Array {
 export function generateTotpSecret(): string {
   const bytes = new Uint8Array(20);
   const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
-  if (cryptoObj?.getRandomValues) {
-    cryptoObj.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  if (!cryptoObj?.getRandomValues) {
+    // Never fall back to Math.random: predictable secrets would defeat MFA entirely.
+    throw new Error('A secure cryptographic random source (crypto.getRandomValues) is required to generate TOTP secrets.');
   }
+  cryptoObj.getRandomValues(bytes);
   return encodeBase32(bytes);
 }
 
@@ -196,6 +196,14 @@ export async function generateTotpCode(secret: string, timestampMs = Date.now())
   return code;
 }
 
+/** Constant-time string comparison to avoid leaking match position via timing. */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 export async function verifyTotpCode(
   secret: string,
   code: string,
@@ -205,11 +213,11 @@ export async function verifyTotpCode(
   const cleanCode = code.trim();
   if (!/^\d{6}$/.test(cleanCode)) return false;
 
-  // Check current window and +/- 2 windows (150s tolerance)
-  for (const delta of [0, -STEP_SECONDS * 1000, STEP_SECONDS * 1000, -STEP_SECONDS * 2000, STEP_SECONDS * 2000]) {
+  // Check current window and +/- 1 window (90s tolerance)
+  for (const delta of [0, -STEP_SECONDS * 1000, STEP_SECONDS * 1000]) {
     try {
       const expected = await generateTotpCode(secret, timestampMs + delta);
-      if (expected === cleanCode) return true;
+      if (safeEqual(expected, cleanCode)) return true;
     } catch {
       return false;
     }

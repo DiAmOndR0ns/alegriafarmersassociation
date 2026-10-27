@@ -603,7 +603,7 @@ export default function ExecutiveView({
                 || (currentUserId ? users.find(u => u.id === currentUserId) : null)
                 || users.find(u => u.role === 'President')
                 || users.find(u => u.role?.toLowerCase() === 'president');
-              const activeSecret = presUser?.totpSecret || 'JBSWY3DPEHPK3PXP';
+              const activeSecret = presUser?.totpSecret;
               return (
                 <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col justify-between gap-3 text-xs">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -620,17 +620,26 @@ export default function ExecutiveView({
                       ✓ Enforced &amp; Active
                     </span>
                   </div>
-                  <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
-                    <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-[#1B4332] text-xs sm:text-sm select-all break-all bg-[#FAF8F5] px-2 py-1 rounded border border-[#D8E7D9]">
-                        {activeSecret}
-                      </span>
+                  {activeSecret ? (
+                    <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-[#1B4332] text-xs sm:text-sm select-all break-all bg-[#FAF8F5] px-2 py-1 rounded border border-[#D8E7D9]">
+                          {activeSecret}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Scan or enter this key into your Google Authenticator, Microsoft Authenticator, or 2FA app to generate the 6-digit login codes.
+                      </p>
                     </div>
-                    <p className="text-[10px] text-slate-500">
-                      Scan or enter this key into your Google Authenticator, Microsoft Authenticator, or 2FA app to generate the 6-digit login codes.
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
+                      <p className="text-[11px] text-amber-700 font-semibold">
+                        No authenticator enrolled yet. Sign in online once to complete 2FA enrollment — a unique secret will be generated then.
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })()
