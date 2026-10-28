@@ -436,16 +436,16 @@ export default function LivestockMonitor({
       {/* ========================================================================= */}
       {/* 1. MASTER ASSOCIATION LIVESTOCK STATUS BAR (EXECUTIVE OVERVIEW)           */}
       {/* ========================================================================= */}
-      <section className="bg-gradient-to-br from-[#1B4332] via-[#204F3B] to-[#143326] text-white rounded-3xl p-5 sm:p-6 shadow-lg space-y-4">
-        <div className="flex min-w-0 flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/15 pb-4">
-          <div className="min-w-0 w-full sm:w-auto">
+      <section className="bg-white text-slate-900 rounded-2xl border-[#D5CFC1] p-4 sm:p-5 shadow-sm space-y-4 min-w-0">
+        <div className="flex min-w-0 flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#E9E4D9] pb-4">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                 Live Cooperative Assets
               </span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight mt-2 text-white flex items-start sm:items-center gap-2 min-w-0">
-              <Briefcase className="w-6 h-6 text-emerald-300 shrink-0 mt-0.5 sm:mt-0" />
+            <h2 className="text-lg sm:text-xl font-black font-display tracking-tight mt-2 text-[#1B4332] flex items-start sm:items-center gap-2 min-w-0">
+              <Briefcase className="w-5 h-5 text-emerald-800 shrink-0 mt-0.5 sm:mt-0" />
               <span className="min-w-0 break-words [overflow-wrap:anywhere] leading-tight">AFA Livestock &amp; IGP Monitoring</span>
             </h2>
           </div>
@@ -454,22 +454,22 @@ export default function LivestockMonitor({
             <button
               type="button"
               onClick={() => setShowAddProject(true)}
-              className="min-h-11 px-4 py-2.5 rounded-xl bg-white text-[#1B4332] hover:bg-emerald-50 text-sm font-bold shadow-md transition-all cursor-pointer flex items-center gap-2 shrink-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
+              className="min-h-10 w-full sm:w-auto px-3.5 py-2 rounded-lg bg-[#1B4332] text-white hover:bg-[#143326] text-sm font-bold transition-colors cursor-pointer flex items-center justify-center gap-2 shrink-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
             >
-              <Plus className="w-4 h-4 text-emerald-700" />
+              <Plus className="w-4 h-4 text-white" />
               <span>Add New IGP</span>
             </button>
           )}
         </div>
 
         {/* All Association IGP Portfolios (Automatically renders a card for each active or added IGP) */}
-        <div className={`grid grid-cols-1 sm:grid-cols-2 ${
+        <div className={`grid min-w-0 grid-cols-1 sm:grid-cols-2 ${
           produces.length <= 2
             ? 'lg:grid-cols-2'
             : produces.length === 3
             ? 'lg:grid-cols-3'
             : 'lg:grid-cols-3 xl:grid-cols-4'
-        } gap-3.5`}>
+        } gap-2.5`}>
           {produces.map((p) => {
             const isSelected = selected === p;
             const isSwine = isSwineProject(p);
@@ -529,39 +529,39 @@ export default function LivestockMonitor({
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => setSelected(p)}
-                className={`w-full text-left p-4 rounded-2xl border-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/70 flex flex-col justify-between ${
+                className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 flex flex-col justify-between ${
                   isSelected
-                    ? 'bg-white text-slate-900 border-emerald-300 shadow-md ring-2 ring-emerald-300/50'
-                    : 'bg-[#0D2B21] hover:bg-[#123A2C] text-white border-emerald-500/40'
+                    ? 'bg-emerald-50 text-slate-900 border-emerald-700 shadow-sm'
+                    : 'bg-white hover:bg-slate-50 text-slate-900 border-[#D5CFC1]'
                 }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <span className={`min-w-0 text-sm font-black uppercase tracking-wider leading-snug break-words ${isSelected ? 'text-[#1B4332]' : 'text-emerald-300'}`}>
+                    <span className="min-w-0 text-xs font-black uppercase tracking-wider leading-snug break-words text-[#1B4332]">
                       {displayTitle}
                     </span>
-                    <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full shrink-0 ${isSelected ? 'bg-emerald-100 text-[#1B4332]' : 'bg-emerald-400 text-[#062017]'}`}>
+                    <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 bg-emerald-100 text-[#1B4332]">
                       {badgeText}
                     </span>
                   </div>
 
-                  <div className="mt-3.5 space-y-1.5 text-xs">
+                  <div className="mt-2.5 space-y-1 text-xs">
                     <div className="flex justify-between items-center gap-2 font-bold">
-                      <span className={isSelected ? 'text-slate-600' : 'text-emerald-100/90'}>{row1.label}</span>
-                      <span className={`font-mono font-black ${isSelected ? 'text-[#1B4332]' : 'text-white'}`}>{row1.value}</span>
+                      <span className="text-slate-700">{row1.label}</span>
+                      <span className="font-mono font-black text-[#1B4332]">{row1.value}</span>
                     </div>
                     <div className="flex justify-between items-center gap-2 font-bold">
-                      <span className={isSelected ? 'text-slate-600' : 'text-emerald-100/90'}>{row2.label}</span>
-                      <span className={`font-mono font-black ${isSelected ? 'text-[#1B4332]' : 'text-white'}`}>{row2.value}</span>
+                      <span className="text-slate-700">{row2.label}</span>
+                      <span className="font-mono font-black text-[#1B4332]">{row2.value}</span>
                     </div>
                     <div className="flex justify-between items-center gap-2 font-bold">
-                      <span className={isSelected ? 'text-slate-600' : 'text-emerald-100/90'}>{row3.label}</span>
+                      <span className="text-slate-700">{row3.label}</span>
                       <span className={`font-mono font-black ${
                         row3.highlight === 'amber'
-                          ? (isSelected ? 'text-[#B26A00]' : 'text-amber-300')
+                          ? 'text-amber-800'
                           : row3.highlight === 'emerald'
-                          ? (isSelected ? 'text-[#2D6A4F]' : 'text-emerald-300')
-                          : (isSelected ? 'text-slate-500' : 'text-emerald-200/80')
+                          ? 'text-emerald-800'
+                          : 'text-slate-600'
                       }`}>
                         {row3.value}
                       </span>
