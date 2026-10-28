@@ -5,7 +5,8 @@ import {
   Check, ChevronLeft, ChevronRight, Lock, ShieldAlert, Megaphone,
   MapPin, Clock, Tag, AlertTriangle, Boxes, Package, Phone, X, ShoppingBag
 } from 'lucide-react';
-import { HogRaisingState, Member, Product, Announcement, AssociationActivity } from '../types';
+import { HogRaisingState, Member, Product, Announcement, AssociationActivity, User } from '../types';
+import { resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
 import { useLanguage, LanguageToggle } from '../i18n/LanguageContext';
 
 interface GuestPortalProps {
@@ -15,6 +16,7 @@ interface GuestPortalProps {
   products?: Product[];
   announcements?: Announcement[];
   activities?: AssociationActivity[];
+  users?: User[];
 }
 
 export default function GuestPortal({
@@ -23,7 +25,8 @@ export default function GuestPortal({
   hogRaising,
   products = [],
   announcements = [],
-  activities = []
+  activities = [],
+  users = []
 }: GuestPortalProps) {
   const { isEnglish: en, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'>('home');
@@ -94,7 +97,7 @@ export default function GuestPortal({
       specs: '100% Organic Robusta & Liberica beans',
       price: 'PHP 250 matag 250g pack',
       quantityAvailable: '45 ka pack (250g bags)',
-      farmerName: 'Zenaida A. Elbiña',
+      farmerName: resolveOfficerName(users, 'President'),
       farmerSitio: 'Sitio Tapon',
       farmerPhone: '0945-876-1234',
       category: 'Coffee & Crops',
@@ -110,7 +113,7 @@ export default function GuestPortal({
       specs: 'Bag-ong ani sa Alegria',
       price: 'PHP 45 matag kilo',
       quantityAvailable: '250 ka kilo',
-      farmerName: 'Gracelyn P. Asendiente',
+      farmerName: resolveOfficerName(users, 'Treasurer'),
       farmerSitio: 'Sitio Pundok 2',
       farmerPhone: '0917-345-6789',
       category: 'Produce',
@@ -126,7 +129,7 @@ export default function GuestPortal({
       specs: 'Premium Copra & Fresh Buko',
       price: 'PHP 20 matag buok',
       quantityAvailable: '500 ka buok',
-      farmerName: 'Lorena B. Pinote',
+      farmerName: resolveOfficerName(users, 'Auditor'),
       farmerSitio: 'Sitio Pundok 1',
       farmerPhone: '0998-123-4567',
       category: 'Produce',
@@ -560,7 +563,7 @@ export default function GuestPortal({
                   Sa wala pa matukod ang opisayl nga asosasyon, ang mga mag-uuma nag-atubang ug dakong kalisod sa pagbaligya sa ilang abot tungod sa kalayo sa merkado ug sa ubos kaayo nga presyo nga gitanyag sa mga middlemen.
                 </p>
                 <p>
-                  Tungod niini, niadtong tuig 2022, sa tabang sa atong lider nga si <strong className="text-[#1B4332]">Presidente Zenaida A. Elbiña</strong> kauban ang suporta sa Lokal nga Kagamhanan (LGU) ug Department of Agriculture (DA),
+                  Tungod niini, niadtong tuig 2022, sa tabang sa atong lider nga si <strong className="text-[#1B4332]">Presidente {resolveOfficerName(users, 'President')}</strong> kauban ang suporta sa Lokal nga Kagamhanan (LGU) ug Department of Agriculture (DA),
                   ang asosasyon opisyal nga na-rehistro ug natukod. Ang panguna nga katuyoan mao ang paghiusa sa upat (4) ka opisyal nga Sitio sa Alegria (Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak) aron adunay usa ka tingog ug hiniusang kusog.
                 </p>
 
@@ -605,17 +608,7 @@ export default function GuestPortal({
                     <span>Mga Opisyales sa AFA (2026)</span>
                   </h4>
                   <div className="space-y-2 text-xs text-slate-700 font-medium min-w-0">
-                    {[
-                      { title: 'President', name: 'Zenaida A. Elbiña' },
-                      { title: 'Vice President', name: 'Anselna B. Arnado' },
-                      { title: 'Secretary', name: 'Jennylyn S. Lumactao' },
-                      { title: 'Asst. Secretary', name: 'Joan A. Cebas' },
-                      { title: 'Treasurer', name: 'Gracelyn P. Asendiente' },
-                      { title: 'Asst. Treasurer', name: 'Ana Lourdes D. Pasaylo' },
-                      { title: 'Auditor', name: 'Lorena B. Pinote' },
-                      { title: 'PIO 1', name: 'Ida S. Manera' },
-                      { title: 'PIO 2', name: 'Rosalinda G. Bangga' }
-                    ].map((officer, i) => (
+                    {resolveOfficerRoster(users).map((officer, i) => (
                       <div key={i} className="flex items-center justify-between border-b border-emerald-950/10 pb-1.5 gap-2 min-w-0">
                         <span className="font-extrabold text-[#1B4332] text-[11px] sm:text-xs shrink-0">{officer.title}:</span>
                         <span className="font-bold text-slate-800 text-[11px] sm:text-xs text-right break-words min-w-0">{officer.name}</span>
@@ -777,8 +770,8 @@ export default function GuestPortal({
               <h4 className="text-sm sm:text-base font-black text-[#1B4332] font-display break-words">{en ? 'Want to order or rent?' : 'Gusto ka mopalit o mo-abang?'}</h4>
               <p className="text-xs text-slate-700 font-semibold leading-relaxed break-words">
                 {en
-                  ? 'Contact or visit President Zenaida A. Elbiña or any AFA officer to place an order or book a rental.'
-                  : 'Kontaka o bisitaha si Presidente Zenaida A. Elbiña o bisan kinsa nga Opisyales sa AFA aron mo-order o mo-book og abang.'}
+                  ? `Contact or visit President ${resolveOfficerName(users, 'President')} or any AFA officer to place an order or book a rental.`
+                  : `Kontaka o bisitaha si Presidente ${resolveOfficerName(users, 'President')} o bisan kinsa nga Opisyales sa AFA aron mo-order o mo-book og abang.`}
               </p>
             </div>
           </div>

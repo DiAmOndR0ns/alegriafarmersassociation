@@ -28,6 +28,8 @@ const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 const OfficerReportModal = lazy(() => import('./components/OfficerReportModal'));
 const PresidentReport = lazy(() => import('./components/PresidentReport'));
 const ProductManagementModal = lazy(() => import('./components/ProductManagementModal'));
+import { buildReportData } from './components/PresidentReport';
+import TreasurerFinancialReport from './components/TreasurerFinancialReport';
 import PasswordChangePrompt from './components/PasswordChangePrompt';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useDatabaseStatus } from './hooks/useDatabaseStatus';
@@ -60,6 +62,7 @@ export default function App() {
   const [officerTab, setOfficerTab] = useState<'tasks' | 'hog-raising' | 'announcements' | 'member-view' | 'products'>('tasks');
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showPresidentReport, setShowPresidentReport] = useState<boolean>(false);
+  const [showTreasurerFinancialReport, setShowTreasurerFinancialReport] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
   const [showClearCacheConfirmModal, setShowClearCacheConfirmModal] = useState<boolean>(false);
 
@@ -2619,6 +2622,7 @@ export default function App() {
             products={products}
             announcements={announcements}
             activities={activities}
+            users={users}
           />
         </Suspense>
       );
@@ -2753,6 +2757,7 @@ export default function App() {
               onAddChoreLog={handleAddPigChore}
               products={products}
               activities={activities}
+              users={users}
             />
           </Suspense>
         </main>
@@ -2937,7 +2942,7 @@ export default function App() {
               <button
                 id="sidebar-treasurer-report-btn"
                 type="button"
-                onClick={() => setShowPresidentReport(true)}
+                onClick={() => setShowTreasurerFinancialReport(true)}
                 className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
               >
                 <FileText className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
@@ -3214,6 +3219,7 @@ export default function App() {
                 onAddFund={handleAddFund}
                 onDeleteFund={handleDeleteFund}
                 onOpenReportModal={() => setShowReportModal(true)}
+                users={users}
               />
             )}
 
@@ -3267,6 +3273,7 @@ export default function App() {
                 isTreasurer={currentRole === 'Treasurer'}
                 currentUser={currentUser!}
                 isOfficerMode={true}
+                users={users}
                 closedYears={hogRaising.closedYears || [2025]}
                 onCloseDecemberBook={handleCloseDecemberBook}
               />
@@ -3282,6 +3289,7 @@ export default function App() {
                 onUpdateProduct={handleUpdateProduct}
                 onDeleteProduct={handleDeleteProduct}
                 onClose={() => setOfficerTab('tasks')}
+                users={users}
               />
             </div>
           )}
@@ -3345,6 +3353,7 @@ export default function App() {
                 onAddChoreLog={handleAddPigChore}
                 products={products}
                 activities={activities}
+                users={users}
               />
             </div>
           )}
@@ -3381,6 +3390,7 @@ export default function App() {
         <Suspense fallback={null}>
           <OfficerReportModal
             currentRole={currentRole}
+            users={users}
             members={members}
             meetings={meetings}
             resolutions={resolutions}
@@ -3397,7 +3407,35 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* PRESIDENT'S LETTERHEAD REPORT (print / save as PDF) */}
+      {/* TREASURER'S OFFICIAL FINANCIAL REPORT (print / save as PDF) — SEGREGATED:
+          all financial exports belong exclusively to the Treasurer's dashboard. */}
+      {showTreasurerFinancialReport && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
+          <div className="mx-auto max-w-[210mm]">
+            <button
+              type="button"
+              onClick={() => setShowTreasurerFinancialReport(false)}
+              className="mb-3 w-full rounded-xl bg-white px-4 py-2 text-sm font-black text-[#1B4332] shadow hover:bg-slate-100 cursor-pointer print:hidden"
+            >
+              ✕ Close Financial Report
+            </button>
+            <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading financial report...</div>}>
+              <TreasurerFinancialReport
+                year={new Date().getFullYear()}
+                transactions={transactions}
+                funds={funds}
+                hogRaising={hogRaising}
+                inventory={inventory}
+                users={users}
+                onClose={() => setShowTreasurerFinancialReport(false)}
+              />
+            </Suspense>
+          </div>
+        </div>
+      )}
+
+      {/* PRESIDENT'S LETTERHEAD REPORT (print / save as PDF) — EXECUTIVE SUMMARY ONLY:
+          no financial statements; those are the Treasurer's exclusive export. */}
       {showPresidentReport && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
           <div className="mx-auto max-w-[210mm]">
@@ -3410,8 +3448,7 @@ export default function App() {
             </button>
             <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading report...</div>}>
               <PresidentReport
-                year={new Date().getFullYear()}
-                users={users}
+                data={buildReportData({ year: new Date().getFullYear(), users })}
             />
             </Suspense>
           </div>
@@ -3428,6 +3465,7 @@ export default function App() {
             onUpdateProduct={handleUpdateProduct}
             onDeleteProduct={handleDeleteProduct}
             onClose={() => setShowProductModal(false)}
+            users={users}
           />
         </Suspense>
       )}

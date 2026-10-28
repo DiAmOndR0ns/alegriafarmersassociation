@@ -28,6 +28,7 @@ interface LivestockMonitorProps {
   isTreasurer: boolean;
   currentUser: User;
   isOfficerMode?: boolean;
+  users?: User[];
   closedYears?: number[];
   onCloseDecemberBook?: (year: number) => void;
 }
@@ -108,6 +109,7 @@ export default function LivestockMonitor({
   isTreasurerOrOfficer,
   isTreasurer,
   currentUser,
+  users = [],
   closedYears = state.closedYears || [],
   onCloseDecemberBook,
 }: LivestockMonitorProps) {
@@ -1252,6 +1254,7 @@ export default function LivestockMonitor({
         members={members}
         meetings={meetings}
         hogRaisingState={state}
+        users={users}
       />
 
     </div>

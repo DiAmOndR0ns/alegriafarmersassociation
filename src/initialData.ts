@@ -16,7 +16,7 @@ export const INITIAL_FUNDS: OrganizationFund[] = [
     allocatedAmount: 50000,
     currentBalance: 50000,
     description: 'Pang-operasyon ug general reserve fund sa asosasyon gikan sa DSWD Sustainable Livelihood Program operational buffer.',
-    custodian: 'Treasurer Gracelyn P. Asendiente',
+    custodian: 'Treasurer',
     lastUpdated: '2026-09-01'
   },
   {
@@ -26,7 +26,7 @@ export const INITIAL_FUNDS: OrganizationFund[] = [
     allocatedAmount: 85000,
     currentBalance: 85000,
     description: 'Kapital nga gigahin alang sa livelihood project, hog raising ug gamit sa produksyon sa asosasyon.',
-    custodian: 'Treasurer Gracelyn P. Asendiente',
+    custodian: 'Treasurer',
     lastUpdated: '2026-09-01'
   },
   {
@@ -36,7 +36,7 @@ export const INITIAL_FUNDS: OrganizationFund[] = [
     allocatedAmount: 25000,
     currentBalance: 25000,
     description: 'Tampo ug equity sa mga miyembro alang sa institutional stability ug emergency buffer.',
-    custodian: 'Treasurer Gracelyn P. Asendiente',
+    custodian: 'Treasurer',
     lastUpdated: '2026-09-01'
   },
   {
@@ -46,7 +46,7 @@ export const INITIAL_FUNDS: OrganizationFund[] = [
     allocatedAmount: 15000,
     currentBalance: 15000,
     description: 'Gahin alang sa mga pagbansay-bansay, seminar, ug edukasyon sa mga opisyal ug mag-uuma.',
-    custodian: 'Treasurer Gracelyn P. Asendiente',
+    custodian: 'Treasurer',
     lastUpdated: '2026-09-01'
   },
   {
@@ -56,7 +56,7 @@ export const INITIAL_FUNDS: OrganizationFund[] = [
     allocatedAmount: 40000,
     currentBalance: 40000,
     description: 'Opisyal nga bank savings account sa asosasyon sa FCCT Cooperative Bank.',
-    custodian: 'Treasurer Gracelyn P. Asendiente',
+    custodian: 'Treasurer',
     lastUpdated: '2026-09-01'
   }
 ];
@@ -77,10 +77,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     farmerName: 'AFA Equipment & Rental Committee',
     farmerSitio: 'Sitio Tapon (AFA Center)',
     farmerPhone: '0945-876-1234',
-    contactPerson: 'President Zenaida A. Elbiña / Treasurer Gracelyn P. Asendiente',
+    contactPerson: 'President / Treasurer (see Officers directory)',
     isPublished: true,
     updatedBy: 'AFA Admin',
-    managedBy: 'Treasurer Gracelyn P. Asendiente',
+    managedBy: 'Treasurer',
     dateUpdated: '2026-09-07'
   },
   {
@@ -97,10 +97,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     farmerName: 'AFA Warehouse & Logistics',
     farmerSitio: 'Sitio Lamak',
     farmerPhone: '0917-345-6789',
-    contactPerson: 'Vice President Anselna B. Arnado',
+    contactPerson: 'Vice President',
     isPublished: true,
     updatedBy: 'AFA Admin',
-    managedBy: 'Treasurer Gracelyn P. Asendiente',
+    managedBy: 'Treasurer',
     dateUpdated: '2026-09-07'
   },
   {
@@ -114,13 +114,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     description: 'Lunsay ug organiko nga kape gikan sa mga bungtod sa Tuburan. Humot, lami, ug gi-atiman sa atong mag-uuma sa AFA.',
     specs: '100% Organic Robusta & Liberica',
     stockStatus: 'In Stock',
-    farmerName: 'Zenaida A. Elbiña',
+    farmerName: 'AFA President',
     farmerSitio: 'Sitio Tapon',
     farmerPhone: '0945-876-1234',
-    contactPerson: 'Zenaida A. Elbiña (0945-876-1234)',
+    contactPerson: 'President (see Officers directory)',
     isPublished: true,
     updatedBy: 'AFA Admin',
-    managedBy: 'President Zenaida A. Elbiña',
+    managedBy: 'President',
     dateUpdated: '2026-09-07'
   },
   {
@@ -134,13 +134,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     description: 'Gitanom sa tabunok nga yuta sa Alegria nga walay makadaot nga kemikal. Tam-is ug lab-as kaayo.',
     specs: 'Bag-ong ani sa Alegria',
     stockStatus: 'In Stock',
-    farmerName: 'Gracelyn P. Asendiente',
+    farmerName: 'Treasurer (see Officers directory)',
     farmerSitio: 'Sitio Pundok 2',
     farmerPhone: '0917-345-6789',
-    contactPerson: 'Gracelyn P. Asendiente (0917-345-6789)',
+    contactPerson: 'Treasurer',
     isPublished: true,
     updatedBy: 'AFA Admin',
-    managedBy: 'Treasurer Gracelyn P. Asendiente',
+    managedBy: 'Treasurer',
     dateUpdated: '2026-09-07'
   },
   {
@@ -154,13 +154,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     description: 'Katas sa lubi ug taas nga kalidad nga kopras para sa mantika. Direkta gikan sa mga mag-uuma sa 4 ka opisyal nga Sitio sa Alegria.',
     specs: 'Premium Copra & Fresh Buko',
     stockStatus: 'In Stock',
-    farmerName: 'Lorena B. Pinote',
+    farmerName: 'Auditor (see Officers directory)',
     farmerSitio: 'Sitio Pundok 1',
     farmerPhone: '0998-123-4567',
-    contactPerson: 'Lorena B. Pinote (0998-123-4567)',
+    contactPerson: 'Auditor',
     isPublished: true,
     updatedBy: 'AFA Admin',
-    managedBy: 'Auditor Lorena B. Pinote',
+    managedBy: 'Auditor',
     dateUpdated: '2026-09-07'
   }
 ];

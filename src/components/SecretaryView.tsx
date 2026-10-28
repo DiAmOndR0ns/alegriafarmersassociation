@@ -369,7 +369,7 @@ export default function SecretaryView({
       attendanceCount: finalCount,
       agenda: meetingAgenda,
       minutes: meetingMinutes,
-      officerInCharge: 'Secretary (Jennylyn S Lumactao)',
+      officerInCharge: `Secretary (${users.find(u => u.role === 'Secretary')?.name || 'AFA Secretary'})`,
       attendanceRecord: Object.keys(meetingAttendanceRecord).length > 0 ? meetingAttendanceRecord : undefined
     });
     // Reset Form
@@ -1648,7 +1648,7 @@ export default function SecretaryView({
                   <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Moved By (Proponent)</label>
                   <input
                     type="text"
-                    placeholder="e.g. Anselna B. Arnado"
+                    placeholder="e.g. Juan Dela Cruz"
                     value={resMovedBy}
                     onChange={(e) => setResMovedBy(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
@@ -1726,6 +1726,7 @@ export default function SecretaryView({
       <PrintMinutesModal
         meeting={selectedMeetingForPrint}
         onClose={() => setSelectedMeetingForPrint(null)}
+        users={users}
       />
 
       {/* PRINT BLANK ATTENDANCE SHEET MODAL */}
@@ -1733,6 +1734,7 @@ export default function SecretaryView({
         isOpen={showAttendanceModal}
         onClose={() => setShowAttendanceModal(false)}
         members={members}
+        users={users}
       />
 
       {/* DIGITAL ROLL CALL MODAL - NEW MEETING CREATION */}
@@ -1770,6 +1772,7 @@ export default function SecretaryView({
         members={members}
         resolutions={resolutions}
         onAddResolution={onAddResolution}
+        users={users}
       />
 
       {/* MEMBER REGISTRATION & ID BADGE MODAL */}

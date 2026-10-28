@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Announcement, HogRaisingState, IgpChoreLog, Member, Product, AssociationActivity, MemberAffiliation } from '../types';
+import { resolveOfficerName } from '../utils/officers';
 import { 
   User as UserIcon, MapPin, Smartphone, Layers, Tag, Calendar, 
   Printer, Upload, LogOut, FileText, CheckCircle, CreditCard, 
@@ -22,6 +23,7 @@ interface MemberDashboardProps {
   onAddChoreLog: (chore: Omit<IgpChoreLog, 'id'>) => void;
   products?: Product[];
   activities?: AssociationActivity[];
+  users?: User[];
 }
 
 const SITIOS = [
@@ -60,7 +62,8 @@ export default function MemberDashboard({
   members,
   onAddChoreLog,
   products = [],
-  activities = []
+  activities = [],
+  users = []
 }: MemberDashboardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(currentUser.name);
@@ -638,7 +641,7 @@ export default function MemberDashboard({
             <div className="space-y-1 text-xs text-[#5D4037]">
               <h4 className="font-black">Tinuig nga Amot ug Katungod (Annual Renewal)</h4>
               <p className="leading-relaxed text-[#6D4C41]">
-                Sigon sa balaod sa atong AFA, ang imong membership balido sulod sa **usa ka (1) tuig**. Kada dapit sa **Disyembre**, ang atong Tesorero (Gracelyn P Asendiente) mangolekta og **PHP 100.00** nga tinuig nga amot para sa pag-renew sa imong mga benepisyo.
+                Sigon sa balaod sa atong AFA, ang imong membership balido sulod sa **usa ka (1) tuig**. Kada dapit sa **Disyembre**, ang atong Tesorero ({resolveOfficerName(users, 'Treasurer')}) mangolekta og **PHP 100.00** nga tinuig nga amot para sa pag-renew sa imong mga benepisyo.
               </p>
               <div className="pt-1 text-[10px] font-black text-[#1B4332] flex items-center gap-1 uppercase">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
@@ -892,12 +895,12 @@ export default function MemberDashboard({
                     <div className="grid grid-cols-2 gap-4 text-center mt-2 pt-1.5 border-t border-[#F0EBE1] text-[5.5px]">
                       <div className="space-y-0.5">
                         <div className="border-b border-[#D5CFC1] mx-auto w-3/4" />
-                        <span className="text-[#2D3A22] font-extrabold block">Zenaida A. Elbiña</span>
+                        <span className="text-[#2D3A22] font-extrabold block">{resolveOfficerName(users, 'President')}</span>
                         <span className="text-[#1B4332] uppercase font-black block">President</span>
                       </div>
                       <div className="space-y-0.5">
                         <div className="border-b border-[#D5CFC1] mx-auto w-3/4" />
-                        <span className="text-[#2D3A22] font-extrabold block">Gracelyn P Asendiente</span>
+                        <span className="text-[#2D3A22] font-extrabold block">{resolveOfficerName(users, 'Treasurer')}</span>
                         <span className="text-[#1B4332] uppercase font-black block">Treasurer</span>
                       </div>
                     </div>
@@ -925,11 +928,11 @@ export default function MemberDashboard({
 
                     <div className="grid grid-cols-2 gap-4 mt-3 pt-2 border-t border-[#F0EBE1] text-[6px] font-sans">
                       <div>
-                        <strong className="text-slate-800 block uppercase font-bold">Zenaida A. Elbiña</strong>
+                        <strong className="text-slate-800 block uppercase font-bold">{resolveOfficerName(users, 'President')}</strong>
                         <span className="text-slate-500 block">AFA President</span>
                       </div>
                       <div>
-                        <strong className="text-slate-800 block uppercase font-bold">Gracelyn P Asendiente</strong>
+                        <strong className="text-slate-800 block uppercase font-bold">{resolveOfficerName(users, 'Treasurer')}</strong>
                         <span className="text-slate-500 block">AFA Treasurer</span>
                       </div>
                     </div>
@@ -965,6 +968,7 @@ export default function MemberDashboard({
             isTreasurer={false}
             currentUser={currentUser}
             isOfficerMode={false}
+            users={users}
             closedYears={hogRaisingState.closedYears || [2025]}
           />
         </div>
@@ -1205,7 +1209,7 @@ export default function MemberDashboard({
               <span className="text-slate-500 block">Attested and Signed:</span>
               <div className="space-y-1">
                 <div className="w-40 border-b border-slate-400 mx-auto h-1" />
-                <p className="font-bold uppercase text-slate-850">Zenaida A. Elbiña</p>
+                <p className="font-bold uppercase text-slate-850">{resolveOfficerName(users, 'President')}</p>
                 <p className="text-[10px] text-slate-500">President, AFA</p>
               </div>
             </div>
@@ -1214,7 +1218,7 @@ export default function MemberDashboard({
               <span className="text-slate-500 block">Attested and Signed:</span>
               <div className="space-y-1">
                 <div className="w-40 border-b border-slate-400 mx-auto h-1" />
-                <p className="font-bold uppercase text-slate-850">Gracelyn P Asendiente</p>
+                <p className="font-bold uppercase text-slate-850">{resolveOfficerName(users, 'Treasurer')}</p>
                 <p className="text-[10px] text-slate-500">Treasurer, AFA</p>
               </div>
             </div>
@@ -1295,12 +1299,12 @@ export default function MemberDashboard({
             <div className="grid grid-cols-2 gap-2 text-center mt-3 pt-2 border-t border-slate-200 text-[6px]">
               <div className="space-y-0.5">
                 <div className="border-b border-slate-300 mx-auto w-16" />
-                <span className="text-slate-900 block font-bold">Zenaida A. Elbiña</span>
+                <span className="text-slate-900 block font-bold">{resolveOfficerName(users, 'President')}</span>
                 <span className="text-emerald-800 uppercase block font-semibold">President</span>
               </div>
               <div className="space-y-0.5">
                 <div className="border-b border-slate-300 mx-auto w-16" />
-                <span className="text-slate-900 block font-bold">Gracelyn P Asendiente</span>
+                <span className="text-slate-900 block font-bold">{resolveOfficerName(users, 'Treasurer')}</span>
                 <span className="text-emerald-800 uppercase block font-semibold">Treasurer</span>
               </div>
             </div>

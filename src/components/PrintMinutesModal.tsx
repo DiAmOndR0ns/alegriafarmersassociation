@@ -1,20 +1,24 @@
 import React, { useState, useRef } from 'react';
-import { Meeting } from '../types';
+import { Meeting, User, OfficerRole } from '../types';
+import { resolveOfficerName } from '../utils/officers';
 import { Printer, Download, Copy, X, Settings, Check, FileText, Sprout, Landmark } from 'lucide-react';
 
 interface PrintMinutesModalProps {
   meeting: Meeting | null;
   onClose: () => void;
+  users?: User[];
 }
 
-export default function PrintMinutesModal({ meeting, onClose }: PrintMinutesModalProps) {
+export default function PrintMinutesModal({ meeting, onClose, users = [] }: PrintMinutesModalProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState(false);
   
   // Customization Options
   const [documentType, setDocumentType] = useState('Minutes of the General Assembly');
-  const [presidingOfficer, setPresidingOfficer] = useState('Zenaida A. Elbiña (President)');
-  const [secretaryName, setSecretaryName] = useState('Jennylyn S Lumactao (Secretary)');
+  // Officer fields default to the officers ACTUALLY delegated in the system —
+  // no hardcoded names. Still editable per document when needed.
+  const [presidingOfficer, setPresidingOfficer] = useState(`${resolveOfficerName(users, 'President' as OfficerRole)} (President)`);
+  const [secretaryName, setSecretaryName] = useState(`${resolveOfficerName(users, 'Secretary' as OfficerRole)} (Secretary)`);
   const [timeCommenced, setTimeCommenced] = useState('09:00 AM');
   const [timeAdjourned, setTimeAdjourned] = useState('11:45 AM');
   const [showWatermark, setShowWatermark] = useState(true);

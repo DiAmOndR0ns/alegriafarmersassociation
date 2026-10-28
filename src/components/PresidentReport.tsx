@@ -1,10 +1,11 @@
 import "./president-report.css";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import type {
   User,
   OfficerRole,
 } from "../types";
+import { OFFICER_ROLE_LABELS } from "../utils/officers";
 
 /* ---------- Data shape (fill from FAMS state/API, not hardcoded) ----------
    Segregation of duties: the President's letterhead report carries the EXECUTIVE
@@ -65,7 +66,7 @@ function Highlights({ d }: { d: ReportData }) {
   return (
     <Page d={d} title={`Highlights of Programs and Activities in ${d.year}`}>
       {d.highlights.length > 0
-        ? <ul className="pr-list">{d.highlights.map((h) => <li key={h}>{h}</li>)}</ul>
+        ? <ul className="pr-list">{d.highlights.map((h, i) => <li key={`${i}-${h}`}>{h}</li>)}</ul>
         : <p className="pr-empty">No highlights recorded for this year.</p>}
     </Page>
   );
@@ -75,7 +76,7 @@ function Plans({ d }: { d: ReportData }) {
   return (
     <Page d={d} title={`Plans and Programs for ${d.year + 1}`}>
       {d.plans.length > 0
-        ? <ol className="pr-list pr-roman">{d.plans.map((p) => <li key={p}>{p}</li>)}</ol>
+        ? <ol className="pr-list pr-roman">{d.plans.map((p, i) => <li key={`${i}-${p}`}>{p}</li>)}</ol>
         : <p className="pr-empty">No plans recorded for this year.</p>}
       {d.closingLine && <p className="pr-closing">{d.closingLine}</p>}
     </Page>
@@ -95,8 +96,8 @@ function Officers({ d }: { d: ReportData }) {
         <tbody>
           {d.officers.length === 0 ? (
             <tr><td colSpan={3} className="pr-empty">No officers on record.</td></tr>
-          ) : d.officers.map((o) => (
-            <tr key={o.position}><td>{o.position}</td><td>{o.name}</td><td>{o.contact ?? ""}</td></tr>
+          ) : d.officers.map((o, i) => (
+            <tr key={`${i}-${o.position}`}><td>{o.position}</td><td>{o.name}</td><td>{o.contact ?? ""}</td></tr>
           ))}
         </tbody>
       </table>
@@ -106,28 +107,31 @@ function Officers({ d }: { d: ReportData }) {
 
 
 /* ---------- Report ---------- */
-export default function PresidentReport({ data, year, users }: { data?: ReportData; year?: number; users?: User[] }) {
-  const resolvedData = useMemo(() => {
-    if (data) return data;
-    return buildReportData({
-      year: year || new Date().getFullYear(),
-      users,
-    });
-  }, [data, year, users]);
+export default function PresidentReport({ data }: { data: ReportData }) {
+  const resolvedData = data;
+
+  const restoreTitleRef = useRef<(() => void) | null>(null);
 
   const exportPdf = () => {
     const prev = document.title;
     document.title = `${resolvedData.org.abbr}-Executive-Report-${resolvedData.year}`; // becomes the PDF filename
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const restore = () => {
       document.title = prev;
       window.removeEventListener("afterprint", restore);
+      if (timer !== undefined) clearTimeout(timer);
     };
-    // Browsers capture the title when the print dialog opens; restore after it closes
-    // (with a timeout fallback for browsers that don't fire afterprint).
+    restoreTitleRef.current = restore;
+    // Browsers capture the title when the print dialog opens; restore once it closes.
+    // The timeout fallback is cancelled by restore() if afterprint fires in time.
     window.addEventListener("afterprint", restore);
     window.print();
-    setTimeout(restore, 1000);
+    timer = setTimeout(restore, 1000);
   };
+  // Safety net: if the component unmounts mid-print, always restore the title.
+  useEffect(() => () => {
+    restoreTitleRef.current?.();
+  }, []);
   return (
     <div className="pr-root">
       <div className="pr-toolbar"><button onClick={exportPdf}>Export PDF</button></div>
@@ -139,7 +143,14 @@ export default function PresidentReport({ data, year, users }: { data?: ReportDa
 }
 
 /* ---------- Mappers: real FAMS state/API → ReportData ---------- */
-const DOLE_REG_NO = "2315"; // TODO: move to org settings once it's a configurable field
+export const DEFAULT_ORG = {
+  name: "Alegria Farmers Association",
+  abbr: "AFA",
+  doleRegNo: "2315", // TODO: move to org settings once it's a configurable field
+  province: "Cebu",
+  municipality: "Tuburan",
+  barangay: "Alegria",
+} as const;
 
 export function buildReportData(input: {
   year: number;
@@ -152,22 +163,26 @@ export function buildReportData(input: {
 }): ReportData {
   const {
     year, users = [],
-    highlights = [], plans = [], closingLine, logoSrc, doleRegNo = DOLE_REG_NO,
+    highlights = [], plans = [], closingLine, logoSrc, doleRegNo = DEFAULT_ORG.doleRegNo,
   } = input;
 
   // Never leave Officer signatories blank: prefer the live account, fall back to the role title.
+  // No hardcoded officer names — documents always reflect the officers delegated in the system.
   const signatory = (role: OfficerRole, fallback: string) =>
     users.find((u) => u.role === role)?.name || fallback;
+
+  // Display label for each officer role (shared single source of truth).
+  const toOfficerRow = (u: User): Officer => ({
+    position: OFFICER_ROLE_LABELS[u.role as OfficerRole] ?? String(u.role).replace(/_/g, " "),
+    name: u.name,
+    contact: u.contactNumber,
+  });
 
   return {
     year,
     org: {
-      name: "Alegria Farmers Association",
-      abbr: "AFA",
+      ...DEFAULT_ORG,
       doleRegNo,
-      province: "Cebu",
-      municipality: "Tuburan",
-      barangay: "Alegria",
       logoSrc: logoSrc ?? "/logo.svg",
     },
     highlights,
@@ -175,13 +190,9 @@ export function buildReportData(input: {
     closingLine,
     officers: users
       .filter((u) => u.role !== "Member")
-      .map((u) => ({
-        position: u.role.replace("_", " "),
-        name: u.name,
-        contact: u.contactNumber,
-      })),
-    secretary: signatory("Secretary", "Jennylyn S. Lumactao"),
-    president: signatory("President", "Zenaida A. Elbiña"),
+      .map(toOfficerRow),
+    secretary: signatory("Secretary", "AFA Secretary"),
+    president: signatory("President", "AFA President"),
   };
 }
 
@@ -200,7 +211,7 @@ export function PresidentReportContainer(props: {
 /* ---------- Sample data (kept for preview/Storybook use) ---------- */
 export const sampleReport: ReportData = {
   year: 2025,
-  org: { name: "Alegria Farmers Association", abbr: "AFA", doleRegNo: "2315", province: "Cebu", municipality: "Tuburan", barangay: "Alegria" },
+  org: { ...DEFAULT_ORG },
   highlights: [
     "The association participated in the barangay Clean Up Drive, which is done twice a year.",
     "ATI RTC7 awarded 1.5 Million Pesos for the 40 Head Swine Fattening Project (SIRP).",
@@ -211,10 +222,7 @@ export const sampleReport: ReportData = {
     "Strengthen the bond of the members of the association.",
   ],
   closingLine: "MABUHAY ANG MGA MAG-UUMA, Welcome 2026!",
-  officers: [
-    { position: "President", name: "Zenaida A. Elbina", contact: "09358282315" },
-    { position: "Vice President", name: "Anselma B. Arnado", contact: "09193969362" },
-  ],
-  secretary: "Joan A. Cebas",
-  president: "Zenaida A. Elbina",
+  officers: [],
+  secretary: "AFA Secretary",
+  president: "AFA President",
 };

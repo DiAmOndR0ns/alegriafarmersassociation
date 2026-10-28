@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FinancialTransaction, OrganizationFund, HogRaisingState } from '../types';
+import { FinancialTransaction, OrganizationFund, HogRaisingState, User, OfficerRole } from '../types';
+import { resolveOfficerPrefixed } from '../utils/officers';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { INITIAL_FUNDS, INITIAL_HOG_RAISING } from '../initialData';
+import FinancialStatement from './FinancialStatement';
 import { 
   Coins, ArrowUpRight, ArrowDownRight, Plus, 
   Search, ShieldCheck, AlertTriangle, CheckCircle, 
@@ -27,6 +29,7 @@ interface TreasurerViewProps {
   onAddFund?: (fund: Omit<OrganizationFund, 'id' | 'lastUpdated'>) => void;
   onDeleteFund?: (id: string) => void;
   onOpenReportModal?: () => void;
+  users?: User[];
 }
 
 export interface MonthlyChartEntry {
@@ -133,11 +136,15 @@ export default function TreasurerView({
   onDeleteTransaction,
   onAddFund,
   onDeleteFund,
-  onOpenReportModal
+  onOpenReportModal,
+  users = []
 }: TreasurerViewProps) {
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterAudit, setFilterAudit] = useState<'all' | 'Unaudited' | 'Audited' | 'Flagged'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // The association's official FINANCIAL STATEMENT (segregated exportable).
+  const [showFinancialStatement, setShowFinancialStatement] = useState(false);
 
   // Hog IGP Chart Filter States
   const [chartYear, setChartYear] = useState<string>('all');
@@ -167,7 +174,7 @@ export default function TreasurerView({
   const [fundFormCode, setFundFormCode] = useState('');
   const [fundFormAllocated, setFundFormAllocated] = useState('');
   const [fundFormBalance, setFundFormBalance] = useState('');
-  const [fundFormCustodian, setFundFormCustodian] = useState('Treasurer Gracelyn P. Asendiente');
+  const [fundFormCustodian, setFundFormCustodian] = useState(resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole));
   const [fundFormDescription, setFundFormDescription] = useState('');
 
   // Audit Form
@@ -281,7 +288,7 @@ export default function TreasurerView({
         code,
         allocatedAmount: allocated,
         currentBalance: balance,
-        custodian: fundFormCustodian.trim() || 'Treasurer Gracelyn P. Asendiente',
+        custodian: fundFormCustodian.trim() || resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole),
         description: fundFormDescription.trim() || 'Opisyal nga pundo sa asosasyon'
       });
     }
@@ -295,7 +302,7 @@ export default function TreasurerView({
     setFundFormCode('');
     setFundFormAllocated('');
     setFundFormBalance('');
-    setFundFormCustodian('Treasurer Gracelyn P. Asendiente');
+    setFundFormCustodian(resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole));
     setFundFormDescription('');
     setShowAddFundModal(false);
   };
@@ -324,7 +331,7 @@ export default function TreasurerView({
           code: codeDerived,
           allocatedAmount: txType === 'income' ? parseFloat(txAmount) : 0,
           currentBalance: txType === 'income' ? parseFloat(txAmount) : 0,
-          custodian: 'Treasurer Gracelyn P. Asendiente',
+          custodian: resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole),
           description: `Tinubdan sa pundo nga gi-rehistro ni Treasurer alang sa ${txType === 'income' ? 'nadawat nga kita' : 'gasto'}: ${effectivePurpose}`
         });
       }
@@ -339,7 +346,7 @@ export default function TreasurerView({
       purpose: effectivePurpose,
       liquidationDeadline,
       fundSource: finalFundSource,
-      recordedBy: 'Treasurer (Gracelyn P Asendiente)'
+      recordedBy: resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole)
     });
 
     setTxAmount('');
@@ -740,6 +747,18 @@ export default function TreasurerView({
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
+          {/* SEGREGATED EXPORTABLE — the association's official FINANCIAL STATEMENT format,
+              kept separate from the Treasurer's other exports (OfficerReportModal etc.). */}
+          <button
+            id="treasurer-financial-statement-btn"
+            type="button"
+            onClick={() => setShowFinancialStatement(true)}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold bg-emerald-900 hover:bg-emerald-800 text-emerald-100 border border-emerald-500/40 rounded-xl shadow-sm transition-all w-full md:w-auto cursor-pointer"
+          >
+            <FileText className="w-4 h-4 shrink-0" />
+            <span>Financial Statement (Official Format)</span>
+          </button>
+
           {onOpenReportModal && (
             <button
               id="treasurer-report-btn"
@@ -1430,6 +1449,14 @@ export default function TreasurerView({
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* THE ASSOCIATION'S OFFICIAL FINANCIAL STATEMENT — segregated exportable,
+          separate from the Treasurer's other report exports. */}
+      {showFinancialStatement && (
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-4">
+          <FinancialStatement />
         </div>
       )}
 

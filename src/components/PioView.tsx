@@ -30,7 +30,7 @@ export default function PioView({
   onUpdateActivity,
   onDeleteActivity,
   onOpenReportModal,
-  postedByName = 'PIO (Ida S. Manera)'
+  postedByName = 'PIO'
 }: PioViewProps) {
   const { t, isEnglish: en } = useLanguage();
   const [activeTab, setActiveTab] = useState<'bulletins' | 'activities'>('bulletins');
@@ -154,7 +154,7 @@ export default function PioView({
         targetAudience: actAudience,
         status: actStatus,
         documentedNotes: actNotes,
-        organizer: 'PIO (Ida S. Manera)',
+        organizer: 'PIO',
         attendeesCount: Number(actAttendees)
       });
     }

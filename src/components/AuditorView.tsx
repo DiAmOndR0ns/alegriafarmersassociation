@@ -21,7 +21,7 @@ export default function AuditorView({
   onAddInventory,
   onUpdateInventory,
   onDeleteInventory,
-  auditorName = 'Auditor (Lorena B. Pinote)'
+  auditorName = 'AFA Auditor'
 }: AuditorViewProps) {
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterAudit, setFilterAudit] = useState<'all' | 'Unaudited' | 'Audited' | 'Flagged'>('all');

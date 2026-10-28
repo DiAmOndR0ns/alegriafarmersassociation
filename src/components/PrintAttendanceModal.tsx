@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Member } from '../types';
+import { Member, User, OfficerRole } from '../types';
+import { resolveOfficerName } from '../utils/officers';
 import { Printer, Download, Copy, X, Settings, Check, FileText, Sprout, Landmark, Users, Calendar, MapPin } from 'lucide-react';
 
 interface PrintAttendanceModalProps {
   isOpen: boolean;
   onClose: () => void;
   members: Member[];
+  users?: User[];
 }
 
-export default function PrintAttendanceModal({ isOpen, onClose, members }: PrintAttendanceModalProps) {
+export default function PrintAttendanceModal({ isOpen, onClose, members, users = [] }: PrintAttendanceModalProps) {
   const [showSettings, setShowSettings] = useState(true);
   const [copied, setCopied] = useState(false);
   
@@ -17,7 +19,8 @@ export default function PrintAttendanceModal({ isOpen, onClose, members }: Print
   const [meetingTitle, setMeetingTitle] = useState('Monthly General Assembly');
   const [meetingDate, setMeetingDate] = useState(new Date().toISOString().split('T')[0]);
   const [meetingVenue, setMeetingVenue] = useState('Alegria Multi-Purpose Center');
-  const [presidingOfficer, setPresidingOfficer] = useState('Zenaida A. Elbiña (President)');
+  // Presiding officer defaults to the President ACTUALLY delegated in the system.
+  const [presidingOfficer, setPresidingOfficer] = useState(`${resolveOfficerName(users, 'President' as OfficerRole)} (President)`);
   const [sheetType, setSheetType] = useState<'blank' | 'prepopulated'>('blank');
   const [blankRowsCount, setBlankRowsCount] = useState(25);
   const [showWatermark, setShowWatermark] = useState(true);
@@ -80,11 +83,11 @@ ${divider}
 CERTIFIED TRUE AND CORRECT BY:
 
 Prepared by:
-   Jennylyn S Lumactao
+   ${resolveOfficerName(users, 'Secretary' as OfficerRole)}
    Secretary, AFA
 
 Attested by:
-   ${presidingOfficer.split('(')[0].trim() || 'Zenaida A. Elbiña'}
+   ${presidingOfficer.split('(')[0].trim() || resolveOfficerName(users, 'President' as OfficerRole)}
    President, AFA
 `;
 
@@ -135,11 +138,11 @@ ${divider}
 CERTIFIED TRUE AND CORRECT BY:
 
 Prepared by:
-   Jennylyn S Lumactao
+   ${resolveOfficerName(users, 'Secretary' as OfficerRole)}
    Secretary, AFA
 
 Attested by:
-   ${presidingOfficer.split('(')[0].trim() || 'Zenaida A. Elbiña'}
+   ${presidingOfficer.split('(')[0].trim() || resolveOfficerName(users, 'President' as OfficerRole)}
    President, AFA
 `;
 
@@ -521,7 +524,7 @@ Attested by:
                     <p className="text-slate-500">Prepared and Circulated by:</p>
                     <div>
                       <div className="w-full border-b border-slate-400 h-1" />
-                      <p className="font-bold text-slate-800 uppercase mt-1">Jennylyn S Lumactao</p>
+                      <p className="font-bold text-slate-800 uppercase mt-1">{resolveOfficerName(users, 'Secretary' as OfficerRole)}</p>
                       <p className="text-[9px] text-slate-500">Secretary, Alegria Farmers Association (AFA)</p>
                     </div>
                   </div>
@@ -531,7 +534,7 @@ Attested by:
                     <div>
                       <div className="w-full border-b border-slate-400 h-1" />
                       <p className="font-bold text-slate-800 uppercase mt-1">
-                        {presidingOfficer.split('(')[0].trim() || 'Zenaida A. Elbiña'}
+                        {presidingOfficer.split('(')[0].trim() || resolveOfficerName(users, 'President' as OfficerRole)}
                       </p>
                       <p className="text-[9px] text-slate-500 font-sans">President, Alegria Farmers Association (AFA)</p>
                     </div>

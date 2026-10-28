@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Member, Meeting, HogRaisingState, User } from '../types';
+import { resolveOfficerName } from '../utils/officers';
 import { 
   DollarSign, Calculator, Printer, CheckCircle, AlertTriangle, 
   Users, Percent, Calendar, Sparkles, TrendingUp, X, Award, ShieldAlert
@@ -12,6 +13,7 @@ interface AttendanceDividendCalculatorModalProps {
   meetings: Meeting[];
   hogRaisingState: HogRaisingState;
   currentUser?: User;
+  users?: User[];
 }
 
 export default function AttendanceDividendCalculatorModal({
@@ -20,7 +22,8 @@ export default function AttendanceDividendCalculatorModal({
   members,
   meetings,
   hogRaisingState,
-  currentUser
+  currentUser,
+  users = []
 }: AttendanceDividendCalculatorModalProps) {
   const [selectedProduce, setSelectedProduce] = useState<string>('all');
   const [allowAbsenceThreshold, setAllowAbsenceThreshold] = useState<number>(1); // Minimum required attended meetings
@@ -219,13 +222,13 @@ export default function AttendanceDividendCalculatorModal({
 
           <div class="signatures">
             <div>
-              <div class="sign-line">GRACELYN P. ASENDIENTE<br/><span style="font-size:9px; font-weight:normal;">Treasurer, AFA</span></div>
+              <div class="sign-line">${resolveOfficerName(users, 'Treasurer').toUpperCase()}<br/><span style="font-size:9px; font-weight:normal;">Treasurer, AFA</span></div>
             </div>
             <div>
-              <div class="sign-line">LORENA B. PINOTE<br/><span style="font-size:9px; font-weight:normal;">Auditor, AFA</span></div>
+              <div class="sign-line">${resolveOfficerName(users, 'Auditor').toUpperCase()}<br/><span style="font-size:9px; font-weight:normal;">Auditor, AFA</span></div>
             </div>
             <div>
-              <div class="sign-line">ZENAIDA A. ELBIÑA<br/><span style="font-size:9px; font-weight:normal;">President, AFA</span></div>
+              <div class="sign-line">${resolveOfficerName(users, 'President').toUpperCase()}<br/><span style="font-size:9px; font-weight:normal;">President, AFA</span></div>
             </div>
           </div>
 

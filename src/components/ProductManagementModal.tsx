@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Product, OfficerRole } from '../types';
+import { Product, OfficerRole, User as SystemUser } from '../types';
+import { resolveOfficerPrefixed } from '../utils/officers';
 import {  ShoppingBag, Plus, Edit, Trash2, Eye, EyeOff, X, Check, Search, Tag, DollarSign, Package, User, Phone, MapPin } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -10,6 +11,7 @@ interface ProductManagementModalProps {
   onUpdateProduct: (product: Product) => void;
   onDeleteProduct: (id: string) => void;
   onClose: () => void;
+  users?: SystemUser[];
 }
 
 
@@ -19,7 +21,8 @@ export default function ProductManagementModal({
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
-  onClose
+  onClose,
+  users = []
 }: ProductManagementModalProps) {
   const { isEnglish: en } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,15 +46,8 @@ export default function ProductManagementModal({
   const [isPublished, setIsPublished] = useState(true);
   const [otherCategory, setOtherCategory] = useState('');
 
-  const getOfficerTitle = (role: OfficerRole) => {
-    switch (role) {
-      case 'President': return 'President Zenaida A. Elbiña';
-      case 'Vice_President': return 'Vice President Anselna B. Arnado';
-      case 'Treasurer': return 'Treasurer Gracelyn P. Asendiente';
-      case 'Auditor': return 'Auditor Lorena B. Pinote';
-      default: return `${role} Officer`;
-    }
-  };
+  // Resolved from the officers ACTUALLY delegated in the system — no hardcoded names.
+  const getOfficerTitle = (role: OfficerRole) => resolveOfficerPrefixed(users, role);
 
   const handleOpenAdd = () => {
     setEditingProduct(null);

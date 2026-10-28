@@ -200,7 +200,8 @@ export default function AuthScreen({
     }
 
     if (!matchedUser.isApproved) {
-      toast('Ang imong account nagpaabot pa sa pag-aprobar ni Presidente Zenaida A. Elbiña (Awaiting President approval).', 'warning');
+      const presidentName = users.find(u => u.role?.toLowerCase() === 'president')?.name || 'AFA President';
+      toast(`Ang imong account nagpaabot pa sa pag-aprobar ni Presidente ${presidentName} (Awaiting President approval).`, 'warning');
       return;
     }
 
@@ -406,7 +407,7 @@ export default function AuthScreen({
                   <div className="text-xs space-y-1">
                     <strong className="font-extrabold block">Hangyo sa Bag-ong Password (Password Reset Request)</strong>
                     <p className="leading-relaxed text-bafa-neutral-700">
-                      Isulat ang imong Username sa ubos. Ang imong hangyo ipadala dayon ngadto kang Presidente Zenaida A. Elbiña.
+                      Isulat ang imong Username sa ubos. Ang imong hangyo ipadala dayon ngadto kang Presidente {users.find(u => u.role?.toLowerCase() === 'president')?.name || 'AFA President'}.
                     </p>
                   </div>
                 </div>

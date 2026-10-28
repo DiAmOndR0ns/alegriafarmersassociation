@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement, AssociationActivity, InventoryItem, HogRaisingState, OfficerRole, OrganizationFund } from '../types';
+import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement, AssociationActivity, InventoryItem, HogRaisingState, OfficerRole, OrganizationFund, User } from '../types';
 import { INITIAL_FUNDS } from '../initialData';
+import { resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
 import {  getSurname } from '../utils/names';
 import {
   Printer, Download, X, FileText, ShieldCheck, Coins,
@@ -9,6 +10,7 @@ import {
 
 interface OfficerReportModalProps {
   currentRole: OfficerRole;
+  users: User[];
   members: Member[];
   meetings: Meeting[];
   resolutions: Resolution[];
@@ -25,6 +27,7 @@ interface OfficerReportModalProps {
 
 export default function OfficerReportModal({
   currentRole,
+  users,
   members,
   meetings,
   resolutions,
@@ -118,21 +121,9 @@ export default function OfficerReportModal({
     getSurname(a.name).localeCompare(getSurname(b.name)) || a.name.localeCompare(b.name)
   );
 
-  // Officer names
-  const getOfficerNameByRole = (r: OfficerRole) => {
-    switch (r) {
-      case 'President': return 'Zenaida A. Elbiña';
-      case 'Vice_President': return 'Anselna B. Arnado';
-      case 'Secretary': return 'Jennylyn S. Lumactao';
-      case 'Assistant_Secretary': return 'Joan A. Cebas';
-      case 'Board_Member': return 'AFA Board Member';
-      case 'Treasurer': return 'Gracelyn P. Asendiente';
-      case 'Assistant_Treasurer': return 'Assistant Treasurer';
-      case 'Auditor': return 'Lorena B. Pinote';
-      case 'PIO': return 'Ida S. Manera';
-      default: return 'AFA Officer';
-    }
-  };
+  // Officer names — resolved LIVE from the officer accounts in the system.
+  // No hardcoded names: documents always reflect the actual delegated officers.
+  const getOfficerNameByRole = (r: OfficerRole) => resolveOfficerName(users, r);
 
   // Printable report handler
   const handlePrint = () => {
@@ -422,132 +413,38 @@ export default function OfficerReportModal({
         </table>
       `;
     } else if (activeReportRole === 'President') {
-      // PRESIDENT'S CONSOLIDATED EXECUTIVE SUMMARY OF ALL EXECUTIVE OFFICERS
+      // SEGREGATED PRESIDENT'S REPORT — EXECUTIVE SUMMARY ONLY.
+      // Segregation of duties: all FINANCIAL exports belong to the TREASURER'S DASHBOARD (TreasurerView);
+      // all MEMBERSHIP/LEGISLATIVE exports belong to the Secretary's export;
+      // all BULLETINS/ACTIVITIES exports belong to the PIO's export.
+      // The President's letterhead report carries highlights, plans and the officers directory only — no treasury figures.
       contentHtml = `
         <div class="section-title">1. EXECUTIVE OVERVIEW & STATE OF THE ASSOCIATION</div>
         <table>
           <tr><th>Executive Key Performance Indicator</th><th>Current Status Outcome</th></tr>
           <tr><td>Total Registered Farmer Roster</td><td><strong>${members.length} Members (${activeMembers.length} Active, ${inactiveMembers.length} Inactive)</strong></td></tr>
-          <tr><td>General Fund Financial Cash Balance</td><td><strong>PHP ${netBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong></td></tr>
           <tr><td>Passed Legislative Resolutions</td><td>${resolutions.filter(r => r.status === 'Approved').length} Approved Resolution(s) out of ${resolutions.length} Total</td></tr>
-          <tr><td>Financial Audit Integrity Rate</td><td><strong>${auditComplianceRate}% Verified Compliance (Auditor: Lorena B. Pinote)</strong></td></tr>
+          <tr><td>Financial Audit Integrity Rate</td><td><strong>${auditComplianceRate}% Verified Compliance (Auditor: ${getOfficerNameByRole('Auditor')})</strong></td></tr>
           <tr><td>Public Announcements Broadcasted</td><td>${announcements.length} Published Advisories (${announcements.filter(a => a.priority === 'High').length} High Priority)</td></tr>
         </table>
-
-        <div class="section-title">2. CAPITAL & SOURCE OF BUDGET ALLOCATIONS (WHERE BUDGET WAS TAKEN FROM)</div>
         <p style="font-size: 10px; color: #475569; margin-bottom: 8px;">
-          Master inventory of government capital allocations, cooperative deposits, and organizational funds managed by the Association:
+          Note: Financial statements, fund allocations, and cash flow are exported EXCLUSIVELY from the <strong>Treasurer's Dashboard</strong> (Treasurer's Official Financial Report).
+          The consolidated membership roster and legislative minutes are issued under the <strong>Secretary's Official Report</strong>.
+          Community bulletins and activity logs are issued under the <strong>PIO's Official Communications Report</strong>.
         </p>
-        <table>
-          <thead>
-            <tr>
-              <th>Fund Code</th>
-              <th>Fund Program Name</th>
-              <th>Originating Budget / Funding Source</th>
-              <th>Allocated Capital (PHP)</th>
-              <th>Audited Live Balance (PHP)</th>
-              <th>Fund Custodian</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${funds.map(f => `
-              <tr>
-                <td><strong>${f.code}</strong></td>
-                <td><strong>${f.name}</strong></td>
-                <td>${f.code.includes('DOLE') ? 'DOLE Integrated Livelihood Program (DILP)' : f.code.includes('SLP') ? 'DSWD-SLP & LGU Tuburan Seed Fund' : f.code.includes('ATI') ? 'ATI Region VII Training Fund' : f.code.includes('FCCT') ? 'FCCT Cooperative Bank Savings' : f.code.includes('DISP') ? '5% Gross Statutory Reserve' : 'Member Equity Pool'}</td>
-                <td>PHP ${f.allocatedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                <td style="color: #065f46; font-weight: bold;">PHP ${f.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                <td>${f.custodian}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
 
-        <div class="section-title">3. TREASURER'S FINANCIAL DEPARTMENT SUMMARY</div>
-        <table>
-          <tr><th>Financial Metric</th><th>Amount (PHP)</th><th>Budget Status / Remarks</th></tr>
-          <tr><td>Total Gross Revenue Collected</td><td class="income">+ PHP ${totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td><td>Membership dues, donations, sales & livelihood</td></tr>
-          <tr><td>Total Disbursed Operating Expenses</td><td class="expense">- PHP ${totalExpense.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td><td>Disbursed across GF-SLP, ATI, & operational allocations</td></tr>
-          <tr style="background:#f1f5f9;"><td><strong>NET CASH FUND BALANCE</strong></td><td><strong>PHP ${netBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong></td><td><strong>Liquid Treasury Balance</strong></td></tr>
-        </table>
-
-        <div class="section-title">4. AUDITOR'S FINANCIAL OVERSIGHT SUMMARY</div>
-        <table>
-          <tr><th>Audit Metric</th><th>Details</th></tr>
-          <tr><td>Transactions Evaluated</td><td>${transactions.length} Total Ledger Items</td></tr>
-          <tr><td>Verified & Audited OK</td><td style="color: green; font-weight: bold;">${auditedCount} Transaction(s)</td></tr>
-          <tr><td>Flagged Discrepancies Requiring Review</td><td style="color: red; font-weight: bold;">${flaggedCount} Item(s)</td></tr>
-          <tr><td>Audit Compliance Rate</td><td><strong>${auditComplianceRate}%</strong></td></tr>
-        </table>
-
-        <div class="section-title">5. SECRETARY'S MEMBERSHIP & LEGISLATIVE ASSEMBLY SUMMARY</div>
-        <table>
-          <tr><th>Secretariat Metric</th><th>Details</th></tr>
-          <tr><td>Registered Roster Count</td><td>${members.length} Farmers (${activeMembers.length} Active)</td></tr>
-          <tr><td>Sitio Locations Covered</td><td>${Object.keys(sitioCounts).length} Sitio Communities</td></tr>
-          <tr><td>Passed Legislative Resolutions</td><td>${resolutions.filter(r => r.status === 'Approved').length} Approved out of ${resolutions.length} Total</td></tr>
-          <tr><td>General Assembly Sessions Held</td><td>${meetings.length} Recorded Meetings</td></tr>
-        </table>
-
-        <div class="section-title">6. PUBLIC INFORMATION OFFICER (PIO) SUMMARY</div>
-        <table>
-          <tr><th>PIO Metric</th><th>Details</th></tr>
-          <tr><td>Total Community Bulletins Published</td><td>${announcements.length} Announcements</td></tr>
-          <tr><td>Urgent LGU & Weather Advisories</td><td>${announcements.filter(a => a.priority === 'High').length} High-Priority Bulletins</td></tr>
-        </table>
-
-        ${hogRaising ? `
-          <div class="section-title">7. HOG RAISING & LIVELIHOOD IGP PROJECT</div>
-          <table>
-            <tr><th>IGP Metric</th><th>Outcome Details</th></tr>
-            <tr><td>Total Operating Expenses Recorded</td><td>PHP ${hogExpensesTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })} (Feeds, Piglets, Vaccines)</td></tr>
-            <tr><td>Active Volunteer Chore Groups</td><td>${hogRaising.groups?.length || 0} Member Caretaker Teams</td></tr>
-            <tr><td>Total Batch Sales Revenue Collected</td><td>PHP ${hogSalesTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td></tr>
-            <tr><td>Net Livelihood Tubo / Proceeds</td><td style="color: ${hogNet >= 0 ? 'green' : 'red'}; font-weight: bold;">PHP ${hogNet.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td></tr>
-          </table>
-        ` : ''}
-
-        <div class="section-title">8. EXECUTIVE OFFICERS DIRECTORY</div>
+        <div class="section-title">2. EXECUTIVE OFFICERS DIRECTORY</div>
         <table>
           <thead>
             <tr><th>Role</th><th>Officer Name</th><th>Designation</th></tr>
           </thead>
           <tbody>
-            <tr><td>President</td><td>Zenaida A. Elbiña</td><td>Chief Executive Officer</td></tr>
-            <tr><td>Vice President</td><td>Anselna B. Arnado</td><td>Executive Vice Chairman</td></tr>
-            <tr><td>Secretary</td><td>Jennylyn S. Lumactao</td><td>Records & Secretariat Head</td></tr>
-            <tr><td>Treasurer</td><td>Gracelyn P. Asendiente</td><td>General Custodian of Funds</td></tr>
-            <tr><td>Auditor</td><td>Lorena B. Pinote</td><td>Chief Financial Auditor</td></tr>
-            <tr><td>PIO</td><td>Ida S. Manera</td><td>Public Information Officer</td></tr>
-          </tbody>
-        </table>
-
-        <div class="section-title">9. CONSOLIDATED ROSTER OF MEMBERS (BY SURNAME)</div>
-        <p style="font-size: 10px; color: #475569; margin-bottom: 8px;">
-          Surname is taken from each registered farmer's official record and listed alphabetically for the consolidated report of the members.
-        </p>
-        <table>
-          <thead>
-            <tr>
-              <th>No.</th>
-              <th>Surname</th>
-              <th>Full Name</th>
-              <th>Member ID</th>
-              <th>Sitio Location</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${membersBySurname.map((m, i) => `
-              <tr>
-                <td>${i + 1}</td>
-                <td><strong>${getSurname(m.name)}</strong></td>
-                <td>${m.name}</td>
-                <td>${m.memberIdNumber || 'Pending'}</td>
-                <td>${m.farmLocation || 'Unassigned'}</td>
-                <td>${m.status}</td>
-              </tr>
-            `).join('') || '<tr><td colspan="6">No members on record.</td></tr>'}
+            <tr><td>President</td><td>${getOfficerNameByRole('President')}</td><td>Chief Executive Officer</td></tr>
+            <tr><td>Vice President</td><td>${getOfficerNameByRole('Vice_President')}</td><td>Executive Vice Chairman</td></tr>
+            <tr><td>Secretary</td><td>${getOfficerNameByRole('Secretary')}</td><td>Records & Secretariat Head</td></tr>
+            <tr><td>Treasurer</td><td>${getOfficerNameByRole('Treasurer')}</td><td>General Custodian of Funds</td></tr>
+            <tr><td>Auditor</td><td>${getOfficerNameByRole('Auditor')}</td><td>Chief Financial Auditor</td></tr>
+            <tr><td>PIO</td><td>${getOfficerNameByRole('PIO')}</td><td>Public Information Officer</td></tr>
           </tbody>
         </table>
       `;
@@ -721,13 +618,13 @@ export default function OfficerReportModal({
 
             <div class="sig-box">
               <div class="sig-line"></div>
-              <div class="sig-name">Lorena B. Pinote</div>
+              <div class="sig-name">${getOfficerNameByRole('Auditor')}</div>
               <div class="sig-title">Auditor Verification</div>
             </div>
 
             <div class="sig-box">
               <div class="sig-line"></div>
-              <div class="sig-name">Zenaida A. Elbiña</div>
+              <div class="sig-name">${getOfficerNameByRole('President')}</div>
               <div class="sig-title">President (Approved & Attested)</div>
             </div>
           </div>
@@ -943,73 +840,29 @@ export default function OfficerReportModal({
       csvRows.push(`Net Fund Balance (PHP),${netBalance.toFixed(2)}`);
       csvRows.push(`Approved Resolutions,${resolutions.filter(r => r.status === 'Approved').length}`);
     } else {
-      // PRESIDENT'S CONSOLIDATED EXECUTIVE CSV REPORT
-      csvRows.push('AFA PRESIDENT CONSOLIDATED EXECUTIVE SUMMARY OF ALL OFFICERS REPORTS');
+      // SEGREGATED PRESIDENT'S CONSOLIDATED EXECUTIVE CSV REPORT — SUMMARY ONLY.
+      // Segregation of duties: financial exports belong to the Treasurer's CSV export;
+      // membership/legislative exports to the Secretary's; bulletins/activities to the PIO's.
+      csvRows.push('AFA PRESIDENT CONSOLIDATED EXECUTIVE SUMMARY (SEGREGATED)');
       csvRows.push(`Date Generated,${reportDate}`);
       csvRows.push(`President,${getOfficerNameByRole('President')}`);
       csvRows.push('');
       csvRows.push('1. EXECUTIVE STATE OF THE ASSOCIATION');
       csvRows.push(`Total Registered Farmer Members,${members.length}`);
       csvRows.push(`Active Farmer Members,${activeMembers.length}`);
-      csvRows.push(`Net General Cash Fund Balance (PHP),${netBalance.toFixed(2)}`);
       csvRows.push(`Approved Legislative Resolutions,${resolutions.filter(r => r.status === 'Approved').length}`);
       csvRows.push(`Financial Audit Compliance Rate (%),${auditComplianceRate}`);
       csvRows.push('');
-      csvRows.push('2. PORTFOLIO OF CAPITAL & BUDGET SOURCES (WHERE BUDGET WAS TAKEN FROM)');
-      csvRows.push('Fund Code,Fund Account Name,Originating Source,Allocated Capital (PHP),Audited Balance (PHP),Custodian');
-      funds.forEach(f => {
-        const origin = f.code.includes('DOLE') ? 'DOLE Integrated Livelihood Program (DILP)' : f.code.includes('SLP') ? 'DSWD-SLP & LGU Tuburan Seed Fund' : f.code.includes('ATI') ? 'ATI Region VII Training Fund' : f.code.includes('FCCT') ? 'FCCT Cooperative Bank Savings' : f.code.includes('DISP') ? '5% Gross Statutory Reserve' : 'Member Equity Pool';
-        csvRows.push([
-          `"${f.code}"`,
-          `"${f.name.replace(/"/g, '""')}"`,
-          `"${origin}"`,
-          f.allocatedAmount.toFixed(2),
-          f.currentBalance.toFixed(2),
-          `"${f.custodian.replace(/"/g, '""')}"`
-        ].join(','));
-      });
+      csvRows.push('2. EXECUTIVE OFFICERS DIRECTORY');
+      csvRows.push('Role,Officer Name,Designation');
+      csvRows.push(`President,${getOfficerNameByRole('President')},Chief Executive Officer`);
+      csvRows.push(`Vice President,${getOfficerNameByRole('Vice_President')},Executive Vice Chairman`);
+      csvRows.push(`Secretary,${getOfficerNameByRole('Secretary')},Records & Secretariat Head`);
+      csvRows.push(`Treasurer,${getOfficerNameByRole('Treasurer')},General Custodian of Funds`);
+      csvRows.push(`Auditor,${getOfficerNameByRole('Auditor')},Chief Financial Auditor`);
+      csvRows.push(`PIO,${getOfficerNameByRole('PIO')},Public Information Officer`);
       csvRows.push('');
-      csvRows.push('3. TREASURER FINANCIAL SUMMARY');
-      csvRows.push(`Gross Income (PHP),${totalIncome.toFixed(2)}`);
-      csvRows.push(`Gross Expenditures (PHP),${totalExpense.toFixed(2)}`);
-      csvRows.push(`Net Balance (PHP),${netBalance.toFixed(2)}`);
-      csvRows.push('');
-      csvRows.push('4. AUDITOR COMPLIANCE SUMMARY');
-      csvRows.push(`Total Evaluated Transactions,${transactions.length}`);
-      csvRows.push(`Audited Verified OK,${auditedCount}`);
-      csvRows.push(`Flagged Discrepancy Items,${flaggedCount}`);
-      csvRows.push(`Audit Integrity Rate (%),${auditComplianceRate}`);
-      csvRows.push('');
-      csvRows.push('5. SECRETARY ROSTER & ASSEMBLY SUMMARY');
-      csvRows.push(`Active Members,${activeMembers.length}`);
-      csvRows.push(`Inactive Members,${inactiveMembers.length}`);
-      csvRows.push(`Passed Resolutions,${resolutions.filter(r => r.status === 'Approved').length}`);
-      csvRows.push(`General Assembly Meetings Logged,${meetings.length}`);
-      csvRows.push('');
-      csvRows.push('6. PUBLIC INFORMATION OFFICER (PIO) SUMMARY');
-      csvRows.push(`Total Bulletins Published,${announcements.length}`);
-      csvRows.push(`High Priority Advisories,${announcements.filter(a => a.priority === 'High').length}`);
-      if (hogRaising) {
-        csvRows.push('');
-        csvRows.push('7. HOG RAISING IGP LIVELIHOOD SUMMARY');
-        csvRows.push(`Total Operating Expenses (PHP),${hogExpensesTotal.toFixed(2)}`);
-        csvRows.push(`Active Volunteer Chore Groups,${hogRaising.groups?.length || 0}`);
-        csvRows.push(`Total Batch Sales Revenue (PHP),${hogSalesTotal.toFixed(2)}`);
-        csvRows.push(`Net Livelihood Tubo (PHP),${hogNet.toFixed(2)}`);
-      }
-      csvRows.push('');
-      csvRows.push('8. CONSOLIDATED ROSTER OF MEMBERS (BY SURNAME)');
-      csvRows.push('No.,Surname,Full Name,Member ID,Sitio Location,Status');
-      membersBySurname.forEach((m, i) => {
-        csvRows.push([
-          (i + 1).toString(),
-          `"${getSurname(m.name).replace(/"/g, '""')}"`,
-          `"${m.name.replace(/"/g, '""')}"`,
-          `"${(m.memberIdNumber || 'Pending')}"`,
-          `"${(m.farmLocation || 'Unassigned').replace(/"/g, '""')}"`,
-          m.status
-        ].join(','));
-      });
+      csvRows.push('NOTE: Financial exports are issued EXCLUSIVELY by the Treasurer (Treasurer Dashboard); membership roster & legislative exports by the Secretary; bulletins & activity exports by the PIO.');
     }
 
     const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvRows.join('\n'));
@@ -1036,7 +889,7 @@ export default function OfficerReportModal({
               </h2>
               <p className="text-xs text-[#4A5F57] font-medium truncate">
                 {isPresident
-                  ? "Generate the consolidated executive summary. Financial reports are the Treasurer's task; member reports the Secretary's; activities the PIO's."
+                  ? "Generate the consolidated executive summary. Financial exports are the Treasurer's task (Treasurer dashboard); member reports the Secretary's; activities the PIO's."
                   : `Generate, the official ${currentRole.replace('_', ' ')} department report.`}
               </p>
             </div>
@@ -1075,7 +928,7 @@ export default function OfficerReportModal({
                 <div className="min-w-0">
                   <span className="font-extrabold text-[#1B4332] block">President's Executive Consolidated Access</span>
                   <p className="text-[11px] text-[#3A4A42]">
-                    Consolidated summaries across all executive officers, with full treasury and capital breakdown.
+                    Consolidated executive summaries. Financial exports are segregated to the Treasurer's dashboard.
                   </p>
                 </div>
               </div>
@@ -1092,12 +945,14 @@ export default function OfficerReportModal({
                 Select View / Report Scope:
               </label>
               <p className="text-[10px] text-[#4A5F57] font-medium">
-                President — consolidated executive summary • Treasurer — financial reports • Secretary — member reports • PIO — activities.
+                President — consolidated executive summary • Secretary — member reports • PIO — activities.
+                Financial reports belong to the Treasurer's dashboard and are not exported here.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 {[
                   { role: 'President' as OfficerRole, label: 'President (Executive Summary)', icon: FileText, color: 'text-purple-600' },
-                  { role: 'Treasurer' as OfficerRole, label: 'Treasurer (Financial)', icon: Coins, color: 'text-amber-700' },
+                  // SEGREGATION OF DUTIES: Treasurer/financial reports are NOT generated here.
+                  // All financial exports belong to the Treasurer's dashboard (TreasurerView).
                   { role: 'Auditor' as OfficerRole, label: 'Auditor (Financial Oversight)', icon: ShieldCheck, color: 'text-emerald-700' },
                   { role: 'Secretary' as OfficerRole, label: 'Secretary (Members)', icon: Users, color: 'text-blue-700' },
                   { role: 'Assistant_Secretary' as OfficerRole, label: 'Assistant Secretary (Members)', icon: Users, color: 'text-blue-700' },
@@ -1136,7 +991,7 @@ export default function OfficerReportModal({
                   {activeReportRole === 'Auditor' && "Auditor's Financial Oversight & Allocation Compliance Inspection Report"}
                   {activeReportRole === 'Secretary' && "Secretary's Membership Roster & Legislative Assembly Report"}
                   {activeReportRole === 'Assistant_Secretary' && "Assistant Secretary's Membership Roster & Legislative Assembly Report"}
-                  {activeReportRole === 'President' && "President's Executive Consolidated Summary of All Officer Reports & Capital Portfolios"}
+                  {activeReportRole === 'President' && "President's Executive Summary Report (Members → Secretary • Activities → PIO • Financials → Treasurer Dashboard)"}
                   {activeReportRole === 'Vice_President' && "Vice President's Administration & Oversight Report"}
                   {activeReportRole === 'PIO' && "Public Information Officer Communications & Activities Report"}
                 </h3>
@@ -1244,12 +1099,12 @@ export default function OfficerReportModal({
                     <p className="text-sm font-mono font-bold text-[#1B4332]">{activeMembers.length} / {members.length}</p>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
-                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Net Fund</span>
-                    <p className="text-sm font-mono font-bold text-emerald-700">PHP {netBalance.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
                     <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Audit Rate</span>
                     <p className="text-sm font-mono font-bold text-emerald-700">{auditComplianceRate}%</p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Financials</span>
+                    <p className="text-[11px] font-bold text-amber-700">Treasurer's Dashboard</p>
                   </div>
                 </>
               )}

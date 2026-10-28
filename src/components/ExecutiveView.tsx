@@ -261,10 +261,10 @@ export default function ExecutiveView({
     const newLog: SystemLog = {
       id: `log-seal-${Date.now()}`,
       timestamp: new Date().toISOString(),
-      user: currentRole === 'President' ? 'Zenaida A. Elbiña' : 'AFA Executive Officer',
+      user: activeOfficerName,
       role: currentRole,
       action: 'Sealed Digital Trail',
-      details: `OFFICIAL YEAR-END SEALING: Ang general digital system audit trail alang sa tuig ${yearToSeal} opisyal nga gisirado ug gi-seal ni Presidente Zenaida A. Elbiña. Wala nay retroactive nga pagbag-o nga gitugot alang niini nga tuig. (Officially sealed and cryptographically locked the digital trail for the year ${yearToSeal}. No retroactive modifications permitted.)`,
+      details: `OFFICIAL YEAR-END SEALING: Ang general digital system audit trail alang sa tuig ${yearToSeal} opisyal nga gisirado ug gi-seal ni ${activeOfficerName}. Wala nay retroactive nga pagbag-o nga gitugot alang niini nga tuig. (Officially sealed and cryptographically locked the digital trail for the year ${yearToSeal}. No retroactive modifications permitted.)`,
       syncStatus: 'synced',
       hash: '',
       previousHash: ''
@@ -665,7 +665,7 @@ export default function ExecutiveView({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Jennylyn S. Lumactao"
+                    placeholder="e.g. Juan Dela Cruz"
                     value={newOfficerName}
                     onChange={(e) => setNewOfficerName(e.target.value)}
                     className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
@@ -1957,6 +1957,7 @@ export default function ExecutiveView({
       <PrintMinutesModal 
         meeting={selectedMeetingForPrint}
         onClose={() => setSelectedMeetingForPrint(null)}
+        users={users}
       />
     </div>
   );

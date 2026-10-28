@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Member, Resolution } from '../types';
+import { Member, Resolution, User, OfficerRole } from '../types';
+import { resolveOfficerName } from '../utils/officers';
 import { 
   FileText, Printer, CheckCircle, Copy, Download, 
   Send, Sparkles, X, ChevronRight, Building, Award, ShieldCheck
@@ -11,6 +12,7 @@ interface SecretaryTemplatesModalProps {
   members: Member[];
   resolutions: Resolution[];
   onAddResolution?: (resolution: Omit<Resolution, 'id' | 'status'>) => void;
+  users?: User[];
 }
 
 type TemplateType = 'loi' | 'resolution' | 'request';
@@ -20,7 +22,8 @@ export default function SecretaryTemplatesModal({
   onClose,
   members,
   resolutions,
-  onAddResolution
+  onAddResolution,
+  users = []
 }: SecretaryTemplatesModalProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>('loi');
   const [copied, setCopied] = useState(false);
@@ -39,8 +42,8 @@ export default function SecretaryTemplatesModal({
   const [resWhereas1, setResWhereas1] = useState('WHEREAS, the Alegria Farmers Association (AFA) is a duly registered rural workers organization composed of smallholder farmers residing in Barangay Alegria, Tuburan, Cebu;');
   const [resWhereas2, setResWhereas2] = useState('WHEREAS, the association actively engages in agriculture, livestock rearing, and communal hog raising to uplift the socio-economic condition of its members;');
   const [resWhereas3, setResWhereas3] = useState('WHEREAS, there is an urgent need to augment the revolving working capital for organic feeds, livestock dispersal, and post-harvest facilities;');
-  const [resResolved, setResResolved] = useState('NOW THEREFORE, on motion of Hon. Anselna B. Arnado, duly seconded by Hon. Maria Alcoser, BE IT RESOLVED, as it is hereby resolved, to formally submit this request and authorize the Association President to sign all necessary documents.');
-  const [resMovedBy, setResMovedBy] = useState('Anselna B. Arnado');
+  const [resResolved, setResResolved] = useState(`NOW THEREFORE, on motion of Hon. ${resolveOfficerName(users, 'Vice_President' as OfficerRole)}, duly seconded by Hon. Maria Alcoser, BE IT RESOLVED, as it is hereby resolved, to formally submit this request and authorize the Association President to sign all necessary documents.`);
+  const [resMovedBy, setResMovedBy] = useState(resolveOfficerName(users, 'Vice_President' as OfficerRole));
   const [resSecondedBy, setResSecondedBy] = useState('Maria Alcoser');
   const [resVoteFavor, setResVoteFavor] = useState(String(members.length || 42));
   const [resVoteAgainst, setResVoteAgainst] = useState('0');
@@ -133,7 +136,7 @@ export default function SecretaryTemplatesModal({
           <p style="margin-bottom:30px;">Respectfully submitted,</p>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:40px;">
             <div>
-              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">JENNYLYN S. LUMACTAO</div>
+              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">{resolveOfficerName(users, 'Secretary' as OfficerRole).toUpperCase()}</div>
               <div style="font-size:11px; color:#555;">Secretary, AFA</div>
             </div>
             <div>
@@ -241,7 +244,7 @@ export default function SecretaryTemplatesModal({
           <p style="margin-bottom:30px;">Very truly yours,</p>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:40px;">
             <div>
-              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">JENNYLYN S. LUMACTAO</div>
+              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">{resolveOfficerName(users, 'Secretary' as OfficerRole).toUpperCase()}</div>
               <div style="font-size:11px; color:#555;">Secretary, AFA</div>
             </div>
             <div>

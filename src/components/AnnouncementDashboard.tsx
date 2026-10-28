@@ -443,7 +443,7 @@ export default function AnnouncementDashboard({
                   <span className="font-black text-slate-600 text-sm">I</span>
                 </div>
                 <div>
-                  <h4 className={`font-black text-sm ${isOfficerMode ? 'text-white' : 'text-[#1B4332]'}`}>Ida S Manera</h4>
+                  <h4 className={`font-black text-sm ${isOfficerMode ? 'text-white' : 'text-[#1B4332]'}`}>AFA PIO</h4>
                   <p className={`text-[10px] ${isOfficerMode ? 'text-slate-300' : 'text-slate-500'}`}>Public Information Officer (PIO), AFA</p>
                 </div>
               </div>
