@@ -11,6 +11,7 @@ import PrintMinutesModal from './PrintMinutesModal';
 import PrintAttendanceModal from './PrintAttendanceModal';
 import RollCallModal from './RollCallModal';
 import SecretaryTemplatesModal from './SecretaryTemplatesModal';
+import AFAMemberLists from './AFAMemberLists';
 import MemberIdBadgeModal from './MemberIdBadgeModal';
 import AffiliationManager from './AffiliationManager';
 import { splitName } from '../utils/names';
@@ -123,6 +124,9 @@ export default function SecretaryView({
     sitio: string;
   } | null>(null);
   const [copiedCredentials, setCopiedCredentials] = useState(false);
+
+  // Official printable rosters (officers + member lists) — segregated exportable.
+  const [showMemberLists, setShowMemberLists] = useState(false);
 
   // Manage / Reset Portal Login Modal (for existing members)
   const [loginManageMember, setLoginManageMember] = useState<Member | null>(null);
@@ -432,6 +436,18 @@ export default function SecretaryView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto min-w-0">
+          {/* SEGREGATED EXPORTABLE — official printable officers & member rosters,
+              separate from the Secretary's other document exports. */}
+          <button
+            id="secretary-member-lists-btn"
+            type="button"
+            onClick={() => setShowMemberLists(true)}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold bg-emerald-900 hover:bg-emerald-800 text-emerald-100 border border-emerald-500/40 rounded-xl shadow-sm transition-all flex-1 sm:flex-none cursor-pointer whitespace-nowrap"
+          >
+            <Printer className="w-4 h-4 text-emerald-300 shrink-0" />
+            <span>Member Lists &amp; Officers (Print)</span>
+          </button>
+
           <button
             id="secretary-templates-btn"
             type="button"
@@ -1764,6 +1780,14 @@ export default function SecretaryView({
           }
         }}
       />
+
+      {/* OFFICIAL PRINTABLE OFFICERS & MEMBER ROSTERS — segregated exportable,
+          separate from the Secretary's other document exports. */}
+      {showMemberLists && (
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm">
+          <AFAMemberLists users={users} members={members} />
+        </div>
+      )}
 
       {/* SECRETARY OFFICIAL TEMPLATES MODAL (LOI, RESOLUTION, REQUEST LETTER) */}
       <SecretaryTemplatesModal
