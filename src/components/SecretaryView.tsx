@@ -1794,7 +1794,11 @@ export default function SecretaryView({
           separate from the Secretary's other document exports. */}
       {showMemberLists && (
         <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm">
-          <AFAMemberLists users={users} members={members} />
+          <AFAMemberLists
+            users={users}
+            members={members}
+            onClose={() => setShowMemberLists(false)}
+          />
         </div>
       )}
 

@@ -20,7 +20,7 @@
  * The officers list and member rosters are built from the LIVE system accounts
  * and member records — no hardcoded officers or members.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Member, User, OfficerRole } from "../types";
 import { resolveOfficerName, OFFICER_ROLES, OFFICER_ROLE_LABELS } from "../utils/officers";
 import { getSurname } from "../utils/names";
@@ -66,6 +66,7 @@ interface Props {
   paper?: PaperKey;
   certifiedBy?: Signatory;
   attestedBy?: Signatory;
+  onClose?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -212,6 +213,19 @@ const buildCss = ({ w, h }: { w: string; h: string }) => `
 .afa-toolbar button { background: #166534; border-color: #166534; color: #fff; }
 .afa-toolbar button:focus-visible,
 .afa-toolbar select:focus-visible { outline: 2px solid #166534; outline-offset: 2px; }
+.afa-toolbar button.afa-btn-close {
+  background: #dc2626;
+  border-color: #b91c1c;
+  color: #fff;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.afa-toolbar button.afa-btn-close:hover {
+  background: #b91c1c;
+  border-color: #991b1b;
+}
 
 .afa-stage { background: #d4d4d8; padding: 24px 12px; overflow-x: auto; }
 
@@ -400,9 +414,19 @@ export default function AFAMemberLists({
   paper: initialPaper = "a4",
   certifiedBy,
   attestedBy,
+  onClose,
 }: Props & { users?: User[]; members?: Member[] }) {
   const [paper, setPaper] = useState<PaperKey>(initialPaper);
   const [logoOk, setLogoOk] = useState(true);
+
+  useEffect(() => {
+    if (!onClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   // Signatories resolve LIVE from the accounts delegated in the system.
   const resolvedCertifiedBy: Signatory =
@@ -430,6 +454,16 @@ export default function AFAMemberLists({
         <button type="button" onClick={() => window.print()}>
           Print
         </button>
+        {onClose && (
+          <button
+            type="button"
+            className="afa-btn-close"
+            onClick={onClose}
+            title="Exit print preview (Esc)"
+          >
+            ✕ Exit
+          </button>
+        )}
       </div>
 
       <div className="afa-stage">
