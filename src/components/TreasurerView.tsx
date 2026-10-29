@@ -30,6 +30,8 @@ interface TreasurerViewProps {
   onDeleteFund?: (id: string) => void;
   onOpenReportModal?: () => void;
   users?: User[];
+  currentUser?: User;
+  currentRole?: OfficerRole;
 }
 
 export interface MonthlyChartEntry {
@@ -137,7 +139,9 @@ export default function TreasurerView({
   onAddFund,
   onDeleteFund,
   onOpenReportModal,
-  users = []
+  users = [],
+  currentUser,
+  currentRole = 'Treasurer'
 }: TreasurerViewProps) {
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterAudit, setFilterAudit] = useState<'all' | 'Unaudited' | 'Audited' | 'Flagged'>('all');
@@ -174,7 +178,13 @@ export default function TreasurerView({
   const [fundFormCode, setFundFormCode] = useState('');
   const [fundFormAllocated, setFundFormAllocated] = useState('');
   const [fundFormBalance, setFundFormBalance] = useState('');
-  const [fundFormCustodian, setFundFormCustodian] = useState(resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole));
+  const defaultCustodian = useMemo(() => {
+    if (currentRole === 'Assistant_Treasurer') {
+      return `Assistant Treasurer ${currentUser?.name || resolveOfficerPrefixed(users, 'Assistant_Treasurer')}`;
+    }
+    return resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole);
+  }, [currentRole, currentUser, users]);
+  const [fundFormCustodian, setFundFormCustodian] = useState(defaultCustodian);
   const [fundFormDescription, setFundFormDescription] = useState('');
 
   // Audit Form
@@ -302,7 +312,7 @@ export default function TreasurerView({
     setFundFormCode('');
     setFundFormAllocated('');
     setFundFormBalance('');
-    setFundFormCustodian(resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole));
+    setFundFormCustodian(defaultCustodian);
     setFundFormDescription('');
     setShowAddFundModal(false);
   };
@@ -331,7 +341,7 @@ export default function TreasurerView({
           code: codeDerived,
           allocatedAmount: txType === 'income' ? parseFloat(txAmount) : 0,
           currentBalance: txType === 'income' ? parseFloat(txAmount) : 0,
-          custodian: resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole),
+          custodian: defaultCustodian,
           description: `Tinubdan sa pundo nga gi-rehistro ni Treasurer alang sa ${txType === 'income' ? 'nadawat nga kita' : 'gasto'}: ${effectivePurpose}`
         });
       }
@@ -346,7 +356,7 @@ export default function TreasurerView({
       purpose: effectivePurpose,
       liquidationDeadline,
       fundSource: finalFundSource,
-      recordedBy: resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole)
+      recordedBy: defaultCustodian
     });
 
     setTxAmount('');
@@ -368,6 +378,35 @@ export default function TreasurerView({
 
   return (
     <div id="treasurer-view-container" className="space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-[#F7F4EF] p-4 rounded-2xl border border-[#D5CFC1]">
+        <div>
+          <h2 className="text-xl font-bold text-[#1B4332] flex items-center gap-2">
+            <Coins className="w-5 h-5 text-amber-600" />
+            <span>Treasurer Dashboard</span>
+            {currentRole === 'Assistant_Treasurer' && (
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-300">
+                Assistant Treasurer Access
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-[#4A5F57] mt-1">
+            Manage organization funds, record financial transactions, and generate official statements.
+          </p>
+        </div>
+        {onOpenReportModal && (
+          <button
+            id="treasurer-report-btn"
+            type="button"
+            onClick={onOpenReportModal}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-black bg-[#1B4332] hover:bg-[#143326] text-white border border-[#2D6A4F] rounded-xl shadow-sm transition-all cursor-pointer whitespace-nowrap"
+          >
+            <FileText className="w-4 h-4 text-[#D8F3DC] shrink-0" />
+            <span>Export Official Statement</span>
+          </button>
+        )}
+      </div>
+
       {/* FINANCIAL OVERVIEW CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Total General Funds */}

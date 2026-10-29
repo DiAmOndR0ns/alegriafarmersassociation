@@ -1131,7 +1131,9 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         const existingRow = await client.query('SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1', [cleanUsername]);
         const targetId = existingRow.rows[0]?.id || u.id;
         const existingRole = existingRow.rows[0]?.role;
-        const targetRole = existingRole && existingRole.toLowerCase() !== 'member' ? existingRole : (u.role || 'Member');
+        const incomingRole = u.role || 'Member';
+        const isCurrentPresident = existingRole && existingRole.toLowerCase() === 'president';
+        const targetRole = isCurrentPresident && incomingRole.toLowerCase() !== 'president' ? existingRole : incomingRole;
 
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
@@ -1140,7 +1142,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             username = EXCLUDED.username,
             password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
             name = EXCLUDED.name,
-            role = CASE WHEN users.role != 'Member' THEN users.role ELSE EXCLUDED.role END,
+            role = CASE WHEN users.role = 'President' AND EXCLUDED.role != 'President' THEN users.role ELSE EXCLUDED.role END,
             is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,

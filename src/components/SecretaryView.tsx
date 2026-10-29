@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Member, Meeting, Resolution, User, MemberAffiliation } from '../types';
+import { Member, Meeting, Resolution, User, MemberAffiliation, OfficerRole } from '../types';
 import {
   Users, BookOpen, FileText, Plus, Search,
   MapPin, CheckCircle, FilePlus, Calendar,
@@ -20,6 +20,8 @@ import { generateInitialPassword, validatePasswordPolicy } from '../utils/passwo
 interface SecretaryViewProps {
   members: Member[];
   users?: User[];
+  currentUser?: User;
+  currentRole?: OfficerRole;
   onAddMember: (member: Omit<Member, 'id' | 'joinedDate'>, loginCredentials?: { username: string; initialPassword?: string }) => void;
   onUpdateMember?: (member: Member) => void;
   onUpdateMemberStatus: (id: string, status: 'Active' | 'Inactive') => void;
@@ -77,6 +79,8 @@ const buildFullName = (first: string, middle: string, surname: string) => {
 export default function SecretaryView({
   members,
   users = [],
+  currentUser,
+  currentRole,
   onAddMember,
   onUpdateMember,
   onUpdateMemberStatus,
@@ -373,7 +377,7 @@ export default function SecretaryView({
       attendanceCount: finalCount,
       agenda: meetingAgenda,
       minutes: meetingMinutes,
-      officerInCharge: `Secretary (${users.find(u => u.role === 'Secretary')?.name || 'AFA Secretary'})`,
+      officerInCharge: `${currentRole === 'Assistant_Secretary' ? 'Assistant Secretary' : 'Secretary'} (${currentUser?.name || users.find(u => u.role === currentRole || u.role === 'Secretary')?.name || 'AFA Secretary'})`,
       attendanceRecord: Object.keys(meetingAttendanceRecord).length > 0 ? meetingAttendanceRecord : undefined
     });
     // Reset Form
@@ -428,7 +432,12 @@ export default function SecretaryView({
         <div className="shrink-0">
           <h2 className="text-xl font-bold text-[#1B4332] flex items-center gap-2">
             <Users className="w-5 h-5 text-emerald-600" />
-            <span>Secretary Administration</span>
+            <span>Secretary Dashboard</span>
+            {currentRole === 'Assistant_Secretary' && (
+              <span className="text-[10px] bg-blue-100 text-blue-800 font-extrabold px-2.5 py-0.5 rounded-full border border-blue-300">
+                Assistant Secretary Access
+              </span>
+            )}
           </h2>
           <p className="text-xs text-[#4A5F57] mt-1">
             Register members, draft resolutions, and compile meeting minutes.

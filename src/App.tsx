@@ -2410,6 +2410,27 @@ export default function App() {
     return true;
   };
 
+  const getPrimaryRoleDashboardLabel = (role: OfficerRole) => {
+    switch (role) {
+      case 'Secretary':
+      case 'Assistant_Secretary':
+        return 'Secretary Dashboard';
+      case 'Treasurer':
+      case 'Assistant_Treasurer':
+        return 'Treasurer Dashboard';
+      case 'Auditor':
+        return 'Auditor Dashboard';
+      case 'PIO':
+        return 'PIO Information Board';
+      case 'Board_Member':
+        return 'Board Member View';
+      case 'President':
+      case 'Vice_President':
+      default:
+        return 'Executive Dashboard';
+    }
+  };
+
   const handleUpdateProfile = (updatedUser: User) => {
     const owner = currentUser && users.find(u => u.id === currentUser.id);
     if (!owner || updatedUser.id !== owner.id) {
@@ -2892,7 +2913,7 @@ export default function App() {
           <nav className="flex-1 overflow-y-auto px-3 pt-5 pb-4 space-y-1" aria-label="Officer navigation">
             <p className="px-3 pb-1 text-[11px] font-black uppercase tracking-wider text-[#74C69D]">Main Views</p>
             {([
-              { tab: 'tasks' as const, label: 'Officer Task Panel', icon: ShieldCheck },
+              { tab: 'tasks' as const, label: getPrimaryRoleDashboardLabel(currentRole), icon: ShieldCheck },
               { tab: 'hog-raising' as const, label: 'IGP Tracker', icon: Briefcase },
               { tab: 'announcements' as const, label: 'Announcements Board', icon: Megaphone },
               { tab: 'member-view' as const, label: 'Member Portal & ID', icon: Users },
@@ -3017,7 +3038,7 @@ export default function App() {
                   }`}
                 >
                   <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
-                  <span>Officer Task Panel</span>
+                  <span>{getPrimaryRoleDashboardLabel(currentRole)}</span>
                 </button>
 
                 <button
@@ -3115,6 +3136,48 @@ export default function App() {
             {officerTab === 'tasks' && (
               /* ACTIVE VIEW WRAPPER */
               <div id="officer-dashboard-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
+                {(currentUser?.role === 'President' || currentUser?.role === 'Vice_President') && (
+                  <div className="mb-5 pb-4 border-b border-[#D5CFC1] flex flex-wrap items-center justify-between gap-3 bg-[#F4F1EA] p-3 rounded-2xl">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black uppercase text-[#1B4332] tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                        Executive Supervision View:
+                      </span>
+                      <span className="text-xs text-[#52655B] font-medium hidden sm:inline">
+                        (Open and inspect officer dashboards)
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { role: 'President' as OfficerRole, label: 'Executive' },
+                        { role: 'Secretary' as OfficerRole, label: 'Secretary Dashboard' },
+                        { role: 'Treasurer' as OfficerRole, label: 'Treasurer Dashboard' },
+                        { role: 'Auditor' as OfficerRole, label: 'Auditor' },
+                        { role: 'PIO' as OfficerRole, label: 'PIO Board' },
+                      ].map((viewOption) => {
+                        const isSelected =
+                          currentRole === viewOption.role ||
+                          (viewOption.role === 'Secretary' && currentRole === 'Assistant_Secretary') ||
+                          (viewOption.role === 'Treasurer' && currentRole === 'Assistant_Treasurer') ||
+                          (viewOption.role === 'President' && currentRole === 'Vice_President');
+                        return (
+                          <button
+                            key={viewOption.role}
+                            type="button"
+                            onClick={() => setCurrentRole(viewOption.role)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#1B4332] text-white shadow-sm'
+                                : 'bg-white text-[#1B4332] border border-[#D5CFC1] hover:bg-[#EAF4EC]'
+                            }`}
+                          >
+                            {viewOption.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
             {/* President & Vice President View */}
             {(currentRole === 'President' || currentRole === 'Vice_President') && (
@@ -3185,6 +3248,8 @@ export default function App() {
               <SecretaryView
                 members={members}
                 users={users}
+                currentUser={currentUser!}
+                currentRole={currentRole}
             onAddMember={(memberData, loginCredentials) => {
                   if (loginCredentials && users.some((user) => user.username.toLowerCase() === loginCredentials.username.toLowerCase())) {
                     showToastMessage('That username is already in use.', 'error');
@@ -3220,6 +3285,8 @@ export default function App() {
                 onDeleteFund={handleDeleteFund}
                 onOpenReportModal={() => setShowReportModal(true)}
                 users={users}
+                currentUser={currentUser!}
+                currentRole={currentRole}
               />
             )}
 
@@ -3270,7 +3337,7 @@ export default function App() {
                 onAddProduce={handleAddProduce}
                 onDeleteProduce={handleDeleteProduce}
                 isTreasurerOrOfficer={['Auditor', 'Treasurer', 'Assistant_Treasurer', 'President', 'Vice_President'].includes(currentRole || '')}
-                isTreasurer={currentRole === 'Treasurer'}
+                isTreasurer={currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer'}
                 currentUser={currentUser!}
                 isOfficerMode={true}
                 users={users}

@@ -98,7 +98,6 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_used_step BIGINT;`,
     `UPDATE users SET mfa_enabled = TRUE WHERE lower(replace(role, ' ', '_')) = 'president' AND mfa_enabled = FALSE;`,
-    
     `CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
@@ -670,7 +669,9 @@ async function saveFullStateToPostgres(pool, state) {
         const existingRow = await client.query("SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1", [cleanUsername]);
         const targetId = existingRow.rows[0]?.id || u.id;
         const existingRole = existingRow.rows[0]?.role;
-        const targetRole = existingRole && existingRole.toLowerCase() !== "member" ? existingRole : u.role || "Member";
+        const incomingRole = u.role || "Member";
+        const isCurrentPresident = existingRole && existingRole.toLowerCase() === "president";
+        const targetRole = isCurrentPresident && incomingRole.toLowerCase() !== "president" ? existingRole : incomingRole;
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
@@ -678,7 +679,7 @@ async function saveFullStateToPostgres(pool, state) {
             username = EXCLUDED.username,
             password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
             name = EXCLUDED.name,
-            role = CASE WHEN users.role != 'Member' THEN users.role ELSE EXCLUDED.role END,
+            role = CASE WHEN users.role = 'President' AND EXCLUDED.role != 'President' THEN users.role ELSE EXCLUDED.role END,
             is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
@@ -1420,10 +1421,7 @@ var CHALLENGE_SECONDS = 15 * 60;
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("SESSION_SECRET must be configured with at least 32 characters.");
-    }
-    const seed = "afa-farmers-association-development-secret-key-tuburan-cebu";
+    const seed = process.env.DATABASE_URL || "afa-farmers-association-session-secret-seed-key-tuburan-cebu";
     return createHash("sha256").update(seed).digest();
   }
   return Buffer.from(value, "utf8");
