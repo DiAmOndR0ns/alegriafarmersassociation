@@ -235,6 +235,7 @@ function passwordPolicyError(password: string, username: string, role: string, o
 
 async function recordMfaFailure(pool: Pool, userId: string) {
   await pool.query(`UPDATE users SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
+    total_failed_logins = COALESCE(total_failed_logins, 0) + 1,
     locked_until = CASE WHEN COALESCE(failed_login_attempts, 0) + 1 >= 5 THEN NOW() + INTERVAL '15 minutes' ELSE locked_until END
     WHERE id = $1`, [userId]);
 }
@@ -274,11 +275,18 @@ export async function loginHandler(req: any, res: any) {
     if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) {
       return errorResponse(res, 423, 'Account temporarily locked. Try again later.');
     }
+    // Lockout expiry grace: the first attempt right after a lock expires starts a fresh window.
+    // failed_login_attempts resets to 0 but total_failed_logins (audit counter) is never reset.
+    const lockExpired = Boolean(user.locked_until);
+    if (lockExpired) {
+      await pool.query(`UPDATE users SET failed_login_attempts = 0 WHERE id = $1 AND locked_until IS NOT NULL`, [user.id]);
+    }
     const valid = typeof user.password === 'string' && user.password.startsWith('$2')
       ? await bcrypt.compare(body.password, user.password).catch(() => false)
       : false;
     if (!valid) {
       await pool.query(`UPDATE users SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
+        total_failed_logins = COALESCE(total_failed_logins, 0) + 1,
         locked_until = CASE WHEN COALESCE(failed_login_attempts, 0) + 1 >= 5 THEN NOW() + INTERVAL '15 minutes' ELSE locked_until END
         WHERE id = $1`, [user.id]);
       return errorResponse(res, 401, 'Invalid username or password.');
@@ -287,6 +295,7 @@ export async function loginHandler(req: any, res: any) {
       return errorResponse(res, 423, 'Account temporarily locked. Try again later.');
     }
     await pool.query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1', [user.id]);
+    // Note: total_failed_logins is intentionally NOT reset — it is the permanent audit counter.
     const isMfaEnforced = isPresidentRole(user.role) || Boolean(user.mfa_enabled);
     if (isMfaEnforced) {
       const activeSecret = user.totp_secret || user.pending_totp_secret || encodeBase32(randomBytes(20));

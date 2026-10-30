@@ -1,0 +1,185 @@
+FAMS — READY-TO-PASTE DEMO TEXT BLOCKS
+Paste each block as an info card / caption / description text on your demo video.
+Each block is self-contained — paste them in order as you show each feature.
+
+═════════════
+INTRO
+═══════════════════════
+
+SECURITY SHOWCASE — ALEGRIA FARMERS ASSOCIATION MANAGEMENT SYSTEM
+This demo walks through the real security features implemented in our system:
+bcrypt password hashing, password policy enforcement, account lockout,
+TOTP multi-factor authentication, signed HttpOnly session cookies,
+AES-GCM encryption at rest, role-based access control, and a
+tamper-evident hash-chained audit log. Every feature shown is live
+code, not a mockup.
+
+═════════════
+FEATURE 1 — PASSWORD HASHING (bcrypt)
+═══════════════════════
+
+🔒 PASSWORD HASHING — bcrypt, COST 12
+Every password is hashed with bcrypt (cost factor 12) before it is
+stored in the database. Plaintext passwords are NEVER saved — not in
+the database, not in logs, not in backups. Even our administrators
+cannot see your password; they can only reset it. bcrypt is a slow,
+salted, adaptive hash designed specifically to resist brute-force
+and rainbow-table attacks.
+
+═══════════════════════
+FEATURE 2 — PASSWORD POLICY
+═══════════════════════
+
+📋 PASSWORD POLICY ENFORCEMENT
+The system rejects weak passwords BEFORE they are ever accepted:
+• Minimum 12 characters
+• Must contain uppercase, lowercase, number, and special character
+• Cannot contain your username, your role, or the word "password"
+• Blocks sequential & keyboard patterns ("qwerty", "12345")
+• Cannot reuse any of your last 5 passwords (checked against stored hashes)
+Watch: as I type a weak password, the system rejects it in real time.
+
+═══════════════════════
+FEATURE 3 — ACCOUNT LOCKOUT
+═════════════
+
+🛡️ BRUTE-FORCE PROTECTION — ACCOUNT LOCKOUT
+After 5 consecutive failed login attempts, the account is locked for
+15 minutes — enforced SERVER-SIDE, so clearing your browser or using
+another device will not bypass it. Failed MFA attempts count toward
+the same lockout. This makes automated password-guessing attacks
+practically impossible.
+Note how the lockout works in detail:
+• The counter never resets on its own — failed attempts accumulate
+  permanently in the database for security auditing
+• When the 15-minute lock expires, the account is NOT wiped clean:
+  the user gets a fresh set of 5 attempts, and the earlier 5 failed
+  attempts remain stored in the database as an audit record
+• Only a SUCCESSFUL login (correct password + valid MFA code) or an
+  officer-assisted unlock resets the counter to zero
+This means an attacker gets no free retries — every failed attempt
+leaves a permanent, auditable trail.
+
+═════════════
+FEATURE 4 — TOTP MULTI-FACTOR AUTHENTICATION
+═══════════════════════
+
+🔐 MULTI-FACTOR AUTHENTICATION (TOTP)
+Privileged accounts (the President role — enforced automatically)
+require a second factor: a rotating 6-digit code from an
+authenticator app, following the RFC 6238 TOTP standard.
+Key properties of our implementation:
+• Each user gets a UNIQUE secret, generated with cryptographic
+  random (crypto.randomBytes, 160-bit) — never hardcoded
+• Codes rotate every 30 seconds
+• Constant-time comparison prevents timing attacks
+• Anti-replay: the same code can NEVER be used twice — even
+  within its own 30-second window
+• Wrong codes count toward the same lockout
+Even if a password is stolen, the attacker cannot log in without
+the physical device generating the codes.
+
+═══════════════════════
+FEATURE 5 — SESSION SECURITY
+═══════════════════════
+
+🍪 SIGNED SESSION TOKENS (DevTools view)
+After login, the server issues an HMAC-SHA256-signed session cookie:
+• HttpOnly — JavaScript cannot read it, so XSS attacks cannot
+  steal your session
+• Secure — only ever sent over HTTPS
+• SameSite=Strict — never attached to cross-site requests,
+  blocking CSRF
+• 8-hour expiry — sessions are bounded, not permanent
+The token's signature is verified with a server-only secret from
+environment variables. Watch: I corrupt one character of the
+signature and the session is instantly rejected — tampering is
+detected.
+
+═══════════════════════
+FEATURE 6 — ENCRYPTION AT REST (LOCAL DATA)
+═══════════════════════
+
+🗄️ AES-256-GCM ENCRYPTION AT REST
+All sensitive data cached in the browser — member records, drafts,
+offline sync queues — is encrypted with AES-256-GCM BEFORE it is
+written to local storage. Each write uses a fresh random 12-byte
+initialization vector and a 256-bit key from the Web Crypto API.
+Look at Local Storage in DevTools: every record is unreadable
+ciphertext. If someone steals the laptop, the data on it is still
+protected. This is encryption in action — not a diagram, the real
+ciphertext of live data.
+
+═════════════
+FEATURE 7 — ROLE-BASED ACCESS CONTROL
+═══════════════════════
+
+👤 ROLE-BASED ACCESS CONTROL
+Access is restricted by role, and the role is re-verified
+SERVER-SIDE on every single request — the client's claim is
+never trusted:
+• Treasurer only — records and approves financial transactions
+• Auditor only — sets audit status and certifies reports
+• Secretary only — manages meeting minutes
+• President only — approves accounts and delegates authority
+• Regular members — read-only dashboards
+Mutations coming from cross-origin requests are rejected (HTTP 403).
+Watch: logged in as a Member, I attempt to open the Treasurer's
+financial view by editing the URL — access denied.
+
+═══════════════════════
+FEATURE 8 — TAMPER-EVIDENT AUDIT TRAIL
+═══════════════════════
+
+⛓️ TAMPER-EVIDENT AUDIT LOG (SHA-256 HASH CHAIN)
+Every security-relevant action — logins, password changes,
+financial edits, deletions — is recorded in a system log secured
+by a SHA-256 hash chain: each entry contains the hash of its own
+contents PLUS the hash of the previous entry, forming a chain.
+If anyone edits or deletes even one row directly in the database,
+every hash after it breaks — and the tampering becomes provable.
+This is the same principle behind blockchain integrity, applied to
+our audit records. Password history is stored only as hashes,
+never plaintext.
+
+═══════════════════════
+FEATURE 9 — SECURE ACCOUNT PROVISIONING
+═══════════════════════
+
+🔑 SECURE ACCOUNT PROVISIONING & RECOVERY
+• New officer accounts receive an initial password generated with
+  cryptographic randomness — guaranteed policy-compliant, never
+  dictionary-guessable — and it must be rotated on first use.
+• Password resets require a server-side approval state
+  (reset_requested flag): a reset cannot be self-initiated into an
+  arbitrary account by an attacker who only knows a username.
+
+═══════════════════════
+CLOSING
+═════════════
+
+✅ SECURITY SUMMARY
+• Passwords: bcrypt cost-12, salted, policy-enforced, history-checked
+• Brute force: 5-attempt lockout, 15 minutes, server-enforced;
+  failed attempts retained permanently for security auditing
+• Second factor: TOTP MFA with anti-replay, mandatory for President
+• Sessions: HMAC-signed, HttpOnly, Secure, SameSite=Strict, 8-hour
+• Data at rest: AES-256-GCM encrypted local storage
+• Access: role-restricted, server-verified on every request
+• Accountability: SHA-256 hash-chained, tamper-evident audit log
+Security is not a feature added to this system — it is the
+foundation it was built on.
+
+═══════════════════════
+SHORT CAPTION VERSIONS (for on-screen text overlays / subtitles)
+═══════════════════════
+
+F1: Passwords are bcrypt-hashed (cost 12) — never stored in plaintext.
+F2: Password policy: 12+ chars, complexity rules, no patterns, last-5 reuse blocked.
+F3: 5 wrong attempts = 15-min lockout. Counter never self-resets; failed attempts kept permanently for audit.
+F4: TOTP MFA — unique crypto-random secret per user, 30-sec rotating codes, replay-proof.
+F5: Session cookie: HMAC-signed, HttpOnly, Secure, SameSite=Strict, 8-hour expiry. Tamper = rejected.
+F6: All local data AES-256-GCM encrypted at rest — see the ciphertext in DevTools.
+F7: Role-based access, re-verified server-side on every request. Cross-origin mutations → 403.
+F8: Audit log secured by a SHA-256 hash chain — any tampering breaks the chain.
+F9: Crypto-random initial passwords + approval-gated password resets.
