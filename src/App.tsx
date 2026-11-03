@@ -1639,6 +1639,10 @@ export default function App() {
 
   // Egg harvest workflow: member submits -> Auditor verifies -> President signs off (3-stage)
   const handleSubmitEggHarvest = (harvestData: Omit<EggHarvestLog, 'id' | 'status'>) => {
+    if (currentUser?.role !== 'Member') {
+      showToastMessage('Only member accounts may submit egg harvests. Auditors and the President approve submissions.', 'error');
+      return;
+    }
     const newHarvest: EggHarvestLog = {
       ...harvestData,
       id: `egg-${Date.now()}`,
@@ -2238,66 +2242,6 @@ export default function App() {
     }
     showToastMessage(`Malampusong na-reset ang password ni ${targetUser.name}!`, 'success');
     return true;
-  };
-
-  const handleApproveUser = (id: string) => {
-    const targetUser = users.find(u => u.id === id);
-    if (!targetUser) return;
-
-    const updated = users.map(u => u.id === id ? { ...u, isApproved: true } : u);
-    setUsers(updated);
-    updateStorage('bafa_users', updated);
-
-    let updatedMembers = members;
-    // If they are a registered farmer member, enroll them into the primary members list too!
-    if (targetUser.role === 'Member') {
-      const alreadyInRoster = members.some(m => m.id === id || m.name.toLowerCase() === targetUser.name.toLowerCase());
-      if (!alreadyInRoster) {
-        const newMember: Member = {
-          id: targetUser.id,
-          name: targetUser.name,
-          farmLocation: targetUser.farmLocation || 'Sitio Tapon',
-          primaryCrops: targetUser.primaryCrops || ['Crops'],
-          contactNumber: targetUser.contactNumber || '',
-          status: 'Active',
-          joinedDate: targetUser.joinedDate || new Date().toISOString().split('T')[0]
-        };
-        updatedMembers = [newMember, ...members];
-        setMembers(updatedMembers);
-        updateStorage('bafa_members', updatedMembers);
-      }
-    }
-
-    logAction('Approved Registration', `Approved portal registration for ${targetUser.name} (${targetUser.role})`);
-    showToastMessage(`Approved registration for ${targetUser.name}!`, 'success');
-
-    if (isOnline) {
-      pushAllDataToCloud({ users: updated, members: updatedMembers }, { silent: true, source: 'Approve Registration' });
-    } else {
-      addToSyncQueue('update', 'user', { id, isApproved: true });
-    }
-  };
-
-  const handleDeclineUser = (id: string) => {
-    const targetUser = users.find(u => u.id === id);
-    if (!targetUser) return;
-
-    const updated = users.filter(u => u.id !== id);
-    setUsers(updated);
-    updateStorage('bafa_users', updated);
-    storeDeletedId('users', id);
-
-    // Direct and permanent removal from PostgreSQL Cloud Database
-    deleteFromDatabase('user', id);
-
-    logAction('Declined Registration', `Declined portal registration for ${targetUser.name} (${targetUser.role})`);
-    showToastMessage(`Declined registration for ${targetUser.name}.`, 'warning');
-
-    if (isOnline) {
-      pushAllDataToCloud({ users: updated }, { silent: true, source: 'Decline Registration' });
-    } else {
-      addToSyncQueue('delete', 'user', { id, name: targetUser.name });
-    }
   };
 
   const handleDeleteUser = (id: string) => {
@@ -3205,46 +3149,6 @@ export default function App() {
             {officerTab === 'tasks' && (
               /* ACTIVE VIEW WRAPPER */
               <div id="officer-dashboard-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
-                {(currentUser?.role === 'President' || currentUser?.role === 'Vice_President') && (
-                  <div className="mb-5 pb-4 border-b border-[#D5CFC1] flex flex-wrap items-center justify-between gap-3 bg-[#F4F1EA] p-3 rounded-2xl">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black uppercase text-[#1B4332] tracking-wider flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                        Executive Supervision View
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { role: 'President' as OfficerRole, label: 'Executive' },
-                        { role: 'Secretary' as OfficerRole, label: 'Secretary Dashboard' },
-                        { role: 'Treasurer' as OfficerRole, label: 'Treasurer Dashboard' },
-                        { role: 'Auditor' as OfficerRole, label: 'Auditor' },
-                        { role: 'PIO' as OfficerRole, label: 'PIO Board' },
-                      ].map((viewOption) => {
-                        const isSelected =
-                          currentRole === viewOption.role ||
-                          (viewOption.role === 'Secretary' && currentRole === 'Assistant_Secretary') ||
-                          (viewOption.role === 'Treasurer' && currentRole === 'Assistant_Treasurer') ||
-                          (viewOption.role === 'President' && currentRole === 'Vice_President');
-                        return (
-                          <button
-                            key={viewOption.role}
-                            type="button"
-                            onClick={() => setCurrentRole(viewOption.role)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#1B4332] text-white shadow-sm'
-                                : 'bg-white text-[#1B4332] border border-[#D5CFC1] hover:bg-[#EAF4EC]'
-                            }`}
-                          >
-                            {viewOption.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
             {/* President & Vice President View */}
             {(currentRole === 'President' || currentRole === 'Vice_President') && (
               <ExecutiveView
@@ -3262,8 +3166,6 @@ export default function App() {
                 }}
                 users={users}
             onAddOfficer={handleAddOfficer}
-                onApproveUser={handleApproveUser}
-                onDeclineUser={handleDeclineUser}
                 onDeleteUser={handleDeleteUser}
                 onUpdateUserRole={handleUpdateUserRole}
                 onResetPassword={handleResetPassword}
@@ -3359,6 +3261,7 @@ export default function App() {
             {currentRole === 'Auditor' && (
               <AuditorView
                 transactions={transactions}
+                hogRaising={hogRaising}
                 onAuditTransaction={handleAuditTransaction}
                 onOpenReportModal={() => setShowReportModal(true)}
                 inventory={inventory}
@@ -3549,13 +3452,6 @@ export default function App() {
       {showTreasurerFinancialReport && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
           <div className="mx-auto max-w-[210mm]">
-            <button
-              type="button"
-              onClick={() => setShowTreasurerFinancialReport(false)}
-              className="mb-3 w-full rounded-xl bg-white px-4 py-2 text-sm font-black text-[#1B4332] shadow hover:bg-slate-100 cursor-pointer print:hidden"
-            >
-              ✕ Close Financial Report
-            </button>
             <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading financial report...</div>}>
               <TreasurerFinancialReport
                 year={new Date().getFullYear()}

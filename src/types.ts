@@ -189,7 +189,7 @@ export interface SystemLog {
 }
 
 // HOG RAISING & GENERAL INCOME GENERATING PROJECT (IGP) TYPES
-export type HogStage = 'Fattening' | 'Gestation' | 'Breeding' | 'Lactating' | 'Dispersal' | 'RTL' | 'General';
+export type HogStage = 'Fattening' | 'Gestation' | 'Breeding' | 'Lactating' | 'Dispersal' | 'RTL' | 'Eggs' | 'Other' | 'General';
 
 export interface HogHerdBreakdown {
   fattening: number;

@@ -7,6 +7,7 @@ import {
   Pencil, X, PiggyBank, Sparkles, Filter, CheckCircle, AlertTriangle
 } from 'lucide-react';
 import AttendanceDividendCalculatorModal from './AttendanceDividendCalculatorModal';
+import { getAvailableEggCount } from '../utils/eggInventory';
 
 interface LivestockMonitorProps {
   state: HogRaisingState;
@@ -207,6 +208,9 @@ export default function LivestockMonitor({
 
   // Poultry stage counts
   const currentRtl = Math.max(0, baseRtl + dRtl);
+  const currentEggInventory = isPoultry
+    ? getAvailableEggCount(state.eggHarvests || [], state.sales || [], selected)
+    : 0;
 
   // ---------- Finance Totals ----------
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -314,6 +318,10 @@ export default function LivestockMonitor({
 
   const submitEggHarvest = (e: React.FormEvent) => {
     e.preventDefault();
+    if (currentUser?.role !== 'Member' || !onSubmitEggHarvest) {
+      setFormError('Only member accounts may submit egg harvests.');
+      return;
+    }
     const count = parseInt(eggCount, 10);
     if (!(count >= 1)) return setFormError('Please enter the number of eggs harvested (at least 1).');
     const closed = closedMsg(eggDate);
@@ -361,8 +369,7 @@ export default function LivestockMonitor({
 
   const openAddSale = () => {
     setEditingSale(null);
-    // Poultry defaults to eggs / other income so a routine egg sale never reduces the bird count.
-    setSaleStage(isSwine ? 'Fattening' : isCattle ? 'Fattening' : 'General');
+    setSaleStage(isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'Eggs' : 'General');
     setSaleQty('');
     setSaleRevenue('');
     setSaleNotes('');
@@ -373,7 +380,7 @@ export default function LivestockMonitor({
 
   const openEditSale = (sale: IgpSale) => {
     setEditingSale(sale);
-    setSaleStage(sale.hogStage || (isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'RTL' : 'General'));
+    setSaleStage(sale.hogStage || (isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'Eggs' : 'General'));
     setSaleQty(String(sale.produceCount || sale.hogsCount || ''));
     setSaleRevenue(String(sale.revenue));
     setSaleNotes(sale.notes || '');
@@ -436,6 +443,17 @@ export default function LivestockMonitor({
           ? 'Please enter a valid quantity. Revenue can be 0 for a free dispersal.'
           : 'Please enter a valid quantity and amount.'
       );
+    }
+    if (isPoultry && saleStage === 'Eggs') {
+      const availableEggs = getAvailableEggCount(
+        state.eggHarvests || [],
+        state.sales || [],
+        selected,
+        editingSale?.id
+      );
+      if (qty > availableEggs) {
+        return setFormError(`Only ${availableEggs} verified eggs are available to sell.`);
+      }
     }
     const closed = closedMsg(saleDate);
     if (closed) return setFormError(closed);
@@ -550,7 +568,11 @@ export default function LivestockMonitor({
               row3 = { label: 'Status', value: 'Active Livelihood' };
             } else if (isPoultry) {
               row1 = { label: 'Ready-to-Lay (RTL)', value: String(currentRtl) };
-              row2 = { label: 'Egg Production', value: 'Active', highlight: 'emerald' };
+              row2 = {
+                label: 'Eggs Available',
+                value: String(getAvailableEggCount(state.eggHarvests || [], state.sales || [], p)),
+                highlight: 'emerald'
+              };
               row3 = { label: 'Coop Setup', value: 'Layer Cages' };
             } else if (pUnits > 0) {
               row1 = { label: isRental(p) ? 'Units Rented' : 'Units Sold', value: String(pUnits) };
@@ -670,7 +692,7 @@ export default function LivestockMonitor({
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isPoultry ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3`}>
           {/* Headcount Card */}
           <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/70">
             <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 block">
@@ -681,6 +703,14 @@ export default function LivestockMonitor({
             </div>
 
           </div>
+
+          {isPoultry && (
+            <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/70">
+              <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 block">Eggs Available</span>
+              <div className="text-2xl font-black text-[#1B4332] font-mono mt-1">{currentEggInventory} eggs</div>
+              <p className="mt-1 text-[10px] font-semibold text-amber-900">Verified harvests minus eggs sold</p>
+            </div>
+          )}
 
           {/* Revenue Card */}
           <div className="p-4 rounded-2xl border border-emerald-200 bg-white">
@@ -759,7 +789,7 @@ export default function LivestockMonitor({
           )}
 
           {/* Member/Officer: Submit Daily Egg Harvest (replaces old chore log) */}
-          {onSubmitEggHarvest && isPoultry && view === 'ledger' && (
+          {currentUser.role === 'Member' && onSubmitEggHarvest && isPoultry && view === 'ledger' && (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1172,7 +1202,7 @@ export default function LivestockMonitor({
               <div>
                 <label className={labelCls}>What Was Sold?</label>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {([['General', 'Eggs / other income'], ['RTL', 'Birds (reduces RTL count)']] as [HogStage, string][]).map(([stg, label]) => (
+                  {([['Eggs', 'Eggs (deducts egg inventory)'], ['Other', 'Other income'], ['RTL', 'Birds (reduces RTL count)']] as [HogStage, string][]).map(([stg, label]) => (
                     <button
                       key={stg}
                       type="button"
@@ -1191,7 +1221,7 @@ export default function LivestockMonitor({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Quantity Sold / Rental Units</label>
+                <label className={labelCls}>{isPoultry && saleStage === 'Eggs' ? 'Eggs Sold' : 'Quantity Sold / Rental Units'}</label>
                 <input
                   type="number"
                   min={1}

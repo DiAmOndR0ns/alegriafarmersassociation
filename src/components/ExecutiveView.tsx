@@ -23,8 +23,6 @@ interface ExecutiveViewProps {
   onUpdateLogs?: (newLogs: SystemLog[]) => void;
   users?: User[];
   onAddOfficer?: (officerData: { name: string; username: string; password: string; role: OfficerRole }) => boolean;
-  onApproveUser?: (id: string) => void;
-  onDeclineUser?: (id: string) => void;
   onDeleteUser?: (id: string) => void;
   onUpdateUserRole?: (id: string, newRole: OfficerRole | 'Member') => void;
   onResetPassword?: (id: string, newPass: string, currentPassword?: string) => boolean | void | Promise<boolean | void>;
@@ -57,8 +55,6 @@ export default function ExecutiveView({
   onUpdateLogs,
   users = [],
   onAddOfficer,
-  onApproveUser,
-  onDeclineUser,
   onDeleteUser,
   onUpdateUserRole,
   onResetPassword,
@@ -418,90 +414,9 @@ export default function ExecutiveView({
         </div>
       </div>
 
-      {/* SECTION: CREDENTIALS DESK & NEW REGISTRATIONS (UCSD Core focus) */}
       <div className="order-2 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
-
-        {/* LEFT CARD: PENDING SIGNUPS & ROSTER REVIEW (7 columns) */}
-        <div className="order-2 lg:col-span-12 self-start bg-white border border-[#E9E4D9] rounded-3xl p-4.5 shadow-sm space-y-2.5">
-          <div className="border-b border-[#F0EBE1] pb-2.5 text-left">
-            <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
-              <Users className="w-5.5 h-5.5 text-[#1B4332]" />
-              <span>New Registration Desk</span>
-            </h3>
-          </div>
-
-          {/* Pending Requests List */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-extrabold text-[#4F5E46] uppercase tracking-wider flex items-center gap-1">
-              <Clock className="w-4 h-4 text-[#E65100]" />
-              <span>Pending Registration ({users.filter(u => !u.isApproved).length})</span>
-            </h4>
-
-            {users.filter(u => !u.isApproved).length > 0 ? (
-              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                {users.filter(u => !u.isApproved).map((user) => (
-                  <div key={user.id} className="bg-[#FAF8F5] border border-[#E9E4D9] p-3 rounded-2xl text-left space-y-2 hover:border-[#85947E] transition-all">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-extrabold text-[#1B4332] text-sm">{user.name}</span>
-                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider ${
-                            user.role === 'Member'
-                              ? 'bg-[#EAF4EC] text-[#1B4332] border-[#2D6A4F]/25'
-                              : 'bg-[#E3F2FD] text-[#0D47A1] border-[#0D47A1]/25'
-                          }`}>
-                            Gitinguha: {user.role.replace('_', ' ')}
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#5D6B54] mt-0.5 font-medium">
-                          Username: <strong className="text-[#1B4332]">{user.username}</strong> • Contact: <strong>{user.contactNumber || 'N/A'}</strong>
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2 shrink-0 w-full sm:w-auto">
-                        <button
-                          onClick={() => onApproveUser && onApproveUser(user.id)}
-                          className="flex-1 sm:flex-initial px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Aprobahan</span>
-                        </button>
-                        <button
-                          onClick={() => onDeclineUser && onDeclineUser(user.id)}
-                          className="flex-1 sm:flex-initial px-4 py-2 bg-white border border-[#D5CFC1] hover:bg-[#FAF8F5] text-[#D32F2F] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          <span>I-decline</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {user.role === 'Member' && (
-                      <div className="bg-white p-3 rounded-xl border border-[#E9E4D9] grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-[#85947E] block text-[9px] uppercase font-bold tracking-wider">Sitio / Dapit</span>
-                          <span className="text-[#1B4332] font-bold">{user.farmLocation}</span>
-                        </div>
-                        <div>
-                          <span className="text-[#85947E] block text-[9px] uppercase font-bold tracking-wider">Gipananom / Buhi</span>
-                          <span className="text-[#2D6A4F] font-bold truncate block" title={user.primaryCrops?.join(', ')}>
-                            {user.primaryCrops?.join(', ') || 'General Agriculture'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-[#FAF8F5]/50 border border-dashed border-[#D5CFC1] px-4 py-3 rounded-xl text-center text-[#85947E] text-xs leading-tight">
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* OFFICER ROSTER & ROLE GOVERNANCE DESK */}
-        <div id="officer-governance-card" className="order-1 lg:col-span-12 self-start bg-white border border-[#E9E4D9] rounded-3xl p-5 shadow-sm space-y-4 text-left">
+        <div id="officer-governance-card" className="self-start lg:col-span-12 bg-white border border-[#E9E4D9] rounded-3xl p-5 shadow-sm space-y-4 text-left">
           <div className="border-b border-[#F0EBE1] pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
@@ -1954,7 +1869,5 @@ export default function ExecutiveView({
     </div>
   );
 }
-
-
 
 

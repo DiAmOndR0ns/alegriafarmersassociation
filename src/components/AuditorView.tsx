@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, AlertTriangle, CheckCircle, FileText, Filter, ShieldCheck, Wallet, Package, Plus, Trash2, Pencil, Boxes } from 'lucide-react';
-import { FinancialTransaction, InventoryItem } from '../types';
+import { FinancialTransaction, HogRaisingState, InventoryItem } from '../types';
+import { getAvailableEggCount } from '../utils/eggInventory';
 
 interface AuditorViewProps {
   transactions: FinancialTransaction[];
+  hogRaising: HogRaisingState;
   onAuditTransaction: (id: string, status: 'Audited' | 'Flagged', notes: string) => void;
   onOpenReportModal?: () => void;
   inventory?: InventoryItem[];
@@ -15,6 +17,7 @@ interface AuditorViewProps {
 
 export default function AuditorView({
   transactions,
+  hogRaising,
   onAuditTransaction,
   onOpenReportModal,
   inventory = [],
@@ -30,7 +33,7 @@ export default function AuditorView({
   const [auditNotes, setAuditNotes] = useState('');
 
   // Inventory registry state (custodial duty of the Auditor — no Property Custodian exists)
-  const [inventoryTab, setInventoryTab] = useState<'audit' | 'inventory'>('audit');
+  const [inventoryTab, setInventoryTab] = useState<'audit' | 'inventory' | 'eggs'>('audit');
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
   const [invName, setInvName] = useState('');
@@ -112,6 +115,11 @@ export default function AuditorView({
   };
 
   const inventoryNeedsAttention = inventory.filter(i => i.condition === 'Needs Repair' || i.condition === 'Damaged' || i.condition === 'Lost').length;
+  const availableEggCount = getAvailableEggCount(
+    hogRaising.eggHarvests || [],
+    hogRaising.sales || [],
+    'Poultry Raising (RTL)'
+  );
 
   const submitAudit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -147,6 +155,17 @@ export default function AuditorView({
             <Boxes className="h-4 w-4" />
             <span>Inventory Registry ({inventory.length})</span>
           </button>
+          <button
+            onClick={() => setInventoryTab('eggs')}
+            className={`flex items-center gap-2 border-b-2 pb-2.5 text-sm font-bold transition-all cursor-pointer ${
+              inventoryTab === 'eggs'
+                ? 'border-amber-600 text-amber-700'
+                : 'border-transparent text-[#6A7F72] hover:text-[#1B4332]'
+            }`}
+          >
+            <Package className="h-4 w-4" />
+            <span>Egg Inventory ({availableEggCount})</span>
+          </button>
         </div>
 
         {inventoryTab === 'inventory' && (
@@ -161,7 +180,27 @@ export default function AuditorView({
         )}
       </div>
 
-      {inventoryTab === 'inventory' ? (
+      {inventoryTab === 'eggs' ? (
+        <section className="space-y-4" aria-label="Live egg inventory">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl border border-amber-200 bg-white p-2.5">
+                <Package className="h-5 w-5 text-amber-700" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-[#1B4332]">Live Egg Inventory</h2>
+                <p className="text-sm text-[#4A5F57]">Verified harvests less eggs sold</p>
+              </div>
+            </div>
+            <p className="mt-5 text-4xl font-black text-amber-900" aria-live="polite">
+              {availableEggCount} <span className="text-base font-bold">eggs available</span>
+            </p>
+            <p className="mt-2 text-xs text-[#4A5F57]">
+              Only audited or President-signed harvests count toward available stock. Egg sales are deducted automatically.
+            </p>
+          </div>
+        </section>
+      ) : inventoryTab === 'inventory' ? (
         <section className="space-y-4" aria-label="Association inventory registry">
           <div className="rounded-2xl border border-[#B7D9BF] bg-[#EAF4EC] p-4">
             <div className="flex items-start gap-3">
