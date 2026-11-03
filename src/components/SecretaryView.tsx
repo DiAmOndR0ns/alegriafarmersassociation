@@ -649,14 +649,17 @@ export default function SecretaryView({
                         <td className="px-3 py-4">
                           {linkedUser ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold" <button
+                              <span className="inline-flex items-center gap-1 bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold">
+                                {linkedUser.username}
+                              </span>
+                              <button
                                 type="button"
                                 onClick={() => {
                                   setLoginManageMember(member);
                                   setManageUsername(linkedUser.username);
                                   setManagePassword(generateInitialPassword(linkedUser.username, 'Member'));
                                 }}
-                                className="inline-flex items-center justify-center bg-[#EAF4EC] hover:bg-[#D7EBDD] text-[#1B4332] border-[#2D6A4F] p-2 rounded-lg transition-colors cursor-pointer"
+                                className="inline-flex items-center justify-center bg-[#EAF4EC] hover:bg-[#D7EBDD] text-[#1B4332] border border-[#2D6A4F] p-2 rounded-lg transition-colors cursor-pointer"
                                 title="Manage Portal Login"
                                 aria-label={`Manage portal login for ${member.name}`}
                               >
@@ -679,7 +682,8 @@ export default function SecretaryView({
                               <UserPlus className="w-4 h-4" />
                             </button>
                           )}
-                        </td>
+                        </td>
+
                         <td className="sticky right-0 bg-[#F7F4EF] px-3 py-4 text-right shadow-[-8px_0_12px_-10px_rgba(0,0,0,0.5)]">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
