@@ -150,6 +150,12 @@ export function isSecretaryRole(role: string): boolean {
   return normalized === 'secretary' || normalized === 'assistant_secretary';
 }
 
+/** Only the Treasurer (or Assistant Treasurer) may record income or expenses. */
+export function isTreasurerRole(role: string): boolean {
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, '_');
+  return normalized === 'treasurer' || normalized === 'assistant_treasurer';
+}
+
 function newChallenge(kind: 'mfa-login' | 'mfa-setup', userId: string) {
   return signToken({
     kind, sub: userId, exp: Math.floor(Date.now() / 1000) + CHALLENGE_SECONDS,

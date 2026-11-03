@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   OfficerRole, Member, Meeting, Resolution, 
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState, HogHerdBreakdown,
-  IgpExpense, IgpSale, IgpChoreLog, Product, AssociationActivity, OrganizationFund, DatabaseStatus, InventoryItem
+  IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, OrganizationFund, DatabaseStatus, InventoryItem
 } from './types';
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
@@ -1128,6 +1128,11 @@ export default function App() {
   };
 
   const handleDeleteTransaction = (id: string) => {
+    // ADVISER RULE: Only the Treasurer or Assistant Treasurer may remove recorded income/expense entries.
+    if (!isTreasurerAuthorized(currentUser?.role)) {
+      showToastMessage('Only the Treasurer or Assistant Treasurer may delete recorded income or expenses.', 'error');
+      return;
+    }
     const targetTx = transactions.find(t => t.id === id);
     const desc = targetTx ? `${targetTx.description} (PHP ${targetTx.amount.toLocaleString()})` : 'Transaction';
     const updated = transactions.filter(t => t.id !== id);
@@ -1203,7 +1208,14 @@ export default function App() {
   };
 
   // TREASURER & AUDITOR HANDLERS
+  // ADVISER RULE: Only the Treasurer or Assistant Treasurer may record income or expenses.
+  const isTreasurerAuthorized = (role: string | undefined) =>
+    role === 'Treasurer' || role === 'Assistant_Treasurer';
   const handleAddTransaction = (txData: Omit<FinancialTransaction, 'id' | 'auditedStatus'>) => {
+    if (!isTreasurerAuthorized(currentUser?.role)) {
+      showToastMessage('Only the Treasurer or Assistant Treasurer may record income or expenses.', 'error');
+      return;
+    }
     const newTx: FinancialTransaction = {
       ...txData,
       id: `tx-${Date.now()}`,
@@ -1615,24 +1627,70 @@ export default function App() {
     }
   };
 
-  const handleAddPigChore = (choreData: Omit<IgpChoreLog, 'id'>) => {
-    const newChore: IgpChoreLog = {
-      ...choreData,
-      id: `chore-${Date.now()}`
+  // Egg harvest workflow: member submits -> Auditor verifies -> President signs off (3-stage)
+  const handleSubmitEggHarvest = (harvestData: Omit<EggHarvestLog, 'id' | 'status'>) => {
+    const newHarvest: EggHarvestLog = {
+      ...harvestData,
+      id: `egg-${Date.now()}`,
+      status: 'Pending Audit'
     };
     const updatedState: HogRaisingState = {
       ...hogRaising,
-      choreLogs: [newChore, ...hogRaising.choreLogs]
+      eggHarvests: [newHarvest, ...(hogRaising.eggHarvests || [])]
     };
     setHogRaising(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
-      logAction('Logged IGP Chore', `${newChore.checkedBy} checked-in: ${newChore.activities.join(', ')}`);
-      showToastMessage('Daily IGP care/activity log has been recorded successfully!');
+      logAction('Submitted Egg Harvest', `${newHarvest.collectedBy} submitted ${newHarvest.eggCount} eggs harvested on ${newHarvest.date}.`);
+      showToastMessage('Daily egg harvest has been submitted for Auditor verification!');
       pushAllDataToCloud({ hogRaising: updatedState }, { silent: true });
     } else {
-      addToSyncQueue('create', 'hog_chore', newChore);
+      addToSyncQueue('create', 'egg_harvest', newHarvest);
+    }
+  };
+
+  const handleUpdateEggHarvestStatus = (harvestId: string, action: 'audit' | 'sign' | 'return', remarks?: string) => {
+    const updatedHarvests = (hogRaising.eggHarvests || []).map((h) => {
+      if (h.id !== harvestId) return h;
+      if (action === 'audit') {
+        return {
+          ...h,
+          status: 'Audited' as const,
+          auditedBy: currentUser?.name || 'Auditor',
+          auditedDate: new Date().toISOString().split('T')[0],
+          auditRemarks: remarks
+        };
+      }
+      if (action === 'sign') {
+        return {
+          ...h,
+          status: 'Signed' as const,
+          signedBy: currentUser?.name || 'President',
+          signedDate: new Date().toISOString().split('T')[0],
+          signatureRemarks: remarks
+        };
+      }
+      return {
+        ...h,
+        status: 'Returned' as const,
+        auditRemarks: remarks || 'Returned for correction'
+      };
+    });
+    const updatedState: HogRaisingState = { ...hogRaising, eggHarvests: updatedHarvests };
+    setHogRaising(updatedState);
+    updateStorage('bafa_afa_igp', updatedState);
+
+    const target = updatedHarvests.find((h) => h.id === harvestId);
+    const detail = target ? ` (harvest of ${target.date}, ${target.eggCount} eggs by ${target.collectedBy})` : '';
+    const actionLabel = action === 'audit' ? 'Verified Egg Harvest' : action === 'sign' ? 'Signed Off Egg Harvest' : 'Returned Egg Harvest';
+
+    if (isOnline) {
+      logAction(actionLabel, `${currentUser?.name || 'Officer'} ${action === 'audit' ? 'verified' : action === 'sign' ? 'signed off' : 'returned'} an egg harvest record.${detail}`);
+      showToastMessage(action === 'audit' ? 'Egg harvest verified!' : action === 'sign' ? 'Egg harvest signed off!' : 'Egg harvest returned to the member.');
+      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true });
+    } else {
+      addToSyncQueue('update', 'egg_harvest', { id: harvestId, action, remarks, ...target });
     }
   };
 
@@ -2775,7 +2833,8 @@ export default function App() {
               announcements={announcements}
               hogRaisingState={hogRaising}
               members={members}
-              onAddChoreLog={handleAddPigChore}
+              onSubmitEggHarvest={handleSubmitEggHarvest}
+              onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
               products={products}
               activities={activities}
               users={users}
@@ -3332,7 +3391,10 @@ export default function App() {
                 onAddSale={handleAddHogSale}
                 onUpdateSale={handleUpdateHogSale}
                 onDeleteSale={handleDeleteHogSale}
-                onAddChoreLog={handleAddPigChore}
+                onSubmitEggHarvest={handleSubmitEggHarvest}
+                onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
+                isAuditor={currentRole === 'Auditor'}
+                isPresident={currentRole === 'President'}
                 onUpdateOpeningHogCount={handleUpdateOpeningHogCount}
                 onAddProduce={handleAddProduce}
                 onDeleteProduce={handleDeleteProduce}
@@ -3417,7 +3479,8 @@ export default function App() {
                 announcements={announcements}
                 hogRaisingState={hogRaising}
                 members={members}
-                onAddChoreLog={handleAddPigChore}
+                onSubmitEggHarvest={handleSubmitEggHarvest}
+              onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
                 products={products}
                 activities={activities}
                 users={users}

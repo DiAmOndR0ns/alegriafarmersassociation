@@ -171,7 +171,7 @@ export interface SyncQueueItem {
   id: string;
   timestamp: string;
   action: 'create' | 'update' | 'delete';
-  entityType: 'user' | 'officer' | 'member' | 'meeting' | 'resolution' | 'transaction' | 'announcement' | 'hog_expense' | 'hog_sale' | 'hog_chore' | 'product' | 'activity' | string;
+  entityType: 'user' | 'officer' | 'member' | 'meeting' | 'resolution' | 'transaction' | 'announcement' | 'hog_expense' | 'hog_sale' | 'hog_chore' | 'egg_harvest' | 'product' | 'activity' | string;
   payload: any;
 }
 
@@ -233,17 +233,31 @@ export interface IgpGroup {
   scheduleDays: string[]; // e.g. ["Monday", "Thursday"]
 }
 
-export interface IgpChoreLog {
+// EGG HARVEST SUBMISSION (replaces the old IGP chore log).
+// Members submit the number of chicken eggs harvested within the day. The record
+// then flows through a three-stage approval chain:
+//   1. Member submits the harvest count            -> status 'Pending Audit'
+//   2. Auditor verifies the amount is accurate     -> status 'Audited' (auditRemarks)
+//   3. President signs off the verified record     -> status 'Signed' (signedBy/signedDate)
+export interface EggHarvestLog {
   id: string;
-  produce?: string; // e.g., "Hog Raising", "Poultry Raising"
-  hogStage?: HogStage; // Stage cared for: Fattening, Gestation, Lactating, or General
-  date: string;
-  time: string;
-  batchName: string;
-  checkedBy: string; // member name
-  activities: string[]; // e.g. ["Feeding", "Cleaning", "Vitamins"]
-  notes?: string;
+  produce?: string; // e.g., "Poultry Raising (RTL)" — defaults to Poultry project
+  date: string; // harvest date (YYYY-MM-DD), the day the eggs were collected
+  time: string; // time of submission
+  collectedBy: string; // member name who submitted the harvest
+  eggCount: number; // number of chicken eggs harvested within that day
+  notes?: string; // e.g. "collected from coops 1-3", broken/damaged eggs, etc.
+  // --- Approval workflow state ---
+  status: 'Pending Audit' | 'Audited' | 'Signed' | 'Returned';
+  auditedBy?: string; // Auditor name when verified
+  auditedDate?: string;
+  auditRemarks?: string; // Auditor's verification notes
+  signedBy?: string; // President name when signed off
+  signedDate?: string;
+  signatureRemarks?: string; // President's signing remarks
 }
+
+
 
 export interface OrganizationFund {
   id: string;
@@ -263,7 +277,9 @@ export interface HogRaisingState {
   expenses: IgpExpense[];
   sales: IgpSale[];
   groups: IgpGroup[];
-  choreLogs: IgpChoreLog[];
+  /** @deprecated Legacy chore-log field — superseded by the eggHarvests collection. */
+  choreLogs?: EggHarvestLog[];
+  eggHarvests?: EggHarvestLog[]; // Daily chicken-egg harvest submissions (member → Auditor → President)
   closedYears?: number[];
 }
 

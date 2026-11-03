@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Announcement, HogRaisingState, IgpChoreLog, Member, Product, AssociationActivity, MemberAffiliation } from '../types';
+import { User, Announcement, HogRaisingState, EggHarvestLog, Member, Product, AssociationActivity, MemberAffiliation } from '../types';
 import { resolveOfficerName } from '../utils/officers';
 import { 
   User as UserIcon, MapPin, Smartphone, Layers, Tag, Calendar, 
@@ -20,7 +20,8 @@ interface MemberDashboardProps {
   announcements?: Announcement[];
   hogRaisingState: HogRaisingState;
   members: Member[];
-  onAddChoreLog: (chore: Omit<IgpChoreLog, 'id'>) => void;
+  onSubmitEggHarvest: (harvest: Omit<EggHarvestLog, 'id' | 'status'>) => void;
+  onUpdateEggHarvestStatus?: (id: string, action: 'audit' | 'sign' | 'return', remarks?: string) => void;
   products?: Product[];
   activities?: AssociationActivity[];
   users?: User[];
@@ -60,7 +61,8 @@ export default function MemberDashboard({
   announcements = [],
   hogRaisingState,
   members,
-  onAddChoreLog,
+  onSubmitEggHarvest,
+  onUpdateEggHarvestStatus,
   products = [],
   activities = [],
   users = []
@@ -963,7 +965,8 @@ export default function MemberDashboard({
             members={members}
             onAddExpense={() => {}}
             onAddSale={() => {}}
-            onAddChoreLog={onAddChoreLog}
+            onSubmitEggHarvest={onSubmitEggHarvest}
+            onUpdateEggHarvestStatus={onUpdateEggHarvestStatus}
             isTreasurerOrOfficer={false}
             isTreasurer={false}
             currentUser={currentUser}

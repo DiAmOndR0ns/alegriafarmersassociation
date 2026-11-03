@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  HogRaisingState, HogStage, HogHerdBreakdown, IgpExpense, IgpSale, IgpChoreLog, Member, User, Meeting
+  HogRaisingState, HogStage, HogHerdBreakdown, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting
 } from '../types';
 import {
   Briefcase, Plus, Trash2, Printer, Calculator, Lock, ArrowDownRight, ArrowUpRight,
@@ -18,8 +18,11 @@ interface LivestockMonitorProps {
   onAddSale: (sale: Omit<IgpSale, 'id' | 'recordedBy'>) => void;
   onUpdateSale?: (sale: IgpSale) => void;
   onDeleteSale?: (saleId: string) => void;
-  /** @deprecated Kept for backward compatibility */
-  onAddChoreLog?: (chore: Omit<IgpChoreLog, 'id'>) => void;
+  // Egg harvest workflow: members submit, Auditor verifies, President signs off
+  onSubmitEggHarvest?: (harvest: Omit<EggHarvestLog, 'id' | 'status'>) => void;
+  onUpdateEggHarvestStatus?: (id: string, action: 'audit' | 'sign' | 'return', remarks?: string) => void;
+  isAuditor?: boolean;
+  isPresident?: boolean;
   onUpdateOpeningHogCount?: (count: number, herdBreakdown?: HogHerdBreakdown) => void;
   onAddProduce?: (produce: string) => void;
   onDeleteProduce?: (produce: string) => void;
@@ -112,6 +115,10 @@ export default function LivestockMonitor({
   users = [],
   closedYears = state.closedYears || [],
   onCloseDecemberBook,
+  onSubmitEggHarvest,
+  onUpdateEggHarvestStatus,
+  isAuditor = false,
+  isPresident = false,
 }: LivestockMonitorProps) {
   // ---------- Projects ----------
   const rawProduces = state.produces && state.produces.length > 0 ? state.produces : DEFAULT_PROJECTS;
@@ -298,6 +305,34 @@ export default function LivestockMonitor({
   const [saleDate, setSaleDate] = useState(today());
   const [saleNotes, setSaleNotes] = useState('');
 
+  // Egg Harvest Submission Form Fields (member daily harvest)
+  const [showEggModal, setShowEggModal] = useState(false);
+  const [eggCount, setEggCount] = useState('');
+  const [eggDate, setEggDate] = useState(today());
+  const [eggNotes, setEggNotes] = useState('');
+  const [approvalRemarks, setApprovalRemarks] = useState('');
+
+  const submitEggHarvest = (e: React.FormEvent) => {
+    e.preventDefault();
+    const count = parseInt(eggCount, 10);
+    if (!(count >= 1)) return setFormError('Please enter the number of eggs harvested (at least 1).');
+    const closed = closedMsg(eggDate);
+    if (closed) return setFormError(closed);
+
+    onSubmitEggHarvest?.({
+      produce: selected,
+      date: eggDate,
+      time: new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
+      collectedBy: currentUser?.name || 'Member',
+      eggCount: count,
+      notes: eggNotes.trim() || undefined,
+    });
+    setEggCount('');
+    setEggNotes('');
+    setEggDate(today());
+    setShowEggModal(false);
+  };
+
   const openAddExpense = () => {
     setEditingExpense(null);
     setExpCategory(getExpenseCategories(selected)[0] || 'Feeds');
@@ -391,7 +426,7 @@ export default function LivestockMonitor({
 
   const submitSale = (e: React.FormEvent) => {
     e.preventDefault();
-    // Dispersal to members can be free or paid later, so revenue may be 0 for that stage only.
+    if (!isTreasurer) return setFormError('Only the treasurer can record or change income.');
     const isDispersalSale = saleStage === 'Dispersal';
     const revenue = saleRevenue.trim() === '' && isDispersalSale ? 0 : parseFloat(saleRevenue);
     const qty = parseInt(saleQty, 10);
@@ -710,6 +745,7 @@ export default function LivestockMonitor({
                 <span>Add Expense</span>
               </button>
               )}
+              {isTreasurer && (
               <button
                 type="button"
                 onClick={openAddSale}
@@ -717,6 +753,21 @@ export default function LivestockMonitor({
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Sale / Income</span>
+              </button>
+              )}
+            </div>
+          )}
+
+          {/* Member/Officer: Submit Daily Egg Harvest (replaces old chore log) */}
+          {onSubmitEggHarvest && isPoultry && view === 'ledger' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEggModal(true)}
+                className="min-h-11 px-3.5 py-2 text-sm font-bold rounded-xl bg-amber-500 text-white hover:bg-amber-600 cursor-pointer flex items-center gap-1.5 shadow-xs focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Submit Egg Harvest (Today)</span>
               </button>
             </div>
           )}
@@ -775,7 +826,7 @@ export default function LivestockMonitor({
                       {/* CRUD Actions: Edit & Delete (both blocked for closed years) */}
                       {isTreasurerOrOfficer && (
                         <td className="py-2.5 text-center whitespace-nowrap">
-                          {r.itemType === 'sale' || isTreasurer ? (
+                        {isTreasurer ? (
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
@@ -1201,7 +1252,60 @@ export default function LivestockMonitor({
       )}
 
       {/* ========================================================================= */}
-      {/* 8. MODAL: ADD IGP PROJECT                                                 */}
+      {/* 8. MODAL: SUBMIT EGG HARVEST (MEMBER DAILY SUBMISSION)                    */}
+      {/* ========================================================================= */}
+      {showEggModal && (
+        <Modal title="Submit Daily Egg Harvest" onClose={() => setShowEggModal(false)}>
+          <form onSubmit={submitEggHarvest} className="space-y-3.5 text-left">
+            <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-xs font-bold text-[#8A4B08]">
+              Ipadangtang sa asosasyon ang tibuok buok nga itlog nga na-ani karon nga adlaw. Ang Auditor unang magbira kini ug ang President maoy last nagpirmahan.
+              <span className="block mt-1 text-[10px] font-semibold text-[#4A5F57]">(Submit the total number of chicken eggs harvested today. The Auditor verifies the amount and the President signs off last.)</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Number of Eggs Harvested</label>
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={eggCount}
+                  onChange={(e) => setEggCount(e.target.value)}
+                  className={inputCls}
+                  placeholder="e.g. 120"
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Harvest Date</label>
+                <input
+                  type="date"
+                  required
+                  value={eggDate}
+                  onChange={(e) => setEggDate(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelCls}>Notes (Optional)</label>
+              <input
+                type="text"
+                value={eggNotes}
+                onChange={(e) => setEggNotes(e.target.value)}
+                className={inputCls}
+                placeholder="e.g. from coops 1-3, 5 broken eggs excluded"
+              />
+            </div>
+
+            {formError && <p className="text-xs font-bold text-rose-700">{formError}</p>}
+            <ModalActions onCancel={() => setShowEggModal(false)} submitLabel="Submit Harvest" />
+          </form>
+        </Modal>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 8b. MODAL: ADD IGP PROJECT                                                */}
       {/* ========================================================================= */}
       {showAddProject && (
         <Modal title="Add New Association IGP Project" onClose={() => setShowAddProject(false)}>
@@ -1246,7 +1350,128 @@ export default function LivestockMonitor({
       )}
 
       {/* ========================================================================= */}
-      {/* 9. ATTENDANCE DIVIDEND CALCULATOR MODAL                                    */}
+      {/* 9. EGG HARVEST APPROVAL WORKFLOW                                          */}
+      {/*     Member submits -> Auditor verifies the amount -> President signs last */}
+      {/* ========================================================================= */}
+      {(onUpdateEggHarvestStatus || onSubmitEggHarvest) && isPoultry && (
+        <section className="bg-[#FDFBF4] text-slate-900 rounded-2xl border border-amber-200 p-4 sm:p-5 shadow-sm space-y-4 min-w-0">
+          <div className="flex min-w-0 flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-amber-100 pb-4">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-800 border border-amber-400/30">
+                Daily Harvest Registry
+              </span>
+              <h2 className="text-lg sm:text-xl font-black font-display tracking-tight mt-2 text-[#1B4332] flex items-start sm:items-center gap-2 min-w-0">
+                <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                <span className="min-w-0 break-words [overflow-wrap:anywhere] leading-tight">Chicken Egg Harvest Submissions</span>
+              </h2>
+              <p className="text-xs text-[#4A5F57] mt-1">
+                Workflow: Member submits the day's egg count → Auditor verifies the amount → President signs last.
+              </p>
+            </div>
+          </div>
+
+          {(isAuditor || isPresident) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs font-bold text-[#8A4B08]">
+              {isAuditor
+                ? 'As Auditor, check that each submitted amount is accurate, then verify it. Only verified records can be signed by the President.'
+                : 'As President, you are the last signatory: only records already verified by the Auditor can be signed.'}
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={approvalRemarks}
+                  onChange={(e) => setApprovalRemarks(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-amber-300 rounded-lg font-semibold text-[#1B4332]"
+                  placeholder={isAuditor ? 'Verification remarks (optional)…' : 'Signing remarks (optional)…'}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                  <th className="py-2.5 pr-3 font-black">Date & Time</th>
+                  <th className="py-2.5 pr-3 font-black">Collected By</th>
+                  <th className="py-2.5 pr-3 text-right font-black">Eggs</th>
+                  <th className="py-2.5 pr-3 font-black">Notes</th>
+                  <th className="py-2.5 pr-3 font-black">Status</th>
+                  {(isAuditor || isPresident) && <th className="py-2.5 text-center font-black">Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(state.eggHarvests || []).length === 0 ? (
+                  <tr><td colSpan={isAuditor || isPresident ? 6 : 5} className="py-6 text-center text-slate-500">No egg harvest submitted yet.</td></tr>
+                ) : null}
+                {(state.eggHarvests || []).map((h) => (
+                  <tr key={h.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-2.5 pr-3 font-mono text-slate-600 whitespace-nowrap">{h.date} {h.time}</td>
+                    <td className="py-2.5 pr-3 text-slate-700 font-bold">{h.collectedBy}</td>
+                    <td className="py-2.5 pr-3 text-right font-mono font-black text-[#1B4332]">{h.eggCount}</td>
+                    <td className="py-2.5 pr-3 text-slate-700 max-w-xs whitespace-normal break-words">{h.notes || '—'}</td>
+                    <td className="py-2.5 pr-3 whitespace-nowrap">
+                      <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                        h.status === 'Pending Audit' ? 'bg-amber-100 text-amber-800' :
+                        h.status === 'Audited' ? 'bg-emerald-100 text-emerald-800' :
+                        h.status === 'Signed' ? 'bg-[#1B4332] text-white' :
+                        'bg-rose-100 text-rose-800'
+                      }`}>
+                        {h.status}{h.status === 'Audited' && h.auditRemarks ? ` — ${h.auditRemarks}` : h.status === 'Signed' && h.signatureRemarks ? ` — ${h.signatureRemarks}` : h.status === 'Returned' && h.auditRemarks ? ` — ${h.auditRemarks}` : ''}
+                      </span>
+                      {h.auditedBy && h.status !== 'Signed' && (
+                        <span className="block mt-1 text-[10px] text-slate-500">Verified by {h.auditedBy}{h.auditedDate ? ` on ${h.auditedDate}` : ''}</span>
+                      )}
+                      {h.signedBy && (
+                        <span className="block mt-1 text-[10px] text-slate-500">Signed by {h.signedBy}{h.signedDate ? ` on ${h.signedDate}` : ''}</span>
+                      )}
+                    </td>
+                    {(isAuditor || isPresident) && (
+                      <td className="py-2.5 text-center whitespace-nowrap">
+                        {isAuditor && h.status === 'Pending Audit' && (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => onUpdateEggHarvestStatus?.(h.id, 'audit', approvalRemarks.trim() || undefined)}
+                              className="px-2 py-1 text-[10px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+                              title="The amount was checked and is accurate"
+                            >
+                              Verify
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onUpdateEggHarvestStatus?.(h.id, 'return', approvalRemarks.trim() || 'Amount inaccurate')}
+                              className="px-2 py-1 text-[10px] font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 cursor-pointer"
+                              title="Return to member: amount inaccurate"
+                            >
+                              Return
+                            </button>
+                          </div>
+                        )}
+                        {isPresident && h.status === 'Audited' && (
+                          <button
+                            type="button"
+                            onClick={() => onUpdateEggHarvestStatus?.(h.id, 'sign', approvalRemarks.trim() || undefined)}
+                            className="px-2 py-1 text-[10px] font-bold rounded-lg bg-[#1B4332] text-white hover:bg-[#143326] cursor-pointer"
+                            title="Sign off the verified record (President signs last)"
+                          >
+                            Sign Off
+                          </button>
+                        )}
+                        {!(isAuditor && h.status === 'Pending Audit') && !(isPresident && h.status === 'Audited') && (
+                          <span className="text-[10px] font-bold text-slate-400">{h.status === 'Signed' ? 'Complete' : h.status === 'Returned' ? 'Awaiting resubmission' : 'Awaiting next step'}</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 9b. ATTENDANCE DIVIDEND CALCULATOR MODAL                                    */}
       {/* ========================================================================= */}
       <AttendanceDividendCalculatorModal
         isOpen={showDividends}

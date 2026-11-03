@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { Request, Response } from 'express';
 import { getPool, isDatabaseConfigured, saveFullStateToPostgres } from './db';
-import { isPresidentRole, isSecretaryRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
+import { isPresidentRole, isSecretaryRole, isTreasurerRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
 import { parseRequestBody, sendResponse } from './helper';
 
 export type PushApiRequest = Request | (IncomingMessage & {
@@ -62,6 +62,20 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
         safeState.users = safeState.users.filter((u: any) => u && typeof u === 'object' && u.role === 'Member');
       } else {
         delete (safeState as any).users;
+      }
+    }
+    // Financial records (income/expense ledger, fund accounts, and IGP expenses/sales)
+    // may only be recorded or modified by the Treasurer or Assistant Treasurer.
+    if (!isTreasurerRole(user.role)) {
+      const BLOCKED_FINANCIAL_KEYS = ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'hogRaising'] as const;
+      const stripped = BLOCKED_FINANCIAL_KEYS.filter((key) => key in safeState);
+      if (stripped.length > 0) {
+        console.warn(`[Cloud DB Push] Blocked financial mutation from role "${user.role}": ${stripped.join(', ')}`);
+        return sendResponse(res, 403, {
+          success: false,
+          message: 'Only the Treasurer or Assistant Treasurer may record income or expenses.',
+          blockedFields: stripped,
+        });
       }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
