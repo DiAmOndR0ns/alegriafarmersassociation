@@ -48,6 +48,8 @@ export default function AuditorView({
     (filterType === 'all' || transaction.type === filterType) &&
     (filterAudit === 'all' || transaction.auditedStatus === filterAudit)
   );
+  const [visibleTransactionCount, setVisibleTransactionCount] = useState(10);
+  const visibleTransactions = filteredTransactions.slice(0, visibleTransactionCount);
 
   const openAudit = (transaction: FinancialTransaction, status: 'Audited' | 'Flagged') => {
     setSelectedTransaction(transaction);
@@ -167,13 +169,13 @@ export default function AuditorView({
                 <Package className="h-5 w-5 text-emerald-800" />
               </div>
               <div>
-                <h2 className="text-lg font-black text-[#1B4332]">Association Inventory & Custodial Notes</h2>
+                <h2 className="text-lg font-black text-white">Association Inventory & Custodial Notes</h2>
               </div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-xl border border-[#D5CFC1] bg-white p-3">
                 <p className="text-[10px] font-bold uppercase text-[#4A5F57]">Total Items</p>
-                <p className="text-lg font-black text-[#1B4332]">{inventory.length}</p>
+                <p className="text-lg font-black text-white">{inventory.length}</p>
               </div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                 <p className="text-[10px] font-bold uppercase text-emerald-800">Good Condition</p>
@@ -258,8 +260,8 @@ export default function AuditorView({
               <ShieldCheck className="h-5 w-5 text-emerald-800" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-[#1B4332]">Auditor Review Desk</h2>
-              <p className="mt-1 text-sm text-[#4A5F57]">Review transaction records, verify entries, and flag discrepancies.</p>
+              <h2 className="text-lg font-black text-white">Auditor Review Desk</h2>
+              <p className="mt-1 text-sm text-emerald-100">Review transaction records, verify entries, and flag discrepancies.</p>
             </div>
           </div>
           {onOpenReportModal && (
@@ -331,7 +333,7 @@ export default function AuditorView({
         </div>
 
         <div className="space-y-3">
-          {filteredTransactions.length ? filteredTransactions.map(transaction => (
+          {filteredTransactions.length ? visibleTransactions.map(transaction => (
             <article
               key={transaction.id}
               className={`flex flex-col justify-between gap-4 rounded-2xl border bg-white p-4 shadow-sm md:flex-row ${
@@ -406,6 +408,12 @@ export default function AuditorView({
               {transactions.length ? 'No transactions match the selected filters.' : 'No transactions are available for review.'}
             </div>
           )}
+          {visibleTransactionCount < filteredTransactions.length && (
+            <div className="flex items-center justify-between rounded-xl border-[#D5CFC1] bg-white p-3">
+              <span className="text-xs font-semibold text-[#33473D]">Showing {visibleTransactions.length} of {filteredTransactions.length} records</span>
+              <button type="button" onClick={() => setVisibleTransactionCount(count => count + 10)} className="rounded-lg bg-[#1B4332] px-3 py-2 text-xs font-bold text-white">Load 10 more</button>
+            </div>
+          )}
         </div>
       </section>
       </>
@@ -422,7 +430,7 @@ export default function AuditorView({
             <form onSubmit={handleSaveInventory} className="space-y-3.5 p-5">
               <div>
                 <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Item Name</label>
-                <input type="text" required value={invName} onChange={e => setInvName(e.target.value)} placeholder="e.g. IGP Plastic Chairs, Harvest Sacks, Knapsack Sprayer" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+                <input type="text" required value={invName} onChange={e => setInvName(e.target.value)} placeholder="IGP Plastic Chairs, Harvest Sacks, Knapsack Sprayer" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -453,16 +461,16 @@ export default function AuditorView({
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Unit</label>
-                  <input type="text" required value={invUnit} onChange={e => setInvUnit(e.target.value)} placeholder="e.g. pieces, sacks, units" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+                  <input type="text" required value={invUnit} onChange={e => setInvUnit(e.target.value)} placeholder="Pieces, sacks, or units" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
                 </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Storage Location (Optional)</label>
-                <input type="text" value={invLocation} onChange={e => setInvLocation(e.target.value)} placeholder="e.g. Barangay Alegria Covered Court Storage" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+                <input type="text" value={invLocation} onChange={e => setInvLocation(e.target.value)} placeholder="Barangay Alegria Covered Court Storage" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Custodial / Inventory Notes (Optional)</label>
-                <textarea rows={3} value={invNotes} onChange={e => setInvNotes(e.target.value)} placeholder="e.g. Counted 120 pieces during quarterly physical inventory; 8 chairs returned broken by renters." className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+                <textarea rows={3} value={invNotes} onChange={e => setInvNotes(e.target.value)} placeholder="Counted 120 pieces during quarterly physical inventory; 8 chairs returned broken by renters." className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
               </div>
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowInventoryModal(false)} className="flex-1 rounded-xl border border-[#D5CFC1] px-3 py-2.5 text-sm font-semibold text-[#1B4332] hover:bg-[#EAF4EE]">Cancel</button>

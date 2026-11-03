@@ -373,7 +373,6 @@ export default function ProductManagementModal({
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Tuburan Organic Coffee Beans"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
@@ -384,7 +383,6 @@ export default function ProductManagementModal({
                 <label className="block text-[#4A5F57] font-bold mb-1">Visayan / Cebuano Title:</label>
                 <input
                   type="text"
-                  placeholder="e.g., Espesyal nga Kape gikan sa Tuburan"
                   value={cebName}
                   onChange={(e) => setCebName(e.target.value)}
                   className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
@@ -454,7 +452,6 @@ export default function ProductManagementModal({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. matag kilo, matag 250g bag"
                     value={unit}
                     onChange={(e) => setUnit(e.target.value)}
                     className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
@@ -467,7 +464,6 @@ export default function ProductManagementModal({
                 <input
                   type="text"
                   required
-                  placeholder="e.g., 250 ka kilo, 50 ka sako, 12 ka ulo"
                   value={quantityAvailable}
                   onChange={(e) => setQuantityAvailable(e.target.value)}
                   className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500 font-semibold"
@@ -526,7 +522,6 @@ export default function ProductManagementModal({
                 <label className="block text-[#4A5F57] font-bold mb-1">Especificaciones / Specs (Optional):</label>
                 <input
                   type="text"
-                  placeholder="e.g., 100% Organic, LGU Certified"
                   value={specs}
                   onChange={(e) => setSpecs(e.target.value)}
                   className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"

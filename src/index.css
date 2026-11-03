@@ -588,6 +588,38 @@
     visibility: hidden !important;
   }
 
+  .roll-call-modal, .roll-call-modal * {
+    visibility: visible !important;
+    color: #18372d !important;
+  }
+
+  .roll-call-modal {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #fff !important;
+  }
+
+  .member-credentials-print, .member-credentials-print * {
+    visibility: visible !important;
+  }
+
+  .member-credentials-print {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+  }
+
+  .member-credentials-print, .member-credentials-print * {
+    color: #111 !important;
+  }
+
   .print-area-root, .print-area-root * {
     visibility: visible !important;
   }

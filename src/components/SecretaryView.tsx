@@ -100,6 +100,8 @@ export default function SecretaryView({
   const [activeTab, setActiveTab] = useState<'members' | 'meetings' | 'resolutions'>('members');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSitio, setSelectedSitio] = useState('All');
+  const [memberPage, setMemberPage] = useState(1);
+  const membersPerPage = 25;
   const [selectedMeetingForPrint, setSelectedMeetingForPrint] = useState<Meeting | null>(null);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
 
@@ -424,22 +426,24 @@ export default function SecretaryView({
     const matchesSitio = selectedSitio === 'All' || member.farmLocation === selectedSitio;
     return matchesSearch && matchesSitio;
   });
+  const memberPageCount = Math.max(1, Math.ceil(filteredMembers.length / membersPerPage));
+  const paginatedMembers = filteredMembers.slice((memberPage - 1) * membersPerPage, memberPage * membersPerPage);
 
   return (
     <div id="secretary-view-container" className="space-y-6">
       {/* Header and Switch Tabs */}
-      <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4 bg-[#F7F4EF] p-4 rounded-2xl border border-[#D5CFC1]">
+      <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4 bg-[#1B4332] p-4 rounded-2xl border-[#143326] shadow-md">
         <div className="shrink-0">
-          <h2 className="text-xl font-bold text-[#1B4332] flex items-center gap-2">
-            <Users className="w-5 h-5 text-emerald-600" />
-            <span>Secretary Dashboard</span>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Users className="w-5 h-5 text-emerald-200" />
+            <span className="text-white">Secretary Dashboard</span>
             {currentRole === 'Assistant_Secretary' && (
               <span className="text-[10px] bg-blue-100 text-blue-800 font-extrabold px-2.5 py-0.5 rounded-full border border-blue-300">
                 Assistant Secretary Access
               </span>
             )}
           </h2>
-          <p className="text-xs text-[#4A5F57] mt-1">
+          <p className="text-xs text-emerald-100 mt-1">
             Register members, draft resolutions, and compile meeting minutes.
           </p>
         </div>
@@ -541,13 +545,13 @@ export default function SecretaryView({
                   type="text"
                   placeholder="Search members, crops, or livestock..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => { setSearchTerm(e.target.value); setMemberPage(1); }}
                   className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder:text-[#4A5F57] focus:outline-none focus:border-emerald-500"
                 />
               </div>
               <select
                 value={selectedSitio}
-                onChange={(e) => setSelectedSitio(e.target.value)}
+                onChange={(e) => { setSelectedSitio(e.target.value); setMemberPage(1); }}
                 className="px-3 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500"
               >
                 <option value="All">All Sitios</option>
@@ -567,21 +571,21 @@ export default function SecretaryView({
 
           <div className="bg-[#F7F4EF] border border-[#D5CFC1] rounded-2xl overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[980px] table-fixed text-left border-collapse">
                 <thead>
                   <tr className="bg-[#F0EAE1] border-b border-[#D5CFC1] text-[#4A5F57] text-xs font-semibold uppercase tracking-wider">
-                    <th className="px-5 py-3">Farmer Name & ID</th>
-                    <th className="px-5 py-3">RSBSA Status</th>
-                    <th className="px-5 py-3">Sitio / Location</th>
-                    <th className="px-5 py-3">Crops & Livestock</th>
-                    <th className="px-5 py-3">Portal Login</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3 text-right">Actions</th>
+                    <th className="w-[20%] px-3 py-3">Farmer Name & ID</th>
+                    <th className="w-[14%] px-3 py-3">RSBSA Status</th>
+                    <th className="w-[12%] px-3 py-3">Sitio / Location</th>
+                    <th className="w-[15%] px-3 py-3">Crops & Livestock</th>
+                    <th className="w-[14%] px-3 py-3">Portal Login</th>
+                    <th className="w-[10%] px-3 py-3">Status</th>
+                    <th className="w-[15%] px-3 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#D5CFC1] text-[#1B4332] text-sm">
                   {filteredMembers.length > 0 ? (
-                    filteredMembers.map((member) => {
+                    paginatedMembers.map((member) => {
                       const linkedUser = users.find(u =>
                         u.id === member.id ||
                         (member.memberIdNumber && u.memberIdNumber === member.memberIdNumber) ||
@@ -590,7 +594,7 @@ export default function SecretaryView({
 
                       return (
                       <tr key={member.id} className="hover:bg-[#EAF4EC]/60 transition-colors">
-                        <td className="px-5 py-4 font-semibold text-[#1B4332]">
+                        <td className="px-3 py-4 font-semibold text-[#1B4332]">
                           <div className="flex items-center gap-2">
                             <span>{member.name}</span>
                           </div>
@@ -600,7 +604,7 @@ export default function SecretaryView({
                             <span>Joined: {member.joinedDate || 'Recent'}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           <div className="space-y-1">
                             {member.isRsbsaRegistered ? (
                               <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full" title={member.rsbsaNumber}>
@@ -628,13 +632,13 @@ export default function SecretaryView({
                             )}
                           </div>
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           <div className="flex items-center gap-1">
                             <MapPin className="w-3.5 h-3.5 text-[#4A5F57]" />
                             <span>{member.farmLocation}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           <div className="flex flex-wrap gap-1">
                             {member.primaryCrops.map((crop, idx) => (
                               <span key={idx} className="bg-white text-[#1B4332] text-[10px] px-2 py-0.5 rounded-full border border-[#D5CFC1]">
@@ -643,7 +647,7 @@ export default function SecretaryView({
                             ))}
                           </div>
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           {linkedUser ? (
                             <div className="flex items-center gap-1.5">
                               <span className="inline-flex items-center gap-1 bg-[#081C15] text-[#52B788] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold" title={`Account: @${linkedUser.username}`}>
@@ -680,7 +684,7 @@ export default function SecretaryView({
                             </button>
                           )}
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-4">
                           <button
                             id={`status-toggle-${member.id}`}
                             onClick={() => onUpdateMemberStatus(member.id, member.status === 'Active' ? 'Inactive' : 'Active')}
@@ -693,13 +697,13 @@ export default function SecretaryView({
                             {member.status}
                           </button>
                         </td>
-                        <td className="px-5 py-4 text-right">
+                        <td className="sticky right-0 bg-[#F7F4EF] px-3 py-4 text-right shadow-[-8px_0_12px_-10px_rgba(0,0,0,0.5)]">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               id={`edit-member-${member.id}`}
                               onClick={() => handleOpenEditMember(member)}
                               className="text-[#1B4332] hover:text-[#143326] p-1.5 rounded-lg hover:bg-[#EAF4EC] border border-[#D5CFC1] transition-all inline-flex items-center justify-center cursor-pointer"
-                              title="Edit farmer details & other IDs"
+                              title="Edit farmer details and other IDs"
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
@@ -734,6 +738,16 @@ export default function SecretaryView({
                 </tbody>
               </table>
             </div>
+            {filteredMembers.length > 0 && (
+              <div className="flex flex-col gap-2 border-t border-[#D5CFC1] bg-white px-4 py-3 text-xs text-[#4A5F57] sm:flex-row sm:items-center sm:justify-between">
+                <span>Showing {(memberPage - 1) * membersPerPage + 1}–{Math.min(memberPage * membersPerPage, filteredMembers.length)} of {filteredMembers.length} farmers</span>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setMemberPage(page => Math.max(1, page - 1))} disabled={memberPage === 1} className="rounded-lg border-[#D5CFC1] px-3 py-1.5 font-semibold text-[#1B4332] disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+                  <span>Page {memberPage} of {memberPageCount}</span>
+                  <button type="button" onClick={() => setMemberPage(page => Math.min(memberPageCount, page + 1))} disabled={memberPage >= memberPageCount} className="rounded-lg border-[#D5CFC1] px-3 py-1.5 font-semibold text-[#1B4332] disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -953,8 +967,8 @@ export default function SecretaryView({
 
       {/* MEMBER MODAL - Compact and Scrollable */}
       {showMemberModal && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 overflow-y-auto p-2 sm:p-4 flex items-center justify-center animate-fade-in">
-          <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[88vh] sm:max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 overflow-y-auto p-2 sm:p-4 flex items-start justify-center animate-fade-in">
+          <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
             <div className="bg-[#EAF4EC] px-4 py-2.5 sm:px-5 sm:py-3 border-b border-[#D5CFC1] flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-lg bg-[#1B4332] flex items-center justify-center text-white shrink-0">
@@ -984,7 +998,6 @@ export default function SecretaryView({
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Juan"
                         value={memberFirstName}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -1002,7 +1015,6 @@ export default function SecretaryView({
                       <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Middle Name</label>
                       <input
                         type="text"
-                        placeholder="e.g. Santos"
                         value={memberMiddleName}
                         onChange={(e) => setMemberMiddleName(e.target.value)}
                         className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
@@ -1013,7 +1025,6 @@ export default function SecretaryView({
                       <input
                         type="text"
                         required
-                        placeholder="e.g. De la Cruz"
                         value={memberSurname}
                         onChange={(e) => setMemberSurname(e.target.value)}
                         className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
@@ -1025,7 +1036,6 @@ export default function SecretaryView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. AFA-2026-043"
                       value={memberIdNum}
                       onChange={(e) => setMemberIdNum(e.target.value)}
                       className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-500"
@@ -1039,7 +1049,6 @@ export default function SecretaryView({
                     <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Contact Number</label>
                     <input
                       type="text"
-                      placeholder="e.g. 0917-000-0000"
                       value={memberContact}
                       onChange={(e) => setMemberContact(e.target.value)}
                       className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
@@ -1108,7 +1117,6 @@ export default function SecretaryView({
                   {isRsbsaRegistered && (
                     <input
                       type="text"
-                      placeholder="RSBSA Control No. (e.g. 07-22-51-001-000542)"
                       value={memberRsbsa}
                       onChange={(e) => setMemberRsbsa(e.target.value)}
                       className="w-full px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
@@ -1174,7 +1182,6 @@ export default function SecretaryView({
                             <input
                               type="text"
                               required={createLoginAccount}
-                              placeholder="e.g. juan.delacruz"
                               value={loginUsername}
                               onChange={(e) => {
                                 setLoginUsername(e.target.value);
@@ -1218,9 +1225,7 @@ export default function SecretaryView({
                           {loginPasswordError && <p role="alert" className="text-[10px] text-red-700">{loginPasswordError}</p>}
                         </div>
                       </div>
-                      <p className="text-[10px] text-[#3A4A42] italic">
-                        *Makagamit niini ang mag-uuma aron makasulod sa Member Portal ug makakita sa iyang tinigom, attendance, ug dividend share.
-                      </p>
+
                     </div>
                   )}
                 </div>
@@ -1250,8 +1255,8 @@ export default function SecretaryView({
 
       {/* EDIT MEMBER MODAL */}
       {editingMember && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 overflow-y-auto p-2 sm:p-4 flex items-center justify-center animate-fade-in">
-          <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[88vh] sm:max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 overflow-y-auto p-2 sm:p-4 flex items-start justify-center animate-fade-in">
+          <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto">
             <div className="bg-[#EAF4EC] px-4 py-2.5 sm:px-5 sm:py-3 border-b border-[#D5CFC1] flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-lg bg-[#1B4332] flex items-center justify-center text-white shrink-0">
@@ -1282,7 +1287,6 @@ export default function SecretaryView({
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Juan"
                         value={editFirstName}
                         onChange={(e) => setEditFirstName(e.target.value)}
                         className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
@@ -1292,7 +1296,6 @@ export default function SecretaryView({
                       <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Middle Name</label>
                       <input
                         type="text"
-                        placeholder="e.g. Santos"
                         value={editMiddleName}
                         onChange={(e) => setEditMiddleName(e.target.value)}
                         className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
@@ -1303,7 +1306,6 @@ export default function SecretaryView({
                       <input
                         type="text"
                         required
-                        placeholder="e.g. De la Cruz"
                         value={editSurname}
                         onChange={(e) => setEditSurname(e.target.value)}
                         className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
@@ -1315,7 +1317,6 @@ export default function SecretaryView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. AFA-2026-043"
                       value={editMemberIdNum}
                       onChange={(e) => setEditMemberIdNum(e.target.value)}
                       className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-100 border border-[#D5CFC1] rounded-xl text-slate-900 font-mono focus:outline-none focus:border-emerald-500"
@@ -1329,7 +1330,6 @@ export default function SecretaryView({
                     <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Contact Number</label>
                     <input
                       type="text"
-                      placeholder="e.g. 0917-000-0000"
                       value={editContact}
                       onChange={(e) => setEditContact(e.target.value)}
                       className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
@@ -1398,7 +1398,6 @@ export default function SecretaryView({
                   {editIsRsbsa && (
                     <input
                       type="text"
-                      placeholder="RSBSA Control No. (e.g. 07-22-51-001-000542)"
                       value={editRsbsa}
                       onChange={(e) => setEditRsbsa(e.target.value)}
                       className="w-full px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 font-mono placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
@@ -1494,7 +1493,6 @@ export default function SecretaryView({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Monthly General Assembly"
                     value={meetingTitle}
                     onChange={(e) => setMeetingTitle(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
@@ -1637,7 +1635,6 @@ export default function SecretaryView({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. AFA-2026-003"
                     value={resNumber}
                     onChange={(e) => setResNumber(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332] font-mono font-bold"
@@ -1648,7 +1645,6 @@ export default function SecretaryView({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Request for corn seed assistance"
                     value={resTitle}
                     onChange={(e) => setResTitle(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
@@ -1673,7 +1669,6 @@ export default function SecretaryView({
                   <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Moved By (Proponent)</label>
                   <input
                     type="text"
-                    placeholder="e.g. Juan Dela Cruz"
                     value={resMovedBy}
                     onChange={(e) => setResMovedBy(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
@@ -1683,7 +1678,6 @@ export default function SecretaryView({
                   <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Seconded By (Supporter)</label>
                   <input
                     type="text"
-                    placeholder="e.g. Maria Alcoser"
                     value={resSecondedBy}
                     onChange={(e) => setResSecondedBy(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder-[#7A8F87] focus:outline-none focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332]"
@@ -1793,7 +1787,7 @@ export default function SecretaryView({
       {/* OFFICIAL PRINTABLE OFFICERS & MEMBER ROSTERS — segregated exportable,
           separate from the Secretary's other document exports. */}
       {showMemberLists && (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm pt-[env(safe-area-inset-top)]">
           <AFAMemberLists
             users={users}
             members={members}
@@ -2139,3 +2133,11 @@ export default function SecretaryView({
     </div>
   );
 }
+
+
+
+
+
+
+
+

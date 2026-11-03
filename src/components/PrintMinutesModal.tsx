@@ -300,7 +300,6 @@ Attested by:
                   <label className="block text-[10px] font-black text-black uppercase mb-1">Additional Notes / Remarks</label>
                   <textarea
                     rows={3}
-                    placeholder="e.g. Next GA scheduled on..."
                     value={customNotes}
                     onChange={(e) => setCustomNotes(e.target.value)}
                     className="w-full px-2.5 py-1.5 text-xs bg-white border-2 border-slate-300 rounded-lg text-black font-semibold placeholder:text-slate-500 focus:outline-none focus:border-black font-sans"

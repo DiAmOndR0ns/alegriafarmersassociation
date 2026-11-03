@@ -87,40 +87,7 @@ export function useLanguage(): LanguageContextValue {
   };
 }
 
-/** Consistent language switch button used in headers across the app. */
-export function LanguageToggle({
-  className = '',
-  onDark = false,
-}: {
-  className?: string;
-  onDark?: boolean;
-}) {
-  const { isEnglish, toggleLanguage } = useLanguage();
-  return (
-    <button
-      type="button"
-      onClick={toggleLanguage}
-      title={isEnglish ? 'Balik sa English + Bisaya (default)' : 'Translate everything to English'}
-      aria-label={isEnglish ? 'Switch back to English and Bisaya' : 'Switch to English only'}
-      className={
-        className ||
-        [
-          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold normal-case tracking-normal border transition-colors cursor-pointer whitespace-nowrap shadow-sm',
-          onDark
-            ? 'bg-[#081C15] border-[#52B788] text-[#D8F3DC] hover:bg-[#143326]'
-            : 'bg-[#EAF6EE] border-[#B7E3C4] text-[#1B4332] hover:bg-[#D4EEDC]',
-        ].join(' ')
-      }
-    >
-      <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="m5 8 6 6" />
-        <path d="m4 14 6-6 2-3" />
-        <path d="M2 5h12" />
-        <path d="M7 2h1" />
-        <path d="m22 22-5-10-5 10" />
-        <path d="M14 18h6" />
-      </svg>
-      <span>{isEnglish ? 'English + Bisaya' : 'Translate'}</span>
-    </button>
-  );
+/** Retained as a no-op for older imports; translation buttons are removed from the UI. */
+export function LanguageToggle(_props: { className?: string; onDark?: boolean }) {
+  return null;
 }
