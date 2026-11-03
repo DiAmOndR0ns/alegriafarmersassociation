@@ -484,37 +484,6 @@ export default function AnnouncementDashboard({
             </div>
           </div>
 
-          {/* Quick Association Help / Guidelines */}
-          <div className={`p-5 rounded-3xl border ${theme.cardBg} space-y-4.5 shadow-sm`}>
-            <h3 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5 border-b border-[#D5CFC1] pb-2.5">
-              <Shield className="w-4.5 h-4.5 text-[#2D6A4F]" />
-              <span>{en ? 'Guide to Claiming Benefits' : 'Giya sa Pag-angkon og Benepisyo'}</span>
-            </h3>
-
-            <div className="space-y-3 text-[11px] text-[#33473d] leading-relaxed">
-              <div className="flex gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-600 font-black text-[10px] flex items-center justify-center shrink-0">1</div>
-                <p>
-                  <strong>{en ? 'Check your ID:' : 'Susiha ang imong ID:'}</strong> {en ? 'Make sure your Membership Card is valid and your annual PHP 100 dues are paid.' : 'Siguroha nga balido ang imong Membership Card ug nabayran ang tinuig nga amot nga PHP 100.'}
-                </p>
-              </div>
-
-              <div className="flex gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-600 font-black text-[10px] flex items-center justify-center shrink-0">2</div>
-                <p>
-                  <strong>{en ? 'Print your certificate:' : 'I-print ang imong sertipiko:'}</strong> {en ? 'If you are claiming subsidized seeds or fertilizer, print the certificate and bring it to the Barangay Hall.' : 'Kung mokuha ka og subsidiyong liso o abono, i-print ang sertipiko ug dad-a kini sa Barangay Hall.'}
-                </p>
-              </div>
-
-              <div className="flex gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-600 font-black text-[10px] flex items-center justify-center shrink-0">3</div>
-                <p>
-                  <strong>{en ? 'Follow announcements:' : 'Paminawa ang mga pahibalo:'}</strong> {en ? 'Updates from the LGU or AFA officers are posted here weekly to help you avoid missing a distribution.' : 'Ang mga update gikan sa LGU o mga opisyal sa AFA ipahibalo dinhi kada semana aron dili ka mahibaw-an sa ulahi sa pagpang-apod-apod.'}
-                </p>
-              </div>
-            </div>
-          </div>
-
         </div>
 
       </div>

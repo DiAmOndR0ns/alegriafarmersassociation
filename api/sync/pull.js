@@ -815,14 +815,10 @@ async function getAuthenticatedUser(req) {
   const claims = verifyToken(token);
   if (!claims || claims.kind !== "session") return null;
   if (!isDatabaseConfigured()) return null;
-  try {
-    const pool = getPool();
-    await ensureDatabaseSchema(pool);
-    const result = await pool.query("SELECT * FROM users WHERE id = $1", [claims.sub]);
-    return result.rows[0] ? safeUser(result.rows[0]) : null;
-  } catch {
-    return null;
-  }
+  const pool = getPool();
+  await ensureDatabaseSchema(pool);
+  const result = await pool.query("SELECT * FROM users WHERE id = $1", [claims.sub]);
+  return result.rows[0] ? safeUser(result.rows[0]) : null;
 }
 function safeUser(row) {
   return {
@@ -857,7 +853,17 @@ async function handler(req, res) {
       message: "DATABASE_URL is not configured. Running in offline/local storage mode."
     });
   }
-  const user = await getAuthenticatedUser(req);
+  let user;
+  try {
+    user = await getAuthenticatedUser(req);
+  } catch (error) {
+    console.warn("[Cloud DB Pull Auth Warning]:", error?.message || error);
+    return sendResponse(res, 503, {
+      success: false,
+      offlineMode: true,
+      message: "Authentication service is temporarily unavailable."
+    });
+  }
   if (!user) {
     return sendResponse(res, 200, {
       success: false,

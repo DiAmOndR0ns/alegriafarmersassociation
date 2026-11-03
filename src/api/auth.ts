@@ -110,14 +110,10 @@ export async function getAuthenticatedUser(req: any): Promise<SafeUser | null> {
   const claims = verifyToken(token);
   if (!claims || claims.kind !== 'session') return null;
   if (!isDatabaseConfigured()) return null;
-  try {
   const pool = getPool();
   await ensureDatabaseSchema(pool);
   const result = await pool.query('SELECT * FROM users WHERE id = $1', [claims.sub]);
   return result.rows[0] ? safeUser(result.rows[0]) : null;
-  } catch {
-    return null;
-  }
 }
 
 function safeUser(row: any): SafeUser {
@@ -470,7 +466,19 @@ export async function bootstrapHandler(req: any, res: any) {
 export async function sessionHandler(req: any, res: any) {
   try {
     const user = await getAuthenticatedUser(req);
-    return sendResponse(res, 200, { authenticated: Boolean(user), user: user || null });
+    if (user) {
+      const token = signToken({
+        kind: 'session',
+        sub: user.id,
+        exp: Math.floor(Date.now() / 1000) + SESSION_SECONDS
+      });
+      setSessionCookie(req, res, token);
+    }
+    return sendResponse(res, 200, {
+      authenticated: Boolean(user),
+      user: user || null,
+      configured: isDatabaseConfigured()
+    });
   } catch {
     return errorResponse(res, 503, 'Authentication is not configured or unavailable.');
   }
@@ -597,7 +605,7 @@ export async function requireAuthenticated(req: any, res: any): Promise<SafeUser
     if (!user) errorResponse(res, 401, 'Authentication required.');
     return user;
   } catch {
-    errorResponse(res, 401, 'Authentication required.');
+    errorResponse(res, 503, 'Authentication service is temporarily unavailable.');
     return null;
   }
 }

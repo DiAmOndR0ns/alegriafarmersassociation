@@ -15,7 +15,17 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  const user = await getAuthenticatedUser(req);
+  let user;
+  try {
+    user = await getAuthenticatedUser(req);
+  } catch (error: any) {
+    console.warn('[Cloud DB Pull Auth Warning]:', error?.message || error);
+    return sendResponse(res, 503, {
+      success: false,
+      offlineMode: true,
+      message: 'Authentication service is temporarily unavailable.',
+    });
+  }
   if (!user) {
     return sendResponse(res, 200, {
       success: false,

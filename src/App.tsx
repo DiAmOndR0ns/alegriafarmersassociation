@@ -238,7 +238,7 @@ export default function App() {
 
       // Check authenticated session before completing hydration
       try {
-        const sessionRes = await fetch('/api/auth/session');
+        const sessionRes = await fetch('/api/auth/session', { credentials: 'same-origin' });
         if (sessionRes.ok) {
           const result = await sessionRes.json();
           if (result?.authenticated && result.user && !cancelled) {
@@ -250,6 +250,10 @@ export default function App() {
             if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
             setGuestMode(false);
             setUsers(previous => [safeUser, ...previous.filter(user => user.id !== safeUser.id)]);
+          } else if (!result?.authenticated && (import.meta.env.PROD || result?.configured) && !cancelled) {
+            setCurrentUser(null);
+            removeSecureItem('bafa_current_user');
+            setGuestMode(false);
           }
         }
       } catch {
@@ -441,6 +445,40 @@ export default function App() {
   const showToastMessage = (message: string, type: 'success' | 'warning' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4500);
+  };
+
+  const refreshDatabaseConfiguration = async (): Promise<boolean | null> => {
+    if (dbStatus.configured) return true;
+    if (!navigator.onLine) return null;
+
+    try {
+      const response = await fetch('/api/db/status');
+      if (!response.ok) return null;
+      const status = await response.json();
+      const configured = Boolean(status.configured);
+      setDbStatus(previous => ({
+        ...previous,
+        configured,
+        connected: Boolean(status.connected),
+        provider: status.provider || (configured ? 'Supabase' : 'Local Storage'),
+        message: status.message,
+        error: status.error,
+        timestamp: status.timestamp || new Date().toISOString(),
+        checking: false
+      }));
+      return configured;
+    } catch (error) {
+      console.warn('[Database Status] Unable to confirm database configuration.', error);
+      return null;
+    }
+  };
+
+  const handleSessionExpired = () => {
+    setCurrentUser(null);
+    removeSecureItem('bafa_current_user');
+    setGuestMode(false);
+    void fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    showToastMessage('Your session expired. Please sign in again. Your saved local changes are preserved.', 'warning');
   };
 
   const getOfficerName = (role: OfficerRole) => {
@@ -663,6 +701,7 @@ export default function App() {
     options?: { silent?: boolean; source?: string; scope?: 'eggHarvests' | 'roleUpdate' }
   ): Promise<boolean> => {
     if (!navigator.onLine) return false;
+    if (await refreshDatabaseConfiguration() !== true) return false;
     if (isSyncingRef.current) {
       console.log('[Auto-Sync]: Synchronization already in-flight; queueing this update.');
       return new Promise((resolve) => {
@@ -702,9 +741,14 @@ export default function App() {
       const res = await fetch('/api/sync/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify(payload)
       });
 
+      if (res.status === 401) {
+        handleSessionExpired();
+        return false;
+      }
       const result = await res.json();
       if (result?.success && !result?.offlineMode) {
         if (options?.scope !== 'eggHarvests' && options?.scope !== 'roleUpdate') {
@@ -849,6 +893,53 @@ export default function App() {
       clearInterval(intervalId);
     };
   }, [isOnline, syncQueue.length, currentUser?.id]);
+
+  // Keep the server session alive while the user is active. The server refreshes
+  // the signed cookie only when the current session is still valid.
+  useEffect(() => {
+    if (!currentUser || !isOnline || !(import.meta.env.PROD || dbStatus.configured)) return;
+
+    const refreshSession = async () => {
+      try {
+        const response = await fetch('/api/auth/session', { credentials: 'same-origin' });
+        if (response.status === 401) {
+          handleSessionExpired();
+          return;
+        }
+        if (!response.ok) {
+          console.warn(`[Auth Session] Refresh failed with status ${response.status}.`);
+          return;
+        }
+
+        const result = await response.json();
+        if (!result?.authenticated || !result.user) {
+          handleSessionExpired();
+          return;
+        }
+
+        const authenticatedUser = result.user as User;
+        setCurrentUser(authenticatedUser);
+        if (authenticatedUser.role !== 'Member') setCurrentRole(authenticatedUser.role as OfficerRole);
+        setUsers(previous => [authenticatedUser, ...previous.filter(user => user.id !== authenticatedUser.id)]);
+        updateStorage('bafa_current_user', authenticatedUser);
+      } catch (error) {
+        console.warn('[Auth Session] Could not refresh session while online.', error);
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (navigator.onLine) void refreshSession();
+    }, 15 * 60 * 1000);
+    const handleFocus = () => {
+      if (navigator.onLine) void refreshSession();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [currentUser?.id, isOnline, dbStatus.configured]);
 
   // SECRETARY ACTION HANDLERS
   const handleAddMember = (
@@ -2354,7 +2445,17 @@ export default function App() {
       // Keep role updates in memory; do not persist an alternate session identity in web storage.
     }
 
-    if (isOnline && navigator.onLine) {
+    const databaseConfigured = await refreshDatabaseConfiguration();
+    if (databaseConfigured === false) {
+      logAction(
+        'Updated Officer Role',
+        `Modified governance role for ${targetUser.name} from "${oldRoleName}" to "${newRoleName}".`
+      );
+      showToastMessage(`${targetUser.name}'s role was saved locally. Configure the database to sync it to the cloud.`, 'warning');
+      return;
+    }
+
+    if (databaseConfigured && isOnline && navigator.onLine) {
       const saved = await pushAllDataToCloud(
         { roleUpdate: { userId: id, role: newRole } },
         { silent: true, source: 'Role Updated', scope: 'roleUpdate' }

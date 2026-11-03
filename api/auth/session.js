@@ -516,6 +516,11 @@ function signingSecret() {
   }
   return Buffer.from(value, "utf8");
 }
+function signToken(claims) {
+  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  const signature = createHmac("sha256", signingSecret()).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
 function verifyToken(token) {
   try {
     const [payload, signature, extra] = token.split(".");
@@ -545,20 +550,22 @@ function getCookie(req, name) {
   }
   return void 0;
 }
+function setSessionCookie(req, res, token) {
+  const forwardedProto = String(req.headers?.["x-forwarded-proto"] || "").split(",")[0].trim();
+  const secure = process.env.NODE_ENV === "production" || forwardedProto === "https";
+  const value = token ? `${SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${SESSION_SECONDS}; Path=/; HttpOnly; SameSite=Strict${secure ? "; Secure" : ""}` : `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict${secure ? "; Secure" : ""}`;
+  res.setHeader("Set-Cookie", value);
+}
 async function getAuthenticatedUser(req) {
   const token = getCookie(req, SESSION_COOKIE);
   if (!token) return null;
   const claims = verifyToken(token);
   if (!claims || claims.kind !== "session") return null;
   if (!isDatabaseConfigured()) return null;
-  try {
-    const pool = getPool();
-    await ensureDatabaseSchema(pool);
-    const result = await pool.query("SELECT * FROM users WHERE id = $1", [claims.sub]);
-    return result.rows[0] ? safeUser(result.rows[0]) : null;
-  } catch {
-    return null;
-  }
+  const pool = getPool();
+  await ensureDatabaseSchema(pool);
+  const result = await pool.query("SELECT * FROM users WHERE id = $1", [claims.sub]);
+  return result.rows[0] ? safeUser(result.rows[0]) : null;
 }
 function safeUser(row) {
   return {
@@ -586,7 +593,19 @@ function errorResponse(res, status, message) {
 async function sessionHandler(req, res) {
   try {
     const user = await getAuthenticatedUser(req);
-    return sendResponse(res, 200, { authenticated: Boolean(user), user: user || null });
+    if (user) {
+      const token = signToken({
+        kind: "session",
+        sub: user.id,
+        exp: Math.floor(Date.now() / 1e3) + SESSION_SECONDS
+      });
+      setSessionCookie(req, res, token);
+    }
+    return sendResponse(res, 200, {
+      authenticated: Boolean(user),
+      user: user || null,
+      configured: isDatabaseConfigured()
+    });
   } catch {
     return errorResponse(res, 503, "Authentication is not configured or unavailable.");
   }

@@ -113,9 +113,9 @@ export function separateEggHarvestsFromFinancialState(
 export default async function handler(req: PushApiRequest, res: PushApiResponse) {
   if (req.method && req.method !== 'POST') return sendResponse(res, 405, { success: false, message: 'Method not allowed.' });
   if (rejectCrossOriginMutation(req)) return sendResponse(res, 403, { success: false, message: 'Cross-origin requests are not allowed.' });
+  if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: 'Database is not configured.' });
   const user = await requireAuthenticated(req, res);
   if (!user) return;
-  if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: 'Database is not configured.' });
   try {
     const rawState = await parseRequestBody(req);
     if (!isValidSyncState(rawState)) {
