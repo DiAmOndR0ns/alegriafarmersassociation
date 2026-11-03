@@ -1322,7 +1322,7 @@ export default function ExecutiveView({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Outgoing President's New Role:</label>
+                  <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">New Role:</label>
                   <select
                     value={turnoverOutgoingRole}
                     onChange={(e) => setTurnoverOutgoingRole(e.target.value as any)}

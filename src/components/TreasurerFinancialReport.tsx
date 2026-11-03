@@ -162,10 +162,10 @@ export default function TreasurerFinancialReport({
         <span style={{ display: 'flex', gap: 8 }}>
           {onClose && (
             <button type="button" onClick={onClose} className="px-3 py-2 rounded-xl border border-slate-400 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer">
-              ✕ Close
+              <span aria-hidden="true">✕</span> Close
             </button>
           )}
-          <button type="button" onClick={exportPdf} className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-black cursor-pointer">
+          <button type="button" onClick={exportPdf} className="px-4 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-sm font-black shadow-md cursor-pointer">
             Export PDF
           </button>
         </span>
