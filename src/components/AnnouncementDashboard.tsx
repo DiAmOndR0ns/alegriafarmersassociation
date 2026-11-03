@@ -3,8 +3,8 @@ import { Announcement } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import {  getSecureItem, setSecureItem } from '../utils/secureStorage';
 import {
-  Megaphone, Search, Bell, Calendar, Tag, CloudSun, 
-  DollarSign, AlertTriangle, BookOpen, User, Phone, 
+  Megaphone, Search, Bell, Calendar, Tag, CloudSun,
+  AlertTriangle, BookOpen, User, Phone,
   Printer, Check, Clock, Info, Shield, Layers
 } from 'lucide-react';
 
@@ -78,7 +78,7 @@ export default function AnnouncementDashboard({
       case 'Weather':
         return <CloudSun className={`${sizeClass} text-amber-500`} />;
       case 'Price Advisory':
-        return <DollarSign className={`${sizeClass} text-blue-500`} />;
+        return <span className={`${sizeClass} flex items-center justify-center text-blue-500 font-black`}>₱</span>;
       default:
         return <Megaphone className={`${sizeClass} text-slate-500`} />;
     }
@@ -280,7 +280,7 @@ export default function AnnouncementDashboard({
         <div className={`p-4 rounded-2xl border ${theme.cardBg} col-span-2 lg:col-span-1 flex flex-col space-y-1.5 shadow-sm relative overflow-hidden`}>
           <div className="flex justify-between items-start">
             <span className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider block">Market</span>
-            <DollarSign className="w-4 h-4 text-blue-700" />
+            <span className="text-lg font-black text-blue-700 leading-none">₱</span>
           </div>
           <div>
             <span className="text-2xl font-black text-blue-700 block leading-none">{priceAdvisoryCount}</span>
@@ -483,6 +483,7 @@ export default function AnnouncementDashboard({
               </div>
             </div>
           </div>
+
 
         </div>
 

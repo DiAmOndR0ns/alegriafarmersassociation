@@ -76,6 +76,13 @@ export default function MemberDashboard({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'announcements' | 'hog-raising' | 'products' | 'activities'>('profile');
+  const isMemberPortalMode = currentUser.role === 'Member';
+
+  useEffect(() => {
+    if (!isMemberPortalMode && (activeTab === 'announcements' || activeTab === 'hog-raising' || activeTab === 'products')) {
+      setActiveTab('profile');
+    }
+  }, [activeTab, isMemberPortalMode]);
 
   // Sync state if currentUser changes
   useEffect(() => {
@@ -257,58 +264,64 @@ export default function MemberDashboard({
             <span>Akong Profile & ID</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('announcements')}
-            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'announcements'
-                ? 'bg-[#1B4332] text-white shadow-md'
-                : 'text-[#1B4332] hover:bg-[#EAF4EC]'
-            }`}
-          >
-            <Megaphone className="w-4 h-4 shrink-0" />
-            <span>Mga Pahibalo</span>
-            {unreadAnnouncementsCount > 0 && (
-              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
-                activeTab === 'announcements' ? 'bg-amber-400 text-slate-900' : 'bg-rose-600 text-white'
-              }`}>
-                {unreadAnnouncementsCount}
-              </span>
-            )}
-          </button>
+          {isMemberPortalMode && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('announcements')}
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === 'announcements'
+                  ? 'bg-[#1B4332] text-white shadow-md'
+                  : 'text-[#1B4332] hover:bg-[#EAF4EC]'
+              }`}
+            >
+              <Megaphone className="w-4 h-4 shrink-0" />
+              <span>Mga Pahibalo</span>
+              {unreadAnnouncementsCount > 0 && (
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
+                  activeTab === 'announcements' ? 'bg-amber-400 text-slate-900' : 'bg-rose-600 text-white'
+                }`}>
+                  {unreadAnnouncementsCount}
+                </span>
+              )}
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('hog-raising')}
-            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'hog-raising'
-                ? 'bg-[#1B4332] text-white shadow-md'
-                : 'text-[#1B4332] hover:bg-[#EAF4EC]'
-            }`}
-          >
-            <Sprout className="w-4 h-4 shrink-0" />
-            <span>IGP</span>
-          </button>
+          {isMemberPortalMode && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('hog-raising')}
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === 'hog-raising'
+                  ? 'bg-[#1B4332] text-white shadow-md'
+                  : 'text-[#1B4332] hover:bg-[#EAF4EC]'
+              }`}
+            >
+              <Sprout className="w-4 h-4 shrink-0" />
+              <span>IGP</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('products')}
-            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === 'products'
-                ? 'bg-[#1B4332] text-white shadow-md'
-                : 'text-[#1B4332] hover:bg-[#EAF4EC]'
-            }`}
-          >
-            <ShoppingBag className="w-4 h-4 shrink-0" />
-            <span>Merkado / Abot</span>
-            {publishedProductsCount > 0 && (
-              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
-                activeTab === 'products' ? 'bg-[#D8F3DC] text-[#1B4332]' : 'bg-[#EAF4EC] text-[#1B4332]'
-              }`}>
-                {publishedProductsCount}
-              </span>
-            )}
-          </button>
+          {isMemberPortalMode && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('products')}
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === 'products'
+                  ? 'bg-[#1B4332] text-white shadow-md'
+                  : 'text-[#1B4332] hover:bg-[#EAF4EC]'
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4 shrink-0" />
+              <span>Merkado / Abot</span>
+              {publishedProductsCount > 0 && (
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
+                  activeTab === 'products' ? 'bg-[#D8F3DC] text-[#1B4332]' : 'bg-[#EAF4EC] text-[#1B4332]'
+                }`}>
+                  {publishedProductsCount}
+                </span>
+              )}
+            </button>
+          )}
 
           <button
             type="button"
