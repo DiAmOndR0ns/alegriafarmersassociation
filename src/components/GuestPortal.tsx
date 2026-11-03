@@ -6,7 +6,7 @@ import {
   MapPin, Clock, Tag, AlertTriangle, Boxes, Package, Phone, X, ShoppingBag
 } from 'lucide-react';
 import { HogRaisingState, Member, Product, Announcement, AssociationActivity, User } from '../types';
-import { resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
+import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
 import { useLanguage, LanguageToggle } from '../i18n/LanguageContext';
 
 interface GuestPortalProps {
@@ -44,6 +44,7 @@ export default function GuestPortal({
   // Dynamically calculate stats to accurately reflect the registered roster
   const registeredMembersCount = members.length;
   const activeMembersCount = members.filter(m => m.status === 'Active').length;
+  const boardMemberNames = resolveBoardMemberNames(users);
 
   // Theme styling tailored for senior citizens (high contrast, warm, large readable text)
   const theme = {
@@ -600,14 +601,13 @@ export default function GuestPortal({
                   <h4 className="font-black text-[#1B4332] text-[11px] sm:text-xs uppercase tracking-wider pt-2 border-t border-emerald-950/15 font-display break-words">
                     Board of Directors (BOD)
                   </h4>
-                  <ul className="list-disc pl-4 text-xs text-slate-700 space-y-1 font-semibold break-words">
-                    <li>Silvestra S. Simbajon</li>
-                    <li>Diosdada M. Asendiente</li>
-                    <li>Mirasol E. Tan</li>
-                    <li>Romalina S. Evero</li>
-                    <li>Judeline G. Romero</li>
-                    <li>Marvie P. Conahap</li>
-                  </ul>
+                  {boardMemberNames.length > 0 ? (
+                    <ul className="list-disc pl-4 text-xs text-slate-700 space-y-1 font-semibold break-words">
+                      {boardMemberNames.map((name, i) => <li key={`${name}-${i}`}>{name}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="text-xs font-medium text-slate-600">No Board Members have been designated yet.</p>
+                  )}
                 </div>
               </div>
             </div>
