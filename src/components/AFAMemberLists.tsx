@@ -227,14 +227,14 @@ const buildCss = ({ w, h }: { w: string; h: string }) => `
   border-color: #991b1b;
 }
 
-.afa-stage { background: #d4d4d8; padding: 24px 12px; overflow-x: auto; max-height: calc(100dvh - 48px); overflow-y: auto; }
+.afa-stage { background: #d4d4d8; padding: 0; overflow: visible; }
 
 .afa-sheet {
   box-sizing: border-box;
   width: var(--pw);
-  height: var(--ph);
+  min-height: var(--ph);
   margin: 0 auto 24px;
-  padding: 12mm 16mm;
+  padding: 10mm 16mm 0;
   display: flex;
   flex-direction: column;
   background: #fff;
