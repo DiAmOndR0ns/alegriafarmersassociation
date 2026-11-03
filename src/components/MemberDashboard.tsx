@@ -287,7 +287,7 @@ export default function MemberDashboard({
             }`}
           >
             <Sprout className="w-4 h-4 shrink-0" />
-            <span>Baboyan IGP</span>
+            <span>IGP</span>
           </button>
 
           <button

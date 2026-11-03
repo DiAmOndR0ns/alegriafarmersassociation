@@ -3549,13 +3549,7 @@ export default function App() {
       {showTreasurerFinancialReport && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
           <div className="mx-auto max-w-[210mm]">
-            <button
-              type="button"
-              onClick={() => setShowTreasurerFinancialReport(false)}
-              className="mb-3 w-full rounded-xl bg-white px-4 py-2 text-sm font-black text-[#1B4332] shadow hover:bg-slate-100 cursor-pointer print:hidden"
-            >
-              ✕ Close Financial Report
-            </button>
+
             <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading financial report...</div>}>
               <TreasurerFinancialReport
                 year={new Date().getFullYear()}

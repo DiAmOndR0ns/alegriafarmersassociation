@@ -211,16 +211,16 @@ export default function SecretaryView({
   ];
 
   const CROPS = [
-    'Corn (Mais)',
-    'Coconut (Lubi)',
-    'Banana (Saging)',
+    'Corn',
+    'Coconut',
+    'Banana',
     'Cacao',
     'Tuburan Coffee',
-    'Vegetables (Utanon)',
-    'Cassava (Kamoteng Kahoy)',
-    'Hog Raising (Baboyan)',
-    'Poultry Raising (Manokan)',
-    'Goat Raising (Kanding)'
+    'Vegetables',
+    'Cassava',
+    'Hog Raising',
+    'Poultry Raising',
+    'Goat Raising'
   ];
 
   const handleCropToggle = (crop: string) => {
@@ -260,7 +260,7 @@ export default function SecretaryView({
       isRsbsaRegistered: isRsbsaRegistered,
       contactNumber: memberContact || 'None',
       farmLocation: memberSitio,
-      primaryCrops: selectedCrops.length > 0 ? selectedCrops : ['Vegetables (Utanon)'],
+      primaryCrops: selectedCrops.length > 0 ? selectedCrops : ['Vegetables'],
       gender: memberGender,
       birthDate: birthDate || undefined,
       status: 'Active',
@@ -351,7 +351,7 @@ export default function SecretaryView({
       isRsbsaRegistered: editIsRsbsa,
       contactNumber: editContact.trim() || 'None',
       farmLocation: editSitio,
-      primaryCrops: editSelectedCrops.length > 0 ? editSelectedCrops : ['Vegetables (Utanon)'],
+      primaryCrops: editSelectedCrops.length > 0 ? editSelectedCrops : ['Vegetables'],
       gender: editGender,
       birthDate: birthDate || undefined,
       affiliations: editAffiliations
@@ -578,8 +578,7 @@ export default function SecretaryView({
                     <th className="w-[14%] px-3 py-3">RSBSA Status</th>
                     <th className="w-[12%] px-3 py-3">Sitio / Location</th>
                     <th className="w-[15%] px-3 py-3">Crops & Livestock</th>
-                    <th className="w-[14%] px-3 py-3">Portal Login</th>
-                    <th className="w-[10%] px-3 py-3">Status</th>
+                    <th className="w-[19%] px-3 py-3">Portal Login</th>
                     <th className="w-[15%] px-3 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -650,8 +649,8 @@ export default function SecretaryView({
                         <td className="px-3 py-4">
                           {linkedUser ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 bg-[#081C15] text-[#52B788] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold" title={`Account: @${linkedUser.username}`}>
-                                <Key className="w-3 h-3 text-[#52B788]" />
+                              <span className="inline-flex items-center gap-1 bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold" title={`Account: @${linkedUser.username}`}>
+                                <Key className="w-3 h-3 text-[#2D6A4F]" />
                                 <span>@{linkedUser.username}</span>
                               </span>
                               <button
@@ -661,10 +660,11 @@ export default function SecretaryView({
                                   setManageUsername(linkedUser.username);
                                   setManagePassword(generateInitialPassword(linkedUser.username, 'Member'));
                                 }}
-                                className="p-1 hover:bg-[#EAF4EC] text-[#1B4332] hover:text-amber-700 rounded transition-colors"
-                                title="Reset / Manage Password"
+                                className="inline-flex items-center gap-1 bg-[#1B4332] hover:bg-[#143326] text-white px-2 py-1 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
+                                title="Reset / Manage Portal Credentials"
                               >
-                                <KeyRound className="w-3.5 h-3.5" />
+                                <KeyRound className="w-3 h-3" />
+                                <span>Manage Login</span>
                               </button>
                             </div>
                           ) : (
@@ -683,20 +683,7 @@ export default function SecretaryView({
                               <span>+ Create Login</span>
                             </button>
                           )}
-                        </td>
-                        <td className="px-3 py-4">
-                          <button
-                            id={`status-toggle-${member.id}`}
-                            onClick={() => onUpdateMemberStatus(member.id, member.status === 'Active' ? 'Inactive' : 'Active')}
-                            className={`px-2 py-1 rounded-full text-[11px] font-semibold transition-all ${
-                              member.status === 'Active'
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-slate-200 text-[#1B4332]'
-                            }`}
-                          >
-                            {member.status}
-                          </button>
-                        </td>
+                        </td>
                         <td className="sticky right-0 bg-[#F7F4EF] px-3 py-4 text-right shadow-[-8px_0_12px_-10px_rgba(0,0,0,0.5)]">
                           <div className="flex items-center justify-end gap-1.5">
                             <button

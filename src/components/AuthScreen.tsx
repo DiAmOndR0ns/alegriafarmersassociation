@@ -15,7 +15,7 @@ import {
   Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
   UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
   User as UserIcon, HelpCircle, AlertTriangle, KeyRound, Eye, EyeOff,
-  ShieldCheck, Phone, Check, Info, FileText, Languages
+  ShieldCheck, Phone, Check, Info, FileText
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -66,8 +66,8 @@ export default function AuthScreen({
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetUsername, setResetUsername] = useState('');
 
-  // Global language: 'mixed' = English + Bisaya (default), 'en' = English only
-  const { isEnglish: en, toggleLanguage, language } = useLanguage();
+  // Keep the login language setting without exposing a language switch on this screen.
+  const { isEnglish: en } = useLanguage();
 
   const handleAdminSetupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -389,15 +389,7 @@ export default function AuthScreen({
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={toggleLanguage}
-                title={en ? 'Switch to Bisaya and English' : 'Switch to English'}
-                className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors cursor-pointer whitespace-nowrap bg-transparent hover:bg-[#F7F4EF] text-[#4A5F57] border-[#D5CFC1] shadow-none"
-              >
-                <Languages className="w-3.5 h-3.5 shrink-0" />
-                <span>{en ? 'Bisaya' : 'English'}</span>
-              </button>
+
             </div>
 
             {showResetForm ? (

@@ -96,18 +96,18 @@ export default function RollCallModal({
   const excusedPercent = totalCount > 0 ? Math.round((excusedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in text-left">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-[#F7F4EF] backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in text-left">
+      <div className="bg-white border border-[#D5CFC1] w-full max-w-4xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         
         {/* MODAL HEADER */}
         <div className="bg-[#1B4332] text-white px-5 py-4 border-b border-[#2D6A4F] flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="bg-emerald-600/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-400">
+            <div className="bg-emerald-600/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-800">
               <UserCheck className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-bold text-white text-base">Digital Roll Call Attendance</h3>
-              <p className="text-xs text-emerald-100">
+              <p className="text-xs text-white">
                 Recording attendance for: <span className="text-white font-semibold">{meetingTitle || 'Meeting'}</span>
               </p>
             </div>
@@ -123,44 +123,44 @@ export default function RollCallModal({
 
         {/* STATS & SUMMARY DASHBOARD */}
         <div className="bg-[#F1F5F1] border-b border-[#D5CFC1] p-4 shrink-0 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-            <span className="text-[10px] uppercase font-bold text-[#4A5F57] block">Active Association Members</span>
+          <div className="bg-white/60 p-3 rounded-xl border border-[#D5CFC1]">
+            <span className="text-[10px] uppercase font-bold text-[#1B4332] block">Active Association Members</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-white">{totalCount}</span>
-              <span className="text-xs text-slate-400">farmers registered</span>
+              <span className="text-2xl font-black text-[#1B4332]">{totalCount}</span>
+              <span className="text-xs text-[#365447]">farmers registered</span>
             </div>
           </div>
 
-          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+          <div className="bg-white/60 p-3 rounded-xl border border-[#D5CFC1]">
             <div className="flex justify-between items-center">
               <span className="text-[10px] uppercase font-bold text-emerald-800 block">Present</span>
-              <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">{presentPercent}%</span>
+              <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded-md">{presentPercent}%</span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-black text-emerald-400">{presentCount}</span>
-              <span className="text-xs text-slate-400">/ {totalCount}</span>
+              <span className="text-2xl font-black text-emerald-800">{presentCount}</span>
+              <span className="text-xs text-[#365447]">/ {totalCount}</span>
             </div>
           </div>
 
-          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+          <div className="bg-white/60 p-3 rounded-xl border border-[#D5CFC1]">
             <div className="flex justify-between items-center">
               <span className="text-[10px] uppercase font-bold text-rose-800 block">Absent</span>
-              <span className="text-xs font-semibold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded-md">{absentPercent}%</span>
+              <span className="text-xs font-semibold text-rose-800 bg-rose-50 px-1.5 py-0.5 rounded-md">{absentPercent}%</span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-black text-rose-400">{absentCount}</span>
-              <span className="text-xs text-slate-400">/ {totalCount}</span>
+              <span className="text-2xl font-black text-rose-800">{absentCount}</span>
+              <span className="text-xs text-[#365447]">/ {totalCount}</span>
             </div>
           </div>
 
-          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+          <div className="bg-white/60 p-3 rounded-xl border border-[#D5CFC1]">
             <div className="flex justify-between items-center">
               <span className="text-[10px] uppercase font-bold text-amber-800 block">Excused</span>
-              <span className="text-xs font-semibold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md">{excusedPercent}%</span>
+              <span className="text-xs font-semibold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded-md">{excusedPercent}%</span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-2xl font-black text-amber-400">{excusedCount}</span>
-              <span className="text-xs text-slate-400">/ {totalCount}</span>
+              <span className="text-2xl font-black text-amber-900">{excusedCount}</span>
+              <span className="text-xs text-[#365447]">/ {totalCount}</span>
             </div>
           </div>
         </div>
@@ -170,7 +170,7 @@ export default function RollCallModal({
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
             {/* Search Input */}
             <div className="relative w-full sm:w-64">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[#365447]">
                 <Search className="w-4 h-4" />
               </span>
               <input
@@ -178,17 +178,17 @@ export default function RollCallModal({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search member name or sitio..."
-                className="w-full bg-white text-xs text-[#18372D] pl-9 pr-3.5 py-2 rounded-xl border border-slate-800 focus:outline-none focus:border-emerald-500 transition-all font-sans"
+                className="w-full bg-white text-xs text-[#18372D] pl-9 pr-3.5 py-2 rounded-xl border border-[#B7CDBB] focus:outline-none focus:border-emerald-600 transition-all font-sans"
               />
             </div>
 
             {/* Sitio Filter */}
             <div className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <MapPin className="w-3.5 h-3.5 text-[#365447] shrink-0" />
               <select
                 value={selectedSitio}
                 onChange={(e) => setSelectedSitio(e.target.value)}
-                className="bg-slate-900 text-xs text-slate-300 px-2.5 py-2 rounded-xl border border-slate-800 focus:outline-none focus:border-emerald-500 font-sans"
+                className="bg-white text-xs text-[#1B4332] px-2.5 py-2 rounded-xl border border-[#D5CFC1] focus:outline-none focus:border-emerald-500 font-sans"
               >
                 {sitios.map(s => (
                   <option key={s} value={s}>{s === 'All' ? 'All Sitios' : s}</option>
@@ -202,7 +202,7 @@ export default function RollCallModal({
             <button
               type="button"
               onClick={() => handleMarkAll('Present')}
-              className="flex items-center gap-1 px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/30 text-emerald-400 border border-emerald-900/50 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition-all cursor-pointer"
             >
               <UserCheck className="w-3.5 h-3.5" />
               <span>Mark Filtered Present</span>
@@ -210,7 +210,7 @@ export default function RollCallModal({
             <button
               type="button"
               onClick={() => handleMarkAll('Absent')}
-              className="flex items-center gap-1 px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/30 text-rose-400 border border-rose-900/50 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-800 border border-rose-300 rounded-lg text-xs font-bold transition-all cursor-pointer"
             >
               <UserX className="w-3.5 h-3.5" />
               <span>Mark Filtered Absent</span>
@@ -221,10 +221,10 @@ export default function RollCallModal({
         {/* MEMBERS LIST SCROLLABLE GRID */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2.5 min-h-0 bg-[#FAF8F5]">
           {filteredMembers.length === 0 ? (
-            <div className="text-center py-12 bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
-              <Users className="w-10 h-10 text-slate-600 mx-auto stroke-[1.25] mb-2" />
-              <p className="text-sm font-semibold text-slate-400">No active association members found</p>
-              <p className="text-xs text-slate-500 mt-1">Try resetting your search filters or add new members under the roster tab.</p>
+            <div className="text-center py-12 bg-white/40 border border-[#D5CFC1]/80 rounded-2xl p-6">
+              <Users className="w-10 h-10 text-[#2D6A4F] mx-auto stroke-[1.25] mb-2" />
+              <p className="text-sm font-semibold text-[#1B4332]">No active association members found</p>
+              <p className="text-xs text-[#365447] mt-1">Try resetting your search filters or add new members under the roster tab.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -243,14 +243,14 @@ export default function RollCallModal({
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-7 h-7 rounded-full bg-slate-850 border border-slate-750 flex items-center justify-center text-xs font-black text-slate-400 select-none shrink-0 font-mono">
+                      <div className="w-7 h-7 rounded-full bg-[#EAF4EC] border border-[#B7CDBB] flex items-center justify-center text-xs font-black text-[#365447] select-none shrink-0 font-mono">
                         {idx + 1}
                       </div>
                       <div className="min-w-0">
                         <h4 className="text-xs font-bold text-[#18372D] truncate leading-tight uppercase tracking-wide">{member.name}</h4>
-                        <div className="flex items-center gap-1.5 text-[10px] text-[#4A5F57] mt-0.5">
+                        <div className="flex items-center gap-1.5 text-[10px] text-[#365447] mt-0.5">
                           <span className="flex items-center gap-0.5 font-sans truncate">
-                            <MapPin className="w-2.5 h-2.5 text-slate-500 shrink-0" />
+                            <MapPin className="w-2.5 h-2.5 text-[#2D6A4F] shrink-0" />
                             {member.farmLocation}
                           </span>
                         </div>
@@ -258,14 +258,14 @@ export default function RollCallModal({
                     </div>
 
                     {/* Roll Call Markers */}
-                    <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 shrink-0">
+                    <div className="flex items-center gap-1 bg-[#F7F4EF] p-1 rounded-lg border border-[#D5CFC1] shrink-0">
                       <button
                         type="button"
                         onClick={() => handleMarkStatus(member.id, 'Present')}
                         className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${
                           currentStatus === 'Present'
                             ? 'bg-emerald-600 text-white'
-                            : 'text-slate-400 hover:text-white'
+                            : 'text-[#365447] hover:text-[#1B4332]'
                         }`}
                         title="Present"
                       >
@@ -279,7 +279,7 @@ export default function RollCallModal({
                         className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${
                           currentStatus === 'Absent'
                             ? 'bg-rose-600 text-white'
-                            : 'text-slate-400 hover:text-white'
+                            : 'text-[#365447] hover:text-[#1B4332]'
                         }`}
                         title="Absent"
                       >
@@ -293,7 +293,7 @@ export default function RollCallModal({
                         className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${
                           currentStatus === 'Excused'
                             ? 'bg-amber-600 text-white'
-                            : 'text-slate-400 hover:text-white'
+                            : 'text-[#365447] hover:text-[#1B4332]'
                         }`}
                         title="Excused"
                       >
@@ -317,7 +317,7 @@ export default function RollCallModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-initial px-5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition-all cursor-pointer"
+              className="flex-1 sm:flex-initial px-5 py-2 bg-slate-800 hover:bg-[#F7F4EF] text-[#1B4332] hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition-all cursor-pointer"
             >
               Discard Changes
             </button>

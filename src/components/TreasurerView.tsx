@@ -1018,7 +1018,7 @@ export default function TreasurerView({
               <div>
                 <label className="block text-xs font-bold text-[#18372D] uppercase mb-1 flex items-center justify-between">
                   <span>Transaction Type</span>
-                  <span className={`text-[10px] font-bold ${txType === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <span className={`text-[10px] font-black ${txType === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
                     {txType === 'income' ? '● MISULOD (INFLOW / DEPOSIT)' : '● MIGAWAZ (OUTFLOW / DISBURSEMENT)'}
                   </span>
                 </label>

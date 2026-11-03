@@ -178,8 +178,8 @@ export default function GuestPortal({
       <header className="bg-white border-b-2 border-bafa-neutral-300 py-3.5 sm:py-4 px-3.5 sm:px-6 shadow-sm sticky top-0 z-30 no-print">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 sm:gap-4">
           <div className="flex items-center gap-2.5 sm:gap-3.5 w-full sm:w-auto min-w-0">
-            <div className="bg-white p-1 rounded-full shadow-md shrink-0 overflow-hidden border-2 border-bafa-600">
-              <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full" />
+            <div className="bg-white p-1.5 rounded-full shadow-md shrink-0 overflow-hidden border-2 border-bafa-600">
+              <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-16 h-16 sm:w-20 sm:h-20 object-contain block rounded-full" />
             </div>
             <div className="text-left min-w-0 flex-1">
               <h1 className="text-sm sm:text-lg md:text-xl font-black tracking-tight text-bafa-700 uppercase font-display leading-tight break-words">

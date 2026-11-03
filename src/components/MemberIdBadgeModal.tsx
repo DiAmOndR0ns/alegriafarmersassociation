@@ -242,47 +242,37 @@ export default function MemberIdBadgeModal({
               {/* Information Column */}
               <div className="space-y-1.5 flex-1 min-w-0">
                 <div>
-                  <span className="text-[9px] font-black uppercase text-slate-500 block">Registered Member:</span>
+                  <span className="text-[9px] font-black uppercase text-[#365447] block">Registered Member:</span>
                   <h3 className="text-sm sm:text-base font-black text-[#1B4332] truncate uppercase">
                     {member.name}
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-1.5 text-xs">
-                  <div>
-                    <span className="text-[9px] font-bold text-slate-600 block uppercase">Member ID:</span>
-                    <span className="font-mono font-black text-emerald-800 text-[11px]">
-                      {member.memberIdNumber || 'Not assigned'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-bold text-slate-600 block uppercase">Status:</span>
-                    <span className={`font-black text-[10px] px-1.5 py-0.5 rounded-full inline-block ${
-                      member.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                    }`}>
-                      {member.status}
-                    </span>
-                  </div>
+                <div className="text-xs">
+                  <span className="text-[9px] font-bold text-[#365447] block uppercase">Member ID:</span>
+                  <span className="font-mono font-black text-emerald-800 text-[11px]">
+                    {member.memberIdNumber || 'Not assigned'}
+                  </span>
                 </div>
 
                 <div>
-                  <span className="text-[9px] font-bold text-slate-600 block uppercase">Sitio Address:</span>
-                  <span className="font-bold text-slate-700 text-xs flex items-center gap-1">
+                  <span className="text-[9px] font-bold text-[#365447] block uppercase">Sitio Address:</span>
+                  <span className="font-bold text-[#1B4332] text-xs flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-emerald-700 shrink-0" />
                     <span className="truncate">{member.farmLocation}</span>
                   </span>
                 </div>
 
                 <div>
-                  <span className="text-[9px] font-bold text-slate-600 block uppercase">Contact Number:</span>
-                  <span className="font-mono font-bold text-slate-700 text-xs">
+                  <span className="text-[9px] font-bold text-[#365447] block uppercase">Contact Number:</span>
+                  <span className="font-mono font-bold text-[#1B4332] text-xs">
                     {member.contactNumber}
                   </span>
                 </div>
 
                 {member.affiliations && member.affiliations.length > 0 && (
                   <div>
-                    <span className="text-[9px] font-bold text-slate-600 block uppercase">Other IDs & Organizations:</span>
+                    <span className="text-[9px] font-bold text-[#365447] block uppercase">Other IDs & Organizations:</span>
                     <div className="flex flex-wrap gap-1 mt-0.5">
                       {member.affiliations.map(aff => (
                         <span key={aff.id} className="text-[9.5px] font-bold bg-[#EAF4EC] text-[#1B4332] px-2 py-0.5 rounded border border-[#2D6A4F]/30">
@@ -303,7 +293,7 @@ export default function MemberIdBadgeModal({
                   RSBSA Registry: {member.isRsbsaRegistered ? member.rsbsaNumber || 'Verified Registered' : 'Not Registered'}
                 </span>
               </div>
-              <span className="text-[9px] font-mono text-slate-500 font-bold">
+              <span className="text-[9px] font-mono text-[#365447] font-bold">
                 Joined: {member.joinedDate}
               </span>
             </div>
@@ -312,9 +302,9 @@ export default function MemberIdBadgeModal({
 
           {/* PRINT CONTROLS */}
           <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2 text-xs">
-            <label className="font-bold text-slate-700 uppercase text-[10px] block">Print Selection:</label>
+            <label className="font-bold text-[#1B4332] uppercase text-[10px] block">Print Selection:</label>
             <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-[#1B4332]">
                 <input 
                   type="radio" 
                   name="printMode" 
@@ -326,7 +316,7 @@ export default function MemberIdBadgeModal({
               </label>
 
               {allMembers.length > 1 && (
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-[#1B4332]">
                   <input 
                     type="radio" 
                     name="printMode" 
@@ -343,10 +333,10 @@ export default function MemberIdBadgeModal({
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="shrink-0 p-4 bg-white border-t border-slate-200 flex justify-between items-center">
+        <div className="shrink-0 p-4 bg-white border-t border-[#B7CDBB] flex justify-between items-center">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            className="px-4 py-2 text-xs font-bold text-[#1B4332] hover:bg-[#EAF4EC] rounded-xl transition-colors cursor-pointer"
           >
             Close
           </button>
