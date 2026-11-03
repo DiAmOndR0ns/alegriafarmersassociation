@@ -650,7 +650,7 @@ export default function SecretaryView({
                           {linkedUser ? (
                             <div className="flex items-center gap-1.5">
                               <span className="inline-flex items-center gap-1 bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold">
-                                {linkedUser.username}
+                                {'•'.repeat(Math.max(linkedUser.username.length, 3))}
                               </span>
                               <button
                                 type="button"
