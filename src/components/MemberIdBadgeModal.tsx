@@ -185,10 +185,10 @@ export default function MemberIdBadgeModal({
               <Award className="w-5 h-5 text-[#95D5B2]" />
             </div>
             <div>
-              <h3 className="text-base font-black font-display tracking-wide">
+              <h3 className="text-base font-black font-display tracking-wide text-white">
                 Official Farmer Registration Badge
               </h3>
-              <p className="text-[11px] text-emerald-200">
+              <p className="text-[11px] text-white">
                 AFA Member ID & RSBSA Basic Sector Credentials
               </p>
             </div>
@@ -216,7 +216,7 @@ export default function MemberIdBadgeModal({
           <div style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center' }} className="bg-white rounded-2xl border-2 border-[#1B4332] overflow-hidden shadow-lg">
             {/* Badge Top Bar */}
             <div className="bg-[#1B4332] text-white p-3 text-center border-b-2 border-emerald-400">
-              <span className="text-[9px] font-black tracking-widest uppercase text-emerald-200 block">
+              <span className="text-[9px] font-black tracking-widest uppercase text-white block">
                 Republic of the Philippines • Tuburan, Cebu
               </span>
               <h4 className="text-xs sm:text-sm font-black uppercase tracking-wide mt-0.5">

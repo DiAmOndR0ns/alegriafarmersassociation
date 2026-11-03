@@ -35,15 +35,15 @@ const SITIOS = [
 ];
 
 const CROPS_AND_LIVESTOCK = [
-  'Corn (Mais)',
-  'Coconut (Lubi)',
+  'Corn',
+  'Coconut',
   'Cacao',
   'Tuburan Coffee',
-  'Vegetables (Utanon)',
-  'Cassava (Kamoteng Kahoy)',
-  'Hog Raising (Baboyan)',
-  'Poultry Raising (Manokan)',
-  'Goat Raising (Kanding)'
+  'Vegetables',
+  'Cassava',
+  'Hog Raising',
+  'Poultry Raising',
+  'Goat Raising'
 ];
 
 const PRESET_AVATARS = [
@@ -876,7 +876,7 @@ export default function MemberDashboard({
                           <span>{currentUser.farmLocation}</span>
                         </div>
                         <div className="text-[6px] text-white/70">
-                          Primary Crop: <strong className="text-white font-black">{currentUser.primaryCrops && currentUser.primaryCrops[0] || 'Utanon'}</strong>
+                          Primary Crop: <strong className="text-white font-black">{currentUser.primaryCrops && currentUser.primaryCrops[0] || 'Vegetables'}</strong>
                         </div>
                       </div>
                     </div>

@@ -12,7 +12,7 @@ import {
 } from '../utils/passwordPolicy';
 import { getTotpUri, verifyTotpCode } from '../utils/totp';
 import {
-  Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
+  Building, Lock, Shield, Sprout, Smartphone, CheckCircle, LoaderCircle,
   UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
   User as UserIcon, HelpCircle, AlertTriangle, KeyRound, Eye, EyeOff,
   ShieldCheck, Phone, Check, Info, FileText
@@ -46,6 +46,8 @@ export default function AuthScreen({
   const [password, setPassword] = useState('');
   const [bootstrapSecret, setBootstrapSecret] = useState('');
   const [mfaCode, setMfaCode] = useState('');
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  const [isMfaLoading, setIsMfaLoading] = useState(false);
   const [authChallenge, setAuthChallenge] = useState<{
     token: string;
     setup: boolean;
@@ -121,11 +123,12 @@ export default function AuthScreen({
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
+    if (isLoginLoading || !username.trim() || !password.trim()) {
       toast('Palihug isulod ang imong username ug password (Please enter username and password).', 'error');
       return;
     }
 
+    setIsLoginLoading(true);
     if (serverAuthRequired) {
       try {
         const response = await fetch('/api/auth/login', {
@@ -156,10 +159,13 @@ export default function AuthScreen({
         toast('The server returned an incomplete sign-in response.', 'error');
       } catch {
         toast('Sign-in could not reach the server. Try again when the connection is restored.', 'error');
+      } finally {
+        setIsLoginLoading(false);
       }
       return;
     }
 
+    try {
     const matchedUser = users.find(
       u => u.username.toLowerCase() === username.trim().toLowerCase()
     );
@@ -233,14 +239,19 @@ export default function AuthScreen({
 
     onLogin(matchedUser, password);
     toast(`Welcome back, ${matchedUser.name}!`, 'success');
+    } finally {
+      setIsLoginLoading(false);
+    }
   };
 
   const handleMfaSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!authChallenge || !/^\d{6}$/.test(mfaCode)) {
+    if (isMfaLoading || !authChallenge || !/^\d{6}$/.test(mfaCode)) {
       toast('Enter the current 6-digit authenticator code.', 'error');
       return;
     }
+    setIsMfaLoading(true);
+    try {
     if (authChallenge.token.startsWith('offline-') && pendingOfflineUser) {
       const secret = authChallenge.secret || pendingOfflineUser.totpSecret;
       const isValid = await verifyTotpCode(secret, mfaCode);
@@ -286,6 +297,9 @@ export default function AuthScreen({
       setPassword('');
     } catch {
       toast('MFA verification could not reach the server.', 'error');
+    }
+    } finally {
+      setIsMfaLoading(false);
     }
   };
 
@@ -491,8 +505,8 @@ export default function AuthScreen({
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="flex-1 rounded-xl bg-[#1B4332] px-3 py-3 text-xs font-black text-white">
-                    {authChallenge.setup ? 'Enable MFA & Continue' : 'Verify & Sign In'}
+                  <button type="submit" disabled={isMfaLoading} className="flex-1 rounded-xl bg-[#1B4332] px-3 py-3 text-xs font-black text-white disabled:opacity-70">
+                  {isMfaLoading ? <span className="inline-flex items-center justify-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" /> Verifying...</span> : (authChallenge.setup ? 'Enable MFA & Continue' : 'Verify & Sign In')}
                   </button>
                 </div>
               </form>
@@ -546,10 +560,10 @@ export default function AuthScreen({
 
                   <button
                     type="submit"
-                    className="w-full py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-2xl font-black text-sm transition-all shadow-[0_12px_28px_rgba(27,67,50,0.25)] flex items-center justify-center gap-2 cursor-pointer mt-3"
+                    disabled={isLoginLoading}
+                    className="w-full py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-2xl font-black text-sm transition-all shadow-[0_12px_28px_rgba(27,67,50,0.25)] flex items-center justify-center gap-2 cursor-pointer mt-3 disabled:opacity-70"
                   >
-                    <span>Log In</span>
-                    <ArrowRight className="w-4 h-4" />
+                    {isLoginLoading ? <><LoaderCircle className="w-4 h-4 animate-spin" /><span>Signing in...</span></> : <><span>Log In</span><ArrowRight className="w-4 h-4" /></>}
                   </button>
 
                   {!hasPresidentAccount && (
