@@ -1128,6 +1128,106 @@ export default function ExecutiveView({
 
       </div>
 
+      {/* SYSTEM AUDIT TRAIL follows the Farmer Member Portal Accounts desk */}
+      <section className="bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
+        <div className="flex items-center justify-between text-left">
+          <h3 className="text-sm font-extrabold font-display text-[#1B4332] flex items-center gap-2">
+            <Activity className="w-4 h-4 text-[#1B4332]" />
+            <span>System Audit Trail</span>
+          </h3>
+          <span className="text-[10px] font-black text-[#1B4332] bg-[#EAF4EC] px-2 py-0.5 rounded-full">{filteredLogs.length}</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-[#85947E]" />
+            <input
+              type="text"
+              placeholder={t('Pangitaa sa logs...', 'Search logs...')}
+              value={logSearch}
+              onChange={(e) => setLogSearch(e.target.value)}
+              className="w-full pl-8 pr-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans"
+            />
+          </div>
+          <div>
+            <select
+              value={selectedLogYear}
+              onChange={(e) => setSelectedLogYear(e.target.value)}
+              className="w-full px-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans font-bold cursor-pointer"
+            >
+              <option value="All">{t('Tanan nga Tuig', 'All Years')}</option>
+              {availableYears.map(yr => (
+                <option key={yr} value={yr}>{yr} {closedLogYears.includes(yr) ? '🔒' : '🔓'}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {selectedLogYear !== 'All' && (
+          <div className="text-left animate-fade-in">
+            {closedLogYears.includes(parseInt(selectedLogYear)) ? (
+              <div className="bg-[#EFEBE9] border border-[#D7CCC8] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#5D4037]">
+                  <Lock className="w-3.5 h-3.5 text-[#5D4037] shrink-0" />
+                  <span>{t(`${selectedLogYear} sirado na.`, `${selectedLogYear} is sealed.`)}</span>
+                </div>
+                <span className="bg-[#5D4037] text-white text-[8px] tracking-wider px-1.5 py-0.5 rounded-full font-bold shrink-0 uppercase">SEALED</span>
+              </div>
+            ) : (
+              <div className="bg-[#FFF3E0] border border-[#FFE082] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
+                <div className="text-[11px] font-semibold text-[#E65100]">
+                  {t(`${selectedLogYear} aktibo pa.`, `${selectedLogYear} is still active.`)}
+                </div>
+                {currentRole === 'President' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSealYearInput('');
+                      setShowSealConfirm(true);
+                    }}
+                    className="px-2 py-1 bg-[#BF360C] hover:bg-[#8D2300] text-white text-[10px] font-black rounded-lg transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                  >
+                    <Lock className="w-3 h-3" />
+                    <span>{t('I-SEAL', 'SEAL')}</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+          {filteredLogs.length > 0 ? (
+            filteredLogs.map((log) => (
+              <div
+                key={log.id}
+                className="text-xs bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-2 text-left space-y-0.5 transition-all hover:border-[#85947E]"
+              >
+                <div className="flex justify-between items-center gap-2 text-[9px] text-[#85947E] font-semibold">
+                  <span className="flex items-center gap-1 font-mono">
+                    <Clock className="w-2.5 h-2.5" />
+                    {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span className="bg-[#EAF4EC] text-[#1B4332] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0">
+                    {log.role.replace('_', ' ')}
+                  </span>
+                </div>
+                <div className="text-[11px] font-extrabold text-[#2D3A22] truncate">
+                  {log.user} • <span className="text-[#2E7D32]">{log.action}</span>
+                </div>
+                <p className="text-[#5D6B54] leading-snug text-[10px] font-sans line-clamp-2 break-words">
+                  {log.details}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-4 text-[#85947E] text-[11px]">
+              {t('Walay nakit-an nga logs.', 'No logs found.')}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* SECTION: RESOLUTIONS REVIEW & ASSEMBLY RECORDS */}
       <div className="order-1 grid grid-cols-1 gap-4 lg:gap-5 items-start">
 
@@ -1286,106 +1386,6 @@ export default function ExecutiveView({
           </div>
         </div>
       )}
-
-      {/* SYSTEM AUDIT TRAIL — placed at the bottom of the Executive dashboard, before Offline Sync. */}
-      <section className="bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
-        <div className="flex items-center justify-between text-left">
-          <h3 className="text-sm font-extrabold font-display text-[#1B4332] flex items-center gap-2">
-            <Activity className="w-4 h-4 text-[#1B4332]" />
-            <span>System Audit Trail</span>
-          </h3>
-          <span className="text-[10px] font-black text-[#1B4332] bg-[#EAF4EC] px-2 py-0.5 rounded-full">{filteredLogs.length}</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-[#85947E]" />
-            <input
-              type="text"
-              placeholder={t('Pangitaa sa logs...', 'Search logs...')}
-              value={logSearch}
-              onChange={(e) => setLogSearch(e.target.value)}
-              className="w-full pl-8 pr-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans"
-            />
-          </div>
-          <div>
-            <select
-              value={selectedLogYear}
-              onChange={(e) => setSelectedLogYear(e.target.value)}
-              className="w-full px-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans font-bold cursor-pointer"
-            >
-              <option value="All">{t('Tanan nga Tuig', 'All Years')}</option>
-              {availableYears.map(yr => (
-                <option key={yr} value={yr}>{yr} {closedLogYears.includes(yr) ? '🔒' : '🔓'}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {selectedLogYear !== 'All' && (
-          <div className="text-left animate-fade-in">
-            {closedLogYears.includes(parseInt(selectedLogYear)) ? (
-              <div className="bg-[#EFEBE9] border border-[#D7CCC8] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#5D4037]">
-                  <Lock className="w-3.5 h-3.5 text-[#5D4037] shrink-0" />
-                  <span>{t(`${selectedLogYear} sirado na.`, `${selectedLogYear} is sealed.`)}</span>
-                </div>
-                <span className="bg-[#5D4037] text-white text-[8px] tracking-wider px-1.5 py-0.5 rounded-full font-bold shrink-0 uppercase">SEALED</span>
-              </div>
-            ) : (
-              <div className="bg-[#FFF3E0] border border-[#FFE082] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
-                <div className="text-[11px] font-semibold text-[#E65100]">
-                  {t(`${selectedLogYear} aktibo pa.`, `${selectedLogYear} is still active.`)}
-                </div>
-                {currentRole === 'President' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSealYearInput('');
-                      setShowSealConfirm(true);
-                    }}
-                    className="px-2 py-1 bg-[#BF360C] hover:bg-[#8D2300] text-white text-[10px] font-black rounded-lg transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                  >
-                    <Lock className="w-3 h-3" />
-                    <span>{t('I-SEAL', 'SEAL')}</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
-          {filteredLogs.length > 0 ? (
-            filteredLogs.map((log) => (
-              <div
-                key={log.id}
-                className="text-xs bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-2 text-left space-y-0.5 transition-all hover:border-[#85947E]"
-              >
-                <div className="flex justify-between items-center gap-2 text-[9px] text-[#85947E] font-semibold">
-                  <span className="flex items-center gap-1 font-mono">
-                    <Clock className="w-2.5 h-2.5" />
-                    {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  <span className="bg-[#EAF4EC] text-[#1B4332] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0">
-                    {log.role.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="text-[11px] font-extrabold text-[#2D3A22] truncate">
-                  {log.user} • <span className="text-[#2E7D32]">{log.action}</span>
-                </div>
-                <p className="text-[#5D6B54] leading-snug text-[10px] font-sans line-clamp-2 break-words">
-                  {log.details}
-                </p>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-4 text-[#85947E] text-[11px]">
-              {t('Walay nakit-an nga logs.', 'No logs found.')}
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* CONFIRM TURNOVER MODAL */}
       {showTurnoverConfirm && (
