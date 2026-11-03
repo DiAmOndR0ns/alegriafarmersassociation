@@ -649,9 +649,8 @@ export default function SecretaryView({
                         <td className="px-3 py-4">
                           {linkedUser ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold" title={`Account: @${linkedUser.username}`}>
-                                <Key className="w-3 h-3 text-[#2D6A4F]" />
-                                <span>@{linkedUser.username}</span>
+                              <span className="inline-flex items-center gap-1 bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold" title="Manage Portal Login">
+                                <KeyRound className="w-4 h-4" />
                               </span>
                               <button
                                 type="button"
@@ -660,11 +659,11 @@ export default function SecretaryView({
                                   setManageUsername(linkedUser.username);
                                   setManagePassword(generateInitialPassword(linkedUser.username, 'Member'));
                                 }}
-                                className="inline-flex items-center gap-1 bg-[#1B4332] hover:bg-[#143326] text-white px-2 py-1 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
-                                title="Reset / Manage Portal Credentials"
+                                className="inline-flex items-center justify-center bg-[#EAF4EC] hover:bg-[#D7EBDD] text-[#1B4332] border-[#2D6A4F] p-2 rounded-lg transition-colors cursor-pointer"
+                                title="Manage Portal Login"
+                                aria-label={`Manage portal login for ${member.name}`}
                               >
-                                <KeyRound className="w-3 h-3" />
-                                <span>Manage Login</span>
+                                <KeyRound className="w-4 h-4" />
                               </button>
                             </div>
                           ) : (
