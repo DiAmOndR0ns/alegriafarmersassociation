@@ -182,6 +182,7 @@ export const INITIAL_HOG_RAISING: HogRaisingState = {
   produces: [],
   expenses: [],
   sales: [],
+  choreLogs: [],
   groups: [],
   closedYears: []
 };
