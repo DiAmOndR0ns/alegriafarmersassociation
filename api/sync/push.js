@@ -1498,14 +1498,10 @@ async function getAuthenticatedUser(req) {
   const claims = verifyToken(token);
   if (!claims || claims.kind !== "session") return null;
   if (!isDatabaseConfigured()) return null;
-  try {
-    const pool = getPool();
-    await ensureDatabaseSchema(pool);
-    const result = await pool.query("SELECT * FROM users WHERE id = $1", [claims.sub]);
-    return result.rows[0] ? safeUser(result.rows[0]) : null;
-  } catch {
-    return null;
-  }
+  const pool = getPool();
+  await ensureDatabaseSchema(pool);
+  const result = await pool.query("SELECT * FROM users WHERE id = $1", [claims.sub]);
+  return result.rows[0] ? safeUser(result.rows[0]) : null;
 }
 function safeUser(row) {
   return {
@@ -1547,7 +1543,7 @@ async function requireAuthenticated(req, res) {
     if (!user) errorResponse(res, 401, "Authentication required.");
     return user;
   } catch {
-    errorResponse(res, 401, "Authentication required.");
+    errorResponse(res, 503, "Authentication service is temporarily unavailable.");
     return null;
   }
 }
@@ -1610,9 +1606,9 @@ function separateEggHarvestsFromFinancialState(state, role, name) {
 async function handler(req, res) {
   if (req.method && req.method !== "POST") return sendResponse(res, 405, { success: false, message: "Method not allowed." });
   if (rejectCrossOriginMutation(req)) return sendResponse(res, 403, { success: false, message: "Cross-origin requests are not allowed." });
+  if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: "Database is not configured." });
   const user = await requireAuthenticated(req, res);
   if (!user) return;
-  if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: "Database is not configured." });
   try {
     const rawState = await parseRequestBody(req);
     if (!isValidSyncState(rawState)) {
