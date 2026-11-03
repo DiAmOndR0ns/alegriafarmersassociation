@@ -96,8 +96,8 @@ export default function RollCallModal({
   const excusedPercent = totalCount > 0 ? Math.round((excusedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 bg-[#F7F4EF] backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in text-left">
-      <div className="bg-white border border-[#D5CFC1] w-full max-w-4xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-[#F7F4EF] backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-[60] animate-fade-in text-left">
+      <div className="bg-white border border-[#D5CFC1] w-full max-w-6xl h-[96vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         
         {/* MODAL HEADER */}
         <div className="bg-[#1B4332] text-white px-5 py-4 border-b border-[#2D6A4F] flex justify-between items-center shrink-0">
@@ -227,14 +227,14 @@ export default function RollCallModal({
               <p className="text-xs text-[#365447] mt-1">Try resetting your search filters or add new members under the roster tab.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
               {filteredMembers.map((member, idx) => {
                 const currentStatus = record[member.id] || 'Present';
                 
                 return (
                   <div 
                     key={member.id} 
-                    className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                    className={`p-3 rounded-xl border transition-all flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                       currentStatus === 'Present' 
                         ? 'bg-white border-emerald-500/30 hover:border-emerald-500/50'
                         : currentStatus === 'Absent'

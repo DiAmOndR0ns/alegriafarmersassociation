@@ -649,10 +649,7 @@ export default function SecretaryView({
                         <td className="px-3 py-4">
                           {linkedUser ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold" title="Manage Portal Login">
-                                <KeyRound className="w-4 h-4" />
-                              </span>
-                              <button
+                              <span className="inline-flex items-center gap-1 bg-[#EAF4EC] text-[#1B4332] border border-[#2D6A4F] px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold" <button
                                 type="button"
                                 onClick={() => {
                                   setLoginManageMember(member);
@@ -676,10 +673,10 @@ export default function SecretaryView({
                                 setManagePassword(generateInitialPassword(gen, 'Member'));
                               }}
                               className="inline-flex items-center gap-1 bg-[#1B4332] hover:bg-[#143326] text-white border border-[#2D6A4F] px-2 py-1 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
-                              title="Issue portal login for this member"
+                              title="Create portal login for this member"
+                              aria-label={`Create portal login for ${member.name}`}
                             >
-                              <UserPlus className="w-3 h-3 text-emerald-400" />
-                              <span>+ Create Login</span>
+                              <UserPlus className="w-4 h-4" />
                             </button>
                           )}
                         </td>
