@@ -92,6 +92,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS total_failed_logins INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_totp_secret TEXT;`,
@@ -226,6 +227,7 @@ async function initDatabaseSchema(pool) {
         must_change_password BOOLEAN DEFAULT FALSE,
         failed_login_attempts INTEGER DEFAULT 0,
         locked_until TIMESTAMPTZ,
+        total_failed_logins INTEGER DEFAULT 0,
         reset_requested BOOLEAN DEFAULT FALSE
         ,totp_secret TEXT
         ,pending_totp_secret TEXT
@@ -848,7 +850,7 @@ async function saveFullStateToPostgres(pool, state) {
         JSON.stringify(state.hogRaising.expenses || []),
         JSON.stringify(state.hogRaising.sales || []),
         JSON.stringify(state.hogRaising.groups || []),
-        JSON.stringify(state.hogRaising.choreLogs || []),
+        JSON.stringify(state.hogRaising.eggHarvests || state.hogRaising.choreLogs || []),
         state.hogRaising.closedYears || []
       ]);
       await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
@@ -858,6 +860,25 @@ async function saveFullStateToPostgres(pool, state) {
         state.hogRaising.produces?.[0]
       );
       console.log("[DB DEBUG] AFA IGP state saved");
+    }
+    if (Array.isArray(state.eggHarvests) && !state.hogRaising) {
+      let eggHarvests = state.eggHarvests;
+      if (state.appendEggHarvests) {
+        const existing = await client.query(
+          "SELECT chore_logs FROM afa_igp WHERE id = 'main_state' FOR UPDATE"
+        );
+        const existingEggHarvests = Array.isArray(existing.rows[0]?.chore_logs) ? existing.rows[0].chore_logs : [];
+        const existingIds = new Set(existingEggHarvests.map((harvest) => harvest?.id));
+        eggHarvests = [
+          ...eggHarvests.filter((harvest) => !existingIds.has(harvest?.id)),
+          ...existingEggHarvests
+        ];
+      }
+      await client.query(`
+        INSERT INTO afa_igp (id, chore_logs)
+        VALUES ('main_state', $1)
+        ON CONFLICT (id) DO UPDATE SET chore_logs = EXCLUDED.chore_logs
+      `, [JSON.stringify(eggHarvests)]);
     }
     const logList = state.systemLogs || state.logs;
     if (logList && Array.isArray(logList)) {
@@ -1513,6 +1534,10 @@ function isSecretaryRole(role) {
   const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
   return normalized === "secretary" || normalized === "assistant_secretary";
 }
+function isTreasurerRole(role) {
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
+  return normalized === "treasurer" || normalized === "assistant_treasurer";
+}
 function errorResponse(res, status, message) {
   return sendResponse(res, status, { success: false, message });
 }
@@ -1531,6 +1556,46 @@ async function requireAuthenticated(req, res) {
 function isValidSyncState(state) {
   return typeof state === "object" && state !== null && !Array.isArray(state);
 }
+function separateEggHarvestsFromFinancialState(state, role, name) {
+  const safeState = { ...state };
+  const hogRaising = safeState.hogRaising;
+  const eggHarvests = Array.isArray(safeState.eggHarvests) ? safeState.eggHarvests : Array.isArray(hogRaising?.eggHarvests) ? hogRaising.eggHarvests : [];
+  const normalizedRole = role.trim().toLowerCase().replace(/\s+/g, "_");
+  const isMember = normalizedRole === "member";
+  const mayUpdateEggWorkflow = normalizedRole === "auditor" || normalizedRole === "president";
+  for (const key of ["transactions", "financialTransactions", "funds", "organizationFunds", "hogRaising"]) {
+    delete safeState[key];
+  }
+  if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
+    const {
+      transactions: _transactions,
+      financialTransactions: _financialTransactions,
+      funds: _funds,
+      organizationFunds: _organizationFunds,
+      ...allowedDeletions
+    } = safeState.deletedIds;
+    safeState.deletedIds = allowedDeletions;
+  }
+  if (safeState.deleteItem) {
+    const entity = String(safeState.deleteItem.entity || "").toLowerCase().replace(/[\s-]/g, "_");
+    if (["transaction", "transactions", "financial_transaction", "financial_transactions", "fund", "funds", "organization_fund", "organization_funds"].includes(entity)) {
+      delete safeState.deleteItem;
+    }
+  }
+  if (isMember) {
+    safeState.eggHarvests = eggHarvests.filter(
+      (entry) => entry && typeof entry === "object" && entry.status === "Pending Audit" && typeof name === "string" && entry.collectedBy === name && Number.isInteger(entry.eggCount) && entry.eggCount >= 0 && typeof entry.date === "string" && typeof entry.time === "string"
+    );
+    safeState.appendEggHarvests = true;
+  } else if (mayUpdateEggWorkflow) {
+    safeState.eggHarvests = eggHarvests;
+    delete safeState.appendEggHarvests;
+  } else {
+    delete safeState.eggHarvests;
+    delete safeState.appendEggHarvests;
+  }
+  return safeState;
+}
 async function handler(req, res) {
   if (req.method && req.method !== "POST") return sendResponse(res, 405, { success: false, message: "Method not allowed." });
   if (rejectCrossOriginMutation(req)) return sendResponse(res, 403, { success: false, message: "Cross-origin requests are not allowed." });
@@ -1546,12 +1611,19 @@ async function handler(req, res) {
     if (state.deleteItem && ["user", "users", "officer", "officers"].includes(String(state.deleteItem.entity).toLowerCase())) {
       return sendResponse(res, 403, { success: false, message: "User accounts cannot be deleted through bulk synchronization." });
     }
-    const safeState = { ...state };
+    let safeState = { ...state };
     if (!isPresidentRole(user.role)) {
       if (isSecretaryRole(user.role) && Array.isArray(safeState.users)) {
         safeState.users = safeState.users.filter((u) => u && typeof u === "object" && u.role === "Member");
       } else {
         delete safeState.users;
+      }
+    }
+    if (!isTreasurerRole(user.role)) {
+      safeState = separateEggHarvestsFromFinancialState(safeState, user.role, user.name);
+      const stripped = ["transactions", "financialTransactions", "funds", "organizationFunds", "hogRaising"].filter((key) => key in state);
+      if (stripped.length > 0) {
+        console.warn(`[Cloud DB Push] Ignoring financial fields from role "${user.role}": ${stripped.join(", ")}`);
       }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
@@ -1569,5 +1641,6 @@ async function handler(req, res) {
   }
 }
 export {
-  handler as default
+  handler as default,
+  separateEggHarvestsFromFinancialState
 };

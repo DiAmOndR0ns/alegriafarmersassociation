@@ -25,6 +25,7 @@ export interface PushSyncState {
   organizationFunds?: unknown[];
   auditorReports?: unknown[];
   delegationRequests?: unknown[];
+  eggHarvests?: unknown[];
   hogRaising?: Record<string, unknown>;
   systemLogs?: unknown[];
   logs?: unknown[];
@@ -37,13 +38,70 @@ function isValidSyncState(state: unknown): state is PushSyncState {
   return typeof state === 'object' && state !== null && !Array.isArray(state);
 }
 
+export function separateEggHarvestsFromFinancialState(
+  state: PushSyncState,
+  role: string,
+  name?: string
+): PushSyncState {
+  const safeState: PushSyncState = { ...state };
+  const hogRaising = safeState.hogRaising;
+  const eggHarvests = Array.isArray(safeState.eggHarvests)
+    ? safeState.eggHarvests
+    : Array.isArray(hogRaising?.eggHarvests)
+      ? hogRaising.eggHarvests
+      : [];
+  const normalizedRole = role.trim().toLowerCase().replace(/\s+/g, '_');
+  const isMember = normalizedRole === 'member';
+  const mayUpdateEggWorkflow = normalizedRole === 'auditor' || normalizedRole === 'president';
+
+  for (const key of ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'hogRaising']) {
+    delete safeState[key];
+  }
+  if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
+    const {
+      transactions: _transactions,
+      financialTransactions: _financialTransactions,
+      funds: _funds,
+      organizationFunds: _organizationFunds,
+      ...allowedDeletions
+    } = safeState.deletedIds;
+    safeState.deletedIds = allowedDeletions;
+  }
+  if (safeState.deleteItem) {
+    const entity = String(safeState.deleteItem.entity || '').toLowerCase().replace(/[\s-]/g, '_');
+    if (['transaction', 'transactions', 'financial_transaction', 'financial_transactions', 'fund', 'funds', 'organization_fund', 'organization_funds'].includes(entity)) {
+      delete safeState.deleteItem;
+    }
+  }
+
+  if (isMember) {
+    safeState.eggHarvests = eggHarvests.filter((entry: any) =>
+      entry &&
+      typeof entry === 'object' &&
+      entry.status === 'Pending Audit' &&
+      typeof name === 'string' &&
+      entry.collectedBy === name &&
+      Number.isInteger(entry.eggCount) &&
+      entry.eggCount >= 0 &&
+      typeof entry.date === 'string' &&
+      typeof entry.time === 'string'
+    );
+    safeState.appendEggHarvests = true;
+  } else if (mayUpdateEggWorkflow) {
+    safeState.eggHarvests = eggHarvests;
+    delete safeState.appendEggHarvests;
+  } else {
+    delete safeState.eggHarvests;
+    delete safeState.appendEggHarvests;
+  }
+  return safeState;
+}
+
 export default async function handler(req: PushApiRequest, res: PushApiResponse) {
   if (req.method && req.method !== 'POST') return sendResponse(res, 405, { success: false, message: 'Method not allowed.' });
   if (rejectCrossOriginMutation(req)) return sendResponse(res, 403, { success: false, message: 'Cross-origin requests are not allowed.' });
   const user = await requireAuthenticated(req, res);
   if (!user) return;
-  // Fine-grained write authorization has not yet been implemented, so bulk writes fail closed for non-presidents.
-
   if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: 'Database is not configured.' });
   try {
     const rawState = await parseRequestBody(req);
@@ -55,7 +113,7 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       return sendResponse(res, 403, { success: false, message: 'User accounts cannot be deleted through bulk synchronization.' });
     }
     // Accounts, roles, hashes, MFA, lockout, and policy state are managed only by dedicated auth endpoints.
-    const safeState = { ...state };
+    let safeState: PushSyncState = { ...state };
     // President can sync all accounts; Secretary can sync Member portal accounts
     if (!isPresidentRole(user.role)) {
       if (isSecretaryRole(user.role) && Array.isArray(safeState.users)) {
@@ -64,18 +122,15 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
         delete (safeState as any).users;
       }
     }
-    // Financial records (income/expense ledger, fund accounts, and IGP expenses/sales)
-    // may only be recorded or modified by the Treasurer or Assistant Treasurer.
+    // Keep egg-harvest records separate from the financial IGP state. Members may
+    // add their own pending submissions; only the Auditor and President may
+    // update the approval workflow.
     if (!isTreasurerRole(user.role)) {
-      const BLOCKED_FINANCIAL_KEYS = ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'hogRaising'] as const;
-      const stripped = BLOCKED_FINANCIAL_KEYS.filter((key) => key in safeState);
+      safeState = separateEggHarvestsFromFinancialState(safeState, user.role, user.name);
+      const stripped = ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'hogRaising']
+        .filter((key) => key in state);
       if (stripped.length > 0) {
-        console.warn(`[Cloud DB Push] Blocked financial mutation from role "${user.role}": ${stripped.join(', ')}`);
-        return sendResponse(res, 403, {
-          success: false,
-          message: 'Only the Treasurer or Assistant Treasurer may record income or expenses.',
-          blockedFields: stripped,
-        });
+        console.warn(`[Cloud DB Push] Ignoring financial fields from role "${user.role}": ${stripped.join(', ')}`);
       }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {

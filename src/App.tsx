@@ -652,12 +652,13 @@ export default function App() {
       products?: Product[];
       activities?: AssociationActivity[];
       hogRaising?: HogRaisingState;
+      eggHarvests?: EggHarvestLog[];
       funds?: OrganizationFund[];
       inventory?: InventoryItem[];
       systemLogs?: SystemLog[];
       deletedIds?: StoredDeletedIds;
     },
-    options?: { silent?: boolean; source?: string; force?: boolean }
+    options?: { silent?: boolean; source?: string; force?: boolean; scope?: 'eggHarvests' }
   ): Promise<boolean> => {
     if (!navigator.onLine) return false;
     if (isSyncingRef.current && !options?.force) {
@@ -671,21 +672,23 @@ export default function App() {
     try {
       const currentDeletedIds = overrides?.deletedIds || getStoredDeletedIds();
       const snap = appDataRef.current;
-      const payload = {
-        users: overrides?.users || snap.users,
-        members: overrides?.members || snap.members,
-        meetings: overrides?.meetings || snap.meetings,
-        resolutions: overrides?.resolutions || snap.resolutions,
-        financialTransactions: overrides?.financialTransactions || snap.transactions,
-        announcements: overrides?.announcements || snap.announcements,
-        products: overrides?.products || snap.products,
-        activities: overrides?.activities || snap.activities,
-        hogRaising: overrides?.hogRaising || snap.hogRaising,
-        funds: overrides?.funds || snap.funds,
-        inventory: overrides?.inventory || snap.inventory,
-        systemLogs: overrides?.systemLogs || snap.logs,
-        deletedIds: currentDeletedIds
-      };
+      const payload = options?.scope === 'eggHarvests'
+        ? { eggHarvests: overrides?.eggHarvests || snap.hogRaising.eggHarvests || [] }
+        : {
+            users: overrides?.users || snap.users,
+            members: overrides?.members || snap.members,
+            meetings: overrides?.meetings || snap.meetings,
+            resolutions: overrides?.resolutions || snap.resolutions,
+            financialTransactions: overrides?.financialTransactions || snap.transactions,
+            announcements: overrides?.announcements || snap.announcements,
+            products: overrides?.products || snap.products,
+            activities: overrides?.activities || snap.activities,
+            hogRaising: overrides?.hogRaising || snap.hogRaising,
+            funds: overrides?.funds || snap.funds,
+            inventory: overrides?.inventory || snap.inventory,
+            systemLogs: overrides?.systemLogs || snap.logs,
+            deletedIds: currentDeletedIds
+          };
 
       const res = await fetch('/api/sync/push', {
         method: 'POST',
@@ -695,17 +698,18 @@ export default function App() {
 
       const result = await res.json();
       if (result?.success && !result?.offlineMode) {
-        // Clear all locally stored pending contributions, mutations, and deletions
-        setSyncQueue([]);
-        void updateStorage('bafa_sync_queue', []);
-        clearStoredDeletedIds();
+        if (options?.scope !== 'eggHarvests') {
+          // A scoped sync must not clear unrelated pending work.
+          setSyncQueue([]);
+          void updateStorage('bafa_sync_queue', []);
+          clearStoredDeletedIds();
 
-        // Mark pending system logs as synced in state and storage
-        setLogs(prev => {
-          const updated = prev.map(l => l.syncStatus === 'pending' ? { ...l, syncStatus: 'synced' as const } : l);
-          updateStorage('bafa_logs', updated);
-          return updated;
-        });
+          setLogs(prev => {
+            const updated = prev.map(l => l.syncStatus === 'pending' ? { ...l, syncStatus: 'synced' as const } : l);
+            updateStorage('bafa_logs', updated);
+            return updated;
+          });
+        }
 
         // Refresh database row stats and status
         if (!options?.silent) {
@@ -717,6 +721,12 @@ export default function App() {
           showToastMessage(`${prefix}Offline changes automatically synced to database!`, 'success');
         }
         return true;
+      }
+      if (!res.ok) {
+        console.warn(`[Cloud DB Sync Rejected] ${res.status}: ${result?.message || 'Unable to sync state.'}`);
+        if (options?.scope === 'eggHarvests') {
+          showToastMessage(result?.message || 'Egg harvest could not be synced. It remains saved locally.', 'error');
+        }
       }
       return false;
     } catch (err: any) {
@@ -1644,7 +1654,7 @@ export default function App() {
     if (isOnline) {
       logAction('Submitted Egg Harvest', `${newHarvest.collectedBy} submitted ${newHarvest.eggCount} eggs harvested on ${newHarvest.date}.`);
       showToastMessage('Daily egg harvest has been submitted for Auditor verification!');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true });
+      pushAllDataToCloud({ eggHarvests: updatedState.eggHarvests }, { silent: true, scope: 'eggHarvests' });
     } else {
       addToSyncQueue('create', 'egg_harvest', newHarvest);
     }
@@ -1688,7 +1698,7 @@ export default function App() {
     if (isOnline) {
       logAction(actionLabel, `${currentUser?.name || 'Officer'} ${action === 'audit' ? 'verified' : action === 'sign' ? 'signed off' : 'returned'} an egg harvest record.${detail}`);
       showToastMessage(action === 'audit' ? 'Egg harvest verified!' : action === 'sign' ? 'Egg harvest signed off!' : 'Egg harvest returned to the member.');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true });
+      pushAllDataToCloud({ eggHarvests: updatedState.eggHarvests }, { silent: true, scope: 'eggHarvests' });
     } else {
       addToSyncQueue('update', 'egg_harvest', { id: harvestId, action, remarks, ...target });
     }

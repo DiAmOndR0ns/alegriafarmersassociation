@@ -757,6 +757,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       sales: [],
       groups: [],
       choreLogs: [],
+      eggHarvests: [],
       closedYears: []
     };
 
@@ -781,6 +782,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
         sales: row.sales || [],
         groups: row.groups || [],
         choreLogs: row.chore_logs || [],
+        eggHarvests: row.chore_logs || [],
         closedYears: row.closed_years || []
       };
     }
@@ -1290,7 +1292,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         JSON.stringify(state.hogRaising.expenses || []),
         JSON.stringify(state.hogRaising.sales || []),
         JSON.stringify(state.hogRaising.groups || []),
-        JSON.stringify(state.hogRaising.choreLogs || []),
+        JSON.stringify(state.hogRaising.eggHarvests || state.hogRaising.choreLogs || []),
         state.hogRaising.closedYears || []
       ]);
       await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
@@ -1300,6 +1302,28 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         state.hogRaising.produces?.[0]
       );
       console.log('[DB DEBUG] AFA IGP state saved');
+    }
+
+    if (Array.isArray(state.eggHarvests) && !state.hogRaising) {
+      let eggHarvests = state.eggHarvests;
+      if (state.appendEggHarvests) {
+        const existing = await client.query(
+          "SELECT chore_logs FROM afa_igp WHERE id = 'main_state' FOR UPDATE"
+        );
+        const existingEggHarvests = Array.isArray(existing.rows[0]?.chore_logs)
+          ? existing.rows[0].chore_logs
+          : [];
+        const existingIds = new Set(existingEggHarvests.map((harvest: any) => harvest?.id));
+        eggHarvests = [
+          ...eggHarvests.filter((harvest: any) => !existingIds.has(harvest?.id)),
+          ...existingEggHarvests
+        ];
+      }
+      await client.query(`
+        INSERT INTO afa_igp (id, chore_logs)
+        VALUES ('main_state', $1)
+        ON CONFLICT (id) DO UPDATE SET chore_logs = EXCLUDED.chore_logs
+      `, [JSON.stringify(eggHarvests)]);
     }
 
     // 6. System Logs
