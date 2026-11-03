@@ -64,8 +64,13 @@ export function resolveOfficerPrefixed(users: User[], role: OfficerRole): string
 
 /** Full officer roster (role + live name) ordered by hierarchy — for rosters/tables. */
 export function resolveOfficerRoster(users: User[]): { title: string; name: string }[] {
-  return OFFICER_ROLES.map((role) => ({
+  return OFFICER_ROLES.filter((role) => role !== 'Board_Member').map((role) => ({
     title: OFFICER_ROLE_LABELS[role],
     name: resolveOfficerName(users, role),
   }));
+}
+
+/** Resolve every person assigned to the multi-seat Board Member designation. */
+export function resolveBoardMemberNames(users: User[]): string[] {
+  return users.filter((user) => user.role === 'Board_Member').map((user) => user.name);
 }

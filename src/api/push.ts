@@ -31,8 +31,21 @@ export interface PushSyncState {
   logs?: unknown[];
   deleteItem?: { entity?: string; id?: string };
   deletedIds?: Record<string, unknown>;
+  roleUpdate?: { userId?: unknown; role?: unknown };
   [key: string]: unknown;
 }
+
+const ASSIGNABLE_ROLES = [
+  'Vice_President',
+  'Secretary',
+  'Assistant_Secretary',
+  'Board_Member',
+  'Treasurer',
+  'Assistant_Treasurer',
+  'Auditor',
+  'PIO',
+  'Member'
+] as const;
 
 function isValidSyncState(state: unknown): state is PushSyncState {
   return typeof state === 'object' && state !== null && !Array.isArray(state);
@@ -109,6 +122,30 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       return sendResponse(res, 400, { success: false, message: 'A valid state object is required.' });
     }
     const state = rawState;
+    if (state.roleUpdate !== undefined) {
+      if (!isPresidentRole(user.role)) {
+        return sendResponse(res, 403, { success: false, message: 'Only the President may designate or reassign officer roles.' });
+      }
+      if (typeof state.roleUpdate !== 'object' || state.roleUpdate === null || Array.isArray(state.roleUpdate)) {
+        return sendResponse(res, 400, { success: false, message: 'A valid user and assignable role are required.' });
+      }
+      const { userId, role } = state.roleUpdate;
+      if (typeof userId !== 'string' || !userId.trim() || typeof role !== 'string' || !ASSIGNABLE_ROLES.includes(role as typeof ASSIGNABLE_ROLES[number])) {
+        return sendResponse(res, 400, { success: false, message: 'A valid user and assignable role are required.' });
+      }
+
+      const result = await getPool().query(
+        `UPDATE users
+         SET role = $1
+         WHERE id = $2 AND lower(replace(role, ' ', '_')) <> 'president'
+         RETURNING id`,
+        [role, userId]
+      );
+      if (result.rowCount === 0) {
+        return sendResponse(res, 409, { success: false, message: 'The account was not found or cannot be reassigned. Presidential changes require the turnover workflow.' });
+      }
+      return sendResponse(res, 200, { success: true, offlineMode: false, message: 'Officer role designation saved.' });
+    }
     if (state.deleteItem && ['user', 'users', 'officer', 'officers'].includes(String(state.deleteItem.entity).toLowerCase())) {
       return sendResponse(res, 403, { success: false, message: 'User accounts cannot be deleted through bulk synchronization.' });
     }
@@ -141,9 +178,14 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
     return sendResponse(res, 200, { success: true, offlineMode: false, message: 'State successfully synced.' });
   } catch (error: any) {
     console.error('[Cloud DB Push Error]:', error?.message || error);
-    return sendResponse(res, error?.statusCode === 413 ? 413 : 500, {
+    const statusCode = error?.statusCode === 413 ? 413 : error?.code === '23505' ? 409 : 500;
+    return sendResponse(res, statusCode, {
       success: false,
-      message: error?.statusCode === 413 ? 'Request body exceeds the allowed limit.' : 'Unable to sync state.',
+      message: error?.statusCode === 413
+        ? 'Request body exceeds the allowed limit.'
+        : error?.code === '23505'
+          ? 'That officer position is already assigned.'
+          : 'Unable to sync state.',
     });
   }
 }

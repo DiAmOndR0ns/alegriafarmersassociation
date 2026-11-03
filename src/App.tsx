@@ -83,6 +83,7 @@ export default function App() {
 
   // Ref to prevent overlapping push requests and track synchronization status
   const isSyncingRef = useRef<boolean>(false);
+  const pendingSyncsRef = useRef<Array<{ run: () => Promise<boolean>; resolve: (synced: boolean) => void }>>([]);
   const appDataRef = useRef({
     users: [] as User[],
     members: [] as Member[],
@@ -657,13 +658,19 @@ export default function App() {
       inventory?: InventoryItem[];
       systemLogs?: SystemLog[];
       deletedIds?: StoredDeletedIds;
+      roleUpdate?: { userId: string; role: OfficerRole | 'Member' };
     },
-    options?: { silent?: boolean; source?: string; force?: boolean; scope?: 'eggHarvests' }
+    options?: { silent?: boolean; source?: string; scope?: 'eggHarvests' | 'roleUpdate' }
   ): Promise<boolean> => {
     if (!navigator.onLine) return false;
-    if (isSyncingRef.current && !options?.force) {
-      console.log('[Auto-Sync]: Synchronization already in-flight, skipping duplicate dispatch.');
-      return false;
+    if (isSyncingRef.current) {
+      console.log('[Auto-Sync]: Synchronization already in-flight; queueing this update.');
+      return new Promise((resolve) => {
+        pendingSyncsRef.current.push({
+          run: () => pushAllDataToCloud(overrides, options),
+          resolve
+        });
+      });
     }
 
     isSyncingRef.current = true;
@@ -674,6 +681,8 @@ export default function App() {
       const snap = appDataRef.current;
       const payload = options?.scope === 'eggHarvests'
         ? { eggHarvests: overrides?.eggHarvests || snap.hogRaising.eggHarvests || [] }
+        : options?.scope === 'roleUpdate'
+          ? { roleUpdate: overrides?.roleUpdate }
         : {
             users: overrides?.users || snap.users,
             members: overrides?.members || snap.members,
@@ -698,7 +707,7 @@ export default function App() {
 
       const result = await res.json();
       if (result?.success && !result?.offlineMode) {
-        if (options?.scope !== 'eggHarvests') {
+        if (options?.scope !== 'eggHarvests' && options?.scope !== 'roleUpdate') {
           // A scoped sync must not clear unrelated pending work.
           setSyncQueue([]);
           void updateStorage('bafa_sync_queue', []);
@@ -735,6 +744,13 @@ export default function App() {
     } finally {
       isSyncingRef.current = false;
       setIsSyncing(false);
+      const nextSync = pendingSyncsRef.current.shift();
+      if (nextSync) {
+        void nextSync.run().then(nextSync.resolve).catch((error) => {
+          console.error('[Auto-Sync]: Queued update failed unexpectedly.', error);
+          nextSync.resolve(false);
+        });
+      }
     }
   };
 
@@ -1082,7 +1098,7 @@ export default function App() {
           users: updatedUsers,
           deletedIds: allDeleted
         },
-        { silent: true, source: 'Member Deletion', force: true }
+        { silent: true, source: 'Member Deletion' }
       );
     } else {
       addToSyncQueue('delete', 'member', { id, name: mName });
@@ -2111,7 +2127,7 @@ export default function App() {
     updateStorage('bafa_users', updated);
 
     if (isOnline) {
-      pushAllDataToCloud({ users: updated }, { silent: true, force: true, source: isInitialAdminBootstrap ? 'Admin Bootstrap' : 'User Registration' });
+      pushAllDataToCloud({ users: updated }, { silent: true, source: isInitialAdminBootstrap ? 'Admin Bootstrap' : 'User Registration' });
     }
 
     if (isInitialAdminBootstrap) {
@@ -2149,7 +2165,7 @@ export default function App() {
 
     logAction('Requested Reset', `Requested password reset for ${matchedUser.name} (${matchedUser.username})`);
     if (isOnline) {
-      pushAllDataToCloud({ users: updated }, { silent: true, force: true, source: 'Password Reset Requested' });
+      pushAllDataToCloud({ users: updated }, { silent: true, source: 'Password Reset Requested' });
     } else {
       addToSyncQueue('update', 'user', { id: matchedUser.id, resetRequested: true });
     }
@@ -2235,7 +2251,7 @@ export default function App() {
     if (isOnline) {
       pushAllDataToCloud(
         { users: updated, systemLogs: [newLog, ...logs] },
-        { silent: true, force: true, source: 'Password Reset' }
+        { silent: true, source: 'Password Reset' }
       );
     } else {
       addToSyncQueue('update', 'user', { id: userId, resetRequested: false });
@@ -2300,7 +2316,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateUserRole = (id: string, newRole: OfficerRole | 'Member') => {
+  const handleUpdateUserRole = async (id: string, newRole: OfficerRole | 'Member') => {
     const targetUser = users.find(u => u.id === id);
     if (!targetUser) return;
 
@@ -2330,11 +2346,6 @@ export default function App() {
     setUsers(updatedUsers);
     updateStorage('bafa_users', updatedUsers);
 
-    logAction(
-      'Updated Officer Role',
-      `Modified governance role for ${targetUser.name} from "${oldRoleName}" to "${newRoleName}".`
-    );
-
     // If current logged-in user role changed, update session
     if (currentUser && currentUser.id === id) {
       const updatedCurrent = { ...currentUser, role: newRole };
@@ -2343,11 +2354,29 @@ export default function App() {
       // Keep role updates in memory; do not persist an alternate session identity in web storage.
     }
 
-    if (isOnline) {
-      showToastMessage(`Updated ${targetUser.name}'s role to ${newRoleName}. Auto-syncing to database...`, 'info');
-      pushAllDataToCloud({ users: updatedUsers }, { silent: true, source: 'Role Updated' });
+    if (isOnline && navigator.onLine) {
+      const saved = await pushAllDataToCloud(
+        { roleUpdate: { userId: id, role: newRole } },
+        { silent: true, source: 'Role Updated', scope: 'roleUpdate' }
+      );
+      if (saved) {
+        logAction(
+          'Updated Officer Role',
+          `Modified governance role for ${targetUser.name} from "${oldRoleName}" to "${newRoleName}".`
+        );
+        showToastMessage(`${targetUser.name}'s role was saved to the database as ${newRoleName}.`, 'success');
+      } else {
+        const revertedUsers = updatedUsers.map(user => user.id === id ? targetUser : user);
+        setUsers(revertedUsers);
+        updateStorage('bafa_users', revertedUsers);
+        showToastMessage(`Could not save ${targetUser.name}'s role to the database. The local change was reverted. Check the database connection and President session, then retry.`, 'error');
+      }
     } else {
       addToSyncQueue('update', 'officer', { id, name: targetUser.name, newRole });
+      logAction(
+        'Updated Officer Role',
+        `Modified governance role for ${targetUser.name} from "${oldRoleName}" to "${newRoleName}".`
+      );
       showToastMessage(`Role updated offline. Will auto-sync to database once reconnected.`, 'warning');
     }
   };
@@ -2558,7 +2587,7 @@ export default function App() {
     if (isOnline) {
       pushAllDataToCloud(
         { users: updatedUsers, systemLogs: [newLog, ...logs] },
-        { silent: true, source: 'Presidential Turnover', force: true }
+        { silent: true, source: 'Presidential Turnover' }
       );
     } else {
       addToSyncQueue('update', 'officer', {

@@ -24,7 +24,7 @@ interface ExecutiveViewProps {
   users?: User[];
   onAddOfficer?: (officerData: { name: string; username: string; password: string; role: OfficerRole }) => boolean;
   onDeleteUser?: (id: string) => void;
-  onUpdateUserRole?: (id: string, newRole: OfficerRole | 'Member') => void;
+  onUpdateUserRole?: (id: string, newRole: OfficerRole | 'Member') => Promise<void>;
   onResetPassword?: (id: string, newPass: string, currentPassword?: string) => boolean | void | Promise<boolean | void>;
   onPresidentTurnover?: (
     newPresidentId: string,
@@ -125,10 +125,10 @@ export default function ExecutiveView({
     role !== 'Board_Member' &&
     users.some(user => user.id !== exceptUserId && user.role === role);
 
-  const handleAppointMember = (memberId: string) => {
+  const handleAppointMember = async (memberId: string) => {
     if (!canAppointOfficers) return;
     if (onUpdateUserRole) {
-      onUpdateUserRole(memberId, appointRole);
+      await onUpdateUserRole(memberId, appointRole);
     }
     setAppointingMemberId(null);
   };
@@ -1011,7 +1011,7 @@ export default function ExecutiveView({
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleAppointMember(user.id)}
+                            onClick={() => { void handleAppointMember(user.id); }}
                             className="flex-1 py-1.5 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
                           >
                             Confirm Appointment
@@ -1869,5 +1869,4 @@ export default function ExecutiveView({
     </div>
   );
 }
-
 
