@@ -696,7 +696,6 @@
   #root [class~="sm:gap-4"] { gap: 0.85rem; }
   #root [class~="sm:gap-3"] { gap: 0.6375rem; }
   #root [class~="sm:space-y-8"] > :not([hidden]) ~ :not([hidden]) { margin-block: 1.7rem 0; }
-  #root [class~="sm:space-y-6"] > :not([hidden]) ~ :not([hidden]) { margin-block: 1.275rem 0; }
   #root [class~="sm:space-y-5"] > :not([hidden]) ~ :not([hidden]) { margin-block: 1.0625rem 0; }
   #root [class~="sm:space-y-4"] > :not([hidden]) ~ :not([hidden]) { margin-block: 0.85rem 0; }
 }
