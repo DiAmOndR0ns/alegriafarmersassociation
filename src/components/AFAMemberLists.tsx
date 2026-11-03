@@ -227,7 +227,7 @@ const buildCss = ({ w, h }: { w: string; h: string }) => `
   border-color: #991b1b;
 }
 
-.afa-stage { background: #d4d4d8; padding: 24px 12px; overflow-x: auto; }
+.afa-stage { background: #d4d4d8; padding: 24px 12px; overflow-x: auto; max-height: calc(100dvh - 48px); overflow-y: auto; }
 
 .afa-sheet {
   box-sizing: border-box;

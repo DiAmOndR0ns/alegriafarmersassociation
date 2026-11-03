@@ -160,14 +160,14 @@ Attested by:
       <div className="bg-slate-900 border border-slate-800 w-full max-w-6xl h-[92vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         
         {/* MODAL ACTION BAR */}
-        <div className="bg-slate-950 px-5 py-4 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3">
+        <div className="bg-slate-950 px-5 py-4 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3" style={{ background: '#1B4332', color: '#fff', borderColor: '#2D6A4F' }}>
           <div className="flex items-center gap-2">
             <div className="bg-emerald-600/10 p-1.5 rounded-lg border border-emerald-500/20 text-emerald-400">
               <Users className="w-4 h-4" />
             </div>
             <div>
               <h3 className="font-bold text-white text-sm">Attendance Sheet Generator</h3>
-              <p className="text-[10px] text-slate-400">Generate blank or member checklist print-outs for assemblies.</p>
+              <p className="text-xs text-emerald-100">Generate blank or member checklist print-outs for assemblies.</p>
             </div>
           </div>
 
@@ -177,7 +177,7 @@ Attested by:
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
                 showSettings 
                   ? 'bg-emerald-600 border-emerald-500 text-white' 
-                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                  : 'bg-white border-[#D5CFC1] text-black hover:bg-[#EAF4EC]'
               }`}
             >
               <Settings className="w-3.5 h-3.5" />
@@ -225,14 +225,14 @@ Attested by:
           
           {/* SIDEBAR SETTINGS */}
           {showSettings && (
-            <div className="w-80 bg-slate-950 border-r border-slate-800 p-4 overflow-y-auto space-y-4 shrink-0 animate-fade-in">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-slate-800 pb-2">
+            <div className="w-80 bg-[#F7F4EF] border-r border-[#D5CFC1] p-4 overflow-y-auto space-y-4 shrink-0 animate-fade-in">
+              <h4 className="text-xs font-bold text-black uppercase tracking-wider border-b border-[#D5CFC1] pb-2">
                 Sheet Settings
               </h4>
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Sheet Type</label>
+                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Sheet Type</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -240,7 +240,7 @@ Attested by:
                       className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center ${
                         sheetType === 'blank'
                           ? 'bg-emerald-600 border-emerald-500 text-white'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                          : 'bg-white border-[#D5CFC1] text-black hover:bg-[#EAF4EC]'
                       }`}
                     >
                       Blank Rows
@@ -251,7 +251,7 @@ Attested by:
                       className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center ${
                         sheetType === 'prepopulated'
                           ? 'bg-emerald-600 border-emerald-500 text-white'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                          : 'bg-white border-[#D5CFC1] text-black hover:bg-[#EAF4EC]'
                       }`}
                     >
                       Active Members ({activeMembers.length})
@@ -260,30 +260,30 @@ Attested by:
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Sheet Header Title</label>
+                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Sheet Header Title</label>
                   <input
                     type="text"
                     value={documentType}
                     onChange={(e) => setDocumentType(e.target.value)}
                     className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none"
-                    placeholder="e.g. Attendance Sheet"
+
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Meeting Purpose</label>
+                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Meeting Purpose</label>
                   <input
                     type="text"
                     value={meetingTitle}
                     onChange={(e) => setMeetingTitle(e.target.value)}
                     className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none"
-                    placeholder="e.g. Monthly Assembly"
+
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Date</label>
+                    <label className="block text-[10px] font-bold text-black uppercase mb-1">Date</label>
                     <input
                       type="text"
                       value={meetingDate}
@@ -292,7 +292,7 @@ Attested by:
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Presiding Officer</label>
+                    <label className="block text-[10px] font-bold text-black uppercase mb-1">Presiding Officer</label>
                     <input
                       type="text"
                       value={presidingOfficer}
@@ -303,7 +303,7 @@ Attested by:
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Venue</label>
+                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Venue</label>
                   <input
                     type="text"
                     value={meetingVenue}
@@ -314,7 +314,7 @@ Attested by:
 
                 {sheetType === 'blank' && (
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Number of Blank Rows</label>
+                    <label className="block text-[10px] font-bold text-black uppercase mb-1">Number of Blank Rows</label>
                     <select
                       value={blankRowsCount}
                       onChange={(e) => setBlankRowsCount(Number(e.target.value))}
@@ -331,10 +331,10 @@ Attested by:
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Remarks / Note on footer</label>
+                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Remarks / Note on footer</label>
                   <textarea
                     rows={2}
-                    placeholder="e.g. Please sign legibly..."
+
                     value={customNotes}
                     onChange={(e) => setCustomNotes(e.target.value)}
                     className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans"
@@ -349,7 +349,7 @@ Attested by:
                       onChange={(e) => setShowLetterhead(e.target.checked)}
                       className="rounded border-slate-700 bg-slate-900 text-emerald-600 focus:ring-0 focus:ring-offset-0"
                     />
-                    <span className="text-xs text-slate-300">Show Barangay Letterhead</span>
+                    <span className="text-xs text-black">Show Barangay Letterhead</span>
                   </label>
 
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -359,7 +359,7 @@ Attested by:
                       onChange={(e) => setShowWatermark(e.target.checked)}
                       className="rounded border-slate-700 bg-slate-900 text-emerald-600 focus:ring-0 focus:ring-offset-0"
                     />
-                    <span className="text-xs text-slate-300">Subtle Draft Watermark</span>
+                    <span className="text-xs text-black">Subtle Draft Watermark</span>
                   </label>
                 </div>
               </div>
@@ -371,7 +371,7 @@ Attested by:
           )}
 
           {/* DOCUMENT PREVIEW CONTAINER */}
-          <div className="flex-1 bg-slate-950 p-6 md:p-10 overflow-y-auto flex justify-center">
+          <div className="flex-1 bg-[#E9E4D9] p-6 md:p-10 overflow-y-auto flex justify-center">
             
             {/* PAPER SHEET */}
             <div 
@@ -454,10 +454,10 @@ Attested by:
                     <thead>
                       <tr className="bg-slate-100 border-b border-slate-400 text-slate-700 font-extrabold uppercase">
                         <th className="px-2 py-1.5 border-r border-slate-400 w-8 text-center">No.</th>
-                        <th className="px-3 py-1.5 border-r border-slate-400">Name of Farmer (Pangalan sa Mag-uuma)</th>
+                        <th className="px-3 py-1.5 border-r border-slate-400">Member Name</th>
                         <th className="px-3 py-1.5 border-r border-slate-400 w-44">Sitio / Farm Location</th>
                         <th className="px-3 py-1.5 border-r border-slate-400 w-32">Contact No.</th>
-                        <th className="px-3 py-1.5 w-32 text-center">Signature (Lagda / Pirma)</th>
+                        <th className="px-3 py-1.5 w-32 text-center">Signature</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-300">

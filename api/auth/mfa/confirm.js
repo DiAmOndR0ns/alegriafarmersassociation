@@ -96,6 +96,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS total_failed_logins INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_totp_secret TEXT;`,
@@ -230,6 +231,7 @@ async function initDatabaseSchema(pool) {
         must_change_password BOOLEAN DEFAULT FALSE,
         failed_login_attempts INTEGER DEFAULT 0,
         locked_until TIMESTAMPTZ,
+        total_failed_logins INTEGER DEFAULT 0,
         reset_requested BOOLEAN DEFAULT FALSE
         ,totp_secret TEXT
         ,pending_totp_secret TEXT
@@ -675,6 +677,7 @@ function verifyTotp(secret, supplied, nowMs = Date.now(), lastStep) {
 }
 async function recordMfaFailure(pool, userId) {
   await pool.query(`UPDATE users SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
+    total_failed_logins = COALESCE(total_failed_logins, 0) + 1,
     locked_until = CASE WHEN COALESCE(failed_login_attempts, 0) + 1 >= 5 THEN NOW() + INTERVAL '15 minutes' ELSE locked_until END
     WHERE id = $1`, [userId]);
 }

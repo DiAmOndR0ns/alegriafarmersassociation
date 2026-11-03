@@ -100,21 +100,21 @@ export default function RollCallModal({
       <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         
         {/* MODAL HEADER */}
-        <div className="bg-slate-950 px-5 py-4 border-b border-slate-800 flex justify-between items-center shrink-0">
+        <div className="bg-[#1B4332] text-white px-5 py-4 border-b border-[#2D6A4F] flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="bg-emerald-600/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-400">
               <UserCheck className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-bold text-white text-base">Digital Roll Call Attendance</h3>
-              <p className="text-xs text-slate-400">
-                Recording for: <span className="text-emerald-400 font-semibold">{meetingTitle || 'New Meeting/Assembly'}</span>
+              <p className="text-xs text-emerald-100">
+                Recording attendance for: <span className="text-white font-semibold">{meetingTitle || 'Meeting'}</span>
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-all font-bold text-xl"
+            className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-all font-bold text-xl"
             aria-label="Close"
           >
             &times;
@@ -122,9 +122,9 @@ export default function RollCallModal({
         </div>
 
         {/* STATS & SUMMARY DASHBOARD */}
-        <div className="bg-slate-950/40 border-b border-slate-800 p-4 shrink-0 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[#F1F5F1] border-b border-[#D5CFC1] p-4 shrink-0 grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Active Association Members</span>
+            <span className="text-[10px] uppercase font-bold text-[#4A5F57] block">Active Association Members</span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-black text-white">{totalCount}</span>
               <span className="text-xs text-slate-400">farmers registered</span>
@@ -133,7 +133,7 @@ export default function RollCallModal({
 
           <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
             <div className="flex justify-between items-center">
-              <span className="text-[10px] uppercase font-bold text-emerald-500 block">Present (Pirme / Nitambong)</span>
+              <span className="text-[10px] uppercase font-bold text-emerald-800 block">Present</span>
               <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">{presentPercent}%</span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
@@ -144,7 +144,7 @@ export default function RollCallModal({
 
           <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
             <div className="flex justify-between items-center">
-              <span className="text-[10px] uppercase font-bold text-rose-500 block">Absent (Wala / Absent)</span>
+              <span className="text-[10px] uppercase font-bold text-rose-800 block">Absent</span>
               <span className="text-xs font-semibold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded-md">{absentPercent}%</span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
@@ -155,7 +155,7 @@ export default function RollCallModal({
 
           <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
             <div className="flex justify-between items-center">
-              <span className="text-[10px] uppercase font-bold text-amber-500 block">Excused (May Rason)</span>
+              <span className="text-[10px] uppercase font-bold text-amber-800 block">Excused</span>
               <span className="text-xs font-semibold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md">{excusedPercent}%</span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
@@ -166,7 +166,7 @@ export default function RollCallModal({
         </div>
 
         {/* SEARCH, FILTER & BULK ACTIONS */}
-        <div className="p-4 bg-slate-950/20 border-b border-slate-800 flex flex-col md:flex-row gap-3 items-center justify-between shrink-0">
+        <div className="p-4 bg-white border-b border-[#D5CFC1] flex flex-col md:flex-row gap-3 items-center justify-between shrink-0">
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
             {/* Search Input */}
             <div className="relative w-full sm:w-64">
@@ -178,7 +178,7 @@ export default function RollCallModal({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search member name or sitio..."
-                className="w-full bg-slate-900 text-xs text-white pl-9 pr-3.5 py-2 rounded-xl border border-slate-800 focus:outline-none focus:border-emerald-500 transition-all font-sans"
+                className="w-full bg-white text-xs text-[#18372D] pl-9 pr-3.5 py-2 rounded-xl border border-slate-800 focus:outline-none focus:border-emerald-500 transition-all font-sans"
               />
             </div>
 
@@ -219,7 +219,7 @@ export default function RollCallModal({
         </div>
 
         {/* MEMBERS LIST SCROLLABLE GRID */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2.5 min-h-0 bg-slate-900/20">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2.5 min-h-0 bg-[#FAF8F5]">
           {filteredMembers.length === 0 ? (
             <div className="text-center py-12 bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6">
               <Users className="w-10 h-10 text-slate-600 mx-auto stroke-[1.25] mb-2" />
@@ -236,10 +236,10 @@ export default function RollCallModal({
                     key={member.id} 
                     className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
                       currentStatus === 'Present' 
-                        ? 'bg-slate-900/60 border-emerald-500/15 hover:border-emerald-500/25'
+                        ? 'bg-white border-emerald-500/30 hover:border-emerald-500/50'
                         : currentStatus === 'Absent'
-                        ? 'bg-slate-900/60 border-rose-500/15 hover:border-rose-500/25'
-                        : 'bg-slate-900/60 border-amber-500/15 hover:border-amber-500/25'
+                        ? 'bg-white border-rose-500/30 hover:border-rose-500/50'
+                        : 'bg-white border-amber-500/30 hover:border-amber-500/50'
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -247,8 +247,8 @@ export default function RollCallModal({
                         {idx + 1}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-white truncate leading-tight uppercase tracking-wide">{member.name}</h4>
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
+                        <h4 className="text-xs font-bold text-[#18372D] truncate leading-tight uppercase tracking-wide">{member.name}</h4>
+                        <div className="flex items-center gap-1.5 text-[10px] text-[#4A5F57] mt-0.5">
                           <span className="flex items-center gap-0.5 font-sans truncate">
                             <MapPin className="w-2.5 h-2.5 text-slate-500 shrink-0" />
                             {member.farmLocation}
@@ -267,7 +267,7 @@ export default function RollCallModal({
                             ? 'bg-emerald-600 text-white'
                             : 'text-slate-400 hover:text-white'
                         }`}
-                        title="Present (Nitambong)"
+                        title="Present"
                       >
                         <Check className="w-2.5 h-2.5" />
                         <span className="hidden sm:inline">Present</span>
@@ -281,7 +281,7 @@ export default function RollCallModal({
                             ? 'bg-rose-600 text-white'
                             : 'text-slate-400 hover:text-white'
                         }`}
-                        title="Absent (Wala)"
+                        title="Absent"
                       >
                         <XCircle className="w-2.5 h-2.5" />
                         <span className="hidden sm:inline">Absent</span>
@@ -295,7 +295,7 @@ export default function RollCallModal({
                             ? 'bg-amber-600 text-white'
                             : 'text-slate-400 hover:text-white'
                         }`}
-                        title="Excused (May Rason)"
+                        title="Excused"
                       >
                         <AlertCircle className="w-2.5 h-2.5" />
                         <span className="hidden sm:inline">Excused</span>
@@ -309,9 +309,9 @@ export default function RollCallModal({
         </div>
 
         {/* MODAL FOOTER ACTION BAR */}
-        <div className="bg-slate-950 px-5 py-4 border-t border-slate-800 flex justify-between items-center shrink-0">
-          <div className="text-[11px] text-slate-400 max-w-[50%] hidden sm:block">
-            Attendance count of <span className="font-bold text-white">{presentCount}</span> will be auto-saved and applied to the meeting record.
+        <div className="bg-white px-5 py-4 border-t border-[#D5CFC1] flex justify-between items-center shrink-0">
+          <div className="text-[11px] text-[#4A5F57] max-w-[50%] hidden sm:block">
+            Attendance count of <span className="font-bold text-[#18372D]">{presentCount}</span> will be automatically saved and applied to the meeting record.
           </div>
           <div className="flex gap-3 w-full sm:w-auto">
             <button

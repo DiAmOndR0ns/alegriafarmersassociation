@@ -92,6 +92,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS total_failed_logins INTEGER DEFAULT 0;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_requested BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_totp_secret TEXT;`,
@@ -226,6 +227,7 @@ async function initDatabaseSchema(pool) {
         must_change_password BOOLEAN DEFAULT FALSE,
         failed_login_attempts INTEGER DEFAULT 0,
         locked_until TIMESTAMPTZ,
+        total_failed_logins INTEGER DEFAULT 0,
         reset_requested BOOLEAN DEFAULT FALSE
         ,totp_secret TEXT
         ,pending_totp_secret TEXT

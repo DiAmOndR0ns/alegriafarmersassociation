@@ -77,7 +77,6 @@ export default function BoardMemberView({
               required
               value={resolutionNumber}
               onChange={(event) => setResolutionNumber(event.target.value)}
-              placeholder="e.g. Res. No. 2026-01"
               className="mt-1 w-full rounded-xl border border-[#D5CFC1] bg-white px-3 py-2 text-sm font-semibold normal-case"
             />
           </label>

@@ -3200,10 +3200,7 @@ export default function App() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-black uppercase text-[#1B4332] tracking-wider flex items-center gap-1.5">
                         <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                        Executive Supervision View:
-                      </span>
-                      <span className="text-xs text-[#52655B] font-medium hidden sm:inline">
-                        (Open and inspect officer dashboards)
+                        Executive Supervision View
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">

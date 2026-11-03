@@ -192,11 +192,18 @@ export default function MemberDashboard({
 
   const handlePrintCredentials = () => {
     const originalTitle = document.title;
-    document.title = `AFA_ID_${currentUser.name.replace(/\s+/g, '_')}`;
-    window.print();
-    setTimeout(() => {
+    const printArea = document.querySelector('.member-credentials-print');
+    if (!printArea) return;
+    const restore = () => {
+      printArea.classList.add('hidden');
       document.title = originalTitle;
-    }, 1000);
+      window.removeEventListener('afterprint', restore);
+    };
+    document.title = `AFA_ID_${currentUser.name.replace(/\s+/g, '_')}`;
+    printArea.classList.remove('hidden');
+    window.addEventListener('afterprint', restore, { once: true });
+    window.print();
+    window.setTimeout(restore, 1500);
   };
 
   useEffect(() => {
@@ -462,7 +469,7 @@ export default function MemberDashboard({
                     type="text"
                     value={contact}
                     onChange={(e) => setContact(e.target.value)}
-                    placeholder="e.g. 0917-000-0000"
+
                     className="w-full px-3 py-2 text-xs bg-[#FAF8F5] border border-[#D5CFC1] rounded-xl text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-semibold"
                   />
                 </div>
@@ -595,7 +602,7 @@ export default function MemberDashboard({
                     </div>
                   ) : (
                     <p className="text-xs text-slate-600 italic font-medium">
-                      Wala pay dugang nga ID o organisasyon (e.g. Senior Citizen, PWD, 4Ps, FCCT Co-op). I-click ang "Usaba" aron makadugang.
+                      Wala pay dugang nga ID o organisasyon. I-click ang "Usaba" aron makadugang.
                     </p>
                   )}
                 </div>
@@ -677,7 +684,7 @@ export default function MemberDashboard({
                 <Search className="absolute left-3 top-3 w-4 h-4 text-slate-700" />
                 <input
                   type="text"
-                  placeholder="Pangitaa ang anunsyo o balita..."
+
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-3 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#9E9785] rounded-xl text-slate-900 focus:outline-none focus:border-[#1B4332] font-semibold"
@@ -913,7 +920,7 @@ export default function MemberDashboard({
 
               {/* CERTIFICATE PREVIEW STATEMENT */}
               <div className="xl:col-span-5 text-left border-t xl:border-t-0 xl:border-l border-[#E9E4D9] pt-4 xl:pt-0 xl:pl-4">
-                <span className="text-[9px] font-black text-[#85947E] uppercase tracking-wider block mb-2">Sertipiko Preview (Certificate):</span>
+                <div className="mb-2"><span className="text-[9px] font-black text-[#4A5F57] uppercase tracking-wider">Certificate Preview</span></div><div className="overflow-auto max-h-[50vh]">
                 <div className="bg-white text-slate-900 p-4 rounded-2xl border border-[#D5CFC1] text-center font-serif text-[10px] leading-relaxed relative shadow-sm">
                   <div className="border-2 border-double border-[#1B4332] p-3 space-y-2">
                     <Landmark className="w-5 h-5 text-[#1B4332] mx-auto stroke-[1.5]" />
@@ -925,7 +932,7 @@ export default function MemberDashboard({
                     <h5 className="text-[9px] uppercase font-bold text-[#E65100] underline font-sans leading-none pt-1">Certificate of Good Standing</h5>
 
                     <p className="text-[8px] px-2 leading-relaxed">
-                      Kini nagpamatuod nga si <strong className="text-black uppercase font-sans font-black">{currentUser.name}</strong> usa ka aktibong miyembro sa **Alegria Farmers Association (AFA)**, nga nag-uma sa **{currentUser.farmLocation}**.
+                      This certifies that <strong className="text-black uppercase font-sans font-black">{currentUser.name}</strong> is an active member of the Alegria Farmers Association (AFA), farming at {currentUser.farmLocation}.
                     </p>
 
                     <div className="grid grid-cols-2 gap-4 mt-3 pt-2 border-t border-[#F0EBE1] text-[6px] font-sans">
@@ -939,6 +946,7 @@ export default function MemberDashboard({
                       </div>
                     </div>
                   </div>
+                </div>
                 </div>
               </div>
 
@@ -1166,7 +1174,7 @@ export default function MemberDashboard({
       {/* ========================================================================================= */}
       {/* EXCLUSIVELY FOR PRINT SHEET (HIDDEN IN APP VIEW, VISIBLE IN HARDCOPY PRINTING) */}
       {/* ========================================================================================= */}
-      <div className="print-area-root hidden bg-white text-slate-900 w-[210mm] min-h-[297mm] p-[15mm] text-left leading-relaxed font-serif relative">
+      <div className="print-area-root member-credentials-print hidden bg-white text-slate-900 w-[210mm] min-h-[297mm] p-[15mm] text-left leading-relaxed font-serif relative">
         
         {/* CERTIFICATE PRINT OUT SECTION */}
         <div className="border-4 border-double border-emerald-800 p-[10mm] text-center space-y-6 flex flex-col justify-between min-h-[135mm]">
@@ -1192,19 +1200,19 @@ export default function MemberDashboard({
           </div>
 
           <p className="text-sm text-slate-800 leading-loose text-justify indent-10 font-serif">
-            This is to certify that <strong className="text-black font-sans font-black uppercase text-base underline decoration-1 underline-offset-4">{currentUser.name}</strong>, of legal age, residing at <strong className="text-black font-sans font-bold">{currentUser.farmLocation}</strong>, Tuburan, Cebu, is a registered active member in good standing of the **Alegria Farmers Association (AFA)**.
+            This is to certify that <strong className="text-black font-sans font-black uppercase text-base underline decoration-1 underline-offset-4">{currentUser.name}</strong>, of legal age, residing at <strong className="text-black font-sans font-bold">{currentUser.farmLocation}</strong>, Tuburan, Cebu, is a registered active member in good standing of the Alegria Farmers Association (AFA).
           </p>
 
           <p className="text-sm text-slate-800 leading-loose text-justify indent-10 font-serif">
-            Records indicate that the certified member actively engages in agricultural production in <strong className="text-black font-sans font-bold">{currentUser.farmLocation}</strong>, with primary focus on producing crops and livestock commodities including: <strong className="text-slate-800 font-sans font-semibold italic">{currentUser.primaryCrops?.join(', ') || 'Vegetables, Coffee, Baboyan'}</strong>.
+            Records indicate that the certified member actively engages in agricultural production in <strong className="text-black font-sans font-bold">{currentUser.farmLocation}</strong>, with primary focus on producing crops and livestock commodities including: <strong className="text-slate-800 font-sans font-semibold italic">{currentUser.primaryCrops?.join(', ') || 'No crops or livestock listed'}</strong>.
           </p>
 
           <p className="text-sm text-slate-800 leading-loose text-justify indent-10 font-serif">
-            This certificate is officially issued to serve as authentic proof of active cooperative enrollment for securing municipal, provincial, or national Department of Agriculture **assistance programs, fertilizer distributions, tractor rentals, seed subsidies, and agricultural financial aids**.
+            This certificate is officially issued to serve as authentic proof of active cooperative enrollment for securing municipal, provincial, or national Department of Agriculture assistance programs, fertilizer distributions, tractor rentals, seed subsidies, and agricultural financial aid.
           </p>
 
           <div className="bg-slate-50 border border-slate-300 p-3 text-xs leading-relaxed font-sans text-slate-600 rounded-lg text-center max-w-lg mx-auto">
-            <strong>⚠️ ID Validity Period:</strong> Membership status and digital ID credentials are valid for **one (1) year** commencing from date of payment and expiring on **December 31, 2026**. Annual dues of PHP 100.00 must be settled with the Treasurer each December to sustain active enrollment benefits.
+            <strong>⚠️ ID Validity Period:</strong> Membership status and digital ID credentials are valid for one year from the date of payment and expire on December 31, 2026. Annual dues of PHP 100.00 must be settled with the Treasurer each December to sustain active enrollment benefits.
           </div>
 
           <div className="pt-12 grid grid-cols-2 gap-12 text-center font-sans text-xs">

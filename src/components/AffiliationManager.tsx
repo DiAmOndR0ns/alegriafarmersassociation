@@ -117,7 +117,7 @@ export default function AffiliationManager({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Senior Citizen ID, FCCT Member, PWD..."
+                  placeholder="Senior Citizen ID, FCCT Member, PWD..."
                   value={aff.name}
                   onChange={(e) => handleUpdateAffiliation(aff.id, 'name', e.target.value)}
                   disabled={disabled}
@@ -132,7 +132,7 @@ export default function AffiliationManager({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. SC-072251-1234 (ID / Control No.)"
+                  placeholder="SC-072251-1234 (ID / Control No.)"
                   value={aff.idNumber || ''}
                   onChange={(e) => handleUpdateAffiliation(aff.id, 'idNumber', e.target.value)}
                   disabled={disabled}

@@ -312,26 +312,7 @@ export default function GuestPortal({
                 </div>
               </div>
 
-              <div className="md:col-span-4 bg-[#FAF8F5] p-4 sm:p-6 rounded-2xl space-y-3.5 min-w-0">
-                <h4 className="font-black text-[#1B4332] text-xs sm:text-sm md:text-base uppercase tracking-wider flex items-center gap-1.5 border-b border-[#D5CFC1] pb-2 break-words">
-                  <ShieldCheck className="w-5 h-5 text-[#BF360C] shrink-0" />
-                  <span>Kasaligan nga Serbisyo</span>
-                </h4>
-                <ul className="space-y-2.5 text-xs sm:text-sm font-bold text-slate-700">
-                  <li className="flex items-start gap-2 break-words">
-                    <Check className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                    <span>LGU & DA Certified Registered Association</span>
-                  </li>
-                  <li className="flex items-start gap-2 break-words">
-                    <Check className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                    <span>100% Financial Transparency & Live Audit Trail</span>
-                  </li>
-                  <li className="flex items-start gap-2 break-words">
-                    <Check className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                    <span>Active Support & Subsidies for All Members</span>
-                  </li>
-                </ul>
-              </div>
+
             </div>
 
             {/* LATEST ANNOUNCEMENTS & ACTIVITIES PREVIEW BANNER */}

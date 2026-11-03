@@ -163,7 +163,7 @@ export default function ExecutiveView({
   const [turnoverDate, setTurnoverDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [turnoverOutgoingRole, setTurnoverOutgoingRole] = useState<'Member' | 'Vice_President' | 'Secretary' | 'Assistant_Secretary' | 'Board_Member' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO' | 'None'>('Member');
   const [turnoverNotes, setTurnoverNotes] = useState<string>(
-    '1. Formal turnover of the AFA general registry and resolutions book.\n2. Turned over bank accounts and the PHP balance.\n3. Turned over community keys and the hog-raising IGP ledger.'
+    '1. Formal turnover of the AFA general registry and resolutions book.\n2. Turned over bank accounts and the PHP balance.'
   );
   const [showTurnoverConfirm, setShowTurnoverConfirm] = useState<boolean>(false);
   const [turnoverConfirmationWord, setTurnoverConfirmationWord] = useState<string>('');
@@ -495,7 +495,6 @@ export default function ExecutiveView({
               </div>
             ) : (
               <div className="bg-[#FAF8F5]/50 border border-dashed border-[#D5CFC1] px-4 py-3 rounded-xl text-center text-[#85947E] text-xs leading-tight">
-                Walay nagpaabot nga rehistrasyon sa pagkakaron. Limpyo ang approval queue!
               </div>
             )}
           </div>
@@ -1379,18 +1378,18 @@ export default function ExecutiveView({
             {/* Turnover Info Form */}
             <div className="space-y-4">
               <div className="space-y-1">
-                <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Pilia ang Bag-ong Presidente (Select New President):</label>
+                <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Select New President:</label>
                 <select
                   value={turnoverNewPresId}
                   onChange={(e) => setTurnoverNewPresId(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-white border-2 border-[#D5CFC1] rounded-xl text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
                 >
-                  <option value="">-- Pilia ang Bag-ong Opisyal --</option>
+                  <option value="">-- Select an Officer --</option>
                   {users
                     .filter(u => u.isApproved && u.role !== 'President' && u.role !== 'Member')
                     .map(u => (
                       <option key={u.id} value={u.id}>
-                        {u.name} ({u.role === 'Member' ? 'Miyembro' : u.role.replace('_', ' ')})
+                        {u.name} ({u.role.replace('_', ' ')})
                       </option>
                     ))}
                 </select>
@@ -1398,7 +1397,7 @@ export default function ExecutiveView({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Adlaw sa Eleksyon (Election Date):</label>
+                  <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Election Date:</label>
                   <input
                     type="date"
                     value={turnoverDate}
@@ -1408,14 +1407,14 @@ export default function ExecutiveView({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Bag-ong Papel sa Karaang Pres (Your New Role):</label>
+                  <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Outgoing President's New Role:</label>
                   <select
                     value={turnoverOutgoingRole}
                     onChange={(e) => setTurnoverOutgoingRole(e.target.value as any)}
                     className="w-full px-3.5 py-2.5 bg-white border-2 border-[#D5CFC1] rounded-xl text-xs font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
                   >
                     <option value="Vice_President">Vice President</option>
-                    <option value="Member">Miyembro (Regular Member)</option>
+                    <option value="Member">Member (Regular Member)</option>
                     <option value="Secretary">Secretary</option>
                     <option value="Assistant_Secretary">Assistant Secretary</option>
                     <option value="Board_Member">Board Member</option>
@@ -1429,12 +1428,11 @@ export default function ExecutiveView({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Mga Nota ug Gitudlo nga Turnover (Turnover Notes & Inventory Memo):</label>
+                <label className="block text-xs font-extrabold text-[#4F5E46] uppercase">Turnover Notes & Inventory Memo:</label>
                 <textarea
                   rows={4}
                   value={turnoverNotes}
                   onChange={(e) => setTurnoverNotes(e.target.value)}
-                  placeholder="Isulat ang mga detalye sa gi-turnover..."
                   className="w-full px-3.5 py-2.5 bg-white border-2 border-[#D5CFC1] rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:border-[#1B4332]"
                 />
               </div>
@@ -1452,7 +1450,7 @@ export default function ExecutiveView({
                 className="w-full py-3 bg-[#BF360C] hover:bg-[#8D2300] text-white font-black text-xs sm:text-sm rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-colors"
               >
                 <ShieldCheck className="w-5 h-5" />
-                <span>ISALUMIT ANG PORMAL NGA TURNOVER (Formally Turn Over Office)</span>
+                <span>FORMALLY TURN OVER OFFICE</span>
               </button>
             </div>
 
@@ -1461,24 +1459,18 @@ export default function ExecutiveView({
               <div className="space-y-3">
                 <h4 className="text-xs font-black text-[#8A3700] uppercase tracking-wider flex items-center gap-1.5 font-display">
                   <AlertTriangle className="w-4.5 h-4.5" />
-                  <span>MAHINUNGDANONG PAHINUMDOM (Turnover Checklist)</span>
+                  <span>IMPORTANT REMINDER (Turnover Checklist)</span>
                 </h4>
 
                 <p className="text-[11px] text-slate-700 leading-relaxed font-semibold">
-                  Ang pag-turn over sa opisina sa Presidente usa ka pormal nga proseso. Subay sa balaod sa AFA, siguroha nga ang mosunod natuman sa dili pa i-klik ang turnover:
+                  The turnover of the President's office is a formal process. In accordance with AFA rules, ensure the following are completed before proceeding:
                 </p>
 
                 <ul className="text-[11px] text-slate-600 space-y-2 pl-4 list-disc font-medium">
-                  <li><strong className="text-[#1B4332]">Rekord sa Libro:</strong> Nahatag na ang kinatibuk-ang minutes, resolusyon, ug roster sa mga mag-uuma.</li>
-                  <li><strong className="text-[#1B4332]">Pundo sa Asosasyon:</strong> Na-verify na sa Auditor ang sulod sa pundo (PHP {currentBalance.toLocaleString()}) ug natunol na ang bank passbook.</li>
-                  <li><strong className="text-[#1B4332]">Asset sa Pig IGP:</strong> Gi-turnover na ang listahan sa pig chores, feed stock, ug ang nahabiling closed book accounts.</li>
-                  <li><strong className="text-[#1B4332]">System Access:</strong> Human niini nga aksyon, ang imong username dili na maka-access sa President's Suite, ug ang napiling bag-ong Presidente mao nay makadumala.</li>
+                  <li><strong className="text-[#1B4332]">Records:</strong> All meeting minutes, resolutions, and farmer rosters have been transferred.</li>
+                  <li><strong className="text-[#1B4332]">Association Funds:</strong> The Auditor has verified the fund balance (PHP {currentBalance.toLocaleString()}) and the bank passbook has been handed over.</li>
+                  <li><strong className="text-[#1B4332]">System Access:</strong> After this action, your username will no longer access the President's Suite, and the incoming President will take over management.</li>
                 </ul>
-              </div>
-
-              <div className="bg-white/80 p-3.5 rounded-2xl border border-[#FFE082] text-[10px] text-slate-600 font-semibold space-y-1">
-                <p className="text-[#8A3700] font-black uppercase">💡 Pagsiguro sa Kasegurohan:</p>
-                <p>Kini nga transaksyon i-rekord sa cryptographic audit trail ug dili na mamahimong usbon pa (Immutable Audit Record).</p>
               </div>
             </div>
           </div>
@@ -1962,3 +1954,7 @@ export default function ExecutiveView({
     </div>
   );
 }
+
+
+
+

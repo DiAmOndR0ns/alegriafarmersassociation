@@ -339,10 +339,10 @@ export default function AuthScreen({
                     <CheckCircle className="w-3.5 h-3.5" />
                   </div>
                   <span>
-                    <strong className="font-extrabold text-white">Quick sign in:</strong>{' '}
+                    <strong className="font-extrabold text-white">{en ? 'Quick sign in:' : 'Dali nga pagsulod:'}</strong>{' '}
                     {en
                       ? 'Enter your username and password below to access your member or officer dashboard.'
-                      : 'Isulod ang imong username ug password sa ubos aron makasulod sa member o opisyal nga dashboard.'}
+                      : 'Isulod ang imong username ug password sa ubos aron makasulod sa dashboard sa miyembro o opisyal.'}
                   </span>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
@@ -350,10 +350,10 @@ export default function AuthScreen({
                     <ShieldCheck className="w-3.5 h-3.5" />
                   </div>
                   <span>
-                    <strong className="font-extrabold text-white">Membership verification:</strong>{' '}
+                    <strong className="font-extrabold text-white">{en ? 'Membership verification:' : 'Pagpamatuod sa pagkamiyembro:'}</strong>{' '}
                     {en
-                      ? 'All officers and members must be validated and approved in the system before their access can be used.'
-                      : 'Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema antes magamit ang ilang access.'}
+                      ? 'All officers and members must be verified and approved in the system before they can access it.'
+                      : 'Kinahanglan mapamatud-an ug maaprobahan sa sistema ang tanang opisyal ug miyembro sa dili pa sila makagamit niini.'}
                   </span>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
@@ -361,10 +361,10 @@ export default function AuthScreen({
                     <CheckCircle className="w-3.5 h-3.5" />
                   </div>
                   <span>
-                    <strong className="font-extrabold text-white">Member access:</strong>{' '}
+                    <strong className="font-extrabold text-white">{en ? 'Member access:' : 'Pag-access sa miyembro:'}</strong>{' '}
                     {en
-                      ? 'Regular farmers are enrolled via the Secretary desk and receive their login slip.'
-                      : 'Ang mga regular nga mag-uuma gipasakop pinaagi sa Secretary desk ug makadawat og ilang login slip.'}
+                      ? 'Regular farmers are enrolled by the Secretary and receive their login slip.'
+                      : 'Iparehistro sa Sekretaryo ang mga mag-uuma ug hatagan sila og ilang papel sa pagsulod.'}
                   </span>
                 </div>
               </div>
@@ -375,7 +375,7 @@ export default function AuthScreen({
             <span className="font-medium">Tuburan, Cebu Province</span>
             <span className="font-bold flex items-center gap-1 bg-bafa-700 px-2.5 py-1.5 rounded-full border border-bafa-600">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              Lokal / Offline-Ok
+              {en ? 'Local / Works Offline' : 'Lokal / Magamit bisan walay internet'}
             </span>
           </div>
         </div>
@@ -392,11 +392,11 @@ export default function AuthScreen({
               <button
                 type="button"
                 onClick={toggleLanguage}
-                title={en ? 'Show English + Bisaya (default)' : 'Show English only'}
-                className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors cursor-pointer whitespace-nowrap bg-[#EAF6EE] hover:bg-[#D4EEDC] text-[#1B4332] border-[#B7E3C4] shadow-sm"
+                title={en ? 'Switch to Bisaya and English' : 'Switch to English'}
+                className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors cursor-pointer whitespace-nowrap bg-transparent hover:bg-[#F7F4EF] text-[#4A5F57] border-[#D5CFC1] shadow-none"
               >
                 <Languages className="w-3.5 h-3.5 shrink-0" />
-                <span>{en ? 'English + Bisaya' : 'Translate to English'}</span>
+                <span>{en ? 'Bisaya' : 'English'}</span>
               </button>
             </div>
 
@@ -520,7 +520,6 @@ export default function AuthScreen({
                       <input
                         type="text"
                         required
-                        placeholder="e.g. roberto"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC] font-semibold transition-all font-sans"
@@ -546,7 +545,6 @@ export default function AuthScreen({
                       <input
                         type="password"
                         required
-                        placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC] font-semibold transition-all font-sans"
@@ -615,7 +613,7 @@ export default function AuthScreen({
                         <input
                           type="text"
                           required
-                          placeholder="e.g. System Administrator"
+
                           value={adminName}
                           onChange={(e) => setAdminName(e.target.value)}
                           className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
@@ -641,7 +639,7 @@ export default function AuthScreen({
                           <input
                             type="text"
                             required
-                            placeholder="e.g. admin"
+
                             value={adminUsername}
                             onChange={(e) => setAdminUsername(e.target.value)}
                             className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
@@ -652,7 +650,7 @@ export default function AuthScreen({
                           <input
                             type="text"
                             required
-                            placeholder="12+ chars, upper/lower/num/symbol"
+
                             value={adminPassword}
                             onChange={(e) => setAdminPassword(e.target.value)}
                             className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
@@ -692,8 +690,8 @@ export default function AuthScreen({
 
           <div className="text-center text-[10px] text-[#85947E] mt-6 border-t border-[#F0EBE1] pt-3">
             {en
-              ? 'AFA System v1.1 • Designed for ease of use by every farmer and officer.'
-              : 'Sistemang AFA v1.1 • Gidisenyo alang sa kasayon sa matag mag-uuma ug opisyal.'}
+              ? 'AFA System v1.1 • Designed to be easy for every farmer and officer to use.'
+              : 'Sistemang AFA v1.1 • Gidisenyo nga sayon gamiton sa matag mag-uuma ug opisyal.'}
           </div>
         </div>
       </div>

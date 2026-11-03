@@ -907,9 +907,9 @@ export default function OfficerReportModal({
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
           {/* ROLE ACCESS BANNER */}
           {!isPresident ? (
-            <div className="bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="bg-[#F0EDE7] border border-[#D5CFC1] p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
-                <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                <ShieldCheck className="w-5 h-5 text-[#1B4332] shrink-0" />
                 <div className="min-w-0">
                   <span className="font-extrabold text-[#1B4332] block">Official {currentRole.replace('_', ' ')} Department Report</span>
                   <p className="text-[11px] text-[#3A4A42]">
@@ -1176,7 +1176,6 @@ export default function OfficerReportModal({
                 rows={2}
                 value={customRemarks}
                 onChange={(e) => setCustomRemarks(e.target.value)}
-                placeholder="e.g., Reports compiled for Tuburan LGU Municipal Agriculture Audit & Annual AFA General Assembly."
                 className="w-full px-3 py-2 bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] text-xs focus:outline-none focus:border-emerald-500 font-sans"              />
             </div>
           </div>
@@ -1210,3 +1209,5 @@ export default function OfficerReportModal({
     </div>
   );
 }
+
+

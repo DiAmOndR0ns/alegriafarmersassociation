@@ -19,7 +19,7 @@ export default function MemberIdBadgeModal({
   allMembers = []
 }: MemberIdBadgeModalProps) {
   const [printMode, setPrintMode] = useState<'single' | 'all'>('single');
-  const [fontSizeOption, setFontSizeOption] = useState<'normal' | 'large'>('normal');
+  const [previewZoom, setPreviewZoom] = useState(1);
 
   if (!isOpen || !member) return null;
 
@@ -38,6 +38,8 @@ export default function MemberIdBadgeModal({
             @page { size: portrait; margin: 15mm; }
             body { font-family: 'Inter', system-ui, sans-serif; background: #fff; color: #111; padding: 10px; margin: 0; }
             .grid-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+            .id-card, .id-card * { box-sizing: border-box; }
+            @media print { .grid-cards { gap: 10mm; } .id-card { break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .id-card { 
               border: 2px solid #1B4332; 
               border-radius: 12px; 
@@ -101,7 +103,7 @@ export default function MemberIdBadgeModal({
               color: #555;
             }
             @media print {
-              body { padding: 0; }
+              body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             }
           </style>
         </head>
@@ -121,7 +123,7 @@ export default function MemberIdBadgeModal({
                     <div class="member-name">${m.name}</div>
                     <div class="field-row">
                       <span class="field-label">Member ID:</span> 
-                      <span class="field-val" style="font-family:monospace; color:#1B4332;">${m.memberIdNumber || 'AFA-2026-000'}</span>
+                      <span class="field-val" style="font-family:monospace; color:#1B4332;">${m.memberIdNumber || 'Not assigned'}</span>
                     </div>
                     <div class="field-row">
                       <span class="field-label">Sitio Address:</span> 
@@ -159,7 +161,12 @@ export default function MemberIdBadgeModal({
             `).join('')}
           </div>
           <script>
-            window.onload = function() { window.print(); }
+            window.onload = function() {
+              const images = Array.from(document.images);
+              Promise.all(images.map((image) => image.decode().catch(() => undefined))).then(() => {
+                setTimeout(() => { window.focus(); window.print(); }, 250);
+              });
+            };
           </script>
         </body>
       </html>
@@ -168,8 +175,8 @@ export default function MemberIdBadgeModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border-2 border-[#1B4332] overflow-hidden text-slate-800">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
+      <div className="bg-white rounded-3xl max-h-[calc(100dvh-1.5rem)] max-w-lg w-full flex-col shadow-2xl border-2 border-[#1B4332] overflow-hidden text-slate-800">
         
         {/* MODAL HEADER */}
         <div className="p-4 sm:p-5 bg-[#1B4332] text-white flex justify-between items-center shrink-0">
@@ -195,10 +202,18 @@ export default function MemberIdBadgeModal({
         </div>
 
         {/* MODAL BODY: ID CARD PREVIEW */}
-        <div className="p-5 sm:p-6 space-y-5 bg-[#FAF8F5]">
+        <div className="flex-1 overflow-y-auto flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 bg-[#FAF8F5] text-[#1B4332] text-[#1B4332]">
           
-          {/* THE ID BADGE CARD PREVIEW */}
-          <div className="bg-white rounded-2xl border-2 border-[#1B4332] overflow-hidden shadow-lg">
+          {/* ID BADGE PREVIEW AND ZOOM */}
+          <div className="flex items-center justify-end gap-2 text-xs no-print">
+            <span className="font-bold text-[#18372D]">Preview zoom</span>
+            <button type="button" aria-label="Zoom out" onClick={() => setPreviewZoom(value => Math.max(0.75, Number((value - 0.1).toFixed(2))))} className="rounded-lg border-[#D5CFC1] bg-white px-2 py-1 font-bold text-[#18372D]">−</button>
+            <span className="min-w-12 text-center font-mono text-[#18372D]">{Math.round(previewZoom * 100)}%</span>
+            <button type="button" aria-label="Zoom in" onClick={() => setPreviewZoom(value => Math.min(1.5, Number((value + 0.1).toFixed(2))))} className="rounded-lg border-[#D5CFC1] bg-white px-2 py-1 font-bold text-[#18372D]">+</button>
+            <button type="button" onClick={() => setPreviewZoom(1)} className="rounded-lg border-[#D5CFC1] bg-white px-2 py-1 font-bold text-[#18372D]">Reset</button>
+          </div>
+          <div className="overflow-auto max-h-[60vh]">
+          <div style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center' }} className="bg-white rounded-2xl border-2 border-[#1B4332] overflow-hidden shadow-lg">
             {/* Badge Top Bar */}
             <div className="bg-[#1B4332] text-white p-3 text-center border-b-2 border-emerald-400">
               <span className="text-[9px] font-black tracking-widest uppercase text-emerald-200 block">
@@ -227,7 +242,7 @@ export default function MemberIdBadgeModal({
               {/* Information Column */}
               <div className="space-y-1.5 flex-1 min-w-0">
                 <div>
-                  <span className="text-[9px] font-black uppercase text-slate-400 block">Rehistradong Mag-uuma:</span>
+                  <span className="text-[9px] font-black uppercase text-slate-500 block">Registered Member:</span>
                   <h3 className="text-sm sm:text-base font-black text-[#1B4332] truncate uppercase">
                     {member.name}
                   </h3>
@@ -235,13 +250,13 @@ export default function MemberIdBadgeModal({
 
                 <div className="grid grid-cols-2 gap-1.5 text-xs">
                   <div>
-                    <span className="text-[9px] font-bold text-slate-400 block uppercase">Member ID:</span>
+                    <span className="text-[9px] font-bold text-slate-600 block uppercase">Member ID:</span>
                     <span className="font-mono font-black text-emerald-800 text-[11px]">
-                      {member.memberIdNumber || 'AFA-2026-000'}
+                      {member.memberIdNumber || 'Not assigned'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[9px] font-bold text-slate-400 block uppercase">Status:</span>
+                    <span className="text-[9px] font-bold text-slate-600 block uppercase">Status:</span>
                     <span className={`font-black text-[10px] px-1.5 py-0.5 rounded-full inline-block ${
                       member.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                     }`}>
@@ -251,7 +266,7 @@ export default function MemberIdBadgeModal({
                 </div>
 
                 <div>
-                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Sitio Address:</span>
+                  <span className="text-[9px] font-bold text-slate-600 block uppercase">Sitio Address:</span>
                   <span className="font-bold text-slate-700 text-xs flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-emerald-700 shrink-0" />
                     <span className="truncate">{member.farmLocation}</span>
@@ -259,7 +274,7 @@ export default function MemberIdBadgeModal({
                 </div>
 
                 <div>
-                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Contact Number:</span>
+                  <span className="text-[9px] font-bold text-slate-600 block uppercase">Contact Number:</span>
                   <span className="font-mono font-bold text-slate-700 text-xs">
                     {member.contactNumber}
                   </span>
@@ -267,7 +282,7 @@ export default function MemberIdBadgeModal({
 
                 {member.affiliations && member.affiliations.length > 0 && (
                   <div>
-                    <span className="text-[9px] font-bold text-slate-400 block uppercase">Other IDs & Organizations:</span>
+                    <span className="text-[9px] font-bold text-slate-600 block uppercase">Other IDs & Organizations:</span>
                     <div className="flex flex-wrap gap-1 mt-0.5">
                       {member.affiliations.map(aff => (
                         <span key={aff.id} className="text-[9.5px] font-bold bg-[#EAF4EC] text-[#1B4332] px-2 py-0.5 rounded border border-[#2D6A4F]/30">
@@ -292,6 +307,7 @@ export default function MemberIdBadgeModal({
                 Joined: {member.joinedDate}
               </span>
             </div>
+          </div>
           </div>
 
           {/* PRINT CONTROLS */}
@@ -327,19 +343,19 @@ export default function MemberIdBadgeModal({
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="p-4 bg-white border-t border-slate-200 flex justify-between items-center">
+        <div className="shrink-0 p-4 bg-white border-t border-slate-200 flex justify-between items-center">
           <button
             onClick={onClose}
             className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
           >
-            I-close
+            Close
           </button>
           <button
             onClick={handlePrint}
             className="px-5 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl font-black text-xs flex items-center gap-2 shadow-md cursor-pointer transition-all"
           >
             <Printer className="w-4 h-4" />
-            <span>I-print ang Member ID Badge</span>
+            <span>Print Member ID Badge</span>
           </button>
         </div>
 
@@ -347,3 +363,4 @@ export default function MemberIdBadgeModal({
     </div>
   );
 }
+

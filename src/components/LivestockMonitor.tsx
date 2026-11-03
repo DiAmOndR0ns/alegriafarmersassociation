@@ -1050,7 +1050,6 @@ export default function LivestockMonitor({
                   value={expCustom}
                   onChange={(e) => setExpCustom(e.target.value)}
                   className={inputCls}
-                  placeholder="e.g. Veterinary Inspection, Equipment Hire"
                 />
               </div>
             )}

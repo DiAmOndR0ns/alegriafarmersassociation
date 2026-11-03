@@ -48,13 +48,15 @@ function Section({
 
 export default function FinancialStatement() {
   return (
-    <main className="document">
+    <main className="document financial-statement-root">
       <style>{`
         @page { size: letter; margin: 0.65in; }
         * { box-sizing: border-box; }
         body { margin: 0; background: #ececec; color: #171717; font-family: Arial, Helvetica, sans-serif; }
         .document { width: 8.5in; margin: 24px auto; }
         .page { min-height: 9.7in; padding: 0.25in 0.3in; background: white; margin-bottom: 24px; page-break-after: always; }
+        .financial-statement-root { color: #171717; background: #fff; }
+        .financial-statement-root * { color: inherit; }
         .page:last-child { page-break-after: auto; }
         .org-header { text-align: center; line-height: 1.35; font-size: 12px; font-weight: 700; }
         .org-name { margin-top: 22px; font-size: 13px; }
@@ -62,7 +64,7 @@ export default function FinancialStatement() {
         .report-title { margin: 26px 0 20px; text-align: center; font-weight: 700; font-size: 14px; }
         .section { margin: 18px 0 24px; break-inside: avoid; }
         .section h2 { font-size: 13px; font-weight: 700; margin: 0 0 12px; }
-        .line { display: grid; grid-template-columns: 1fr 2.25in; gap: 12px; align-items: baseline; font-size: 12px; line-height: 1.75; }
+        .line { display: grid; grid-template-columns: 1fr 2.25in; gap: 12px; align-items: baseline; font-size: 12px; line-height: 1.75; color: #171717; }
         .line .amount { white-space: nowrap; }
         .line.bold { font-weight: 700; }
         .line.indent { padding-left: 20px; }
@@ -74,10 +76,13 @@ export default function FinancialStatement() {
         .signature { width: 42%; border-top: 1px solid #555; padding-top: 7px; }
         .note { font-size: 9px; color: #555; margin-top: 22px; }
         @media print {
-          body { background: white; }
-          .document { width: auto; margin: 0; }
-          .page { min-height: 9.7in; margin: 0; padding: 0; }
-          .no-print { display: none; }
+          @page { size: letter; margin: 0.65in; }
+          html, body, #root { width: auto !important; height: auto !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+          body * { visibility: hidden !important; }
+          .financial-statement-root, .financial-statement-root * { visibility: visible !important; }
+          .financial-statement-root { position: absolute !important; inset: 0 auto 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; color: #171717 !important; }
+          .financial-statement-root .no-print { display: none !important; }
+          .financial-statement-root .page { min-height: 9.7in; margin: 0; padding: 0; box-shadow: none; }
         }
       `}</style>
 

@@ -193,8 +193,8 @@ export default function PioView({
       {/* PIO BANNER AND ACTION BUTTON */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#EAF4EC] p-4 rounded-2xl border border-[#B7D9BF]">
         <div>
-          <h2 className="text-xl font-bold text-[#1B4332] flex items-center gap-2">
-            <Megaphone className="w-5 h-5 text-[#1B4332]" />
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-emerald-200" />
             <span>PIO Communications & Activity Management</span>
           </h2>
         </div>
@@ -438,7 +438,6 @@ export default function PioView({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Schedule of Seeds & Fertilizer Distribution"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
@@ -482,7 +481,6 @@ export default function PioView({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Livestock Advisory, Cooperative Notice"
                     value={customCategory}
                     onChange={(e) => setCustomCategory(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F]"
@@ -559,7 +557,6 @@ export default function PioView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Organic Farming Seminar"
                       value={actTitle}
                       onChange={(e) => setActTitle(e.target.value)}
                       className="w-full px-3.5 py-2 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
@@ -572,7 +569,6 @@ export default function PioView({
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Seminar sa Organikong Pag-uuma"
                       value={actCebTitle}
                       onChange={(e) => setActCebTitle(e.target.value)}
                       className="w-full px-3.5 py-2 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
@@ -629,7 +625,6 @@ export default function PioView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. 09:00 AM"
                       value={actTime}
                       onChange={(e) => setActTime(e.target.value)}
                       className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
@@ -641,7 +636,6 @@ export default function PioView({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Barangay Covered Court"
                       value={actLocation}
                       onChange={(e) => setActLocation(e.target.value)}
                       className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
@@ -713,4 +707,5 @@ export default function PioView({
     </div>
   );
 }
+
 
