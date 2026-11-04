@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   OfficerRole, Member, Meeting, Resolution, 
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState, HogHerdBreakdown,
-  IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, OrganizationFund, DatabaseStatus, InventoryItem
+  IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem
 } from './types';
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
@@ -75,6 +75,7 @@ export default function App() {
   const [hogRaising, setHogRaising] = useState<HogRaisingState>(INITIAL_HOG_RAISING);
   const [products, setProducts] = useState<Product[]>([]);
   const [activities, setActivities] = useState<AssociationActivity[]>([]);
+  const [achievements, setAchievements] = useState<AssociationAchievement[]>([]);
   const [funds, setFunds] = useState<OrganizationFund[]>([]);
   // Association inventory registry — custodial duty of the Auditor (no Property Custodian officer exists)
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -93,6 +94,7 @@ export default function App() {
     announcements: [] as Announcement[],
     products: [] as Product[],
     activities: [] as AssociationActivity[],
+    achievements: [] as AssociationAchievement[],
     hogRaising: INITIAL_HOG_RAISING,
     funds: [] as OrganizationFund[],
     inventory: [] as InventoryItem[],
@@ -110,12 +112,13 @@ export default function App() {
       announcements,
       products,
       activities,
+      achievements,
       hogRaising,
       funds,
       inventory,
       logs
     };
-  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, hogRaising, funds, inventory, logs]);
+  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, achievements, hogRaising, funds, inventory, logs]);
 
   // Feedback State (Toasts)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' | 'error' } | null>(null);
@@ -134,11 +137,11 @@ export default function App() {
     let cancelled = false;
     const loadLocalData = async () => {
       try {
-        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_inventory', 'bafa_sync_queue', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
+        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_sync_queue', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
         clearSecureItems(['bafa_hog_raising']);
         await migrateSecureItems(storageKeys);
       if (cancelled) return;
-      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers] = await Promise.all([
+      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers] = await Promise.all([
         getSecureItem<Member[]>('bafa_members'),
         getSecureItem<Meeting[]>('bafa_meetings'),
         getSecureItem<Resolution[]>('bafa_resolutions'),
@@ -147,6 +150,7 @@ export default function App() {
         getSecureItem<HogRaisingState>('bafa_afa_igp'),
         getSecureItem<Product[]>('bafa_products'),
         getSecureItem<AssociationActivity[]>('bafa_activities'),
+        getSecureItem<AssociationAchievement[]>('bafa_achievements'),
         getSecureItem<OrganizationFund[]>('bafa_funds'),
         getSecureItem<InventoryItem[]>('bafa_inventory'),
         getSecureItem<SyncQueueItem[]>('bafa_sync_queue'),
@@ -159,7 +163,7 @@ export default function App() {
       const hasOldSeedMembers = storedMembersText.includes('m-001') || storedMembersText.includes('Roberto M. Cañete') || storedMembersText.includes('Juanito') || storedMembersText.includes('user-m1');
       if (hasOldSeedMembers) {
         console.log('[Auto-Cleanup]: Detected legacy dummy seed data in local cache. Cleaning storage for real data...');
-        clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_afa_igp']);
+        clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_afa_igp']);
         setMembers([]);
         setMeetings([]);
         setResolutions([]);
@@ -167,6 +171,7 @@ export default function App() {
         setAnnouncements([]);
         setProducts([]);
         setActivities([]);
+        setAchievements([]);
         setFunds([]);
         setHogRaising(INITIAL_HOG_RAISING);
       } else {
@@ -178,6 +183,7 @@ export default function App() {
         setHogRaising(storedHogRaising || INITIAL_HOG_RAISING);
         setProducts(storedProducts || INITIAL_PRODUCTS);
         setActivities(storedActivities || INITIAL_ACTIVITIES);
+        setAchievements(storedAchievements || []);
         setFunds(storedFunds || INITIAL_FUNDS);
         setInventory(storedInventory || []);
       }
@@ -293,6 +299,7 @@ export default function App() {
             const delAnnouncements = new Set(bootDeletedIds.announcements || []);
             const delProducts = new Set(bootDeletedIds.products || []);
             const delActivities = new Set(bootDeletedIds.activities || []);
+            const delAchievements = new Set(bootDeletedIds.achievements || []);
             const delFunds = new Set(bootDeletedIds.funds || []);
             const delInventory = new Set(bootDeletedIds.inventory || []);
 
@@ -303,6 +310,12 @@ export default function App() {
             const cleanAnnouncements = Array.isArray(res.data.announcements) ? res.data.announcements.filter((a: any) => !delAnnouncements.has(a.id)) : [];
             const cleanProducts = Array.isArray(res.data.products) ? res.data.products.filter((p: any) => !delProducts.has(p.id)) : [];
             const cleanActivities = Array.isArray(res.data.activities) ? res.data.activities.filter((a: any) => !delActivities.has(a.id)) : [];
+            const hasPendingAchievementChanges = Array.isArray(storedQueue) &&
+              storedQueue.some(item => item.entityType === 'achievement');
+            const achievementSource = hasPendingAchievementChanges && Array.isArray(storedAchievements)
+              ? storedAchievements
+              : Array.isArray(res.data.achievements) ? res.data.achievements : [];
+            const cleanAchievements = achievementSource.filter((achievement: AssociationAchievement) => !delAchievements.has(achievement.id));
             const cleanFunds = Array.isArray(res.data.funds) ? res.data.funds.filter((f: any) => !delFunds.has(f.id)) : [];
             const cleanInventory = Array.isArray(res.data.inventory) ? res.data.inventory.filter((i: any) => !delInventory.has(i.id)) : [];
 
@@ -313,6 +326,7 @@ export default function App() {
             if (Array.isArray(res.data.announcements)) { setAnnouncements(cleanAnnouncements); updateStorage('bafa_announcements', cleanAnnouncements); }
             if (Array.isArray(res.data.products)) { setProducts(cleanProducts); updateStorage('bafa_products', cleanProducts); }
             if (Array.isArray(res.data.activities)) { setActivities(cleanActivities); updateStorage('bafa_activities', cleanActivities); }
+            if (Array.isArray(res.data.achievements)) { setAchievements(cleanAchievements); updateStorage('bafa_achievements', cleanAchievements); }
             if (Array.isArray(res.data.funds)) { setFunds(cleanFunds); updateStorage('bafa_funds', cleanFunds); }
             if (Array.isArray(res.data.inventory)) { setInventory(cleanInventory); updateStorage('bafa_inventory', cleanInventory); }
             if (res.data.hogRaising) { setHogRaising(res.data.hogRaising); updateStorage('bafa_afa_igp', res.data.hogRaising); }
@@ -341,7 +355,7 @@ export default function App() {
                 });
               setUsers(cleanUsers);
               updateStorage('bafa_users', cleanUsers);
-              if (isOnline && cleanUsers.some((user) => !user.passwordHash?.startsWith('$2'))) {
+              if (isOnline && cleanUsers.some((user: User) => !user.passwordHash?.startsWith('$2'))) {
                 pushAllDataToCloud({ users: cleanUsers }, { silent: true, source: 'Password Hash Upgrade' });
               }
             }
@@ -372,6 +386,7 @@ export default function App() {
                     announcements: cleanAnnouncements,
                     products: cleanProducts,
                     activities: cleanActivities,
+                    achievements: cleanAchievements,
                     funds: cleanFunds,
                     inventory: cleanInventory,
                     hogRaising: res.data.hogRaising || INITIAL_HOG_RAISING,
@@ -401,6 +416,7 @@ export default function App() {
       setTransactions(INITIAL_TRANSACTIONS);
       setAnnouncements(INITIAL_ANNOUNCEMENTS);
       setHogRaising(INITIAL_HOG_RAISING);
+      setAchievements([]);
       setFunds(INITIAL_FUNDS);
       setInventory([]);
       setSyncQueue([]);
@@ -499,6 +515,7 @@ export default function App() {
     announcements?: string[];
     products?: string[];
     activities?: string[];
+    achievements?: string[];
     funds?: string[];
     inventory?: string[];
   }
@@ -513,7 +530,7 @@ export default function App() {
         member: 'members', user: 'users', officer: 'users', meeting: 'meetings',
         resolution: 'resolutions', transaction: 'financialTransactions',
         financialtransaction: 'financialTransactions', announcement: 'announcements',
-        product: 'products', activity: 'activities', fund: 'funds', inventory: 'inventory'
+        product: 'products', activity: 'activities', achievement: 'achievements', fund: 'funds', inventory: 'inventory'
       };
       const key = keyByEntity[entity];
       if (key) result[key] = Array.from(new Set([...(result[key] || []), id]));
@@ -575,6 +592,8 @@ export default function App() {
       fund: 'funds',
       funds: 'funds',
       inventory: 'inventory',
+      achievement: 'achievements',
+      achievements: 'achievements',
     };
     const mappedKey = entityKeyMap[entity] || (entity as keyof StoredDeletedIds);
     ids.forEach(id => storeDeletedId(mappedKey, id));
@@ -690,6 +709,7 @@ export default function App() {
       announcements?: Announcement[];
       products?: Product[];
       activities?: AssociationActivity[];
+      achievements?: AssociationAchievement[];
       hogRaising?: HogRaisingState;
       eggHarvests?: EggHarvestLog[];
       funds?: OrganizationFund[];
@@ -731,6 +751,7 @@ export default function App() {
             announcements: overrides?.announcements || snap.announcements,
             products: overrides?.products || snap.products,
             activities: overrides?.activities || snap.activities,
+            achievements: overrides?.achievements || snap.achievements,
             hogRaising: overrides?.hogRaising || snap.hogRaising,
             funds: overrides?.funds || snap.funds,
             inventory: overrides?.inventory || snap.inventory,
@@ -1245,9 +1266,9 @@ export default function App() {
   };
 
   const handleDeleteTransaction = (id: string) => {
-    // ADVISER RULE: Only the Treasurer or Assistant Treasurer may remove recorded income/expense entries.
-    if (!isTreasurerAuthorized(currentUser?.role)) {
-      showToastMessage('Only the Treasurer or Assistant Treasurer may delete recorded income or expenses.', 'error');
+    // ADVISER RULE: Treasurers cannot delete recorded financial logs, even when a record is flagged.
+    if (currentUser?.role === 'Treasurer' || currentUser?.role === 'Assistant_Treasurer') {
+      showToastMessage('The Treasurer cannot delete financial logs. Please ask the President or Auditor to review the record.', 'error');
       return;
     }
     const targetTx = transactions.find(t => t.id === id);
@@ -1691,6 +1712,51 @@ export default function App() {
       pushAllDataToCloud({ activities: updated }, { silent: true, source: 'Activity Deletion' });
     } else {
       addToSyncQueue('delete', 'activity', { id });
+    }
+  };
+
+  const handleAddAchievement = (achievementData: Omit<AssociationAchievement, 'id'>) => {
+    if (!currentUser || !['PIO', 'President'].includes(currentUser.role)) {
+      showToastMessage('Only the PIO or President may manage association achievements.', 'error');
+      return;
+    }
+
+    const achievement: AssociationAchievement = {
+      ...achievementData,
+      id: `achievement-${Date.now()}`
+    };
+    const updated = [achievement, ...achievements];
+    setAchievements(updated);
+    updateStorage('bafa_achievements', updated);
+
+    if (isOnline) {
+      logAction('Added Association Achievement', `Published "${achievement.title}" (${achievement.year})`);
+      showToastMessage('Association achievement added to the guest portal.', 'success');
+      pushAllDataToCloud({ achievements: updated }, { silent: true, source: 'Achievement Added' });
+    } else {
+      addToSyncQueue('create', 'achievement', achievement);
+    }
+  };
+
+  const handleDeleteAchievement = (id: string) => {
+    if (!currentUser || !['PIO', 'President'].includes(currentUser.role)) {
+      showToastMessage('Only the PIO or President may manage association achievements.', 'error');
+      return;
+    }
+
+    const target = achievements.find(achievement => achievement.id === id);
+    const updated = achievements.filter(achievement => achievement.id !== id);
+    setAchievements(updated);
+    updateStorage('bafa_achievements', updated);
+
+    if (isOnline) {
+      logAction('Deleted Association Achievement', `Removed "${target?.title || id}"`);
+      pushAllDataToCloud(
+        { achievements: updated, deletedIds: { achievements: [id] } },
+        { silent: true, source: 'Achievement Deleted' }
+      );
+    } else {
+      addToSyncQueue('delete', 'achievement', { id });
     }
   };
 
@@ -2785,6 +2851,7 @@ export default function App() {
             products={products}
             announcements={announcements}
             activities={activities}
+            achievements={achievements}
             users={users}
           />
         </Suspense>
@@ -3377,6 +3444,7 @@ export default function App() {
                 transactions={transactions}
                 funds={funds}
                 hogRaising={hogRaising}
+                inventory={inventory}
                 onAddTransaction={handleAddTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
                 onAddFund={handleAddFund}
@@ -3407,8 +3475,11 @@ export default function App() {
               <PioView
                 announcements={announcements}
                 activities={activities}
+                achievements={achievements}
                 onAddAnnouncement={handleAddAnnouncement}
                 onDeleteAnnouncement={handleDeleteAnnouncement}
+                onAddAchievement={handleAddAchievement}
+                onDeleteAchievement={handleDeleteAchievement}
                 onAddActivity={handleAddActivity}
                 onUpdateActivity={handleUpdateActivity}
                 onDeleteActivity={handleDeleteActivity}
@@ -3470,8 +3541,11 @@ export default function App() {
                 <PioView
                   announcements={announcements}
                   activities={activities}
+                  achievements={achievements}
                   onAddAnnouncement={handleAddAnnouncement}
                   onDeleteAnnouncement={handleDeleteAnnouncement}
+                  onAddAchievement={handleAddAchievement}
+                  onDeleteAchievement={handleDeleteAchievement}
                   onAddActivity={handleAddActivity}
                   onUpdateActivity={handleUpdateActivity}
                   onDeleteActivity={handleDeleteActivity}

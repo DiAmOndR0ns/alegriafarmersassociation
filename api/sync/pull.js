@@ -146,6 +146,14 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
+    `CREATE TABLE IF NOT EXISTS achievements (
+      id VARCHAR(100) PRIMARY KEY,
+      year VARCHAR(20) NOT NULL,
+      title TEXT NOT NULL,
+      ceb_title TEXT,
+      description TEXT NOT NULL,
+      icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+    );`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
       id VARCHAR(100) PRIMARY KEY,
@@ -388,6 +396,16 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS achievements (
+        id VARCHAR(100) PRIMARY KEY,
+        year VARCHAR(20) NOT NULL,
+        title TEXT NOT NULL,
+        ceb_title TEXT,
+        description TEXT NOT NULL,
+        icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+      );
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS organization_funds (
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
@@ -507,6 +525,7 @@ async function fetchAllDataFromPostgres(pool) {
     const igpExpenseRows = await client.query("SELECT id, expense_data FROM afa_igp_expenses ORDER BY date DESC, id ASC");
     const productsRes = await client.query("SELECT * FROM products ORDER BY name ASC");
     const activitiesRes = await client.query("SELECT * FROM activities ORDER BY scheduled_date DESC");
+    const achievementsRes = await client.query("SELECT * FROM achievements ORDER BY year DESC, title ASC");
     const fundsRes = await client.query("SELECT * FROM organization_funds ORDER BY name ASC");
     let auditorReports = [];
     let delegationRequests = [];
@@ -710,6 +729,14 @@ async function fetchAllDataFromPostgres(pool) {
       targetAudience: r.target_audience,
       imageUrl: r.image_url
     }));
+    const achievements = achievementsRes.rows.map((r) => ({
+      id: r.id,
+      year: r.year,
+      title: r.title,
+      cebTitle: r.ceb_title,
+      description: r.description,
+      icon: r.icon
+    }));
     const funds = fundsRes.rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -733,6 +760,7 @@ async function fetchAllDataFromPostgres(pool) {
       hogRaising: hogState,
       products,
       activities,
+      achievements,
       funds,
       organizationFunds: funds,
       auditorReports,

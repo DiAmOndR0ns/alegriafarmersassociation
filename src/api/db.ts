@@ -191,6 +191,15 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
 
+    `CREATE TABLE IF NOT EXISTS achievements (
+      id VARCHAR(100) PRIMARY KEY,
+      year VARCHAR(20) NOT NULL,
+      title TEXT NOT NULL,
+      ceb_title TEXT,
+      description TEXT NOT NULL,
+      icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+    );`,
+
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
       id VARCHAR(100) PRIMARY KEY,
@@ -458,6 +467,17 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       );
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS achievements (
+        id VARCHAR(100) PRIMARY KEY,
+        year VARCHAR(20) NOT NULL,
+        title TEXT NOT NULL,
+        ceb_title TEXT,
+        description TEXT NOT NULL,
+        icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+      );
+    `);
+
     // 11. Organization Funds
     await client.query(`
       CREATE TABLE IF NOT EXISTS organization_funds (
@@ -594,6 +614,7 @@ export const ENTITY_TABLE_MAP: Readonly<Record<string, string>> = {
   financial_transaction: 'financial_transactions', financial_transactions: 'financial_transactions',
   announcement: 'announcements', announcements: 'announcements',
   product: 'products', products: 'products', activity: 'activities', activities: 'activities',
+  achievement: 'achievements', achievements: 'achievements',
   fund: 'organization_funds', funds: 'organization_funds',
   organizationfund: 'organization_funds', organizationfunds: 'organization_funds',
   organization_fund: 'organization_funds', organization_funds: 'organization_funds',
@@ -710,6 +731,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const igpExpenseRows = await client.query('SELECT id, expense_data FROM afa_igp_expenses ORDER BY date DESC, id ASC');
     const productsRes = await client.query('SELECT * FROM products ORDER BY name ASC');
     const activitiesRes = await client.query('SELECT * FROM activities ORDER BY scheduled_date DESC');
+    const achievementsRes = await client.query('SELECT * FROM achievements ORDER BY year DESC, title ASC');
     const fundsRes = await client.query('SELECT * FROM organization_funds ORDER BY name ASC');
 
     let auditorReports: any[] = [];
@@ -925,6 +947,15 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       imageUrl: r.image_url
     }));
 
+    const achievements = achievementsRes.rows.map(r => ({
+      id: r.id,
+      year: r.year,
+      title: r.title,
+      cebTitle: r.ceb_title,
+      description: r.description,
+      icon: r.icon
+    }));
+
     const funds = fundsRes.rows.map(r => ({
       id: r.id,
       name: r.name,
@@ -949,6 +980,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       hogRaising: hogState,
       products,
       activities,
+      achievements,
       funds,
       organizationFunds: funds,
       auditorReports,
@@ -1040,6 +1072,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     const deletedAnnouncementIds = new Set<string>();
     const deletedProductIds = new Set<string>();
     const deletedActivityIds = new Set<string>();
+    const deletedAchievementIds = new Set<string>();
     const deletedFundIds = new Set<string>();
     const deletedAuditorIds = new Set<string>();
     const deletedDelegationIds = new Set<string>();
@@ -1088,6 +1121,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query('DELETE FROM activities WHERE id = ANY($1)', [d.activities]);
         console.log('[DB DELETE] Batch deleted activities:', d.activities);
       }
+      if (Array.isArray(d.achievements) && d.achievements.length > 0) {
+        d.achievements.forEach((id: string) => deletedAchievementIds.add(id));
+        await client.query('DELETE FROM achievements WHERE id = ANY($1)', [d.achievements]);
+      }
       const funds = d.funds || d.organizationFunds;
       if (Array.isArray(funds) && funds.length > 0) {
         funds.forEach((id: string) => deletedFundIds.add(id));
@@ -1119,6 +1156,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         if (tbl === 'announcements') deletedAnnouncementIds.add(state.deleteItem.id);
         if (tbl === 'products') deletedProductIds.add(state.deleteItem.id);
         if (tbl === 'activities') deletedActivityIds.add(state.deleteItem.id);
+        if (tbl === 'achievements') deletedAchievementIds.add(state.deleteItem.id);
         if (tbl === 'organization_funds') deletedFundIds.add(state.deleteItem.id);
         if (tbl === 'auditor_reports') deletedAuditorIds.add(state.deleteItem.id);
         if (tbl === 'delegation_requests') deletedDelegationIds.add(state.deleteItem.id);
@@ -1605,6 +1643,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['location', 'location', (r) => r.location], ['description', 'description', (r) => r.description], ['organizer', 'organizer', (r) => r.organizer],
         ['status', 'status', (r) => r.status], ['documented_notes', 'documentedNotes', (r) => r.documentedNotes || null],
         ['attendees_count', 'attendeesCount', (r) => r.attendeesCount || 0], ['target_audience', 'targetAudience', (r) => r.targetAudience || null], ['image_url', 'imageUrl', (r) => r.imageUrl || null]
+      ] },
+      { table: 'achievements', deletedIds: deletedAchievementIds, fields: [
+        ['year', 'year', (r) => r.year], ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null],
+        ['description', 'description', (r) => r.description], ['icon', 'icon', (r) => r.icon || 'Trophy']
       ] },
       { table: 'organization_funds', deletedIds: deletedFundIds, fields: [
         ['name', 'name', (r) => r.name], ['code', 'code', (r) => r.code], ['allocated_amount', 'allocatedAmount', (r) => r.allocatedAmount || 0],

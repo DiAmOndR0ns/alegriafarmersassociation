@@ -150,6 +150,14 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
+    `CREATE TABLE IF NOT EXISTS achievements (
+      id VARCHAR(100) PRIMARY KEY,
+      year VARCHAR(20) NOT NULL,
+      title TEXT NOT NULL,
+      ceb_title TEXT,
+      description TEXT NOT NULL,
+      icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+    );`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
       id VARCHAR(100) PRIMARY KEY,
@@ -389,6 +397,16 @@ async function initDatabaseSchema(pool) {
         attendees_count INTEGER DEFAULT 0,
         target_audience TEXT,
         image_url TEXT
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS achievements (
+        id VARCHAR(100) PRIMARY KEY,
+        year VARCHAR(20) NOT NULL,
+        title TEXT NOT NULL,
+        ceb_title TEXT,
+        description TEXT NOT NULL,
+        icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
       );
     `);
     await client.query(`

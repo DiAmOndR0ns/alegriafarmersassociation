@@ -21,6 +21,7 @@ export interface PushSyncState {
   announcements?: unknown[];
   products?: unknown[];
   activities?: unknown[];
+  achievements?: unknown[];
   funds?: unknown[];
   organizationFunds?: unknown[];
   auditorReports?: unknown[];
@@ -157,6 +158,16 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
         safeState.users = safeState.users.filter((u: any) => u && typeof u === 'object' && u.role === 'Member');
       } else {
         delete (safeState as any).users;
+      }
+    }
+    if (!isPresidentRole(user.role) && user.role.trim().toLowerCase() !== 'pio') {
+      delete safeState.achievements;
+      if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
+        const { achievements: _deletedAchievements, ...allowedDeletions } = safeState.deletedIds;
+        safeState.deletedIds = allowedDeletions;
+      }
+      if (safeState.deleteItem && ['achievement', 'achievements'].includes(String(safeState.deleteItem.entity || '').toLowerCase())) {
+        delete safeState.deleteItem;
       }
     }
     // Keep egg-harvest records separate from the financial IGP state. Members may

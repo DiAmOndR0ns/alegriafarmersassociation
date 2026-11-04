@@ -146,6 +146,14 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
+    `CREATE TABLE IF NOT EXISTS achievements (
+      id VARCHAR(100) PRIMARY KEY,
+      year VARCHAR(20) NOT NULL,
+      title TEXT NOT NULL,
+      ceb_title TEXT,
+      description TEXT NOT NULL,
+      icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+    );`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
       id VARCHAR(100) PRIMARY KEY,
@@ -388,6 +396,16 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS achievements (
+        id VARCHAR(100) PRIMARY KEY,
+        year VARCHAR(20) NOT NULL,
+        title TEXT NOT NULL,
+        ceb_title TEXT,
+        description TEXT NOT NULL,
+        icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+      );
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS organization_funds (
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
@@ -474,6 +492,8 @@ var ENTITY_TABLE_MAP = {
   products: "products",
   activity: "activities",
   activities: "activities",
+  achievement: "achievements",
+  achievements: "achievements",
   fund: "organization_funds",
   funds: "organization_funds",
   organizationfund: "organization_funds",
@@ -581,6 +601,7 @@ async function saveFullStateToPostgres(pool, state) {
     const deletedAnnouncementIds = /* @__PURE__ */ new Set();
     const deletedProductIds = /* @__PURE__ */ new Set();
     const deletedActivityIds = /* @__PURE__ */ new Set();
+    const deletedAchievementIds = /* @__PURE__ */ new Set();
     const deletedFundIds = /* @__PURE__ */ new Set();
     const deletedAuditorIds = /* @__PURE__ */ new Set();
     const deletedDelegationIds = /* @__PURE__ */ new Set();
@@ -627,6 +648,10 @@ async function saveFullStateToPostgres(pool, state) {
         await client.query("DELETE FROM activities WHERE id = ANY($1)", [d.activities]);
         console.log("[DB DELETE] Batch deleted activities:", d.activities);
       }
+      if (Array.isArray(d.achievements) && d.achievements.length > 0) {
+        d.achievements.forEach((id) => deletedAchievementIds.add(id));
+        await client.query("DELETE FROM achievements WHERE id = ANY($1)", [d.achievements]);
+      }
       const funds = d.funds || d.organizationFunds;
       if (Array.isArray(funds) && funds.length > 0) {
         funds.forEach((id) => deletedFundIds.add(id));
@@ -656,6 +681,7 @@ async function saveFullStateToPostgres(pool, state) {
         if (tbl === "announcements") deletedAnnouncementIds.add(state.deleteItem.id);
         if (tbl === "products") deletedProductIds.add(state.deleteItem.id);
         if (tbl === "activities") deletedActivityIds.add(state.deleteItem.id);
+        if (tbl === "achievements") deletedAchievementIds.add(state.deleteItem.id);
         if (tbl === "organization_funds") deletedFundIds.add(state.deleteItem.id);
         if (tbl === "auditor_reports") deletedAuditorIds.add(state.deleteItem.id);
         if (tbl === "delegation_requests") deletedDelegationIds.add(state.deleteItem.id);
@@ -1255,6 +1281,13 @@ async function saveFullStateToPostgres(pool, state) {
         ["target_audience", "targetAudience", (r) => r.targetAudience || null],
         ["image_url", "imageUrl", (r) => r.imageUrl || null]
       ] },
+      { table: "achievements", deletedIds: deletedAchievementIds, fields: [
+        ["year", "year", (r) => r.year],
+        ["title", "title", (r) => r.title],
+        ["ceb_title", "cebTitle", (r) => r.cebTitle || null],
+        ["description", "description", (r) => r.description],
+        ["icon", "icon", (r) => r.icon || "Trophy"]
+      ] },
       { table: "organization_funds", deletedIds: deletedFundIds, fields: [
         ["name", "name", (r) => r.name],
         ["code", "code", (r) => r.code],
@@ -1647,6 +1680,16 @@ async function handler(req, res) {
         safeState.users = safeState.users.filter((u) => u && typeof u === "object" && u.role === "Member");
       } else {
         delete safeState.users;
+      }
+    }
+    if (!isPresidentRole(user.role) && user.role.trim().toLowerCase() !== "pio") {
+      delete safeState.achievements;
+      if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
+        const { achievements: _deletedAchievements, ...allowedDeletions } = safeState.deletedIds;
+        safeState.deletedIds = allowedDeletions;
+      }
+      if (safeState.deleteItem && ["achievement", "achievements"].includes(String(safeState.deleteItem.entity || "").toLowerCase())) {
+        delete safeState.deleteItem;
       }
     }
     if (!isTreasurerRole(user.role)) {

@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Sprout, Trophy, BookOpen, LogIn, ArrowRight, Sparkles, Coffee, 
   Heart, Milestone, TrendingUp, Calendar, Users, Award, ShieldCheck, 
   Check, ChevronLeft, ChevronRight, Lock, ShieldAlert, Megaphone,
   MapPin, Clock, Tag, AlertTriangle, Boxes, Package, Phone, X, ShoppingBag
 } from 'lucide-react';
-import { HogRaisingState, Member, Product, Announcement, AssociationActivity, User } from '../types';
+import { HogRaisingState, Member, Product, Announcement, AssociationActivity, AssociationAchievement, User } from '../types';
 import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
 import { useLanguage, LanguageToggle } from '../i18n/LanguageContext';
 
@@ -16,6 +16,7 @@ interface GuestPortalProps {
   products?: Product[];
   announcements?: Announcement[];
   activities?: AssociationActivity[];
+  achievements?: AssociationAchievement[];
   users?: User[];
 }
 
@@ -26,12 +27,39 @@ export default function GuestPortal({
   products = [],
   announcements = [],
   activities = [],
+  achievements = [],
   users = []
 }: GuestPortalProps) {
   const { isEnglish: en, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'>('home');
+  const [displayAchievements, setDisplayAchievements] = useState(achievements);
   const [selectedProductModal, setSelectedProductModal] = useState<any | null>(null);
   const [collapsedProductIds, setCollapsedProductIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setDisplayAchievements(achievements);
+  }, [achievements]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/achievements')
+      .then(async response => {
+        if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+        return response.json();
+      })
+      .then(result => {
+        if (active && result?.success && Array.isArray(result.achievements)) {
+          setDisplayAchievements(result.achievements);
+        }
+      })
+      .catch(error => {
+        if (active) console.warn('[Guest Achievements] Unable to refresh published achievements.', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const toggleCollapse = (productId: string) => {
     setCollapsedProductIds((current) =>
@@ -137,38 +165,6 @@ export default function GuestPortal({
       stockStatus: 'In Stock',
       icon: Sparkles,
       color: 'bg-emerald-100 border-emerald-300 text-emerald-900'
-    }
-  ];
-
-  // Milestones Data
-  const milestones = [
-    {
-      year: '2026',
-      title: 'Community IGP & Rental Services Expansion',
-      cebTitle: 'Opisyal nga Pagpalapad sa mga Proyekto sa Asosasyon (IGP & Rentals)',
-      desc: 'Gipalapdan sa AFA ang mga kagamitan ug serbisyo sama sa abang sa mga lingkoranan ug sako nga bukas alang sa tanan aron makahatag og dugang kita sa mga miyembro.',
-      icon: Trophy
-    },
-    {
-      year: '2025',
-      title: 'Pioneer Coffee Partner Award',
-      cebTitle: 'Pasidungog sa Labing Maayo nga Kape sa Probinsya',
-      desc: 'Giila ang Alegria nga usa sa nag-unang tig-suplay sa lunsay nga Tuburan Coffee nga de-kalidad.',
-      icon: Award
-    },
-    {
-      year: '2024',
-      title: 'Bilingual Digital Integration',
-      cebTitle: 'Paglusad sa Offline-First Mobile Portal',
-      desc: 'Gisugdan ang paggamit sa daling masabtan nga sistema aron ang mga lolo ug lola nga mag-uuma dali rang makasusi sa presyo ug tigom.',
-      icon: ShieldCheck
-    },
-    {
-      year: '2022',
-      title: 'AFA Official Incorporation',
-      cebTitle: 'Opisyal nga Pagkatukod sa Atong Asosasyon',
-      desc: 'Naghiusa ang mga mag-uuma gikan sa upat (4) ka opisyal nga Sitio sa Alegria aron magtinabangay ug mapanalipdan ang presyo sa uma.',
-      icon: BookOpen
     }
   ];
 
@@ -628,10 +624,18 @@ export default function GuestPortal({
 
             {/* Timeline View */}
             <div className="relative border-l-3 sm:border-l-4 border-[#1B4332] ml-3 sm:ml-8 pl-4 sm:pl-10 space-y-6 sm:space-y-8 min-w-0">
-              {milestones.map((item, index) => {
-                const Icon = item.icon;
+              {[...displayAchievements]
+                .sort((a, b) => b.year.localeCompare(a.year) || a.title.localeCompare(b.title))
+                .map((item) => {
+                const Icon = {
+                  Trophy,
+                  Award,
+                  ShieldCheck,
+                  BookOpen,
+                  Milestone
+                }[item.icon] || Trophy;
                 return (
-                  <div key={index} className="relative space-y-2 animate-slide-up bg-white p-4 sm:p-6 rounded-2xl border-2 border-[#D5CFC1] hover:border-[#1B4332] hover:shadow-lg hover:-translate-y-0.5 hover:bg-[#FAFDFB] transition-all duration-200 shadow-sm min-w-0 cursor-pointer">
+                  <div key={item.id} className="relative space-y-2 animate-slide-up bg-white p-4 sm:p-6 rounded-2xl border-2 border-[#D5CFC1] hover:border-[#1B4332] hover:shadow-lg hover:-translate-y-0.5 hover:bg-[#FAFDFB] transition-all duration-200 shadow-sm min-w-0">
                     {/* Circle badge on timeline line */}
                     <div className="absolute -left-[17px] sm:-left-[22px] top-5 sm:top-6 bg-[#1B4332] text-white p-1.5 sm:p-2 rounded-full border-2 sm:border-4 border-[#FAF7F2] shadow-md z-10 flex items-center justify-center">
                       <Icon className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
@@ -639,47 +643,25 @@ export default function GuestPortal({
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 flex-wrap min-w-0">
                       <span className="text-base sm:text-lg font-mono font-black text-[#BF360C]">{item.year}</span>
-                      <span className="bg-[#EAF4EC] text-[#1B4332] px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-black border border-[#2D6A4F]/20 font-display break-words max-w-full inline-block">
-                        {item.title}
-                      </span>
                     </div>
 
                     <h4 className="text-sm sm:text-base md:text-lg font-black text-[#1B4332] font-display break-words leading-tight">
-                      {item.cebTitle}
+                      {en ? item.title : (item.cebTitle || item.title)}
                     </h4>
 
                     <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed break-words">
-                      {item.desc}
+                      {item.description}
                     </p>
                   </div>
                 );
               })}
+              {displayAchievements.length === 0 && (
+                <div className="bg-white border-2 border-dashed border-[#D5CFC1] rounded-2xl p-6 text-sm text-slate-600">
+                  {en ? 'The association has not published any achievements yet.' : 'Wala pay gipatik nga mga kalampusan ang asosasyon.'}
+                </div>
+              )}
             </div>
 
-            {/* Achievements Summary Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pt-2 min-w-0">
-              <div className="bg-[#EAF4EC] border-2 border-[#1B4332]/30 hover:border-[#1B4332] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-3xl p-4 sm:p-6 space-y-2.5 min-w-0 cursor-pointer">
-                <span className="bg-[#1B4332] text-white text-[10px] font-black px-3 py-1 rounded-md uppercase tracking-wider inline-block">
-                  Lokal nga Pagsuporta
-                </span>
-                <h4 className="text-base sm:text-lg font-black text-[#1B4332] break-words">100% Secured LGU Coordination</h4>
-                <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed break-words">
-                  Ang tanang pundo nga nadawat sa asosasyon direkta nga narekord ug gisubay sa atong Tesorero ug Auditor para masiguro nga walay mausik.
-                  Ang LGU sa Tuburan naghatag kanato og commendation isip usa sa labing transparent ug aktibo nga farmers association sa probinsya.
-                </p>
-              </div>
-
-              <div className="bg-[#FFF3E0] border-2 border-orange-200 hover:border-orange-400 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-3xl p-4 sm:p-6 space-y-2.5 min-w-0 cursor-pointer">
-                <span className="bg-[#BF360C] text-white text-[10px] font-black px-3 py-1 rounded-md uppercase tracking-wider inline-block">
-                  Komunidad ug Miyembro
-                </span>
-                <h4 className="text-base sm:text-lg font-black text-orange-950 break-words">Miyembro nga Adunay Sumpay nga Kita</h4>
-                <p className="text-xs sm:text-sm text-slate-700 font-semibold leading-relaxed break-words">
-                  Pinaagi sa mga Livelihood Projects ug Rental IGP (sama sa abang sa mga lingkoranan ug sako nga bukas alang sa tanan), ang matag miyembro makadawat og bahin o dividends gikan sa halin ug abot sa asosasyon.
-                  Kini naghatag og sigurado ug kasaligan nga dugang kwarta nga magamit sa pamilya para sa pagpa-skwela sa mga anak o medisina sa mga senior citizen.
-                </p>
-              </div>
-            </div>
           </div>
         )}
 

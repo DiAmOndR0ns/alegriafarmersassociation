@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FinancialTransaction, OrganizationFund, HogRaisingState, User, OfficerRole } from '../types';
+import { FinancialTransaction, OrganizationFund, HogRaisingState, User, OfficerRole, InventoryItem } from '../types';
 import { resolveOfficerPrefixed } from '../utils/officers';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { INITIAL_FUNDS, INITIAL_HOG_RAISING } from '../initialData';
@@ -24,6 +24,7 @@ interface TreasurerViewProps {
   transactions: FinancialTransaction[];
   funds?: OrganizationFund[];
   hogRaising?: HogRaisingState;
+  inventory?: InventoryItem[];
   onAddTransaction: (tx: Omit<FinancialTransaction, 'id' | 'auditedStatus'>) => void;
   onDeleteTransaction?: (id: string) => void;
   onAddFund?: (fund: Omit<OrganizationFund, 'id' | 'lastUpdated'>) => void;
@@ -134,6 +135,7 @@ export default function TreasurerView({
   transactions,
   funds = INITIAL_FUNDS,
   hogRaising = INITIAL_HOG_RAISING,
+  inventory = [],
   onAddTransaction,
   onDeleteTransaction,
   onAddFund,
@@ -383,7 +385,7 @@ export default function TreasurerView({
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-[#F7F4EF] p-4 rounded-2xl border border-[#D5CFC1]">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-[#1B4332] flex items-center gap-2">
             <Coins className="w-5 h-5 text-amber-600" />
             <span>Treasurer Dashboard</span>
             {currentRole === 'Assistant_Treasurer' && (
@@ -392,21 +394,10 @@ export default function TreasurerView({
               </span>
             )}
           </h2>
-          <p className="text-xs text-emerald-100 mt-1">
+          <p className="text-xs text-[#4A5F57] mt-1">
             Manage organization funds, record financial transactions, and generate official statements.
           </p>
         </div>
-        {onOpenReportModal && (
-          <button
-            id="treasurer-report-btn"
-            type="button"
-            onClick={onOpenReportModal}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-black bg-[#1B4332] hover:bg-[#143326] text-white border border-[#2D6A4F] rounded-xl shadow-sm transition-all cursor-pointer whitespace-nowrap"
-          >
-            <FileText className="w-4 h-4 text-[#D8F3DC] shrink-0" />
-            <span>Export Official Statement</span>
-          </button>
-        )}
       </div>
 
       {/* FINANCIAL OVERVIEW CARDS */}
@@ -947,7 +938,7 @@ export default function TreasurerView({
                     }`}>
                       {tx.auditedStatus}
                     </span>
-                    {onDeleteTransaction && (
+                    {onDeleteTransaction && currentRole !== 'Treasurer' && currentRole !== 'Assistant_Treasurer' && (
                       <button
                         id={`delete-tx-${tx.id}`}
                         onClick={() => {
@@ -1491,7 +1482,14 @@ export default function TreasurerView({
               <button type="button" onClick={() => window.print()} className="rounded-xl bg-[#1B4332] px-4 py-2 text-sm font-bold text-white">Print / Save PDF</button>
               <button type="button" onClick={() => setShowFinancialStatement(false)} className="rounded-xl border-[#D5CFC1] px-4 py-2 text-sm font-bold text-[#1B4332]">Close</button>
             </div>
-            <FinancialStatement />
+            <FinancialStatement
+              transactions={transactions}
+              funds={funds}
+              hogRaising={hogRaising}
+              inventory={inventory}
+              users={users}
+              year={new Date().getFullYear()}
+            />
           </div>
         </div>
       )}

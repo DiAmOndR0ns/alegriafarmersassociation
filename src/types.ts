@@ -135,6 +135,15 @@ export interface AssociationActivity {
   imageUrl?: string;
 }
 
+export interface AssociationAchievement {
+  id: string;
+  year: string;
+  title: string;
+  cebTitle?: string;
+  description: string;
+  icon: 'Trophy' | 'Award' | 'ShieldCheck' | 'BookOpen' | 'Milestone';
+}
+
 export interface Product {
   id: string;
   name: string;

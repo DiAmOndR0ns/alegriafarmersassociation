@@ -1,16 +1,18 @@
-import React from "react";
+import React from 'react';
+import { FinancialTransaction, HogRaisingState, InventoryItem, OrganizationFund, User } from '../types';
+import { resolveOfficerName } from '../utils/officers';
 
-/**
- * Printable transcription of the two photographed Alegria Farmers Association
- * financial-statement pages. Save as FinancialStatement.tsx in a React app.
- *
- * Print from the browser (Ctrl/Cmd + P). The print stylesheet creates two
- * clean, letter-sized pages. Review the transcription against the originals
- * before using it as an official financial record; a few labels are partly
- * obscured in the photographs and some figures appear internally inconsistent.
- */
+interface FinancialStatementProps {
+  transactions?: FinancialTransaction[];
+  funds?: OrganizationFund[];
+  hogRaising?: HogRaisingState;
+  inventory?: InventoryItem[];
+  users?: User[];
+  year?: number;
+}
 
-const money = (value: string) => value;
+const money = (value: number) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const peso = (value: number) => `PHP ${money(value)}`;
 
 function Line({
   label,
@@ -24,9 +26,9 @@ function Line({
   indent?: boolean;
 }) {
   return (
-    <div className={`line ${bold ? "bold" : ""} ${indent ? "indent" : ""}`}>
+    <div className={`line ${bold ? 'bold' : ''} ${indent ? 'indent' : ''}`}>
       <span>{label}</span>
-      <span className="amount">{money(value)}</span>
+      <span className="amount">{value}</span>
     </div>
   );
 }
@@ -46,7 +48,46 @@ function Section({
   );
 }
 
-export default function FinancialStatement() {
+export default function FinancialStatement({
+  transactions = [],
+  funds = [],
+  hogRaising,
+  inventory = [],
+  users = [],
+  year: yearProp,
+}: FinancialStatementProps) {
+  const year = yearProp ?? new Date().getFullYear();
+  const treasurer = resolveOfficerName(users, 'Treasurer');
+  const auditor = resolveOfficerName(users, 'Auditor');
+  const president = resolveOfficerName(users, 'President');
+
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const netSurplus = totalIncome - totalExpense;
+
+  const totalFundBalance = funds.reduce((sum, fund) => sum + Number(fund.currentBalance || 0), 0);
+  const totalAllocated = funds.reduce((sum, fund) => sum + Number(fund.allocatedAmount || 0), 0);
+
+  const incomeCategoryTotals: Record<string, number> = {};
+  const expenseCategoryTotals: Record<string, number> = {};
+
+  transactions.forEach((transaction) => {
+    if (transaction.type === 'income') {
+      incomeCategoryTotals[transaction.category] = (incomeCategoryTotals[transaction.category] || 0) + Number(transaction.amount || 0);
+    } else {
+      expenseCategoryTotals[transaction.category] = (expenseCategoryTotals[transaction.category] || 0) + Number(transaction.amount || 0);
+    }
+  });
+
+  const hogExpenses = (hogRaising?.expenses || []).filter((expense) => expense.date?.startsWith(String(year))).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const hogSales = (hogRaising?.sales || []).filter((sale) => sale.date?.startsWith(String(year))).reduce((sum, sale) => sum + Number(sale.revenue || 0), 0);
+  const hogNet = hogSales - hogExpenses;
+
+  const inventoryCount = inventory.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const totalIncomeWithHog = totalIncome + hogSales;
+  const totalExpenseWithHog = totalExpense + hogExpenses;
+  const netPosition = netSurplus + hogNet;
+
   return (
     <main className="document financial-statement-root">
       <style>{`
@@ -86,8 +127,8 @@ export default function FinancialStatement() {
         }
       `}</style>
 
-      <div className="no-print" style={{ padding: "10px 0", fontSize: 12, color: "#555" }}>
-        Printable transcription · Use Ctrl/Cmd + P to print
+      <div className="no-print" style={{ padding: '10px 0', fontSize: 12, color: '#555' }}>
+        Printable financial statement · Use Ctrl/Cmd + P to print
       </div>
 
       <article className="page">
@@ -98,51 +139,57 @@ export default function FinancialStatement() {
           Barangay Alegria
           <div className="org-name">Alegria Farmers Association (AFA)</div>
           <div className="registration">DOLE Registration No. 2315</div>
-          <div className="report-title">FINANCIAL STATEMENT (Year Ended: Dec. 31, 2025)</div>
+          <div className="report-title">FINANCIAL STATEMENT (Year Ended: Dec. 31, {year})</div>
         </header>
 
         <Section title="I. CASH POSITION">
-          <div className="subheading">General Fund</div>
-          <Line label="Cash in bank — FCCT Cooperative Bank" value="PHP 40,000.00" indent />
-          <Line label="Petty cash / revolving liquid balance" value="PHP 12,450.00" indent />
+          {funds.length === 0 ? (
+            <Line label="No treasury accounts registered." value="—" indent />
+          ) : funds.map((fund) => (
+            <Line key={fund.id} label={`${fund.code} — ${fund.name}`} value={peso(fund.currentBalance)} indent />
+          ))}
           <div className="rule" />
-          <Line label="Total Cash Position" value="PHP 52,450.00" bold />
-
-          <div className="subheading">Restricted Fund Allocations</div>
-          <Line label="GF-SLP (DSWD Sustainable Livelihood Program)" value="PHP 50,000.00" indent />
-          <Line label="DOLE-DILP (Integrated Livelihood Program)" value="PHP 85,000.00" indent />
-          <Line label="CBU — Member Capital Build-Up" value="PHP 25,000.00" indent />
-          <Line label="ATI-TRG (Training & Capacity Building)" value="PHP 15,000.00" indent />
-          <div className="rule" />
-          <Line label="Total Restricted Fund Allocations" value="PHP 175,000.00" bold />
+          <Line label="TOTAL CASH BALANCE, ALL ACCOUNTS" value={peso(totalFundBalance)} bold />
+          <Line label="TOTAL ALLOCATED CAPITAL, ALL FUNDS" value={peso(totalAllocated)} indent />
         </Section>
 
-        <Section title="II. INCOME">
-          <Line label="Membership dues (42 members, annual)" value="PHP 4,200.00" indent />
-          <Line label="Chairs & sacks rental income" value="PHP 18,600.00" indent />
-          <Line label="Produce sales (coffee, corn, coconut)" value="PHP 31,850.00" indent />
-          <Line label="Hog raising IGP — sales" value="PHP 96,400.00" indent />
-          <Line label="Donations & grants" value="PHP 15,000.00" indent />
+        <Section title="II. INCOME / RECEIPTS">
+          {Object.keys(incomeCategoryTotals).length === 0 ? (
+            <Line label="No income recorded for the period." value="—" indent />
+          ) : Object.entries(incomeCategoryTotals).map(([category, amount]) => (
+            <Line key={category} label={category} value={peso(amount)} indent />
+          ))}
+          {hogSales > 0 && (
+            <>
+              <div className="subheading">Hog Raising IGP (Fiscal Year {year})</div>
+              <Line label="IGP Sales" value={peso(hogSales)} indent />
+            </>
+          )}
           <div className="rule" />
-          <Line label="Total Income" value="PHP 166,050.00" bold />
+          <Line label="TOTAL INCOME / RECEIPTS" value={peso(totalIncomeWithHog)} bold />
         </Section>
 
         <Section title="III. EXPENDITURES">
-          <Line label="Feeds, vitamins & veterinary supplies" value="PHP 54,300.00" indent />
-          <Line label="Piglets / livestock stock purchases" value="PHP 38,000.00" indent />
-          <Line label="Meeting snacks & logistics" value="PHP 6,240.00" indent />
-          <Line label="Equipment purchase & maintenance" value="PHP 9,860.00" indent />
-          <Line label="Honorarium & training" value="PHP 12,000.00" indent />
-          <Line label="Other operating expenses" value="PHP 4,315.00" indent />
+          {Object.keys(expenseCategoryTotals).length === 0 ? (
+            <Line label="No expenditures recorded for the period." value="—" indent />
+          ) : Object.entries(expenseCategoryTotals).map(([category, amount]) => (
+            <Line key={category} label={category} value={peso(amount)} indent />
+          ))}
+          {hogExpenses > 0 && (
+            <>
+              <div className="subheading">Hog Raising IGP (Fiscal Year {year})</div>
+              <Line label="IGP Expenses (feeds, stock, medication)" value={peso(hogExpenses)} indent />
+            </>
+          )}
           <div className="rule" />
-          <Line label="Total Expenditures" value="PHP 124,715.00" bold />
+          <Line label="TOTAL EXPENDITURES" value={peso(totalExpenseWithHog)} bold />
         </Section>
 
-        <Section title="IV. SUMMARY">
-          <Line label="Total Income" value="PHP 166,050.00" indent />
-          <Line label="Less: Total Expenditures" value="(PHP 124,715.00)" indent />
+        <Section title="IV. NET FINANCIAL POSITION">
+          <Line label="Total Income / Receipts" value={peso(totalIncomeWithHog)} indent />
+          <Line label="Less: Total Expenditures" value={`(${peso(totalExpenseWithHog)})`} indent />
           <div className="rule" />
-          <Line label="NET SURPLUS" value="PHP 41,335.00" bold />
+          <Line label="NET SURPLUS / (DEFICIT)" value={peso(netPosition)} bold />
         </Section>
       </article>
 
@@ -154,61 +201,44 @@ export default function FinancialStatement() {
           Barangay Alegria
           <div className="org-name">Alegria Farmers Association (AFA)</div>
           <div className="registration">DOLE Registration No. 2315</div>
-          <div className="report-title">APPENDIX A — PROPERTY & EQUIPMENT INVENTORY</div>
+          <div className="report-title">APPENDIX A — PROPERTY &amp; EQUIPMENT INVENTORY</div>
         </header>
 
-        <Section title="V. PROPERTY & EQUIPMENT">
+        <Section title="V. PROPERTY & EQUIPMENT INVENTORY">
           <div className="inventory">
-            <div className="inventory-row">
-              <span>Item</span>
-              <span>Qty</span>
-              <span>Description / Condition</span>
-            </div>
-            <div className="inventory-row">
-              <span>Monobloc chairs</span>
-              <span>100</span>
-              <span>White & beige, rental assets — Good condition</span>
-            </div>
-            <div className="inventory-row">
-              <span>Woven sacks (50kg)</span>
-              <span>250</span>
-              <span>Harvest & storage — Good condition</span>
-            </div>
-            <div className="inventory-row">
-              <span>Knapsack sprayers</span>
-              <span>4</span>
-              <span>1 unit with solar charging battery — Good</span>
-            </div>
-            <div className="inventory-row">
-              <span>Communal corn storage</span>
-              <span>1</span>
-              <span>Solar dryer facility, Sitio Tapon — Good</span>
-            </div>
-            <div className="inventory-row">
-              <span>Hog pens (communal)</span>
-              <span>3</span>
-              <span>Sitio Pundok 1 & 2 — 1 unit needs roof repair</span>
-            </div>
+            {inventory.length === 0 ? (
+              <div className="inventory-row"><span>No items recorded.</span><span></span><span></span></div>
+            ) : inventory.map((item) => (
+              <div className="inventory-row" key={item.id}>
+                <span>{item.name}</span>
+                <span>{item.quantity} {item.unit}</span>
+                <span>{item.condition} — {item.location || 'AFA Center'}</span>
+              </div>
+            ))}
           </div>
           <div className="rule" />
-          <Line label="Total Items on Registry" value="358" bold />
+          <Line label="TOTAL ITEMS ON REGISTRY" value={String(inventory.length)} bold />
+          <Line label="TOTAL QUANTITY / UNITS" value={String(inventoryCount)} indent />
         </Section>
+
+        <p className="note">
+          Prepared from the live association ledger, treasury accounts, and inventory registry. This statement is generated from the current system records and is subject to auditor verification.
+        </p>
 
         <div className="signatures">
           <div className="signature">
-            Treasurer
+            <strong>{treasurer.toUpperCase()}</strong><br />
+            Treasurer, AFA — Prepared by
           </div>
           <div className="signature">
-            President
+            <strong>{auditor.toUpperCase()}</strong><br />
+            Auditor, AFA — Verified
+          </div>
+          <div className="signature">
+            <strong>{president.toUpperCase()}</strong><br />
+            President, AFA — Attested
           </div>
         </div>
-
-        <p className="note">
-          Note: This is a transcription of the association's photographed financial-statement
-          pages. A few labels are partly obscured in the photographs and some figures appear
-          internally inconsistent; review against the originals before using as an official
-          financial record.
-        </p>
       </article>
     </main>
   );

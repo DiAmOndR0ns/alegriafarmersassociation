@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Announcement, AssociationActivity } from '../types';
+import { Announcement, AssociationActivity, AssociationAchievement } from '../types';
 import { 
   Megaphone, Plus, Trash2, Calendar, Shield, Tag, AlertTriangle, 
   CloudSun, DollarSign, Printer, CheckCircle, Clock, MapPin, 
-  Users, Edit3, FileText, Check, X
+  Users, Edit3, FileText, Check, X, Trophy
 } from 'lucide-react';
 
 import { useLanguage } from '../i18n/LanguageContext';
@@ -11,8 +11,11 @@ import { useLanguage } from '../i18n/LanguageContext';
 interface PioViewProps {
   announcements: Announcement[];
   activities: AssociationActivity[];
+  achievements: AssociationAchievement[];
   onAddAnnouncement: (ann: Omit<Announcement, 'id' | 'datePosted'>) => void;
   onDeleteAnnouncement: (id: string) => void;
+  onAddAchievement: (achievement: Omit<AssociationAchievement, 'id'>) => void;
+  onDeleteAchievement: (id: string) => void;
   onAddActivity: (activity: Omit<AssociationActivity, 'id'>) => void;
   onUpdateActivity: (activity: AssociationActivity) => void;
   onDeleteActivity: (id: string) => void;
@@ -24,8 +27,11 @@ interface PioViewProps {
 export default function PioView({
   announcements,
   activities = [],
+  achievements = [],
   onAddAnnouncement,
   onDeleteAnnouncement,
+  onAddAchievement,
+  onDeleteAchievement,
   onAddActivity,
   onUpdateActivity,
   onDeleteActivity,
@@ -33,7 +39,7 @@ export default function PioView({
   postedByName = 'PIO'
 }: PioViewProps) {
   const { t, isEnglish: en } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'bulletins' | 'activities'>('bulletins');
+  const [activeTab, setActiveTab] = useState<'bulletins' | 'activities' | 'achievements'>('bulletins');
 
   // Announcement State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -42,6 +48,30 @@ export default function PioView({
   const [category, setCategory] = useState<string>('General');
   const [customCategory, setCustomCategory] = useState('');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High'>('Low');
+
+  const [achievementYear, setAchievementYear] = useState(String(new Date().getFullYear()));
+  const [achievementTitle, setAchievementTitle] = useState('');
+  const [achievementCebTitle, setAchievementCebTitle] = useState('');
+  const [achievementDescription, setAchievementDescription] = useState('');
+  const [achievementIcon, setAchievementIcon] = useState<AssociationAchievement['icon']>('Trophy');
+
+  const handleAddAchievement = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!achievementYear.trim() || !achievementTitle.trim() || !achievementDescription.trim()) return;
+
+    onAddAchievement({
+      year: achievementYear.trim(),
+      title: achievementTitle.trim(),
+      cebTitle: achievementCebTitle.trim() || undefined,
+      description: achievementDescription.trim(),
+      icon: achievementIcon
+    });
+    setAchievementTitle('');
+    setAchievementCebTitle('');
+    setAchievementDescription('');
+    setAchievementYear(String(new Date().getFullYear()));
+    setAchievementIcon('Trophy');
+  };
 
   // Activity State
   const [showAddActivityModal, setShowAddActivityModal] = useState(false);
@@ -221,7 +251,7 @@ export default function PioView({
               <Plus className="w-4 h-4" />
               <span>Post Bulletin</span>
             </button>
-          ) : (
+          ) : activeTab === 'activities' ? (
             <button
               id="add-activity-btn"
               onClick={handleOpenAddActivity}
@@ -230,6 +260,9 @@ export default function PioView({
               <Plus className="w-4 h-4" />
               <span>Schedule Activity</span>
             </button>
+          ) : null}
+          {activeTab === 'achievements' && (
+            <span className="text-xs font-semibold text-[#4A5F57]">Manage milestones shown in the guest portal</span>
           )}
         </div>
       </div>
@@ -259,7 +292,77 @@ export default function PioView({
           <Calendar className="w-4 h-4" />
           <span>Activities ({activities.length})</span>
         </button>
+        <button
+          onClick={() => setActiveTab('achievements')}
+          className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeTab === 'achievements'
+              ? 'border-amber-600 text-amber-700'
+              : 'border-transparent text-[#6A7F72] hover:text-[#1B4332]'
+          }`}
+        >
+          <Trophy className="w-4 h-4" />
+          <span>Achievements ({achievements.length})</span>
+        </button>
       </div>
+
+      {activeTab === 'achievements' && (
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-5">
+          <form onSubmit={handleAddAchievement} className="bg-white border border-[#D5CFC1] rounded-2xl p-5 space-y-3 shadow-sm">
+            <h3 className="text-base font-black text-[#1B4332]">Add Association Achievement</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs font-bold text-[#1B4332] space-y-1">
+                <span>Year</span>
+                <input required value={achievementYear} onChange={event => setAchievementYear(event.target.value)} className="w-full px-3 py-2 text-sm font-normal border border-[#D5CFC1] rounded-lg text-slate-900" />
+              </label>
+              <label className="text-xs font-bold text-[#1B4332] space-y-1">
+                <span>Icon</span>
+                <select value={achievementIcon} onChange={event => setAchievementIcon(event.target.value as AssociationAchievement['icon'])} className="w-full px-3 py-2 text-sm border border-[#D5CFC1] rounded-lg text-slate-900">
+                  <option value="Trophy">Trophy</option>
+                  <option value="Award">Award</option>
+                  <option value="ShieldCheck">Shield</option>
+                  <option value="BookOpen">Book</option>
+                  <option value="Milestone">Milestone</option>
+                </select>
+              </label>
+            </div>
+            <label className="block text-xs font-bold text-[#1B4332] space-y-1">
+              <span>Achievement title</span>
+              <input required value={achievementTitle} onChange={event => setAchievementTitle(event.target.value)} className="w-full px-3 py-2 text-sm font-normal border border-[#D5CFC1] rounded-lg text-slate-900" />
+            </label>
+            <label className="block text-xs font-bold text-[#1B4332] space-y-1">
+              <span>Bisaya title (optional)</span>
+              <input value={achievementCebTitle} onChange={event => setAchievementCebTitle(event.target.value)} className="w-full px-3 py-2 text-sm font-normal border border-[#D5CFC1] rounded-lg text-slate-900" />
+            </label>
+            <label className="block text-xs font-bold text-[#1B4332] space-y-1">
+              <span>Description</span>
+              <textarea required rows={4} value={achievementDescription} onChange={event => setAchievementDescription(event.target.value)} className="w-full px-3 py-2 text-sm font-normal border border-[#D5CFC1] rounded-lg text-slate-900" />
+            </label>
+            <button type="submit" className="inline-flex items-center gap-2 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-lg text-sm font-bold">
+              <Plus className="w-4 h-4" /> Add Achievement
+            </button>
+          </form>
+
+          <div className="space-y-3">
+            {achievements.length ? achievements.map(achievement => (
+              <article key={achievement.id} className="bg-white border border-[#D5CFC1] rounded-2xl p-4 flex justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold text-amber-700">{achievement.year}</p>
+                  <h4 className="font-black text-[#1B4332]">{achievement.title}</h4>
+                  {achievement.cebTitle && <p className="text-sm font-semibold text-[#2D6A4F]">{achievement.cebTitle}</p>}
+                  <p className="text-sm text-slate-700 mt-1 whitespace-pre-line">{achievement.description}</p>
+                </div>
+                <button type="button" aria-label={`Delete ${achievement.title}`} onClick={() => onDeleteAchievement(achievement.id)} className="self-start p-2 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </article>
+            )) : (
+              <div className="bg-white border border-dashed border-[#B8CDBE] rounded-2xl p-8 text-center text-sm text-[#6A7F72]">
+                No achievements added yet. New entries will appear in the public guest portal.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: ANNOUNCEMENTS */}
       {activeTab === 'bulletins' && (
@@ -707,5 +810,3 @@ export default function PioView({
     </div>
   );
 }
-
-
