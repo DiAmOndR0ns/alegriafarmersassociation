@@ -128,6 +128,7 @@ export interface AssociationActivity {
   location: string;
   description: string;
   status: 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled' | 'Postponed';
+  statusReason?: string;
   documentedNotes?: string;
   organizer: string; // e.g. PIO (Ida S. Manera)
   targetAudience?: string; // e.g. "All AFA Members"

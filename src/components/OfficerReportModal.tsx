@@ -5,7 +5,7 @@ import { resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
 import {  getSurname } from '../utils/names';
 import {
   Printer, Download, X, FileText, ShieldCheck, Coins,
-  Users, Megaphone, Wallet, Database, Layers, CheckCircle2, AlertCircle
+  Wallet, Database, Layers, CheckCircle2, AlertCircle
 } from 'lucide-react';
 
 interface OfficerReportModalProps {
@@ -42,13 +42,11 @@ export default function OfficerReportModal({
 }: OfficerReportModalProps) {
   const isPresident = currentRole === 'President';
   // Non-presidents are strictly locked to their own officer role report
-  const defaultRole = isPresident ? 'President' : currentRole;
-  const [selectedReportType, setSelectedReportType] = useState<OfficerRole>(defaultRole);
   const [reportDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [customRemarks, setCustomRemarks] = useState<string>('');
 
-  // Enforce role lock if user is not President
-  const activeReportRole = isPresident ? selectedReportType : currentRole;
+  // Every officer can export only the report for their assigned role.
+  const activeReportRole = currentRole;
 
   // Calculations for Financials
   let totalIncome = 0;
@@ -889,7 +887,7 @@ export default function OfficerReportModal({
               </h2>
               <p className="text-xs text-[#4A5F57] font-medium truncate">
                 {isPresident
-                  ? "Generate the consolidated executive summary. Financial exports are the Treasurer's task (Treasurer dashboard); member reports the Secretary's; activities the PIO's."
+                  ? "Generate only the President's executive summary. Each other officer exports their own assigned department report."
                   : `Generate, the official ${currentRole.replace('_', ' ')} department report.`}
               </p>
             </div>
@@ -926,57 +924,15 @@ export default function OfficerReportModal({
               <div className="flex items-center gap-2.5 min-w-0">
                 <FileText className="w-5 h-5 text-[#1B4332] shrink-0" />
                 <div className="min-w-0">
-                  <span className="font-extrabold text-[#1B4332] block">President's Executive Consolidated Access</span>
+                  <span className="font-extrabold text-[#1B4332] block">President's Executive Report Access</span>
                   <p className="text-[11px] text-[#3A4A42]">
-                    Consolidated executive summaries. Financial exports are segregated to the Treasurer's dashboard.
+                    The President can export only the President's executive summary. Department reports are available to their assigned officers.
                   </p>
                 </div>
               </div>
               <span className="bg-[#1B4332] text-[#D8F3DC] font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#2D6A4F] font-bold shrink-0">
                 President Mode
               </span>
-            </div>
-          )}
-
-          {/* REPORT TYPE SELECTOR FOR PRESIDENT */}
-          {isPresident && (
-            <div className="space-y-2">
-              <label className="block text-xs font-black text-[#4A5F57] uppercase tracking-wider">
-                Select View / Report Scope:
-              </label>
-              <p className="text-[10px] text-[#4A5F57] font-medium">
-                President — consolidated executive summary • Secretary — member reports • PIO — activities.
-                Financial reports belong to the Treasurer's dashboard and are not exported here.
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {[
-                  { role: 'President' as OfficerRole, label: 'President (Executive Summary)', icon: FileText, color: 'text-purple-600' },
-                  // SEGREGATION OF DUTIES: Treasurer/financial reports are NOT generated here.
-                  // All financial exports belong to the Treasurer's dashboard (TreasurerView).
-                  { role: 'Auditor' as OfficerRole, label: 'Auditor (Financial Oversight)', icon: ShieldCheck, color: 'text-emerald-700' },
-                  { role: 'Secretary' as OfficerRole, label: 'Secretary (Members)', icon: Users, color: 'text-blue-700' },
-                  { role: 'Assistant_Secretary' as OfficerRole, label: 'Assistant Secretary (Members)', icon: Users, color: 'text-blue-700' },
-                  { role: 'PIO' as OfficerRole, label: 'PIO (Activities)', icon: Megaphone, color: 'text-pink-700' }
-                ].map((item) => {
-                  const Icon = item.icon;
-                  const isSelected = activeReportRole === item.role;
-                  return (
-                    <button
-                      key={item.role}
-                      type="button"
-                      onClick={() => setSelectedReportType(item.role)}
-                      className={`p-3 rounded-2xl border text-center flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-emerald-100 border-emerald-500 text-[#1B4332] shadow-md'
-                          : 'bg-white border-[#D5CFC1] text-[#1B4332] hover:bg-[#F0EDE7] hover:border-[#C9BDAE]'
-                      }`}
-                    >
-                      <Icon className={`w-5 h-5 ${item.color}`} />
-                      <span className="text-xs font-extrabold">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           )}
 
@@ -1209,5 +1165,3 @@ export default function OfficerReportModal({
     </div>
   );
 }
-
-

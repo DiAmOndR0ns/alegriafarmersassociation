@@ -3537,7 +3537,6 @@ export default function App() {
                   onAddActivity={handleAddActivity}
                   onUpdateActivity={handleUpdateActivity}
                   onDeleteActivity={handleDeleteActivity}
-                  onOpenReportModal={() => setShowReportModal(true)}
                   postedByName={`President (${currentUser?.name || 'AFA President'})`}
                 />
               ) : (

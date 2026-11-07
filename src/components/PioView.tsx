@@ -3,7 +3,7 @@ import { Announcement, AssociationActivity, AssociationAchievement } from '../ty
 import { 
   Megaphone, Plus, Trash2, Calendar, Shield, Tag, AlertTriangle, 
   CloudSun, DollarSign, Printer, CheckCircle, Clock, MapPin, 
-  Users, Edit3, FileText, Check, X, Trophy
+  Edit3, FileText, Check, X, Trophy
 } from 'lucide-react';
 
 import { useLanguage } from '../i18n/LanguageContext';
@@ -86,8 +86,9 @@ export default function PioView({
   const [actDesc, setActDesc] = useState('');
   const [actAudience, setActAudience] = useState('All AFA Farmer Members');
   const [actStatus, setActStatus] = useState<AssociationActivity['status']>('Scheduled');
+  const [actStatusReason, setActStatusReason] = useState('');
+  const [actStatusReasonError, setActStatusReasonError] = useState('');
   const [actNotes, setActNotes] = useState('');
-  const [actAttendees, setActAttendees] = useState(0);
 
   const CATEGORIES = [
     { value: 'General', label: 'General Announcement' },
@@ -128,8 +129,9 @@ export default function PioView({
     setActDesc('');
     setActAudience('All AFA Farmer Members');
     setActStatus('Scheduled');
+    setActStatusReason('');
+    setActStatusReasonError('');
     setActNotes('');
-    setActAttendees(0);
     setShowAddActivityModal(true);
   };
 
@@ -144,14 +146,21 @@ export default function PioView({
     setActDesc(act.description);
     setActAudience(act.targetAudience || 'All AFA Farmer Members');
     setActStatus(act.status);
+    setActStatusReason(act.statusReason || '');
+    setActStatusReasonError('');
     setActNotes(act.documentedNotes || '');
-    setActAttendees(act.attendeesCount || 0);
     setShowAddActivityModal(true);
   };
 
   const handleSaveActivity = (e: React.FormEvent) => {
     e.preventDefault();
     if (!actTitle.trim() || !actDesc.trim()) return;
+    if (editingActivity && ['Postponed', 'Cancelled'].includes(actStatus) && !actStatusReason.trim()) {
+      setActStatusReasonError(en
+        ? 'Please provide a reason before saving this status.'
+        : 'Ihatag ang rason sa dili pa i-save kini nga kahimtang.');
+      return;
+    }
 
     if (editingActivity) {
       onUpdateActivity({
@@ -167,8 +176,8 @@ export default function PioView({
         description: actDesc,
         targetAudience: actAudience,
         status: actStatus,
+        statusReason: ['Postponed', 'Cancelled'].includes(actStatus) ? actStatusReason.trim() : undefined,
         documentedNotes: actNotes,
-        attendeesCount: Number(actAttendees)
       });
     } else {
       onAddActivity({
@@ -182,10 +191,9 @@ export default function PioView({
         location: actLocation,
         description: actDesc,
         targetAudience: actAudience,
-        status: actStatus,
+        status: 'Scheduled',
         documentedNotes: actNotes,
-        organizer: 'PIO',
-        attendeesCount: Number(actAttendees)
+        organizer: 'PIO'
       });
     }
 
@@ -444,6 +452,7 @@ export default function PioView({
                           act.status === 'Completed' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
                           act.status === 'In Progress' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                           act.status === 'Cancelled' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                          act.status === 'Postponed' ? 'bg-orange-100 text-orange-800 border border-orange-300' :
                           'bg-blue-100 text-blue-800 border border-blue-300'
                         }`}>
                           {act.status}
@@ -490,6 +499,13 @@ export default function PioView({
 
                     <p className="text-sm text-slate-700 leading-relaxed break-words">{act.description}</p>
 
+                    {act.statusReason && (
+                      <p className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs leading-relaxed text-orange-900">
+                        <strong>{act.status === 'Cancelled' ? 'Cancellation reason:' : 'Postponement reason:'}</strong>{' '}
+                        {act.statusReason}
+                      </p>
+                    )}
+
                     {act.documentedNotes && (
                       <div className="bg-[#FAF8F5] border-2 border-[#E9E4D9] p-3 rounded-xl space-y-1">
                         <span className="text-[10px] font-black uppercase tracking-wider text-[#4A5F57] flex items-center gap-1">
@@ -497,11 +513,6 @@ export default function PioView({
                           <span>{en ? 'Notes' : 'Mga Saysay'}</span>
                         </span>
                         <p className="text-xs text-slate-800 leading-relaxed break-words">{act.documentedNotes}</p>
-                        {act.attendeesCount ? (
-                          <span className="inline-block text-[11px] font-black text-[#2D6A4F] pt-0.5">
-                            {t('Niadto', 'Attendees')}: {act.attendeesCount}
-                          </span>
-                        ) : null}
                       </div>
                     )}
                   </div>
@@ -696,20 +707,56 @@ export default function PioView({
                     </select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Status' : 'Kahimtang'}</label>
-                    <select
-                      value={actStatus}
-                      onChange={(e) => setActStatus(e.target.value as any)}
-                      className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors cursor-pointer"
-                    >
-                      <option value="Scheduled">{t('Nakaplano', 'Scheduled')}</option>
-                      <option value="In Progress">{t('Nagpadayon', 'In Progress')}</option>
-                      <option value="Completed">{t('Nahuman', 'Completed')}</option>
-                      <option value="Cancelled">{t('Kinansela', 'Cancelled')}</option>
-                    </select>
-                  </div>
+                  {editingActivity ? (
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Status' : 'Kahimtang'}</label>
+                      <select
+                        value={actStatus}
+                        onChange={(e) => {
+                          setActStatus(e.target.value as AssociationActivity['status']);
+                          setActStatusReasonError('');
+                        }}
+                        className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors cursor-pointer"
+                      >
+                        <option value="Scheduled">{t('Nakaplano', 'Scheduled')}</option>
+                        <option value="In Progress">{t('Nagpadayon', 'In Progress')}</option>
+                        <option value="Completed">{t('Nahuman', 'Completed')}</option>
+                        <option value="Postponed">{t('Gibalhin og petsa', 'Postponed')}</option>
+                        <option value="Cancelled">{t('Kinansela', 'Cancelled')}</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Status' : 'Kahimtang'}</label>
+                      <p className="px-3.5 py-2.5 text-sm text-slate-700 bg-emerald-50 border-2 border-emerald-200 rounded-xl">
+                        {t('Nakaplano', 'Scheduled')} — {en ? 'You can update the status after the event.' : 'Mahimong i-update ang kahimtang human sa kalihokan.'}
+                      </p>
+                    </div>
+                  )}
                 </div>
+
+                {editingActivity && ['Postponed', 'Cancelled'].includes(actStatus) && (
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">
+                      {actStatus === 'Cancelled'
+                        ? (en ? 'Cancellation reason' : 'Rason sa pagkansela')
+                        : (en ? 'Postponement reason' : 'Rason sa pagbalhin sa petsa')}
+                      <span className="ml-1 text-rose-600">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      required
+                      value={actStatusReason}
+                      onChange={(e) => {
+                        setActStatusReason(e.target.value);
+                        setActStatusReasonError('');
+                      }}
+                      placeholder={en ? 'Explain why this event was postponed or cancelled...' : 'Ipasabot nganong gi-postpone o gikansela ang kalihokan...'}
+                      className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors resize-y"
+                    />
+                    {actStatusReasonError && <p role="alert" className="text-xs font-semibold text-rose-700">{actStatusReasonError}</p>}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
@@ -758,8 +805,7 @@ export default function PioView({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2 space-y-1.5">
+                <div className="space-y-1.5">
                     <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">
                       Notes <span className="font-semibold normal-case text-slate-400">({en ? 'optional' : 'opsyonal'})</span>
                     </label>
@@ -771,19 +817,6 @@ export default function PioView({
                       className="w-full h-[64px] px-3.5 py-2 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors resize-none"
                     />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Attendees' : 'Niadto'}</label>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={actAttendees}
-                      onChange={(e) => setActAttendees(Number(e.target.value))}
-                      className="w-full h-[64px] px-3.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors font-mono"
-                    />
-                  </div>
-                </div>
               </div>
 
               {/* FOOTER */}

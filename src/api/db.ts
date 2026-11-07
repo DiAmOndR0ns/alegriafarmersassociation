@@ -190,6 +190,7 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS status_reason TEXT;`,
 
     `CREATE TABLE IF NOT EXISTS achievements (
       id VARCHAR(100) PRIMARY KEY,
@@ -460,6 +461,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         description TEXT,
         organizer TEXT,
         status VARCHAR(50),
+        status_reason TEXT,
         documented_notes TEXT,
         attendees_count INTEGER DEFAULT 0,
         target_audience TEXT,
@@ -941,6 +943,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       description: r.description,
       organizer: r.organizer,
       status: r.status,
+      statusReason: r.status_reason,
       documentedNotes: r.documented_notes,
       attendeesCount: Number(r.attendees_count || 0),
       targetAudience: r.target_audience,
@@ -1479,8 +1482,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Saving', activeActivities.length, 'activities...');
       for (const act of activeActivities) {
         await client.query(`
-          INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, documented_notes, attendees_count, target_audience, image_url)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, status_reason, documented_notes, attendees_count, target_audience, image_url)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
             ceb_title = EXCLUDED.ceb_title,
@@ -1493,6 +1496,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             description = EXCLUDED.description,
             organizer = EXCLUDED.organizer,
             status = EXCLUDED.status,
+            status_reason = EXCLUDED.status_reason,
             documented_notes = EXCLUDED.documented_notes,
             attendees_count = EXCLUDED.attendees_count,
             target_audience = EXCLUDED.target_audience,
@@ -1504,7 +1508,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
           act.scheduledTime || act.timeScheduled || null,
           act.timeScheduled || act.scheduledTime || null,
           act.location, act.description, act.organizer, act.status,
-          act.documentedNotes || null, act.attendeesCount || 0,
+          act.statusReason || null, act.documentedNotes || null, act.attendeesCount || 0,
           act.targetAudience || null, act.imageUrl || null
         ]);
       }
@@ -1641,7 +1645,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['scheduled_date', 'scheduledDate', (r) => r.scheduledDate || r.dateScheduled || null], ['date_scheduled', 'dateScheduled', (r) => r.dateScheduled || r.scheduledDate || null],
         ['scheduled_time', 'scheduledTime', (r) => r.scheduledTime || r.timeScheduled || null], ['time_scheduled', 'timeScheduled', (r) => r.timeScheduled || r.scheduledTime || null],
         ['location', 'location', (r) => r.location], ['description', 'description', (r) => r.description], ['organizer', 'organizer', (r) => r.organizer],
-        ['status', 'status', (r) => r.status], ['documented_notes', 'documentedNotes', (r) => r.documentedNotes || null],
+        ['status', 'status', (r) => r.status], ['status_reason', 'statusReason', (r) => r.statusReason || null],
+        ['documented_notes', 'documentedNotes', (r) => r.documentedNotes || null],
         ['attendees_count', 'attendeesCount', (r) => r.attendeesCount || 0], ['target_audience', 'targetAudience', (r) => r.targetAudience || null], ['image_url', 'imageUrl', (r) => r.imageUrl || null]
       ] },
       { table: 'achievements', deletedIds: deletedAchievementIds, fields: [
