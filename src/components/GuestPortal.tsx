@@ -672,7 +672,7 @@ export default function GuestPortal({
               <div className="border-b-2 border-[#F0EBE1] pb-3 flex items-center gap-2.5 flex-wrap">
                 <Coffee className="w-6 h-6 text-amber-700 shrink-0" />
                 <h3 className="text-lg sm:text-xl font-black text-[#1B4332] font-display break-words">
-                  {en ? 'Product Catalog' : 'Katalogo sa Produkto'}
+                  {en ? 'Product Catalog' : 'Product Catalog'}
                 </h3>
               </div>
             </div>
