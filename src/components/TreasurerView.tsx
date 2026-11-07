@@ -1244,7 +1244,7 @@ export default function TreasurerView({
                           className="rounded border-slate-600 text-emerald-600 focus:ring-emerald-500"
                         />
                         <span className="text-[11px]">
-                          I-rehistro usab kini sa Opisyal nga Database sa Pundo sa Asosasyon (Save to permanent fund accounts)
+                         Save to permanent fund accounts
                         </span>
                       </label>
                     </div>

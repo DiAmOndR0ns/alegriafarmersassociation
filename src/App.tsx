@@ -2949,13 +2949,7 @@ export default function App() {
 
               {/* Offline Switch & Sync Trigger */}
               <OfflineIndicator
-                isOnline={isOnline}
-                queueCount={syncQueue.length}
-                onSync={handleSynchronize}
-                isSyncing={isSyncing}
                 dbStatus={dbStatus}
-                onCheckDb={checkDatabaseConnection}
-                onClearLocalCache={handleClearLocalCache}
               />
             </div>
           </div>
@@ -3101,13 +3095,7 @@ export default function App() {
 
             {/* Offline Switch & Sync Trigger */}
             <OfflineIndicator
-              isOnline={isOnline}
-              queueCount={syncQueue.length}
-              onSync={handleSynchronize}
-              isSyncing={isSyncing}
               dbStatus={dbStatus}
-              onCheckDb={checkDatabaseConnection}
-              onClearLocalCache={handleClearLocalCache}
             />
           </div>
         </div>
