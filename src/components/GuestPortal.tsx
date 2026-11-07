@@ -541,7 +541,7 @@ export default function GuestPortal({
                   Sa wala pa matukod ang opisayl nga asosasyon, ang mga mag-uuma nag-atubang ug dakong kalisod sa pagbaligya sa ilang abot tungod sa kalayo sa merkado ug sa ubos kaayo nga presyo nga gitanyag sa mga middlemen.
                 </p>
                 <p>
-                  Tungod niini, niadtong tuig 2022, sa tabang sa atong lider nga si <strong className="text-[#1B4332]">Presidente {resolveOfficerName(users, 'President')}</strong> kauban ang suporta sa Lokal nga Kagamhanan (LGU) ug Department of Agriculture (DA),
+                  Tungod niini, niadtong tuig 2000, sa tabang sa atong lider nga si <strong className="text-[#1B4332]">Presidente {resolveOfficerName(users, 'President')}</strong> kauban ang suporta sa Lokal nga Kagamhanan (LGU) ug Department of Agriculture (DA),
                   ang asosasyon opisyal nga na-rehistro ug natukod. Ang panguna nga katuyoan mao ang paghiusa sa upat (4) ka opisyal nga Sitio sa Alegria (Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak) aron adunay usa ka tingog ug hiniusang kusog.
                 </p>
 

@@ -148,24 +148,7 @@ export default function OfflineIndicator({
             <span>Auto-Synced</span>
           </div>
         ) : null}
-
-        {/* Optional Manual Instant Refresh Pulse (Officers don't need to push this, but available if requested) */}
-        <button
-          id="sync-trigger-btn"
-          type="button"
-          disabled={!isOnline || isSyncing}
-          onClick={onSync}
-          className={`p-1 rounded-lg border transition-all ${
-            !isOnline
-              ? 'bg-[#0F2D24] text-[#4A5F57] border-[#2D6A4F] cursor-not-allowed opacity-50'
-              : isSyncing
-              ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30 cursor-not-allowed opacity-60'
-              : 'bg-[#0F2D24] text-[#95D5B2] hover:text-white hover:bg-[#122E22] border-[#2D6A4F] cursor-pointer'
-          }`}
-          title="Auto-sync is active. Click to trigger an immediate database heartbeat pulse if desired."
-        >
-          <RotateCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-emerald-400' : ''}`} />
-        </button>
+        
       </div>
 
       {/* MODAL: DATABASE CONNECTION AUDIT & DETAILS */}
