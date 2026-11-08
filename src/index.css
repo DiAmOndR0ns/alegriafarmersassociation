@@ -376,6 +376,18 @@
   body .text-\[10px\] { font-size: 12.5px !important; line-height: 1.45; }
   body .text-\[11px\] { font-size: 13px !important; line-height: 1.5; }
 
+  /* Keep the public portal's small labels readable without changing other views. */
+  #guest-portal-root .text-xs,
+  #guest-portal-root .text-\[10px\],
+  #guest-portal-root .text-\[11px\] {
+    font-size: 0.875rem !important;
+    line-height: 1.5;
+  }
+
+  #guest-portal-root button {
+    min-height: 44px;
+  }
+
   /*
    * PALE TEXT DARKENING
    * Pastel accent colors (emerald-300/400, amber-300/400, rose-300/400, ...)
@@ -713,5 +725,3 @@
   #root [class~="lg:gap-8"] { gap: 1.7rem; }
   #root [class~="lg:gap-5"] { gap: 1.0625rem; }
 }
-
-

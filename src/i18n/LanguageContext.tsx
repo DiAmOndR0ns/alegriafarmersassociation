@@ -87,7 +87,22 @@ export function useLanguage(): LanguageContextValue {
   };
 }
 
-/** Retained as a no-op for older imports; translation buttons are removed from the UI. */
-export function LanguageToggle(_props: { className?: string; onDark?: boolean }) {
-  return null;
+export function LanguageToggle({ className = '', onDark = false }: { className?: string; onDark?: boolean }) {
+  const { isEnglish, toggleLanguage } = useLanguage();
+  const nextLanguage = isEnglish ? 'Bisaya' : 'English';
+
+  return (
+    <button
+      type="button"
+      onClick={toggleLanguage}
+      aria-label={isEnglish ? 'Switch language to Bisaya' : 'Ilisi ang pinulongan sa English'}
+      className={`min-h-11 px-4 py-2 rounded-xl border-2 font-bold text-sm transition-colors focus-visible:outline ${
+        onDark
+          ? 'border-emerald-300 text-white hover:bg-white/10'
+          : 'border-[#1B4332] text-[#1B4332] hover:bg-emerald-50'
+      } ${className}`}
+    >
+      {nextLanguage}
+    </button>
+  );
 }
