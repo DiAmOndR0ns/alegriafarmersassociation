@@ -15,7 +15,7 @@ interface ExecutiveViewProps {
   members: Member[];
   meetings: Meeting[];
   resolutions: Resolution[];
-  onApproveResolution: (id: string) => void;
+  onApproveResolution?: (id: string) => void;
   transactions: FinancialTransaction[];
   logs: SystemLog[];
   currentRole: OfficerRole;

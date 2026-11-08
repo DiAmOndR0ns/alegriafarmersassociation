@@ -28,22 +28,27 @@ function cleanDatabaseUrl(rawUrl) {
   try {
     const parsed = new URL(urlStr);
     hostInfo = `${parsed.hostname}${parsed.port ? ":" + parsed.port : ""}${parsed.pathname}`;
+    const sslParam = parsed.searchParams.get("sslmode")?.toLowerCase() || parsed.searchParams.get("ssl")?.toLowerCase();
+    const isLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1";
+    const isSsl = !isLocal && sslParam !== "disable";
     parsed.searchParams.delete("sslmode");
     parsed.searchParams.delete("ssl");
     return {
       connectionString: parsed.toString(),
-      isSsl: true,
+      isSsl,
       hostInfo
     };
   } catch {
+    const isLocal = /localhost|127\.0\.0\.1|::1/.test(urlStr);
+    const isDisable = /sslmode=disable|ssl=false|ssl=0/.test(urlStr);
     const cleaned = urlStr.replace(/[\?&]sslmode=[^&]*/g, "").replace(/[\?&]ssl=[^&]*/g, "").replace(/\?$/, "");
-    return { connectionString: cleaned, isSsl: true, hostInfo };
+    return { connectionString: cleaned, isSsl: !isLocal && !isDisable, hostInfo };
   }
 }
 function getStatusPool() {
   const rawDbUrl = process.env.DATABASE_URL;
   if (!rawDbUrl) throw new Error("DATABASE_URL environment variable is not configured");
-  const { connectionString } = cleanDatabaseUrl(rawDbUrl);
+  const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
   if (!poolInstance || lastUsedConnectionString !== connectionString) {
     if (poolInstance) {
       poolInstance.end().catch(() => {
@@ -51,7 +56,7 @@ function getStatusPool() {
     }
     poolInstance = new PgPool({
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: isSsl ? { rejectUnauthorized: false } : false,
       connectionTimeoutMillis: 5e3,
       max: 5
     });

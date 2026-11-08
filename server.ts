@@ -81,8 +81,9 @@ export async function createApp() {
     }
 
     const isSupabase = rawUrl.toLowerCase().includes('supabase');
+    const isLocal = rawUrl.includes('localhost') || rawUrl.includes('127.0.0.1') || rawUrl.includes('::1');
     const isDirectPort = rawUrl.includes(':5432') && rawUrl.includes('db.');
-    const provider = isSupabase ? 'Supabase' : 'PostgreSQL';
+    const provider = isSupabase ? 'Supabase' : (isLocal ? 'Local PostgreSQL' : 'PostgreSQL');
 
     try {
       const pool = getPool();

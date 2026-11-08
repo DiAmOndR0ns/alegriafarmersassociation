@@ -3355,6 +3355,7 @@ export default function App() {
                 members={members}
                 meetings={meetings}
                 resolutions={resolutions}
+                onApproveResolution={handleApproveResolution}
                 transactions={transactions}
                 logs={logs}
                 currentRole={currentRole}
