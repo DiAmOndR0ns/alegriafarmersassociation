@@ -315,7 +315,7 @@ export default function AuthScreen({
           <div className="relative space-y-6">
             <div className="flex items-center gap-3">
               <div className="bg-white p-1.5 rounded-full shadow-lg shrink-0 overflow-hidden border-2 border-bafa-500">
-                <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-16 h-16 sm:w-20 sm:h-20 object-contain block rounded-full" />
+                <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-16 h-16 sm:w-20 sm:h-20 object-contain block rounded-full" />
               </div>
               <div>
                 <h1 className="text-2xl sm:text-[2rem] font-black font-display tracking-tight text-white uppercase leading-none">AFA</h1>

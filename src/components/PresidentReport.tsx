@@ -183,7 +183,7 @@ export function buildReportData(input: {
     org: {
       ...DEFAULT_ORG,
       doleRegNo,
-      logoSrc: logoSrc ?? "/logo.svg",
+      logoSrc: logoSrc ?? "/afa-logo.png",
     },
     highlights,
     plans,

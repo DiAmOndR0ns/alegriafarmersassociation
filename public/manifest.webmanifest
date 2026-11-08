@@ -9,10 +9,10 @@
   "theme_color": "#1b4332",
   "icons": [
     {
-      "src": "/logo.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/afa-logo.png",
+      "sizes": "359x360",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

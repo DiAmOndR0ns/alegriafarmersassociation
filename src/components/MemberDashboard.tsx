@@ -860,7 +860,7 @@ export default function MemberDashboard({
 
                     <div className="flex items-start justify-between border-b border-white/10 pb-1.5 relative z-10">
                       <div className="flex items-center gap-1">
-                        <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-4.5 h-4.5 object-cover rounded-sm shrink-0" />
+                        <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-4.5 h-4.5 object-cover rounded-sm shrink-0" />
                         <div>
                           <span className="text-[7px] font-black uppercase text-white block tracking-wider leading-none">Alegria Farmers</span>
                           <span className="text-[6px] text-[#B7E4C7] font-bold uppercase block leading-none">Association (AFA)</span>
@@ -1193,7 +1193,7 @@ export default function MemberDashboard({
         <div className="border-4 border-double border-emerald-800 p-[10mm] text-center space-y-6 flex flex-col justify-between min-h-[135mm]">
           
           <div className="flex justify-between items-center border-b-2 border-slate-800 pb-4">
-            <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-12 h-12 object-cover rounded-md border border-slate-300 shrink-0" />
+            <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-12 h-12 object-cover rounded-md border border-slate-300 shrink-0" />
             <div className="text-center flex-1">
               <p className="text-[10px] tracking-[0.2em] font-sans text-slate-500 uppercase leading-normal">Republic of the Philippines</p>
               <p className="text-[10px] tracking-[0.15em] font-sans text-slate-500 uppercase leading-normal">Province of Cebu • Municipality of Tuburan</p>
@@ -1265,7 +1265,7 @@ export default function MemberDashboard({
           <div className="border-2 border-emerald-800 bg-white p-4 h-[54mm] flex flex-col justify-between font-sans relative overflow-hidden text-slate-900 rounded-lg shadow-sm">
             <div className="flex items-start justify-between border-b border-emerald-800 pb-1.5">
               <div className="flex items-center gap-1">
-                <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-5 h-5 object-cover rounded-sm border border-emerald-800/20 shrink-0" />
+                <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-5 h-5 object-cover rounded-sm border border-emerald-800/20 shrink-0" />
                 <div>
                   <h4 className="text-[8px] font-black uppercase text-emerald-800 leading-none">Alegria Farmers</h4>
                   <span className="text-[6.5px] text-slate-600 block leading-none">Association (AFA)</span>

@@ -2917,7 +2917,7 @@ export default function App() {
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 max-w-full">
               <div className="bg-[#D8F3DC] p-1 rounded-full shadow-inner text-[#1B4332] shrink-0 overflow-hidden border-2 border-[#a8d5b0]">
-                <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full bg-white" />
+                <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full bg-white" />
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -3063,7 +3063,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 max-w-full">
             <div className="bg-[#D8F3DC] p-1 rounded-full shadow-inner text-[#1B4332] shrink-0 overflow-hidden border-2 border-[#a8d5b0]">
-              <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full bg-white" />
+              <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full bg-white" />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -3250,7 +3250,7 @@ export default function App() {
                       : 'border-transparent text-slate-700 hover:text-[#1B4332] hover:bg-[#F2EFE9]'
                   }`}
                 >
-                  <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
+                  <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
                   <span>{getPrimaryRoleDashboardLabel(currentRole)}</span>
                 </button>
 
@@ -3583,7 +3583,7 @@ export default function App() {
                   }}
                   className="px-4 py-2 bg-[#1B4332] hover:bg-[#122e22] text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
-                  <img src="/logo.svg" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
+                  <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
                   <span>Back to Officer Suite</span>
                 </button>
               </div>
