@@ -1119,8 +1119,8 @@ export default function ExecutiveView({
 
       </div>
 
-      {/* SYSTEM AUDIT TRAIL follows the Farmer Member Portal Accounts desk */}
-      <section className="bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
+      {/* SYSTEM AUDIT TRAIL follows the Presidential Turnover Desk */}
+      <section className="order-4 bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
         <div className="flex items-center justify-between text-left">
           <h3 className="text-sm font-extrabold font-display text-[#1B4332] flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#1B4332]" />
