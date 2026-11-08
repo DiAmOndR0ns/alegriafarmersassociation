@@ -281,6 +281,8 @@ export interface OrganizationFund {
   id: string;
   name: string;
   code: string;
+  category?: string;
+  source?: string;
   allocatedAmount: number;
   currentBalance: number;
   description: string;

@@ -5,6 +5,7 @@ import { isActivityOpenForExpenses } from '../utils/activityExpenses';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { INITIAL_FUNDS, INITIAL_HOG_RAISING } from '../initialData';
 import FinancialStatement from './FinancialStatement';
+import { getTreasurerAnalytics } from '../utils/treasurerAnalytics';
 import { 
   Coins, ArrowUpRight, ArrowDownRight, Plus, 
   Search, ShieldCheck, AlertTriangle, CheckCircle, 
@@ -37,102 +38,6 @@ interface TreasurerViewProps {
   currentRole?: OfficerRole;
 }
 
-export interface MonthlyChartEntry {
-  monthKey: string;
-  monthLabel: string;
-  shortMonth: string;
-  income: number;
-  expenses: number;
-  net: number;
-  hogsSold: number;
-  feedExpenses: number;
-  pigletExpenses: number;
-  medExpenses: number;
-}
-
-export function aggregateMonthlyChartData(
-  hogRaising?: HogRaisingState,
-  chartProduce: string = 'Hog Raising',
-  chartYear: string = 'all'
-): MonthlyChartEntry[] {
-  if (!hogRaising) return [];
-
-  const map: Record<string, MonthlyChartEntry> = {};
-
-  const targetExpenses = (hogRaising.expenses || []).filter(e => {
-    const matchesProduce = !chartProduce || chartProduce === 'all' || (e.produce || 'Hog Raising') === chartProduce;
-    const matchesYear = chartYear === 'all' || (e.date && e.date.startsWith(chartYear));
-    return matchesProduce && matchesYear;
-  });
-
-  const targetSales = (hogRaising.sales || []).filter(s => {
-    const matchesProduce = !chartProduce || chartProduce === 'all' || (s.produce || 'Hog Raising') === chartProduce;
-    const matchesYear = chartYear === 'all' || (s.date && s.date.startsWith(chartYear));
-    return matchesProduce && matchesYear;
-  });
-
-  targetExpenses.forEach(e => {
-    if (!e.date) return;
-    const monthKey = e.date.substring(0, 7);
-    if (!map[monthKey]) {
-      const [y, m] = monthKey.split('-');
-      const d = new Date(parseInt(y), parseInt(m) - 1, 1);
-      const monthLabel = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-      const shortMonth = d.toLocaleString('en-US', { month: 'short' });
-      map[monthKey] = {
-        monthKey,
-        monthLabel,
-        shortMonth: `${shortMonth} '${y.slice(2)}`,
-        income: 0,
-        expenses: 0,
-        net: 0,
-        hogsSold: 0,
-        feedExpenses: 0,
-        pigletExpenses: 0,
-        medExpenses: 0
-      };
-    }
-    const amt = Number(e.amount) || 0;
-    map[monthKey].expenses += amt;
-    if (e.category === 'Feeds') map[monthKey].feedExpenses += amt;
-    else if (e.category === 'Piglets') map[monthKey].pigletExpenses += amt;
-    else if (e.category === 'Vitamins/Medicines') map[monthKey].medExpenses += amt;
-  });
-
-  targetSales.forEach(s => {
-    if (!s.date) return;
-    const monthKey = s.date.substring(0, 7);
-    if (!map[monthKey]) {
-      const [y, m] = monthKey.split('-');
-      const d = new Date(parseInt(y), parseInt(m) - 1, 1);
-      const monthLabel = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-      const shortMonth = d.toLocaleString('en-US', { month: 'short' });
-      map[monthKey] = {
-        monthKey,
-        monthLabel,
-        shortMonth: `${shortMonth} '${y.slice(2)}`,
-        income: 0,
-        expenses: 0,
-        net: 0,
-        hogsSold: 0,
-        feedExpenses: 0,
-        pigletExpenses: 0,
-        medExpenses: 0
-      };
-    }
-    const rev = Number(s.revenue) || 0;
-    map[monthKey].income += rev;
-    map[monthKey].hogsSold += Number(s.hogsCount || s.produceCount || 0);
-  });
-
-  const sortedKeys = Object.keys(map).sort();
-  return sortedKeys.map(k => {
-    const item = map[k];
-    item.net = item.income - item.expenses;
-    return item;
-  });
-}
-
 export default function TreasurerView({
   transactions,
   activities = [],
@@ -155,9 +60,8 @@ export default function TreasurerView({
   // The association's official FINANCIAL STATEMENT (segregated exportable).
   const [showFinancialStatement, setShowFinancialStatement] = useState(false);
 
-  // Hog IGP Chart Filter States
+  // Financial analytics year filter.
   const [chartYear, setChartYear] = useState<string>('all');
-  const [chartProduce, setChartProduce] = useState<string>('Hog Raising');
 
   // Add Transaction Form
   const [txType, setTxType] = useState<'income' | 'expense'>('income');
@@ -177,12 +81,16 @@ export default function TreasurerView({
   const [isCustomFundSource, setIsCustomFundSource] = useState(false);
   const [customFundName, setCustomFundName] = useState('');
   const [customFundCode, setCustomFundCode] = useState('');
+  const [customFundCategory, setCustomFundCategory] = useState('Grant');
+  const [customFundSource, setCustomFundSource] = useState('');
   const [saveCustomToFunds, setSaveCustomToFunds] = useState(true);
 
   // Add Organization Fund Modal
   const [showAddFundModal, setShowAddFundModal] = useState(false);
   const [fundFormName, setFundFormName] = useState('');
   const [fundFormCode, setFundFormCode] = useState('');
+  const [fundFormCategory, setFundFormCategory] = useState('Grant');
+  const [fundFormSource, setFundFormSource] = useState('');
   const [fundFormAllocated, setFundFormAllocated] = useState('');
   const [fundFormBalance, setFundFormBalance] = useState('');
   const defaultCustodian = useMemo(() => {
@@ -241,9 +149,12 @@ export default function TreasurerView({
 
   const { total: currentBalance, income: totalIncome, expenses: totalExpenses } = calculateBalances();
 
-  // Compute available years for the Hog Raising IGP chart
+  // The analytics year filter covers both association ledger and IGP entries.
   const availableYears = useMemo(() => {
     const yearsSet = new Set<string>();
+    transactions.forEach(transaction => {
+      if (transaction.date && transaction.date.length >= 4) yearsSet.add(transaction.date.substring(0, 4));
+    });
     (hogRaising?.expenses || []).forEach(e => {
       if (e.date && e.date.length >= 4) yearsSet.add(e.date.substring(0, 4));
     });
@@ -251,37 +162,13 @@ export default function TreasurerView({
       if (s.date && s.date.length >= 4) yearsSet.add(s.date.substring(0, 4));
     });
     return Array.from(yearsSet).sort().reverse();
-  }, [hogRaising]);
+  }, [transactions, hogRaising]);
 
-  // Compute available produces
-  const availableProduces = useMemo(() => {
-    return (hogRaising?.produces || ['Chairs Rental', 'Sacks Rental', 'Crop Livelihood']).filter(p => !p.toLowerCase().includes('tilapia'));
-  }, [hogRaising]);
-
-  // Aggregate monthly expenses and sales income for the Hog Raising IGP Project
-  const monthlyChartData = useMemo(
-    () => aggregateMonthlyChartData(hogRaising, chartProduce, chartYear),
-    [hogRaising, chartProduce, chartYear]
+  const treasurerAnalytics = useMemo(
+    () => getTreasurerAnalytics(transactions, hogRaising, activities, funds, chartYear),
+    [transactions, hogRaising, activities, funds, chartYear]
   );
-
-  // Overall totals for the active IGP chart selection
-  const chartTotals = useMemo(() => {
-    let totalIncome = 0;
-    let totalExpenses = 0;
-    let totalHogs = 0;
-    monthlyChartData.forEach(d => {
-      totalIncome += d.income;
-      totalExpenses += d.expenses;
-      totalHogs += d.hogsSold;
-    });
-    return {
-      totalIncome,
-      totalExpenses,
-      net: totalIncome - totalExpenses,
-      totalHogs,
-      margin: totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0
-    };
-  }, [monthlyChartData]);
+  const currentRegisteredFundBalance = funds.reduce((total, fund) => total + (Number(fund.currentBalance) || 0), 0);
 
   const handleTypeChange = (type: 'income' | 'expense') => {
     setTxType(type);
@@ -292,7 +179,7 @@ export default function TreasurerView({
 
   const handleAddFundSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fundFormName.trim()) return;
+    if (!fundFormName.trim() || !fundFormCategory || !fundFormSource.trim()) return;
 
     const allocated = parseFloat(fundFormAllocated) || 0;
     const balance = fundFormBalance ? parseFloat(fundFormBalance) : allocated;
@@ -303,6 +190,8 @@ export default function TreasurerView({
       onAddFund({
         name: fundFormName.trim(),
         code,
+        category: fundFormCategory,
+        source: fundFormSource.trim(),
         allocatedAmount: allocated,
         currentBalance: balance,
         custodian: fundFormCustodian.trim() || resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole),
@@ -317,6 +206,8 @@ export default function TreasurerView({
     // Reset fund form
     setFundFormName('');
     setFundFormCode('');
+    setFundFormCategory('Grant');
+    setFundFormSource('');
     setFundFormAllocated('');
     setFundFormBalance('');
     setFundFormCustodian(defaultCustodian);
@@ -344,6 +235,7 @@ export default function TreasurerView({
     let finalFundSource = txFundSource;
     if (isCustomFundSource) {
       if (!customFundName.trim()) return;
+      if (saveCustomToFunds && !customFundSource.trim()) return;
       const codeDerived = customFundCode.trim().toUpperCase() ||
         customFundName.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 8);
       finalFundSource = `${codeDerived} (${customFundName.trim()})`;
@@ -353,6 +245,8 @@ export default function TreasurerView({
         onAddFund({
           name: customFundName.trim(),
           code: codeDerived,
+          category: customFundCategory,
+          source: customFundSource.trim() || customFundName.trim(),
           allocatedAmount: txType === 'income' ? parseFloat(txAmount) : 0,
           currentBalance: txType === 'income' ? parseFloat(txAmount) : 0,
           custodian: defaultCustodian,
@@ -515,7 +409,11 @@ export default function TreasurerView({
                       </span>
                       <h4 className="font-bold text-[#1B4332] text-sm">{fund.name}</h4>
                     </div>
-                    <p className="text-xs text-emerald-100 mt-1">{fund.description}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {fund.category && <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">{fund.category}</span>}
+                      {fund.source && <span className="text-[10px] text-slate-600">From: {fund.source}</span>}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">{fund.description}</p>
                   </div>
                   {onDeleteFund && (
                     <button
@@ -554,7 +452,7 @@ export default function TreasurerView({
         )}
       </div>
 
-      {/* HOG RAISING IGP MONTHLY EXPENSES VS. INCOME RECHARTS BAR CHART */}
+      {/* ASSOCIATION-WIDE FINANCIAL ANALYTICS */}
       <div className="bg-slate-800 border border-slate-700/70 p-5 sm:p-6 rounded-2xl space-y-5 shadow-lg relative">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-slate-700/70">
           <div className="space-y-1">
@@ -563,13 +461,13 @@ export default function TreasurerView({
                 <Briefcase className="w-5 h-5 text-emerald-400" />              </div>
               <div>
                 <h3 className="text-base font-black text-white flex items-center gap-2">
-                  <span>Association IGP & Rentals - Monthly Expenses vs. Income Trends</span>
+                  <span>Association Financial Analytics</span>
                   <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Interactive Recharts
+                    Ledger + Livestock IGP
                   </span>
                 </h3>
-                <p className="text-xs text-[#4A5F57]">
-                  Visualizing monthly feeds, stock purchases, veterinary care vs. mature hog sales revenue
+                <p className="text-xs text-slate-300">
+                  Income and expenses from every association fund source, linked activities, and livestock projects
                 </p>
               </div>
             </div>
@@ -577,25 +475,9 @@ export default function TreasurerView({
 
           {/* Interactive Filters */}
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-            {availableProduces.length > 1 && (
-              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-[#D5CFC1] text-xs">
-                <span className="text-[#4A5F57] font-semibold text-[11px]">Project:</span>
-                <select
-                  value={chartProduce}
-                  onChange={(e) => setChartProduce(e.target.value)}
-                  className="bg-transparent text-[#1B4332] font-bold focus:outline-none cursor-pointer"
-                >
-                  <option value="all" className="bg-white text-[#1B4332]">All IGP Projects</option>
-                  {availableProduces.map(p => (
-                    <option key={p} value={p} className="bg-white text-[#1B4332]">{p}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-[#D5CFC1] text-xs">
               <Calendar className="w-3.5 h-3.5 text-[#4A5F57]" />
-              <span className="text-[#4A5F57] font-semibold text-[11px]">Cycle Year:</span>
+              <span className="text-[#4A5F57] font-semibold text-[11px]">Year:</span>
               <select
                 value={chartYear}
                 onChange={(e) => setChartYear(e.target.value)}
@@ -613,44 +495,44 @@ export default function TreasurerView({
         {/* SUMMARY KPI CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total IGP Sales</span>
+            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total Income</span>
             <div className="text-lg font-black text-emerald-700 font-mono mt-0.5">
-              PHP {chartTotals.totalIncome.toLocaleString('en-US')}
+              PHP {treasurerAnalytics.totalIncome.toLocaleString('en-US')}
             </div>
             <span className="text-[10px] text-[#4A5F57] mt-1 block">
-              {chartTotals.totalHogs} mature hogs sold
+              Association ledger + livestock IGP
             </span>
           </div>
 
           <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total IGP Expenses</span>
+            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total Expenses</span>
             <div className="text-lg font-black text-rose-700 font-mono mt-0.5">
-              PHP {chartTotals.totalExpenses.toLocaleString('en-US')}
+              PHP {treasurerAnalytics.totalExpenses.toLocaleString('en-US')}
             </div>
             <span className="text-[10px] text-[#4A5F57] mt-1 block">
-              Feeds, piglets & veterinary
+              Recorded expenses + livestock costs
             </span>
           </div>
 
           <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Net IGP Cash Flow</span>
-            <div className={`text-lg font-black font-mono mt-0.5 ${chartTotals.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-              {chartTotals.net >= 0 ? '+' : ''}PHP {chartTotals.net.toLocaleString('en-US')}
+            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Net Cash Flow</span>
+            <div className={`text-lg font-black font-mono mt-0.5 ${treasurerAnalytics.totalIncome - treasurerAnalytics.totalExpenses >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {treasurerAnalytics.totalIncome >= treasurerAnalytics.totalExpenses ? '+' : ''}PHP {(treasurerAnalytics.totalIncome - treasurerAnalytics.totalExpenses).toLocaleString('en-US')}
             </div>
             <span className="text-[10px] text-[#4A5F57] mt-1 block">
-              {chartTotals.margin > 0 ? `${chartTotals.margin.toFixed(1)}% profit margin` : 'Ongoing rearing cycle'}
+              {funds.length} registered sources · PHP {currentRegisteredFundBalance.toLocaleString('en-US')} balance
             </span>
           </div>
 
         </div>
 
         {/* RECHARTS BAR CHART CANVAS */}
-        {monthlyChartData.length > 0 ? (
+        {treasurerAnalytics.months.length > 0 ? (
           <div className="space-y-4">
             <div className="h-[300px] w-full bg-white p-2 sm:p-4 rounded-xl border border-[#D5CFC1]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={monthlyChartData}
+                  data={treasurerAnalytics.months}
                   margin={{ top: 15, right: 20, left: 10, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#D5CFC1" vertical={false} opacity={0.8} />
@@ -675,7 +557,7 @@ export default function TreasurerView({
                             <div className="flex items-center justify-between border-b border-slate-700/80 pb-1.5">
                               <span className="font-bold text-[#1B4332] text-sm">{data.monthLabel}</span>
                               <span className="text-[10px] font-mono text-emerald-800 font-bold bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200">
-                                {chartProduce === 'all' ? 'All IGP' : chartProduce}
+                                Association + IGP
                               </span>
                             </div>
 
@@ -683,7 +565,7 @@ export default function TreasurerView({
                               <div className="flex justify-between items-center gap-4">
                                 <span className="text-emerald-800 flex items-center gap-1.5 font-medium">
                                   <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" />
-                                  Sales (Income):
+                                  Income:
                                 </span>
                                 <span className="font-mono font-bold text-emerald-800">
                                   PHP {Number(data.income).toLocaleString('en-US')}
@@ -693,29 +575,35 @@ export default function TreasurerView({
                               <div className="flex justify-between items-center gap-4">
                                 <span className="text-rose-800 flex items-center gap-1.5 font-medium">
                                   <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />
-                                  Total Expenses:
+                                  Expenses:
                                 </span>
                                 <span className="font-mono font-bold text-rose-800">
                                   PHP {Number(data.expenses).toLocaleString('en-US')}
                                 </span>
                               </div>
 
-                              {data.feedExpenses > 0 && (
+                              {data.associationIncome > 0 && (
                                 <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
-                                  <span>• Feeds:</span>
-                                  <span className="font-mono">PHP {data.feedExpenses.toLocaleString('en-US')}</span>
+                                  <span>• Association income:</span>
+                                  <span className="font-mono">PHP {data.associationIncome.toLocaleString('en-US')}</span>
                                 </div>
                               )}
-                              {data.pigletExpenses > 0 && (
+                              {data.igpIncome > 0 && (
                                 <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
-                                  <span>• Piglets / Stock:</span>
-                                  <span className="font-mono">PHP {data.pigletExpenses.toLocaleString('en-US')}</span>
+                                  <span>• Livestock IGP income:</span>
+                                  <span className="font-mono">PHP {data.igpIncome.toLocaleString('en-US')}</span>
                                 </div>
                               )}
-                              {data.medExpenses > 0 && (
+                              {data.associationExpenses > 0 && (
                                 <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
-                                  <span>• Vitamins / Meds:</span>
-                                  <span className="font-mono">PHP {data.medExpenses.toLocaleString('en-US')}</span>
+                                  <span>• Association expenses:</span>
+                                  <span className="font-mono">PHP {data.associationExpenses.toLocaleString('en-US')}</span>
+                                </div>
+                              )}
+                              {data.igpExpenses > 0 && (
+                                <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
+                                  <span>• Livestock IGP expenses:</span>
+                                  <span className="font-mono">PHP {data.igpExpenses.toLocaleString('en-US')}</span>
                                 </div>
                               )}
                             </div>
@@ -741,14 +629,14 @@ export default function TreasurerView({
                   />
                   <Bar
                     dataKey="income"
-                    name="Hog Sales (Income)"
+                    name="Total Income"
                     fill="#10B981"
                     radius={[6, 6, 0, 0]}
                     maxBarSize={42}
                   />
                   <Bar
                     dataKey="expenses"
-                    name="IGP Expenses (Feeds & Stock)"
+                    name="Total Expenses"
                     fill="#F43F5E"
                     radius={[6, 6, 0, 0]}
                     maxBarSize={42}
@@ -759,7 +647,7 @@ export default function TreasurerView({
 
             {/* MONTHLY SUMMARY CHIPS */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-1">
-              {monthlyChartData.map((m) => (
+              {treasurerAnalytics.months.map((m) => (
                 <div key={m.monthKey} className="bg-white border border-[#D5CFC1] p-2.5 rounded-xl space-y-1 text-xs">
                   <span className="font-bold text-[#1B4332] block">{m.shortMonth}</span>
                   <div className="flex justify-between text-[11px]">
@@ -778,10 +666,93 @@ export default function TreasurerView({
         ) : (
           <div className="bg-[#EAF6EE] border border-[#B6E3C0] p-8 rounded-xl text-center space-y-2">
             <BarChart3 className="w-8 h-8 text-[#2D6A4F] mx-auto" />
-            <p className="text-sm font-bold text-[#1B4332]">Walay natala nga transaksyon sa napili nga tuig o proyekto.</p>
-            <p className="text-xs text-[#2B3D33]">I-adjust ang filters o mag-log og bag-ong expenses/sales sa Hog Raising tab.</p>
+            <p className="text-sm font-bold text-[#1B4332]">No financial activity recorded for the selected year.</p>
+            <p className="text-xs text-[#2B3D33]">Choose another year or record an association transaction or livestock sale/expense.</p>
           </div>
         )}
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className="bg-slate-900/70 border border-slate-700 rounded-xl p-4">
+            <h4 className="text-sm font-bold text-white mb-3">Expenses linked to activities</h4>
+            {treasurerAnalytics.eventExpenses.length ? (
+              <div className="space-y-3">
+                {treasurerAnalytics.eventExpenses.map(item => (
+                  <div key={item.name} className="space-y-1">
+                    <div className="flex justify-between gap-3 text-xs">
+                      <span className="text-slate-200 truncate">{item.name}</span>
+                      <span className="text-rose-300 font-mono shrink-0">PHP {item.expenses.toLocaleString('en-US')}</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-rose-400 rounded-full"
+                        style={{ width: `${Math.min(100, item.expenses / Math.max(...treasurerAnalytics.eventExpenses.map(event => event.expenses)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-xs text-slate-400">No ledger expenses are linked to activities in this period.</p>}
+          </div>
+
+          <div className="bg-slate-900/70 border border-slate-700 rounded-xl p-4">
+            <h4 className="text-sm font-bold text-white mb-3">Livestock project expenses</h4>
+            {treasurerAnalytics.livestockExpenses.length ? (
+              <div className="space-y-3">
+                {treasurerAnalytics.livestockExpenses.map(item => (
+                  <div key={item.name} className="space-y-1">
+                    <div className="flex justify-between gap-3 text-xs">
+                      <span className="text-slate-200 truncate">{item.name}</span>
+                      <span className="text-amber-300 font-mono shrink-0">PHP {item.expenses.toLocaleString('en-US')}</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-400 rounded-full"
+                        style={{ width: `${Math.min(100, item.expenses / Math.max(...treasurerAnalytics.livestockExpenses.map(expense => expense.expenses)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-xs text-slate-400">No livestock expenses are recorded in this period.</p>}
+          </div>
+        </div>
+
+        <div className="bg-slate-900/70 border border-slate-700 rounded-xl p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
+            <h4 className="text-sm font-bold text-white">All fund sources</h4>
+            <span className="text-[11px] text-slate-400">Registered balances and recorded transaction flows</span>
+          </div>
+          {treasurerAnalytics.fundSources.length ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {treasurerAnalytics.fundSources.map(source => (
+                <div key={source.id} className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-100">{source.name}</span>
+                    <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${source.registered ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                      {source.registered ? 'Registered' : 'Unregistered'}
+                    </span>
+                  </div>
+                  {(source.category || source.source) && (
+                    <div className="mt-1.5 space-y-0.5 text-[10px] text-slate-400">
+                      {source.category && <p>Category: <span className="text-emerald-200">{source.category}</span></p>}
+                      {source.source && <p>From: <span className="text-slate-200">{source.source}</span></p>}
+                    </div>
+                  )}
+                  {source.registered && (
+                    <div className="text-[11px] text-slate-300 mt-2">
+                      Current balance: <span className="font-mono text-white">PHP {(source.balance || 0).toLocaleString('en-US')}</span>
+                      <span className="text-slate-500"> / PHP {(source.allocated || 0).toLocaleString('en-US')} allocated</span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]">
+                    <span className="text-emerald-300">Income: PHP {source.income.toLocaleString('en-US')}</span>
+                    <span className="text-rose-300">Expenses: PHP {source.expenses.toLocaleString('en-US')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-xs text-slate-400">No registered or transaction fund sources are available.</p>}
+        </div>
       </div>
 
       {/* OFFICER SUMMARY DESCRIPTION AND TOOLS */}
@@ -1283,6 +1254,38 @@ export default function TreasurerView({
                       </div>
                     </div>
 
+                    {saveCustomToFunds && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#1B4332] mb-0.5">Source category</label>
+                          <select
+                            value={customFundCategory}
+                            onChange={(e) => setCustomFundCategory(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
+                          >
+                            <option>Grant</option>
+                            <option>Government Program</option>
+                            <option>Donation / Sponsorship</option>
+                            <option>Association Funds</option>
+                            <option>Cooperative / Bank</option>
+                            <option>Member Contribution</option>
+                            <option>Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#1B4332] mb-0.5">Grantor / source</label>
+                          <input
+                            type="text"
+                            required={isCustomFundSource && saveCustomToFunds}
+                            value={customFundSource}
+                            onChange={(e) => setCustomFundSource(e.target.value)}
+                            placeholder="e.g. Department of Agriculture"
+                            className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     <div className="pt-1">
                       <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                         <input
@@ -1424,6 +1427,44 @@ export default function TreasurerView({
                   onChange={(e) => setFundFormName(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="fund-source-category" className="block text-xs font-bold text-slate-200 uppercase mb-1">
+                    Source Category <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    id="fund-source-category"
+                    required
+                    value={fundFormCategory}
+                    onChange={(e) => setFundFormCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option>Grant</option>
+                    <option>Government Program</option>
+                    <option>Donation / Sponsorship</option>
+                    <option>Association Funds</option>
+                    <option>Cooperative / Bank</option>
+                    <option>Member Contribution</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="fund-source-origin" className="block text-xs font-bold text-slate-200 uppercase mb-1">
+                    Where is it from? <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    id="fund-source-origin"
+                    type="text"
+                    required
+                    maxLength={120}
+                    value={fundFormSource}
+                    onChange={(e) => setFundFormSource(e.target.value)}
+                    placeholder="e.g. Department of Labor and Employment"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

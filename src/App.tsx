@@ -2344,6 +2344,34 @@ export default function App() {
     showToastMessage('Kung adunay account nga motakdo, ipadala ang password reset instructions.', 'success');
   };
 
+  const handleVerifyAdminPassword = async (
+    password: string,
+    totpCode?: string
+  ): Promise<'verified' | 'mfa-required' | 'invalid'> => {
+    if (!currentUser || (currentRole !== 'President' && currentRole !== 'Vice_President')) return 'invalid';
+
+    if (import.meta.env.PROD || dbStatus.configured) {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: currentUser.username,
+          password,
+          ...(totpCode ? { totpCode } : {})
+        })
+      });
+      const result = await response.json();
+      if (result?.mfaRequired) return totpCode ? 'invalid' : 'mfa-required';
+      if (!response.ok || !result?.success || result.user?.id !== currentUser.id) return 'invalid';
+      return 'verified';
+    }
+
+    const account = users.find(user => user.id === currentUser.id);
+    return account && verifyPassword(password, account.passwordHash, account.password)
+      ? 'verified'
+      : 'invalid';
+  };
+
   const handleResetPassword = async (userId: string, newPass: string, currentPassword = ''): Promise<boolean> => {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return false;
@@ -3516,6 +3544,10 @@ export default function App() {
                 onOpenReportModal={() => setShowReportModal(true)}
                 onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
                 onRestoreBackup={currentRole === 'President' ? handleRestoreSystemBackup : undefined}
+                onVerifyAdminPassword={handleVerifyAdminPassword}
+                activities={activities}
+                hogRaising={hogRaising}
+                funds={funds}
                 onApproveMeetingMinutes={handleApproveMeetingMinutes}
                 onReturnMeetingMinutes={handleReturnMeetingMinutes}
                 onPresidentApproveTransaction={handlePresidentApproveTransaction}

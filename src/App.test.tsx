@@ -142,7 +142,7 @@ describe('App Component', () => {
       expect(typeof isInvalid).toBe('boolean');
     });
 
-    it('renders 2FA Enforced section in ExecutiveView for President', () => {
+    it('keeps executive administration details behind password verification', () => {
       const mockUsers = [
         {
           id: 'pres-1',
@@ -170,9 +170,13 @@ describe('App Component', () => {
         />
       );
 
-      expect(html).toContain('Two-Factor Authentication');
-      expect(html).toContain('Enforced');
-      expect(html).toContain('JBSWY3DPEHPK3PXPTESTFIXTURE');
+      expect(html).toContain('executive-admin-tasks-btn');
+      expect(html).toContain('Financial Analytics');
+      expect(html).toContain('Monthly income and expenses');
+      expect(html).toContain('Registered fund sources');
+      expect(html).not.toContain('Executive Admin Desk');
+      expect(html).not.toContain('executive-download-backup-btn');
+      expect(html).not.toContain('JBSWY3DPEHPK3PXPTESTFIXTURE');
     });
   });
 });

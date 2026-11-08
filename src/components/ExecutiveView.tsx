@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
-import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User } from '../types';
+import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, HogRaisingState, OrganizationFund } from '../types';
 import {
   ShieldCheck, Users, Coins, BookOpen, FileCheck, Activity, Check, X,
   KeyRound, Trash2, Clock, Smartphone, AlertTriangle, Printer, Calendar,
@@ -10,6 +10,9 @@ import { buildAuditChain } from '../utils/audit';
 import { generateInitialPassword } from '../utils/passwordPolicy';
 import PrintMinutesModal from './PrintMinutesModal';
 import { useLanguage } from '../i18n/LanguageContext';
+import {
+  Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis
+} from 'recharts';
 
 interface ExecutiveViewProps {
   members: Member[];
@@ -35,6 +38,10 @@ interface ExecutiveViewProps {
   onOpenReportModal?: () => void;
   onDownloadBackup?: () => void;
   onRestoreBackup?: (backupData: any) => Promise<boolean | void> | boolean | void;
+  onVerifyAdminPassword?: (password: string, totpCode?: string) => Promise<'verified' | 'mfa-required' | 'invalid'>;
+  activities?: AssociationActivity[];
+  hogRaising?: HogRaisingState;
+  funds?: OrganizationFund[];
   // President approval workflow: Secretary Minutes of Meeting (Secretary drafts → President approves)
   onApproveMeetingMinutes?: (id: string, remarks?: string) => void;
   onReturnMeetingMinutes?: (id: string, remarks: string) => void;
@@ -63,6 +70,10 @@ export default function ExecutiveView({
   onOpenReportModal,
   onDownloadBackup,
   onRestoreBackup,
+  onVerifyAdminPassword,
+  activities = [],
+  hogRaising,
+  funds = [],
   onApproveMeetingMinutes,
   onReturnMeetingMinutes,
   onPresidentApproveTransaction,
@@ -76,6 +87,26 @@ export default function ExecutiveView({
   const [pendingBackup, setPendingBackup] = useState<any | null>(null);
   const [isRestoringBackup, setIsRestoringBackup] = useState<boolean>(false);
   const [backupRestoreError, setBackupRestoreError] = useState<string>('');
+  const [showAdminTasksModal, setShowAdminTasksModal] = useState(false);
+  const [isVerifyingAdminPassword, setIsVerifyingAdminPassword] = useState(false);
+  const [requiresAdminTotp, setRequiresAdminTotp] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminTotpCode, setAdminTotpCode] = useState('');
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const adminTasksTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const adminTasksCloseRef = React.useRef<HTMLButtonElement>(null);
+  const adminPasswordInputRef = React.useRef<HTMLInputElement>(null);
+  const adminTasksWasOpenRef = React.useRef(false);
+
+  useEffect(() => {
+    if (showAdminTasksModal) {
+      adminTasksWasOpenRef.current = true;
+      (isAdminUnlocked ? adminTasksCloseRef : adminPasswordInputRef).current?.focus();
+    } else if (adminTasksWasOpenRef.current) {
+      adminTasksTriggerRef.current?.focus();
+      adminTasksWasOpenRef.current = false;
+    }
+  }, [showAdminTasksModal, isAdminUnlocked]);
 
   const handleBackupFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -112,6 +143,44 @@ export default function ExecutiveView({
       setIsRestoringBackup(false);
     }
   };
+
+  const closeAdminTasks = () => {
+    setShowAdminTasksModal(false);
+    setIsAdminUnlocked(false);
+    setRequiresAdminTotp(false);
+    setAdminPasswordInput('');
+    setAdminTotpCode('');
+    setAdminGateError('');
+    setBackupRestoreError('');
+    setPendingBackup(null);
+  };
+
+  const handleAdminPasswordSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!onVerifyAdminPassword || !adminPasswordInput) return;
+    setIsVerifyingAdminPassword(true);
+    setAdminGateError('');
+    try {
+      const result = await onVerifyAdminPassword(adminPasswordInput, adminTotpCode || undefined);
+      if (result === 'mfa-required') {
+        setRequiresAdminTotp(true);
+        setAdminGateError('Enter the current code from your authenticator app.');
+      } else if (result === 'verified') {
+        setIsAdminUnlocked(true);
+        setAdminPasswordInput('');
+        setAdminTotpCode('');
+        setRequiresAdminTotp(false);
+        setAdminGateError('');
+      } else {
+        setAdminGateError('Password or authentication code is incorrect.');
+      }
+    } catch (error) {
+      setAdminGateError(error instanceof Error ? error.message : 'Unable to verify your password. Please try again.');
+    } finally {
+      setIsVerifyingAdminPassword(false);
+    }
+  };
+
   const [showMeetingsModal, setShowMeetingsModal] = useState<boolean>(false);
   const [selectedMeetingForPrint, setSelectedMeetingForPrint] = useState<Meeting | null>(null);
 
@@ -139,12 +208,7 @@ export default function ExecutiveView({
   const [editingRoleOfficerId, setEditingRoleOfficerId] = useState<string | null>(null);
   const [selectedNewRole, setSelectedNewRole] = useState<OfficerRole | 'Member'>('Secretary');
 
-  // Dedicated Admin Security Gate: Require secondary admin security code before unlocking executive officer management
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
-    if (typeof sessionStorage === 'undefined') return true;
-    return sessionStorage.getItem('fams_admin_gate_unlocked') === 'true';
-  });
-  const [adminSecurityCodeInput, setAdminSecurityCodeInput] = useState<string>('');
+  // Administrative actions remain locked until this signed-in officer reauthenticates.
   const [adminGateError, setAdminGateError] = useState<string>('');
 
   // Add New Officer Form State (Admin / President)
@@ -238,16 +302,13 @@ export default function ExecutiveView({
     t => t.auditedStatus === 'Audited' && t.presidentApprovalStatus !== 'Approved' && t.presidentApprovalStatus !== 'Returned'
   );
 
-  // Calculate cooperative financial balance
-  let currentBalance = 0;
-  transactions.forEach(t => {
-    if (t.type === 'income') currentBalance += t.amount;
-    else currentBalance -= t.amount;
-  });
-
   const totalMembers = members.length;
   const activeMembers = members.filter(m => m.status === 'Active').length;
   const pendingResolutions = resolutions.filter(r => r.status === 'Pending Approval');
+  const currentBalance = transactions.reduce(
+    (balance, transaction) => balance + (transaction.type === 'income' ? transaction.amount : -transaction.amount),
+    0
+  );
 
   const activeOfficerUser = (currentUserId ? users.find(u => u.id === currentUserId) : null)
     || (currentRole === 'President' ? users.find(u => u.role === 'President' || u.role?.toLowerCase() === 'president') : null)
@@ -348,6 +409,102 @@ export default function ExecutiveView({
     setNewPassword('');
   };
 
+  const analyticsYear = new Date().getFullYear();
+  const monthlyAnalytics = Array.from({ length: 12 }, (_, monthIndex) => ({
+    month: new Date(analyticsYear, monthIndex, 1).toLocaleString('en-US', { month: 'short' }),
+    income: 0,
+    expenses: 0
+  }));
+  transactions.forEach(transaction => {
+    if (!transaction.date?.startsWith(String(analyticsYear))) return;
+    const monthIndex = Number(transaction.date.slice(5, 7)) - 1;
+    if (monthIndex < 0 || monthIndex > 11) return;
+    monthlyAnalytics[monthIndex][transaction.type === 'income' ? 'income' : 'expenses'] += Number(transaction.amount) || 0;
+  });
+  (hogRaising?.sales || []).forEach(sale => {
+    if (!sale.date?.startsWith(String(analyticsYear))) return;
+    const monthIndex = Number(sale.date.slice(5, 7)) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) monthlyAnalytics[monthIndex].income += Number(sale.revenue) || 0;
+  });
+  (hogRaising?.expenses || []).forEach(expense => {
+    if (!expense.date?.startsWith(String(analyticsYear))) return;
+    const monthIndex = Number(expense.date.slice(5, 7)) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) monthlyAnalytics[monthIndex].expenses += Number(expense.amount) || 0;
+  });
+  const analyticsIncome = monthlyAnalytics.reduce((total, month) => total + month.income, 0);
+  const analyticsExpenses = monthlyAnalytics.reduce((total, month) => total + month.expenses, 0);
+
+  const activityExpenseTotals = new Map<string, { name: string; expenses: number }>();
+  transactions.filter(transaction =>
+    transaction.type === 'expense' &&
+    transaction.activityId &&
+    transaction.date?.startsWith(String(analyticsYear))
+  ).forEach(transaction => {
+    const activity = activities.find(item => item.id === transaction.activityId);
+    const entry = activityExpenseTotals.get(transaction.activityId!) || {
+      name: activity?.title || 'Activity no longer listed',
+      expenses: 0
+    };
+    entry.expenses += Number(transaction.amount) || 0;
+    activityExpenseTotals.set(transaction.activityId!, entry);
+  });
+  const eventExpenseData = Array.from(activityExpenseTotals.values())
+    .sort((left, right) => right.expenses - left.expenses)
+    .slice(0, 8);
+
+  const livestockExpenseTotals = new Map<string, number>();
+  (hogRaising?.expenses || []).filter(expense => expense.date?.startsWith(String(analyticsYear))).forEach(expense => {
+    const label = `${expense.produce || 'Livestock'} · ${expense.category}`;
+    livestockExpenseTotals.set(label, (livestockExpenseTotals.get(label) || 0) + (Number(expense.amount) || 0));
+  });
+  const livestockExpenseData = Array.from(livestockExpenseTotals, ([name, expenses]) => ({ name, expenses }))
+    .sort((left, right) => right.expenses - left.expenses)
+    .slice(0, 10);
+
+  const fundSourceTotals = new Map<string, {
+    name: string;
+    balance?: number;
+    allocated?: number;
+    income: number;
+    expenses: number;
+    registered: boolean;
+  }>();
+  funds.forEach(fund => {
+    fundSourceTotals.set(fund.id, {
+      name: `${fund.code} · ${fund.name}`,
+      balance: Number(fund.currentBalance) || 0,
+      allocated: Number(fund.allocatedAmount) || 0,
+      income: 0,
+      expenses: 0,
+      registered: true
+    });
+  });
+  transactions.filter(transaction => transaction.fundSource?.trim()).forEach(transaction => {
+    const source = transaction.fundSource!.trim();
+    const normalizedSource = source.toLowerCase();
+    const fund = funds.find(item =>
+      [item.code, item.name]
+        .map(value => value.trim().toLowerCase())
+        .filter(Boolean)
+        .some(value => normalizedSource.includes(value) || value.includes(normalizedSource))
+    );
+    const key = fund?.id || `source:${normalizedSource}`;
+    const entry = fundSourceTotals.get(key) || {
+      name: source,
+      income: 0,
+      expenses: 0,
+      registered: false
+    };
+    entry[transaction.type === 'income' ? 'income' : 'expenses'] += Number(transaction.amount) || 0;
+    fundSourceTotals.set(key, entry);
+  });
+  const fundSourceAnalytics = Array.from(fundSourceTotals.values())
+    .sort((left, right) => {
+      if (left.registered !== right.registered) return left.registered ? -1 : 1;
+      return left.name.localeCompare(right.name);
+    });
+  const totalRegisteredFundBalance = funds.reduce((total, fund) => total + (Number(fund.currentBalance) || 0), 0);
+
   return (
     <div id="executive-view-container" className="flex flex-col space-y-5 text-[#2D3A22]">
 
@@ -375,39 +532,23 @@ export default function ExecutiveView({
               <span className="truncate">Export Executive Report</span>
             </button>
           )}
-          {currentRole === 'President' && onDownloadBackup && (
-            <button
-              id="executive-download-backup-btn"
-              type="button"
-              onClick={onDownloadBackup}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-black bg-[#1B4332] hover:bg-[#2D6A4F] text-white border border-[#52B788] rounded-2xl shadow-sm transition-all cursor-pointer uppercase tracking-wider min-w-0"
-              title="Download formatted JSON system backup"
-            >
-              <Download className="w-4 h-4 text-[#D8F3DC] shrink-0" />
-              <span className="truncate">Export Backup</span>
-            </button>
-          )}
-          {currentRole === 'President' && onRestoreBackup && (
-            <>
-              <input
-                type="file"
-                ref={backupFileInputRef}
-                accept=".json,application/json"
-                className="hidden"
-                onChange={handleBackupFileSelect}
-              />
-              <button
-                id="executive-restore-backup-btn"
-                type="button"
-                onClick={() => backupFileInputRef.current?.click()}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-black bg-amber-700 hover:bg-amber-800 text-white border border-amber-500 rounded-2xl shadow-sm transition-all cursor-pointer uppercase tracking-wider min-w-0"
-                title="Load and restore an exported JSON backup into database"
-              >
-                <Upload className="w-4 h-4 text-amber-200 shrink-0" />
-                <span className="truncate">Load Backup</span>
-              </button>
-            </>
-          )}
+          <button
+            ref={adminTasksTriggerRef}
+            id="executive-admin-tasks-btn"
+            type="button"
+            onClick={() => {
+              setIsAdminUnlocked(false);
+              setRequiresAdminTotp(false);
+              setAdminPasswordInput('');
+              setAdminTotpCode('');
+              setAdminGateError('');
+              setShowAdminTasksModal(true);
+            }}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-black bg-[#1B4332] hover:bg-[#2D6A4F] text-white border border-[#52B788] rounded-2xl shadow-sm transition-all cursor-pointer uppercase tracking-wider min-w-0"
+          >
+            <ShieldAlert className="w-4 h-4 text-[#D8F3DC] shrink-0" />
+            <span className="truncate">Admin Tasks</span>
+          </button>
         </div>
       </div>
 
@@ -425,11 +566,11 @@ export default function ExecutiveView({
         {/* Association Funds */}
         <div className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left">
           <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Co-op Funds Balance</span>
+            <span className="text-xs font-bold uppercase tracking-wider">All Registered Fund Balances</span>
             <Coins className="w-5 h-5 text-[#E65100]" />
           </div>
           <div className="text-2xl sm:text-3xl font-black font-display text-[#1B4332] tracking-tight">
-            PHP {currentBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            PHP {totalRegisteredFundBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
           </div>
         </div>
 
@@ -482,6 +623,195 @@ export default function ExecutiveView({
         </div>
       </div>
 
+      <section className="space-y-4 text-left" aria-labelledby="executive-analytics-title">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+          <div>
+            <h3 id="executive-analytics-title" className="text-lg font-black text-[#1B4332]">Financial Analytics</h3>
+            <p className="text-xs font-semibold text-[#5D6B54]">Association ledger and livestock IGP · {analyticsYear}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="bg-white border border-[#E9E4D9] p-4 rounded-2xl shadow-sm">
+            <span className="text-[11px] font-bold text-[#5D6B54] uppercase tracking-wider">Income to date</span>
+            <div className="mt-1 text-xl font-black font-mono text-emerald-700">PHP {analyticsIncome.toLocaleString('en-US')}</div>
+          </div>
+          <div className="bg-white border border-[#E9E4D9] p-4 rounded-2xl shadow-sm">
+            <span className="text-[11px] font-bold text-[#5D6B54] uppercase tracking-wider">Expenses to date</span>
+            <div className="mt-1 text-xl font-black font-mono text-rose-700">PHP {analyticsExpenses.toLocaleString('en-US')}</div>
+          </div>
+          <div className="bg-white border border-[#E9E4D9] p-4 rounded-2xl shadow-sm">
+            <span className="text-[11px] font-bold text-[#5D6B54] uppercase tracking-wider">Net cash flow</span>
+            <div className={`mt-1 text-xl font-black font-mono ${analyticsIncome - analyticsExpenses >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              PHP {(analyticsIncome - analyticsExpenses).toLocaleString('en-US')}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
+          <h4 className="text-sm font-extrabold text-[#1B4332] mb-4">Monthly income and expenses</h4>
+          <div className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyAnalytics} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: '#5D6B54', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#5D6B54', fontSize: 10 }} tickFormatter={(value: number) => `₱${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`} />
+                <Tooltip formatter={(value) => `PHP ${Number(value).toLocaleString('en-US')}`} />
+                <Legend />
+                <Bar dataKey="income" name="Income (Association + IGP)" fill="#2D6A4F" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expenses" name="Expenses (Association + IGP)" fill="#D95D39" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className="bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
+            <h4 className="text-sm font-extrabold text-[#1B4332] mb-1">Expenses linked to events</h4>
+            <p className="text-[11px] text-[#5D6B54] mb-3">Association expenses assigned to an activity in the current year.</p>
+            {eventExpenseData.length ? (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={eventExpenseData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: '#5D6B54', fontSize: 10 }} tickFormatter={(value: number) => `₱${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`} />
+                    <YAxis type="category" dataKey="name" width={140} tick={{ fill: '#5D6B54', fontSize: 10 }} />
+                    <Tooltip formatter={(value) => `PHP ${Number(value).toLocaleString('en-US')}`} />
+                    <Bar dataKey="expenses" name="Event expenses" fill="#D97706" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="py-12 text-center text-xs font-semibold text-[#85947E]">No event-linked expenses recorded for {analyticsYear}.</p>
+            )}
+          </div>
+
+          <div className="bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
+            <h4 className="text-sm font-extrabold text-[#1B4332] mb-1">Livestock expenses</h4>
+            <p className="text-[11px] text-[#5D6B54] mb-3">IGP spending by livestock project and expense category · {analyticsYear}</p>
+            {livestockExpenseData.length ? (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={livestockExpenseData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: '#5D6B54', fontSize: 10 }} tickFormatter={(value: number) => `₱${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`} />
+                    <YAxis type="category" dataKey="name" width={165} tick={{ fill: '#5D6B54', fontSize: 9 }} />
+                    <Tooltip formatter={(value) => `PHP ${Number(value).toLocaleString('en-US')}`} />
+                    <Bar dataKey="expenses" name="Livestock expenses" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="py-12 text-center text-xs font-semibold text-[#85947E]">No livestock expenses recorded for {analyticsYear}.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
+          <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
+            <div>
+              <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
+              <p className="text-[11px] text-[#5D6B54]">Balances for all registered funds, with recorded income and expenses by source.</p>
+            </div>
+            <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
+              {funds.length} registered · {fundSourceAnalytics.length} sources tracked
+            </span>
+          </div>
+          {fundSourceAnalytics.length ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {fundSourceAnalytics.map(source => (
+                <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
+                  <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
+                  {source.registered ? (
+                    <>
+                      <div className="text-lg font-black font-mono text-[#1B4332]">PHP {(source.balance || 0).toLocaleString('en-US')}</div>
+                      <p className="text-[10px] text-[#5D6B54]">Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}</p>
+                    </>
+                  ) : (
+                    <div className="text-sm font-black font-mono text-[#5D6B54]">
+                      Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                    <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
+                    <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-xs font-semibold text-[#85947E]">No registered fund sources or attributed transactions yet.</p>
+          )}
+        </div>
+      </section>
+
+      {showAdminTasksModal && (
+        <div
+          className="fixed inset-0 z-[60] bg-[#0B1F17]/80 backdrop-blur-sm p-3 sm:p-5 flex items-center justify-center"
+          onClick={closeAdminTasks}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-tasks-modal-title"
+            className="w-full max-w-6xl max-h-[94vh] bg-[#F7F4EF] rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="shrink-0 bg-[#1B4332] text-white p-4 sm:px-6 sm:py-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 id="admin-tasks-modal-title" className="text-base sm:text-lg font-black flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-[#D8F3DC] shrink-0" />
+                  <span>Admin Tasks</span>
+                </h3>
+                <p className="text-xs text-[#D8F3DC]/80 mt-1">Officer governance, security operations, and system backups</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {isAdminUnlocked && currentRole === 'President' && onDownloadBackup && (
+                  <button
+                    id="executive-download-backup-btn"
+                    type="button"
+                    onClick={onDownloadBackup}
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-black bg-[#2D6A4F] hover:bg-[#40916C] text-white border border-[#52B788] rounded-xl transition-all cursor-pointer"
+                    title="Download formatted JSON system backup"
+                  >
+                    <Download className="w-4 h-4 shrink-0" />
+                    <span>Export Backup</span>
+                  </button>
+                )}
+                {isAdminUnlocked && currentRole === 'President' && onRestoreBackup && (
+                  <>
+                    <input
+                      type="file"
+                      ref={backupFileInputRef}
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={handleBackupFileSelect}
+                    />
+                    <button
+                      id="executive-restore-backup-btn"
+                      type="button"
+                      onClick={() => backupFileInputRef.current?.click()}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-black bg-amber-700 hover:bg-amber-800 text-white border border-amber-500 rounded-xl transition-all cursor-pointer"
+                      title="Load and restore an exported JSON backup into database"
+                    >
+                      <Upload className="w-4 h-4 shrink-0" />
+                      <span>Load Backup</span>
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={closeAdminTasks}
+                  aria-label="Close admin tasks"
+                  className="min-w-10 min-h-10 inline-flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {backupRestoreError && (
+                <p role="alert" className="w-full text-xs font-bold text-amber-100">{backupRestoreError}</p>
+              )}
+            </div>
+            <div className="overflow-y-auto p-3 sm:p-5">
       <div className="order-2 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
         {/* OFFICER ROSTER & ROLE GOVERNANCE DESK */}
         <div id="officer-governance-card" className="self-start lg:col-span-12 bg-white border border-[#E9E4D9] rounded-3xl p-5 shadow-sm space-y-4 text-left">
@@ -496,12 +826,7 @@ export default function ExecutiveView({
               {isAdminUnlocked ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsAdminUnlocked(false);
-                    if (typeof sessionStorage !== 'undefined') {
-                      sessionStorage.removeItem('fams_admin_gate_unlocked');
-                    }
-                  }}
+                  onClick={() => setIsAdminUnlocked(false)}
                   className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
                 >
                   <Lock className="w-3.5 h-3.5 text-amber-700" />
@@ -539,43 +864,43 @@ export default function ExecutiveView({
               <div className="max-w-md space-y-1">
                 <h4 className="font-extrabold text-[#1B4332] text-sm">Dedicated Admin Security Gate</h4>
                 <p className="text-xs text-[#5D6B54]">
-                  Officer management, credential resets, and account governance require entering your admin security code or President session confirmation.
+                  Re-enter your signed-in account password to open backup and officer administration tools.
                 </p>
               </div>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const code = adminSecurityCodeInput.trim();
-                  // Default security passcode or current session password confirmation
-                  if (code === 'afa-admin-2026' || code.length >= 4) {
-                    setIsAdminUnlocked(true);
-                    if (typeof sessionStorage !== 'undefined') {
-                      sessionStorage.setItem('fams_admin_gate_unlocked', 'true');
-                    }
-                    setAdminSecurityCodeInput('');
-                    setAdminGateError('');
-                  } else {
-                    setAdminGateError('Invalid security passcode. Use your designated admin key.');
-                  }
-                }}
-                className="flex flex-col sm:flex-row items-center gap-2 w-full max-w-sm pt-2"
-              >
+              <form onSubmit={handleAdminPasswordSubmit} className="flex flex-col gap-2 w-full max-w-sm pt-2">
                 <input
+                  ref={adminPasswordInputRef}
                   type="password"
-                  placeholder="Enter admin security code"
-                  value={adminSecurityCodeInput}
-                  onChange={(e) => setAdminSecurityCodeInput(e.target.value)}
+                  autoComplete="current-password"
+                  placeholder="Enter your account password"
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
                   required
                 />
+                {requiresAdminTotp && (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="6-digit authenticator code"
+                    value={adminTotpCode}
+                    onChange={(e) => setAdminTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                    required
+                    minLength={6}
+                    maxLength={6}
+                  />
+                )}
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all"
+                  disabled={isVerifyingAdminPassword || !onVerifyAdminPassword}
+                  className="w-full px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:opacity-60 text-white text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all"
                 >
-                  Unlock Desk
+                  {isVerifyingAdminPassword ? 'Verifying…' : requiresAdminTotp ? 'Verify & Open Admin Tasks' : 'Verify Password'}
                 </button>
               </form>
-              {adminGateError && <p className="text-xs font-bold text-rose-600">{adminGateError}</p>}
+              {adminGateError && <p role="alert" className="text-xs font-bold text-rose-600">{adminGateError}</p>}
             </div>
           ) : (
             <>
@@ -634,6 +959,7 @@ export default function ExecutiveView({
                   Create New Officer Account
                 </h4>
                 <button
+                  ref={adminTasksCloseRef}
                   type="button"
                   onClick={() => setNewOfficerPassword(generateInitialPassword(newOfficerUsername || 'officer', newOfficerRole))}
                   className="text-[11px] font-bold text-[#2D6A4F] hover:underline cursor-pointer"
@@ -1295,6 +1621,10 @@ export default function ExecutiveView({
           )}
         </div>
       </section>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SECTION: RESOLUTIONS REVIEW & ASSEMBLY RECORDS */}
       <div className="order-1 grid grid-cols-1 gap-4 lg:gap-5 items-start">
@@ -1457,7 +1787,7 @@ export default function ExecutiveView({
 
       {/* CONFIRM TURNOVER MODAL */}
       {showTurnoverConfirm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in no-print text-left">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in no-print text-left">
           <div className="bg-white border-2 border-[#BF360C] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
             <div className="bg-[#BF360C] text-white px-6 py-4 flex items-center gap-2">
               <AlertTriangle className="w-6 h-6 text-white shrink-0" />
@@ -1807,7 +2137,7 @@ export default function ExecutiveView({
 
       {/* CONFIRM SEAL LOG YEAR MODAL */}
       {showSealConfirm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in no-print text-left">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in no-print text-left">
           <div className="bg-white border-2 border-[#BF360C] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
             <div className="bg-[#BF360C] text-white px-6 py-4 flex items-center gap-2">
               <Lock className="w-6 h-6 text-white shrink-0" />
@@ -1866,7 +2196,7 @@ export default function ExecutiveView({
 
       {/* OFFICER DELETION & ROLE REVOCATION CONFIRMATION MODAL */}
       {officerToDelete && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-fade-in">
           <div className="bg-white border-2 border-rose-500 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-6 text-left space-y-4">
             <div className="flex items-center gap-3 border-b border-rose-100 pb-3">
               <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
@@ -1925,7 +2255,7 @@ export default function ExecutiveView({
 
       {/* LOAD & RESTORE BACKUP MODAL */}
       {pendingBackup && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-fade-in">
           <div className="bg-white border-2 border-amber-600 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden p-6 text-left space-y-4">
             <div className="flex items-center gap-3 border-b border-amber-100 pb-3">
               <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">

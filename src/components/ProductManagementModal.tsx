@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Product, OfficerRole, User as SystemUser } from '../types';
 import { resolveOfficerPrefixed } from '../utils/officers';
+import { isEggCatalogProduct } from '../utils/eggInventory';
 import {  ShoppingBag, Plus, Edit, Trash2, Eye, EyeOff, X, Check, Search, Tag, DollarSign, Package, User, Phone, MapPin } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -45,6 +46,7 @@ export default function ProductManagementModal({
   const [farmerPhone, setFarmerPhone] = useState('');
   const [isPublished, setIsPublished] = useState(true);
   const [otherCategory, setOtherCategory] = useState('');
+  const hasEggCatalogProduct = products.some(isEggCatalogProduct);
 
   // Resolved from the officers ACTUALLY delegated in the system — no hardcoded names.
   const getOfficerTitle = (role: OfficerRole) => resolveOfficerPrefixed(users, role);
@@ -63,6 +65,25 @@ export default function ProductManagementModal({
     setFarmerName('');
     setFarmerSitio('Sitio Tapon');
     setFarmerPhone('0912-345-6789');
+    setIsPublished(true);
+    setOtherCategory('');
+    setShowAddEditModal(true);
+  };
+
+  const handleOpenEggSetup = () => {
+    setEditingProduct(null);
+    setName('Chicken Eggs');
+    setCebName('Itlog sa Manok');
+    setCategory('Produce');
+    setPrice(0);
+    setUnit('per egg');
+    setQuantityAvailable('Managed automatically from verified harvests');
+    setDescription('Fresh eggs from the AFA poultry project. Contact AFA to place an order.');
+    setSpecs('');
+    setStockStatus('In Stock');
+    setFarmerName('AFA Poultry Project');
+    setFarmerSitio('');
+    setFarmerPhone('');
     setIsPublished(true);
     setOtherCategory('');
     setShowAddEditModal(true);
@@ -206,15 +227,33 @@ export default function ProductManagementModal({
             </select>
           </div>
 
-          <button
-            type="button"
-            onClick={handleOpenAdd}
-            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{en ? 'Add Product' : 'Idugang ang Produkto (Add Product)'}</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {!hasEggCatalogProduct && (
+              <button
+                type="button"
+                onClick={handleOpenEggSetup}
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shrink-0"
+              >
+                <Tag className="w-4 h-4" />
+                <span>{en ? 'Set Egg Price' : 'Itakda ang Presyo sa Itlog'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{en ? 'Add Product' : 'Idugang ang Produkto (Add Product)'}</span>
+            </button>
+          </div>
         </div>
+
+        <p className="px-4 pt-3 text-xs font-semibold text-[#4A5F57]">
+          {en
+            ? 'Egg listing stock and availability are updated automatically from verified harvests and recorded egg sales. Set its price and unit in the Eggs product details.'
+            : 'Awtomatikong i-update ang stock sa itlog base sa gi-aprubahang ani ug natala nga halin. Ibutang ang presyo ug yunit sa detalye sa produkto nga Itlog.'}
+        </p>
 
         {/* PRODUCTS GRID / LIST */}
         <div className="p-6 space-y-4">
@@ -439,7 +478,8 @@ export default function ProductManagementModal({
                   <label className="block text-[#4A5F57] font-bold mb-1">Presyo (PHP):</label>
                   <input
                     type="number"
-                    min={0}
+                    min={isEggCatalogProduct({ name, cebName }) ? 0.01 : 0}
+                    step="0.01"
                     required
                     value={price}
                     onChange={(e) => setPrice(Number(e.target.value))}
@@ -456,6 +496,13 @@ export default function ProductManagementModal({
                     onChange={(e) => setUnit(e.target.value)}
                     className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
                   />
+                  {isEggCatalogProduct({ name, cebName }) && (
+                    <p className="mt-1 text-[10px] font-semibold text-[#4A5F57]">
+                      {en
+                        ? 'Enter a unit such as “per egg” or “per tray”. Public stock is calculated in eggs.'
+                        : 'Ibutang ang yunit sama sa “per egg” o “per tray”. Ang stock sa publiko kwentahon isip gidaghanon sa itlog.'}
+                    </p>
+                  )}
                 </div>
               </div>
 

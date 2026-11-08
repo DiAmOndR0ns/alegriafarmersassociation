@@ -1,5 +1,8 @@
 import { EggHarvestLog, IgpSale } from '../types';
 
+export const isEggCatalogProduct = (product: { name: string; cebName?: string }) =>
+  /\beggs?\b|\bitlog\b/i.test(`${product.name} ${product.cebName || ''}`);
+
 const isVerifiedHarvest = (harvest: EggHarvestLog) =>
   harvest.status === 'Audited' || harvest.status === 'Signed';
 

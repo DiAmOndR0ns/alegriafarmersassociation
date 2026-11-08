@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { HogRaisingState, Member, PublicProduct, Announcement, AssociationActivity, AssociationAchievement, User } from '../types';
 import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
+import { getAvailableEggCount, isEggCatalogProduct } from '../utils/eggInventory';
 import { useLanguage, LanguageToggle } from '../i18n/LanguageContext';
 
 interface GuestPortalProps {
@@ -20,8 +21,54 @@ interface GuestPortalProps {
   users?: User[];
 }
 
-export const getPublishedProducts = (products: PublicProduct[]) =>
-  products.filter(product => product.isPublished);
+const isPoultryProject = (produce: string) => /poultry|rtl|manok|chicken/i.test(produce);
+
+export const getPublishedProducts = (products: PublicProduct[], hogRaising?: HogRaisingState) => {
+  const eggProduct = products.find(isEggCatalogProduct);
+  const publishedProducts = products.filter(product =>
+    product.isPublished && (!eggProduct || product.id !== eggProduct.id) && !isEggCatalogProduct(product)
+  );
+
+  if (!eggProduct || !hogRaising) {
+    return products.filter(product => product.isPublished);
+  }
+
+  const eggProjects = new Set([
+    'Poultry Raising (RTL)',
+    ...(hogRaising.produces || []).filter(isPoultryProject),
+    ...(hogRaising.eggHarvests || [])
+      .map(harvest => harvest.produce || 'Poultry Raising (RTL)')
+      .filter(isPoultryProject),
+    ...(hogRaising.sales || [])
+      .filter(sale => sale.hogStage === 'Eggs' || sale.hogStage === 'General' || sale.hogStage === undefined)
+      .map(sale => sale.produce || 'Poultry Raising (RTL)')
+      .filter(isPoultryProject)
+  ]);
+  const availableEggs = [...eggProjects].reduce(
+    (total, produce) => total + getAvailableEggCount(
+      hogRaising.eggHarvests || [],
+      hogRaising.sales || [],
+      produce
+    ),
+    0
+  );
+
+  if (availableEggs <= 0 || !Number.isFinite(eggProduct.price) || eggProduct.price <= 0) {
+    return publishedProducts;
+  }
+
+  const automaticEggListing: PublicProduct = {
+    ...eggProduct,
+    isPublished: true,
+    stockStatus: 'In Stock',
+    quantityAvailable: `${availableEggs.toLocaleString()} eggs available`
+  };
+
+  return [
+    ...publishedProducts,
+    automaticEggListing
+  ];
+};
 
 export default function GuestPortal({
   onEnterLogin,
@@ -36,7 +83,7 @@ export default function GuestPortal({
   const { isEnglish: en, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'>('home');
   const [displayAchievements, setDisplayAchievements] = useState(achievements);
-  const [displayProducts, setDisplayProducts] = useState(() => getPublishedProducts(products));
+  const [displayProducts, setDisplayProducts] = useState(() => getPublishedProducts(products, hogRaising));
   const [selectedProductModal, setSelectedProductModal] = useState<any | null>(null);
   const productDialogRef = useRef<HTMLDivElement>(null);
   const productDialogCloseRef = useRef<HTMLButtonElement>(null);
@@ -46,8 +93,8 @@ export default function GuestPortal({
   }, [achievements]);
 
   useEffect(() => {
-    setDisplayProducts(getPublishedProducts(products));
-  }, [products]);
+    setDisplayProducts(getPublishedProducts(products, hogRaising));
+  }, [products, hogRaising]);
 
   useEffect(() => {
     let active = true;
@@ -58,7 +105,9 @@ export default function GuestPortal({
       })
       .then(result => {
         if (active && result?.success && Array.isArray(result.products)) {
-          setDisplayProducts(getPublishedProducts(result.products));
+          const refreshedProducts = new Map(products.map(product => [product.id, product]));
+          result.products.forEach((product: PublicProduct) => refreshedProducts.set(product.id, product));
+          setDisplayProducts(getPublishedProducts([...refreshedProducts.values()], hogRaising));
         }
       })
       .catch(error => {

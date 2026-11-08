@@ -499,6 +499,11 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         last_updated VARCHAR(50)
       );
     `);
+    await client.query(`
+      ALTER TABLE organization_funds
+        ADD COLUMN IF NOT EXISTS category TEXT,
+        ADD COLUMN IF NOT EXISTS source_origin TEXT;
+    `);
 
     // 12. Auditor Reports
     await client.query(`
@@ -990,6 +995,8 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       code: r.code,
       allocatedAmount: Number(r.allocated_amount || 0),
       currentBalance: Number(r.current_balance || 0),
+      category: r.category || '',
+      source: r.source_origin || '',
       description: r.description,
       custodian: r.custodian,
       lastUpdated: r.last_updated
@@ -1548,8 +1555,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Saving', fundList.length, 'organization funds...');
       for (const f of fundList) {
         await client.query(`
-          INSERT INTO organization_funds (id, name, code, allocated_amount, current_balance, description, custodian, last_updated)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          INSERT INTO organization_funds (id, name, code, allocated_amount, current_balance, description, custodian, last_updated, category, source_origin)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             code = EXCLUDED.code,
@@ -1557,10 +1564,13 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             current_balance = EXCLUDED.current_balance,
             description = EXCLUDED.description,
             custodian = EXCLUDED.custodian,
-            last_updated = EXCLUDED.last_updated;
+            last_updated = EXCLUDED.last_updated,
+            category = EXCLUDED.category,
+            source_origin = EXCLUDED.source_origin;
         `, [
           f.id, f.name, f.code, f.allocatedAmount || 0, f.currentBalance || 0,
-          f.description || '', f.custodian || '', f.lastUpdated || new Date().toISOString().split('T')[0]
+          f.description || '', f.custodian || '', f.lastUpdated || new Date().toISOString().split('T')[0],
+          f.category || null, f.source || null
         ]);
       }
       console.log('[DB DEBUG] Organization funds saved');
@@ -1682,7 +1692,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       { table: 'organization_funds', deletedIds: deletedFundIds, fields: [
         ['name', 'name', (r) => r.name], ['code', 'code', (r) => r.code], ['allocated_amount', 'allocatedAmount', (r) => r.allocatedAmount || 0],
         ['current_balance', 'currentBalance', (r) => r.currentBalance || 0], ['description', 'description', (r) => r.description || ''],
-        ['custodian', 'custodian', (r) => r.custodian || ''], ['last_updated', 'lastUpdated', (r) => r.lastUpdated || new Date().toISOString().split('T')[0]]
+        ['custodian', 'custodian', (r) => r.custodian || ''], ['last_updated', 'lastUpdated', (r) => r.lastUpdated || new Date().toISOString().split('T')[0]],
+        ['category', 'category', (r) => r.category || null], ['source_origin', 'source', (r) => r.source || null]
       ] },
       { table: 'auditor_reports', deletedIds: deletedAuditorIds, fields: [
         ['report_period', 'reportPeriod', (r) => r.reportPeriod], ['report_type', 'reportType', (r) => r.reportType],

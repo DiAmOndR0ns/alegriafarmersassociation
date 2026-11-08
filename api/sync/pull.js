@@ -427,6 +427,11 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      ALTER TABLE organization_funds
+        ADD COLUMN IF NOT EXISTS category TEXT,
+        ADD COLUMN IF NOT EXISTS source_origin TEXT;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS auditor_reports (
         id VARCHAR(100) PRIMARY KEY,
         report_period VARCHAR(100) NOT NULL,
@@ -754,6 +759,8 @@ async function fetchAllDataFromPostgres(pool) {
       code: r.code,
       allocatedAmount: Number(r.allocated_amount || 0),
       currentBalance: Number(r.current_balance || 0),
+      category: r.category || "",
+      source: r.source_origin || "",
       description: r.description,
       custodian: r.custodian,
       lastUpdated: r.last_updated
