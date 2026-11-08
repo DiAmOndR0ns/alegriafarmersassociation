@@ -11,7 +11,6 @@ import {
 import pullHandler from "./src/api/pull";
 import pushHandler from "./src/api/push";
 import achievementsHandler from "./src/api/achievements";
-import publicProductsHandler from "./src/api/public-products";
 import deleteHandler from "./src/api/delete";
 import {
   bootstrapHandler,
@@ -136,7 +135,6 @@ export async function createApp() {
 
   app.get("/api/sync/pull", pullHandler);
   app.get("/api/achievements", achievementsHandler);
-  app.get("/api/public-products", publicProductsHandler);
   app.post("/api/sync/push", pushHandler);
   app.post(["/api/db/delete", "/api/sync/delete"], deleteHandler);
   app.delete("/api/db/:entity/:id", deleteHandler);

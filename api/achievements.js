@@ -103,6 +103,7 @@ async function runSchemaMigrations(client) {
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
@@ -146,6 +147,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS status_reason TEXT;`,
     `CREATE TABLE IF NOT EXISTS achievements (
       id VARCHAR(100) PRIMARY KEY,
       year VARCHAR(20) NOT NULL,
@@ -300,6 +302,7 @@ async function initDatabaseSchema(pool) {
         date VARCHAR(50),
         description TEXT,
         recorded_by TEXT,
+        activity_id VARCHAR(100),
         fund_source TEXT,
         audited_status VARCHAR(50) DEFAULT 'Unaudited',
         audited_by TEXT,
@@ -389,6 +392,7 @@ async function initDatabaseSchema(pool) {
         description TEXT,
         organizer TEXT,
         status VARCHAR(50),
+        status_reason TEXT,
         documented_notes TEXT,
         attendees_count INTEGER DEFAULT 0,
         target_audience TEXT,
@@ -519,6 +523,7 @@ async function handler(req, res) {
   if (req.method && req.method !== "GET") {
     return sendResponse(res, 405, { success: false, message: "Method not allowed." });
   }
+  const resource = req.query?.resource || new URL(req.url || "/", "http://localhost").searchParams.get("resource");
   if (!isDatabaseConfigured()) {
     return sendResponse(res, 200, {
       success: false,
@@ -529,6 +534,34 @@ async function handler(req, res) {
   try {
     const pool = getPool();
     await ensureDatabaseSchema(pool);
+    if (resource === "products") {
+      const result2 = await pool.query(
+        `SELECT id, name, ceb_name, category, description, unit, price, quantity_available,
+          stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url,
+          is_published
+         FROM products
+         WHERE is_published = TRUE
+         ORDER BY name ASC`
+      );
+      const products = result2.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        cebName: row.ceb_name,
+        category: row.category,
+        description: row.description,
+        unit: row.unit,
+        price: Number(row.price || 0),
+        quantityAvailable: row.quantity_available,
+        stockStatus: row.stock_status,
+        farmerName: row.farmer_name,
+        farmerSitio: row.farmer_sitio,
+        farmerPhone: row.farmer_phone,
+        contactPerson: row.contact_person,
+        imageUrl: row.image_url,
+        isPublished: row.is_published
+      }));
+      return sendResponse(res, 200, { success: true, products });
+    }
     const result = await pool.query(
       "SELECT id, year, title, ceb_title, description, icon FROM achievements ORDER BY year DESC, title ASC"
     );
@@ -542,10 +575,11 @@ async function handler(req, res) {
     }));
     return sendResponse(res, 200, { success: true, achievements });
   } catch (error) {
-    console.error("[Public Achievements] Unable to load achievements:", error?.message || error);
+    const resourceLabel = resource === "products" ? "products" : "achievements";
+    console.error(`[Public ${resourceLabel}] Unable to load public data:`, error?.message || error);
     return sendResponse(res, 503, {
       success: false,
-      message: "Association achievements are temporarily unavailable."
+      message: resource === "products" ? "The public product catalog is temporarily unavailable." : "Association achievements are temporarily unavailable."
     });
   }
 }

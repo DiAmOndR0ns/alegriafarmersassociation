@@ -51,7 +51,7 @@ export default function GuestPortal({
 
   useEffect(() => {
     let active = true;
-    fetch('/api/public-products')
+    fetch('/api/achievements?resource=products')
       .then(async response => {
         if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
         return response.json();

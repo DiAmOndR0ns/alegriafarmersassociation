@@ -103,6 +103,7 @@ async function runSchemaMigrations(client) {
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
@@ -146,6 +147,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS status_reason TEXT;`,
     `CREATE TABLE IF NOT EXISTS achievements (
       id VARCHAR(100) PRIMARY KEY,
       year VARCHAR(20) NOT NULL,
@@ -300,6 +302,7 @@ async function initDatabaseSchema(pool) {
         date VARCHAR(50),
         description TEXT,
         recorded_by TEXT,
+        activity_id VARCHAR(100),
         fund_source TEXT,
         audited_status VARCHAR(50) DEFAULT 'Unaudited',
         audited_by TEXT,
@@ -389,6 +392,7 @@ async function initDatabaseSchema(pool) {
         description TEXT,
         organizer TEXT,
         status VARCHAR(50),
+        status_reason TEXT,
         documented_notes TEXT,
         attendees_count INTEGER DEFAULT 0,
         target_audience TEXT,
