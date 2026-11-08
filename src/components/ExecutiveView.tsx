@@ -331,15 +331,6 @@ export default function ExecutiveView({
               <span className="truncate">Export Executive Report</span>
             </button>
           )}
-
-          <div className="w-full sm:w-auto bg-[#081C15] border-2 border-[#52B788] px-3.5 py-2 rounded-2xl text-xs text-white font-bold shadow-md uppercase tracking-wider min-w-0 flex flex-wrap items-center gap-2">
-            <span className="bg-[#D8F3DC] text-[#1B4332] text-[10px] font-mono px-2 py-0.5 rounded-md shrink-0 font-black">
-              ACTIVE OFFICER
-            </span>
-            <span className="font-black text-xs sm:text-sm text-white break-words">
-              {currentRole.replace('_', ' ')} ({activeOfficerName})
-            </span>
-          </div>
         </div>
       </div>
 
@@ -1128,8 +1119,8 @@ export default function ExecutiveView({
 
       </div>
 
-      {/* SYSTEM AUDIT TRAIL follows the Presidential Turnover Desk */}
-      <section className="order-4 bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
+      {/* SYSTEM AUDIT TRAIL follows the Farmer Member Portal Accounts desk */}
+      <section className="bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
         <div className="flex items-center justify-between text-left">
           <h3 className="text-sm font-extrabold font-display text-[#1B4332] flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#1B4332]" />
