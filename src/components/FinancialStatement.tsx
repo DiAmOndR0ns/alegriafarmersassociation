@@ -1,9 +1,10 @@
 import React from 'react';
-import { FinancialTransaction, HogRaisingState, InventoryItem, OrganizationFund, User } from '../types';
+import { AssociationActivity, FinancialTransaction, HogRaisingState, InventoryItem, OrganizationFund, User } from '../types';
 import { resolveOfficerName } from '../utils/officers';
 
 interface FinancialStatementProps {
   transactions?: FinancialTransaction[];
+  activities?: AssociationActivity[];
   funds?: OrganizationFund[];
   hogRaising?: HogRaisingState;
   inventory?: InventoryItem[];
@@ -50,6 +51,7 @@ function Section({
 
 export default function FinancialStatement({
   transactions = [],
+  activities = [],
   funds = [],
   hogRaising,
   inventory = [],
@@ -61,8 +63,9 @@ export default function FinancialStatement({
   const auditor = resolveOfficerName(users, 'Auditor');
   const president = resolveOfficerName(users, 'President');
 
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount || 0), 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const yearTransactions = transactions.filter(transaction => transaction.date?.startsWith(String(year)));
+  const totalIncome = yearTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const totalExpense = yearTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount || 0), 0);
   const netSurplus = totalIncome - totalExpense;
 
   const totalFundBalance = funds.reduce((sum, fund) => sum + Number(fund.currentBalance || 0), 0);
@@ -71,12 +74,24 @@ export default function FinancialStatement({
   const incomeCategoryTotals: Record<string, number> = {};
   const expenseCategoryTotals: Record<string, number> = {};
 
-  transactions.forEach((transaction) => {
+  yearTransactions.forEach((transaction) => {
     if (transaction.type === 'income') {
       incomeCategoryTotals[transaction.category] = (incomeCategoryTotals[transaction.category] || 0) + Number(transaction.amount || 0);
     } else {
       expenseCategoryTotals[transaction.category] = (expenseCategoryTotals[transaction.category] || 0) + Number(transaction.amount || 0);
     }
+  });
+  const activityTotals = new Map<string, { title: string; income: number; expense: number }>();
+  yearTransactions.forEach(transaction => {
+    const activityId = transaction.activityId || 'unassigned';
+    const activity = activities.find(item => item.id === transaction.activityId);
+    const totals = activityTotals.get(activityId) || {
+      title: activity?.title || (transaction.activityId ? 'Activity no longer listed' : 'Not linked to an activity'),
+      income: 0,
+      expense: 0
+    };
+    totals[transaction.type] += Number(transaction.amount || 0);
+    activityTotals.set(activityId, totals);
   });
 
   const hogExpenses = (hogRaising?.expenses || []).filter((expense) => expense.date?.startsWith(String(year))).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
@@ -143,6 +158,9 @@ export default function FinancialStatement({
         </header>
 
         <Section title="I. CASH POSITION">
+          <p className="note">
+            Cash balances and allocated capital are current account snapshots; historical year-end balances are not stored.
+          </p>
           {funds.length === 0 ? (
             <Line label="No treasury accounts registered." value="—" indent />
           ) : funds.map((fund) => (
@@ -185,7 +203,20 @@ export default function FinancialStatement({
           <Line label="TOTAL EXPENDITURES" value={peso(totalExpenseWithHog)} bold />
         </Section>
 
-        <Section title="IV. NET FINANCIAL POSITION">
+        <Section title="IV. FINANCIAL SUMMARY BY ACTIVITY">
+          {activityTotals.size === 0 ? (
+            <Line label="No ledger transactions recorded for this year." value="—" indent />
+          ) : Array.from(activityTotals.entries()).map(([activityId, item]) => (
+            <div key={activityId}>
+              <div className="subheading">{item.title}</div>
+              <Line label="Income" value={peso(item.income)} indent />
+              <Line label="Expenses" value={peso(item.expense)} indent />
+              <Line label="Net" value={peso(item.income - item.expense)} bold indent />
+            </div>
+          ))}
+        </Section>
+
+        <Section title="V. NET FINANCIAL POSITION">
           <Line label="Total Income / Receipts" value={peso(totalIncomeWithHog)} indent />
           <Line label="Less: Total Expenditures" value={`(${peso(totalExpenseWithHog)})`} indent />
           <div className="rule" />

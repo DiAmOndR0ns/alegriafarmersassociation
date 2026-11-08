@@ -7,7 +7,7 @@ import {
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
   INITIAL_TRANSACTIONS, INITIAL_ANNOUNCEMENTS, INITIAL_LOGS, INITIAL_HOG_RAISING,
-  INITIAL_PRODUCTS, INITIAL_ACTIVITIES, INITIAL_FUNDS
+  INITIAL_ACTIVITIES, INITIAL_FUNDS
 } from './initialData';
 import OfflineIndicator from './components/OfflineIndicator';
 import DashboardSkeleton from './components/DashboardSkeleton';
@@ -34,6 +34,7 @@ import PasswordChangePrompt from './components/PasswordChangePrompt';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useDatabaseStatus } from './hooks/useDatabaseStatus';
 import { buildAuditChain, hashPassword, verifyPassword, sanitizeUserForStorage } from './utils/audit';
+import { isActivityOpenForExpenses } from './utils/activityExpenses';
 import { generateInitialPassword, getPasswordExpiryStatus, hashPassword as hashPolicyPassword, isLegacyPasswordHash, validatePasswordPolicy } from './utils/passwordPolicy';
 import { LanguageToggle } from './i18n/LanguageContext';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
@@ -181,7 +182,14 @@ export default function App() {
         setTransactions(storedTransactions || INITIAL_TRANSACTIONS);
         setAnnouncements(storedAnnouncements || INITIAL_ANNOUNCEMENTS);
         setHogRaising(storedHogRaising || INITIAL_HOG_RAISING);
-        setProducts(storedProducts || INITIAL_PRODUCTS);
+        const legacySeedProductIds = new Set(['prod-chairs-rental', 'prod-sacks-rental', 'prod-coffee', 'prod-corn', 'prod-coconut']);
+        const localProducts = Array.isArray(storedProducts)
+          ? storedProducts.filter(product => !legacySeedProductIds.has(product.id))
+          : [];
+        setProducts(localProducts);
+        if (localProducts.length !== (storedProducts?.length || 0)) {
+          updateStorage('bafa_products', localProducts);
+        }
         setActivities(storedActivities || INITIAL_ACTIVITIES);
         setAchievements(storedAchievements || []);
         setFunds(storedFunds || INITIAL_FUNDS);
@@ -1353,6 +1361,13 @@ export default function App() {
     if (!isTreasurerAuthorized(currentUser?.role)) {
       showToastMessage('Only the Treasurer or Assistant Treasurer may record income or expenses.', 'error');
       return;
+    }
+    if (txData.type === 'expense' && txData.activityId) {
+      const activity = activities.find(item => item.id === txData.activityId);
+      if (!activity || !isActivityOpenForExpenses(activity)) {
+        showToastMessage('This activity is closed for new expenses. Only scheduled or in-progress activities can receive new expense entries.', 'error');
+        return;
+      }
     }
     const newTx: FinancialTransaction = {
       ...txData,
@@ -3430,6 +3445,7 @@ export default function App() {
             {(currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer') && (
               <TreasurerView
                 transactions={transactions}
+                activities={activities}
                 funds={funds}
                 hogRaising={hogRaising}
                 inventory={inventory}
@@ -3647,6 +3663,7 @@ export default function App() {
               <TreasurerFinancialReport
                 year={new Date().getFullYear()}
                 transactions={transactions}
+                activities={activities}
                 funds={funds}
                 hogRaising={hogRaising}
                 inventory={inventory}

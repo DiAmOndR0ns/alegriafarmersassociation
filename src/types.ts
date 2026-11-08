@@ -101,6 +101,7 @@ export interface FinancialTransaction {
   amount: number;
   date: string;
   description: string;
+  activityId?: string;
   purpose?: string; // Purpose of the funds or cash advance; required for expense/disbursement logs
   liquidationDeadline?: string; // Deadline when an officer must liquidate funds with receipts
   recordedBy: string; // Treasurer
@@ -166,6 +167,13 @@ export interface Product {
   managedBy?: string; // e.g. "Treasurer (Gracelyn P Asendiente)"
   dateUpdated: string;
 }
+
+export type PublicProduct = Pick<Product,
+  'id' | 'name' | 'cebName' | 'category' | 'price' | 'unit' |
+  'quantityAvailable' | 'description' | 'specs' | 'stockStatus' |
+  'farmerName' | 'farmerSitio' | 'farmerPhone' | 'contactPerson' |
+  'imageUrl' | 'isPublished'
+>;
 
 export interface Announcement {
   id: string;

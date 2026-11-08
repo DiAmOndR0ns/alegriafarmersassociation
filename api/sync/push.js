@@ -103,6 +103,7 @@ async function runSchemaMigrations(client) {
       ON users (lower(replace(role, ' ', '_')))
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
@@ -146,6 +147,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS status_reason TEXT;`,
     `CREATE TABLE IF NOT EXISTS achievements (
       id VARCHAR(100) PRIMARY KEY,
       year VARCHAR(20) NOT NULL,
@@ -300,6 +302,7 @@ async function initDatabaseSchema(pool) {
         date VARCHAR(50),
         description TEXT,
         recorded_by TEXT,
+        activity_id VARCHAR(100),
         fund_source TEXT,
         audited_status VARCHAR(50) DEFAULT 'Unaudited',
         audited_by TEXT,
@@ -389,6 +392,7 @@ async function initDatabaseSchema(pool) {
         description TEXT,
         organizer TEXT,
         status VARCHAR(50),
+        status_reason TEXT,
         documented_notes TEXT,
         attendees_count INTEGER DEFAULT 0,
         target_audience TEXT,
@@ -784,8 +788,8 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Saving", txList.length, "transactions...");
       for (const tx of txList) {
         await client.query(`
-          INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, fund_source, audited_status, audited_by, audited_date, audit_notes)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, audited_status, audited_by, audited_date, audit_notes)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (id) DO UPDATE SET
             type = EXCLUDED.type,
             category = EXCLUDED.category,
@@ -793,6 +797,7 @@ async function saveFullStateToPostgres(pool, state) {
             date = EXCLUDED.date,
             description = EXCLUDED.description,
             recorded_by = EXCLUDED.recorded_by,
+            activity_id = EXCLUDED.activity_id,
             fund_source = EXCLUDED.fund_source,
             audited_status = EXCLUDED.audited_status,
             audited_by = EXCLUDED.audited_by,
@@ -806,6 +811,7 @@ async function saveFullStateToPostgres(pool, state) {
           tx.date,
           tx.description,
           tx.recordedBy,
+          tx.activityId || null,
           tx.fundSource || null,
           tx.auditedStatus || "Unaudited",
           tx.auditedBy || null,
@@ -1041,8 +1047,8 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Saving", activeActivities.length, "activities...");
       for (const act of activeActivities) {
         await client.query(`
-          INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, documented_notes, attendees_count, target_audience, image_url)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, status_reason, documented_notes, attendees_count, target_audience, image_url)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
             ceb_title = EXCLUDED.ceb_title,
@@ -1055,6 +1061,7 @@ async function saveFullStateToPostgres(pool, state) {
             description = EXCLUDED.description,
             organizer = EXCLUDED.organizer,
             status = EXCLUDED.status,
+            status_reason = EXCLUDED.status_reason,
             documented_notes = EXCLUDED.documented_notes,
             attendees_count = EXCLUDED.attendees_count,
             target_audience = EXCLUDED.target_audience,
@@ -1072,6 +1079,7 @@ async function saveFullStateToPostgres(pool, state) {
           act.description,
           act.organizer,
           act.status,
+          act.statusReason || null,
           act.documentedNotes || null,
           act.attendeesCount || 0,
           act.targetAudience || null,
@@ -1276,6 +1284,7 @@ async function saveFullStateToPostgres(pool, state) {
         ["description", "description", (r) => r.description],
         ["organizer", "organizer", (r) => r.organizer],
         ["status", "status", (r) => r.status],
+        ["status_reason", "statusReason", (r) => r.statusReason || null],
         ["documented_notes", "documentedNotes", (r) => r.documentedNotes || null],
         ["attendees_count", "attendeesCount", (r) => r.attendeesCount || 0],
         ["target_audience", "targetAudience", (r) => r.targetAudience || null],

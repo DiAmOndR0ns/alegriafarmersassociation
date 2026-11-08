@@ -1,5 +1,4 @@
 import pg from 'pg';
-import { INITIAL_PRODUCTS } from '../initialData';
 import { AuditorReport, DelegationRequest } from '../types';
 
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
@@ -144,6 +143,7 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
 
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
@@ -361,6 +361,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         date VARCHAR(50),
         description TEXT,
         recorded_by TEXT,
+        activity_id VARCHAR(100),
         fund_source TEXT,
         audited_status VARCHAR(50) DEFAULT 'Unaudited',
         audited_by TEXT,
@@ -880,6 +881,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       date: r.date,
       description: r.description,
       recordedBy: r.recorded_by,
+      activityId: r.activity_id,
       fundSource: r.fund_source,
       auditedStatus: r.audited_status,
       auditedBy: r.audited_by,
@@ -1250,8 +1252,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Saving', txList.length, 'transactions...');
       for (const tx of txList) {
         await client.query(`
-          INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, fund_source, audited_status, audited_by, audited_date, audit_notes)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, audited_status, audited_by, audited_date, audit_notes)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (id) DO UPDATE SET
             type = EXCLUDED.type,
             category = EXCLUDED.category,
@@ -1259,6 +1261,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             date = EXCLUDED.date,
             description = EXCLUDED.description,
             recorded_by = EXCLUDED.recorded_by,
+            activity_id = EXCLUDED.activity_id,
             fund_source = EXCLUDED.fund_source,
             audited_status = EXCLUDED.audited_status,
             audited_by = EXCLUDED.audited_by,
@@ -1266,7 +1269,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             audit_notes = EXCLUDED.audit_notes;
         `, [
           tx.id, tx.type, tx.category, tx.amount, tx.date, tx.description,
-          tx.recordedBy, tx.fundSource || null, tx.auditedStatus || 'Unaudited', tx.auditedBy || null,
+          tx.recordedBy, tx.activityId || null, tx.fundSource || null, tx.auditedStatus || 'Unaudited', tx.auditedBy || null,
           tx.auditedDate || null, tx.auditNotes || null
         ]);
       }

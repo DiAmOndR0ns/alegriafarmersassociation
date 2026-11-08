@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FinancialTransaction, OrganizationFund, HogRaisingState, User, OfficerRole, InventoryItem } from '../types';
+import { FinancialTransaction, OrganizationFund, HogRaisingState, User, OfficerRole, InventoryItem, AssociationActivity } from '../types';
 import { resolveOfficerPrefixed } from '../utils/officers';
+import { isActivityOpenForExpenses } from '../utils/activityExpenses';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { INITIAL_FUNDS, INITIAL_HOG_RAISING } from '../initialData';
 import FinancialStatement from './FinancialStatement';
@@ -22,6 +23,7 @@ import {
 
 interface TreasurerViewProps {
   transactions: FinancialTransaction[];
+  activities?: AssociationActivity[];
   funds?: OrganizationFund[];
   hogRaising?: HogRaisingState;
   inventory?: InventoryItem[];
@@ -133,6 +135,7 @@ export function aggregateMonthlyChartData(
 
 export default function TreasurerView({
   transactions,
+  activities = [],
   funds = INITIAL_FUNDS,
   hogRaising = INITIAL_HOG_RAISING,
   inventory = [],
@@ -167,6 +170,8 @@ export default function TreasurerView({
   const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
   const [txDesc, setTxDesc] = useState('');
   const [txPurpose, setTxPurpose] = useState('');
+  const [txActivityId, setTxActivityId] = useState('');
+  const [txActivityError, setTxActivityError] = useState('');
 
   // Custom / Different Fund Source Option in Transaction Modal
   const [isCustomFundSource, setIsCustomFundSource] = useState(false);
@@ -323,6 +328,13 @@ export default function TreasurerView({
     e.preventDefault();
     if (!txAmount || parseFloat(txAmount) <= 0 || !txDesc.trim()) return;
     if (txType === 'expense' && !txPurpose.trim()) return;
+    if (txType === 'expense' && txActivityId) {
+      const selectedActivity = activities.find(activity => activity.id === txActivityId);
+      if (!selectedActivity || !isActivityOpenForExpenses(selectedActivity)) {
+        setTxActivityError('This activity is closed for new expenses. Choose a scheduled or in-progress activity.');
+        return;
+      }
+    }
 
     const effectivePurpose = txPurpose.trim() || txDesc.trim();
     const liquidationDeadline = txType === 'expense'
@@ -355,6 +367,7 @@ export default function TreasurerView({
       amount: parseFloat(txAmount),
       date: txDate,
       description: txDesc,
+      activityId: txActivityId || undefined,
       purpose: effectivePurpose,
       liquidationDeadline,
       fundSource: finalFundSource,
@@ -364,6 +377,8 @@ export default function TreasurerView({
     setTxAmount('');
     setTxDesc('');
     setTxPurpose('');
+    setTxActivityId('');
+    setTxActivityError('');
     setCustomFundName('');
     setCustomFundCode('');
     setIsCustomFundSource(false);
@@ -888,6 +903,11 @@ export default function TreasurerView({
                         <span className="font-semibold text-amber-300">Purpose:</span> {tx.purpose}
                       </p>
                     )}
+                    {tx.activityId && (
+                      <p className="text-[11px] text-sky-200 mt-1">
+                        Activity: {activities.find(activity => activity.id === tx.activityId)?.title || 'Activity no longer listed'}
+                      </p>
+                    )}
                     {tx.liquidationDeadline && (
                       <p className="text-[10px] text-amber-300 mt-1">
                         Liquidation due by {tx.liquidationDeadline} • 20-day rule
@@ -1093,6 +1113,34 @@ export default function TreasurerView({
                   <span className="hidden sm:inline">Add category</span>
                 </button>
                 <p className="mt-1 text-xs text-[#4B6259] hidden">Choose a category or add one for this role, such as Budget Source Allocation.</p>
+              </div>
+
+              <div>
+                <label htmlFor="transaction-activity" className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                  Association activity (optional)
+                </label>
+                <select
+                  id="transaction-activity"
+                  value={txActivityId}
+                  onChange={(e) => {
+                    setTxActivityId(e.target.value);
+                    setTxActivityError('');
+                  }}
+                  className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">Not linked to an activity</option>
+                  {activities.filter(activity => txType !== 'expense' || isActivityOpenForExpenses(activity)).map(activity => (
+                    <option key={activity.id} value={activity.id}>
+                      {activity.title} — {activity.status} ({activity.scheduledDate})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-[#33473d]">
+                  {txType === 'expense'
+                    ? 'Expenses can be linked only while an activity is scheduled or in progress. Mark it Completed in the PIO activity manager to close it to new expenses.'
+                    : 'Link this entry to an activity to include it in activity-level financial reporting.'}
+                </p>
+                {txActivityError && <p role="alert" className="mt-1 text-xs font-semibold text-rose-700">{txActivityError}</p>}
               </div>
 
               {/* Fund Account Selection (Deposit Destination for Income, Budget Source for Expense) */}
@@ -1469,6 +1517,7 @@ export default function TreasurerView({
             </div>
             <FinancialStatement
               transactions={transactions}
+              activities={activities}
               funds={funds}
               hogRaising={hogRaising}
               inventory={inventory}
@@ -1482,4 +1531,3 @@ export default function TreasurerView({
     </div>
   );
 }
-

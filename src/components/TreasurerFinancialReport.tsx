@@ -16,13 +16,14 @@
  * no hardcoded officer names. All figures come from the system ledger.
  */
 import { useEffect, useRef } from 'react';
-import { FinancialTransaction, HogRaisingState, InventoryItem, OfficerRole, OrganizationFund, User } from '../types';
+import { AssociationActivity, FinancialTransaction, HogRaisingState, InventoryItem, OfficerRole, OrganizationFund, User } from '../types';
 import { resolveOfficerName } from '../utils/officers';
 
 interface TreasurerFinancialReportProps {
   /** Fiscal year of the statement — defaults to the CURRENT year when omitted. */
   year?: number;
   transactions: FinancialTransaction[];
+  activities?: AssociationActivity[];
   funds: OrganizationFund[];
   hogRaising?: HogRaisingState;
   inventory?: InventoryItem[];
@@ -57,6 +58,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function TreasurerFinancialReport({
   year: yearProp,
   transactions,
+  activities = [],
   funds,
   hogRaising,
   inventory = [],
@@ -71,8 +73,9 @@ export default function TreasurerFinancialReport({
   const reportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   /* ----- Figures from the system ledger (no hardcoded amounts) ----- */
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const yearTransactions = transactions.filter(t => t.date?.startsWith(String(year)));
+  const totalIncome = yearTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalExpense = yearTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const netBalance = totalIncome - totalExpense;
 
   // Fund accounts: cash on hand per treasury account
@@ -82,12 +85,24 @@ export default function TreasurerFinancialReport({
   // Income & expenditure by category (per association ledger categories)
   const incomeCategoryTotals: Record<string, number> = {};
   const expenseCategoryTotals: Record<string, number> = {};
-  transactions.forEach(t => {
+  yearTransactions.forEach(t => {
     if (t.type === 'income') {
       incomeCategoryTotals[t.category] = (incomeCategoryTotals[t.category] || 0) + t.amount;
     } else {
       expenseCategoryTotals[t.category] = (expenseCategoryTotals[t.category] || 0) + t.amount;
     }
+  });
+  const activityTotals = new Map<string, { title: string; income: number; expense: number }>();
+  yearTransactions.forEach(transaction => {
+    const activityId = transaction.activityId || 'unassigned';
+    const activity = activities.find(item => item.id === transaction.activityId);
+    const totals = activityTotals.get(activityId) || {
+      title: activity?.title || (transaction.activityId ? 'Activity no longer listed' : 'Not linked to an activity'),
+      income: 0,
+      expense: 0
+    };
+    totals[transaction.type] += Number(transaction.amount || 0);
+    activityTotals.set(activityId, totals);
   });
 
   // Hog Raising IGP (fiscal year)
@@ -184,6 +199,9 @@ export default function TreasurerFinancialReport({
         </header>
 
         <Section title="I. CASH BALANCE">
+          <p className="note">
+            Cash balances and allocated capital are current account snapshots; historical year-end balances are not stored.
+          </p>
           {funds.length === 0 ? (
             <Line label="No treasury accounts registered." value="—" indent />
           ) : funds.map(f => (
@@ -217,7 +235,20 @@ export default function TreasurerFinancialReport({
           <Line label="TOTAL EXPENDITURES" value={peso(totalExpense + hogExpenses)} bold />
         </Section>
 
-        <Section title="IV. NET FINANCIAL POSITION">
+        <Section title="IV. FINANCIAL SUMMARY BY ACTIVITY">
+          {activityTotals.size === 0 ? (
+            <Line label="No ledger transactions recorded for this year." value="—" indent />
+          ) : Array.from(activityTotals.entries()).map(([activityId, item]) => (
+            <div key={activityId}>
+              <div className="subheading">{item.title}</div>
+              <Line label="Income" value={peso(item.income)} indent />
+              <Line label="Expenses" value={peso(item.expense)} indent />
+              <Line label="Net" value={peso(item.income - item.expense)} bold indent />
+            </div>
+          ))}
+        </Section>
+
+        <Section title="V. NET FINANCIAL POSITION">
           <Line label="Total Income / Receipts" value={peso(totalIncome + hogSales)} indent />
           <Line label="Less: Total Expenditures" value={`(${peso(totalExpense + hogExpenses)})`} indent />
           <div className="rule" />

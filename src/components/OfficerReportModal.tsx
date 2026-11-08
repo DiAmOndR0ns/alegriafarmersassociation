@@ -680,13 +680,15 @@ export default function OfficerReportModal({
       });
       csvRows.push('');
       csvRows.push('4. TRANSACTION LEDGER WITH BUDGET SOURCE TRACEABILITY');
-      csvRows.push('ID,Date,Type,Category,Budget / Fund Source Taken From,Description,Recorded By,Amount (PHP),Audit Status');
+      csvRows.push('ID,Date,Type,Category,Association Activity,Budget / Fund Source Taken From,Description,Recorded By,Amount (PHP),Audit Status');
       transactions.forEach(t => {
+        const activityName = activities.find(activity => activity.id === t.activityId)?.title || '';
         csvRows.push([
           t.id,
           t.date,
           t.type,
           `"${t.category.replace(/"/g, '""')}"`,
+          `"${activityName.replace(/"/g, '""')}"`,
           `"${(t.fundSource || 'General Operational Fund (GF-SLP)').replace(/"/g, '""')}"`,
           `"${t.description.replace(/"/g, '""')}"`,
           `"${t.recordedBy.replace(/"/g, '""')}"`,

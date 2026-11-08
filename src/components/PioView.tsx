@@ -724,6 +724,11 @@ export default function PioView({
                         <option value="Postponed">{t('Gibalhin og petsa', 'Postponed')}</option>
                         <option value="Cancelled">{t('Kinansela', 'Cancelled')}</option>
                       </select>
+                      <p className="text-xs leading-relaxed text-[#4A5F57]">
+                        {actStatus === 'Completed'
+                          ? (en ? 'Marking an activity Completed closes it to new linked expense entries.' : 'Pagsimbolo sa kalihokan nga Nahuman mopahunong sa bag-ong gasto nga i-link niini.')
+                          : (en ? 'Treasurers can link expenses while this activity is Scheduled or In Progress.' : 'Mahimong i-link sa Treasurer ang mga gasto samtang Nakaplano o Nagpadayon ang kalihokan.')}
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-1.5">

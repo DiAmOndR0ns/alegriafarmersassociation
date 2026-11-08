@@ -5,7 +5,7 @@ import {
   Check, ChevronLeft, ChevronRight, Lock, ShieldAlert, Megaphone,
   MapPin, Clock, Tag, AlertTriangle, Boxes, Phone, X, ShoppingBag
 } from 'lucide-react';
-import { HogRaisingState, Member, Product, Announcement, AssociationActivity, AssociationAchievement, User } from '../types';
+import { HogRaisingState, Member, PublicProduct, Announcement, AssociationActivity, AssociationAchievement, User } from '../types';
 import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
 import { useLanguage, LanguageToggle } from '../i18n/LanguageContext';
 
@@ -13,12 +13,15 @@ interface GuestPortalProps {
   onEnterLogin: () => void;
   members: Member[];
   hogRaising: HogRaisingState;
-  products?: Product[];
+  products?: PublicProduct[];
   announcements?: Announcement[];
   activities?: AssociationActivity[];
   achievements?: AssociationAchievement[];
   users?: User[];
 }
+
+export const getPublishedProducts = (products: PublicProduct[]) =>
+  products.filter(product => product.isPublished);
 
 export default function GuestPortal({
   onEnterLogin,
@@ -33,6 +36,7 @@ export default function GuestPortal({
   const { isEnglish: en, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'>('home');
   const [displayAchievements, setDisplayAchievements] = useState(achievements);
+  const [displayProducts, setDisplayProducts] = useState(() => getPublishedProducts(products));
   const [selectedProductModal, setSelectedProductModal] = useState<any | null>(null);
   const productDialogRef = useRef<HTMLDivElement>(null);
   const productDialogCloseRef = useRef<HTMLButtonElement>(null);
@@ -40,6 +44,31 @@ export default function GuestPortal({
   useEffect(() => {
     setDisplayAchievements(achievements);
   }, [achievements]);
+
+  useEffect(() => {
+    setDisplayProducts(getPublishedProducts(products));
+  }, [products]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/public-products')
+      .then(async response => {
+        if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+        return response.json();
+      })
+      .then(result => {
+        if (active && result?.success && Array.isArray(result.products)) {
+          setDisplayProducts(getPublishedProducts(result.products));
+        }
+      })
+      .catch(error => {
+        if (active) console.warn('[Guest Products] Unable to refresh published products.', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -687,7 +716,7 @@ export default function GuestPortal({
 
             {/* Products Grid — condensed cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 min-w-0">
-              {products.map((prod) => {
+              {displayProducts.map((prod) => {
                 const Icon = prod.category.includes('Rental') ? Boxes : Coffee;
                 const cardColor = prod.category.includes('Rental')
                   ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
@@ -736,7 +765,7 @@ export default function GuestPortal({
                   </button>
                 );
               })}
-              {products.length === 0 && (
+              {displayProducts.length === 0 && (
                 <p className="col-span-full bg-white p-6 rounded-2xl border-2 border-[#D5CFC1] text-center text-base font-semibold text-slate-700">
                   {t('Walay produkto nga gilista karon.', 'No products are listed right now.')}
                 </p>
