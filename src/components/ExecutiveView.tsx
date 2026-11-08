@@ -4,7 +4,7 @@ import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRo
 import {
   ShieldCheck, Users, Coins, BookOpen, FileCheck, Activity, Check, X,
   KeyRound, Trash2, Clock, Smartphone, AlertTriangle, Printer, Calendar,
-  Sprout, MapPin, Search, Lock, Download, ShieldAlert, Shield
+  Sprout, MapPin, Search, Lock, Download, ShieldAlert, Shield, Upload, Database, RefreshCw
 } from 'lucide-react';
 import { buildAuditChain } from '../utils/audit';
 import { generateInitialPassword } from '../utils/passwordPolicy';
@@ -34,6 +34,7 @@ interface ExecutiveViewProps {
   ) => void;
   onOpenReportModal?: () => void;
   onDownloadBackup?: () => void;
+  onRestoreBackup?: (backupData: any) => Promise<boolean | void> | boolean | void;
   // President approval workflow: Secretary Minutes of Meeting (Secretary drafts → President approves)
   onApproveMeetingMinutes?: (id: string, remarks?: string) => void;
   onReturnMeetingMinutes?: (id: string, remarks: string) => void;
@@ -61,6 +62,7 @@ export default function ExecutiveView({
   onPresidentTurnover,
   onOpenReportModal,
   onDownloadBackup,
+  onRestoreBackup,
   onApproveMeetingMinutes,
   onReturnMeetingMinutes,
   onPresidentApproveTransaction,
@@ -68,6 +70,48 @@ export default function ExecutiveView({
   onUpdateUser
 }: ExecutiveViewProps) {
   const { t, isEnglish } = useLanguage();
+
+  // Backup loading / restoration state
+  const backupFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<any | null>(null);
+  const [isRestoringBackup, setIsRestoringBackup] = useState<boolean>(false);
+  const [backupRestoreError, setBackupRestoreError] = useState<string>('');
+
+  const handleBackupFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        const data = parsed?.data || parsed;
+        if (!data || typeof data !== 'object') {
+          throw new Error('File does not appear to be an AFA system backup JSON.');
+        }
+        setBackupRestoreError('');
+        setPendingBackup(parsed);
+      } catch (err: any) {
+        setBackupRestoreError(err?.message || 'Failed to parse JSON backup file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!pendingBackup || !onRestoreBackup) return;
+    setIsRestoringBackup(true);
+    try {
+      await onRestoreBackup(pendingBackup);
+      setPendingBackup(null);
+    } catch (err: any) {
+      setBackupRestoreError(err?.message || 'Failed to restore backup.');
+    } finally {
+      setIsRestoringBackup(false);
+    }
+  };
   const [showMeetingsModal, setShowMeetingsModal] = useState<boolean>(false);
   const [selectedMeetingForPrint, setSelectedMeetingForPrint] = useState<Meeting | null>(null);
 
@@ -330,6 +374,39 @@ export default function ExecutiveView({
               <Printer className="w-4 h-4 text-[#D8F3DC] shrink-0" />
               <span className="truncate">Export Executive Report</span>
             </button>
+          )}
+          {currentRole === 'President' && onDownloadBackup && (
+            <button
+              id="executive-download-backup-btn"
+              type="button"
+              onClick={onDownloadBackup}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-black bg-[#1B4332] hover:bg-[#2D6A4F] text-white border border-[#52B788] rounded-2xl shadow-sm transition-all cursor-pointer uppercase tracking-wider min-w-0"
+              title="Download formatted JSON system backup"
+            >
+              <Download className="w-4 h-4 text-[#D8F3DC] shrink-0" />
+              <span className="truncate">Export Backup</span>
+            </button>
+          )}
+          {currentRole === 'President' && onRestoreBackup && (
+            <>
+              <input
+                type="file"
+                ref={backupFileInputRef}
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleBackupFileSelect}
+              />
+              <button
+                id="executive-restore-backup-btn"
+                type="button"
+                onClick={() => backupFileInputRef.current?.click()}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-black bg-amber-700 hover:bg-amber-800 text-white border border-amber-500 rounded-2xl shadow-sm transition-all cursor-pointer uppercase tracking-wider min-w-0"
+                title="Load and restore an exported JSON backup into database"
+              >
+                <Upload className="w-4 h-4 text-amber-200 shrink-0" />
+                <span className="truncate">Load Backup</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1840,6 +1917,122 @@ export default function ExecutiveView({
               >
                 <Trash2 className="w-4 h-4" />
                 <span>Delete Officer & Role</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LOAD & RESTORE BACKUP MODAL */}
+      {pendingBackup && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white border-2 border-amber-600 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden p-6 text-left space-y-4">
+            <div className="flex items-center gap-3 border-b border-amber-100 pb-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+                <Database className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-extrabold text-slate-900 text-base">Load & Restore System Backup</h3>
+                <p className="text-xs text-amber-700 font-bold uppercase tracking-wider">Database Ingestion & State Recovery</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingBackup(null)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-1">
+                <div className="font-bold text-amber-900 flex justify-between">
+                  <span>Export Date:</span>
+                  <span className="font-mono">{pendingBackup.exportDate ? new Date(pendingBackup.exportDate).toLocaleString() : 'Not specified'}</span>
+                </div>
+                <div className="font-bold text-amber-900 flex justify-between">
+                  <span>Exported By:</span>
+                  <span>{pendingBackup.exportedBy || 'AFA Administrator'}</span>
+                </div>
+                <div className="font-bold text-amber-900 flex justify-between">
+                  <span>Association:</span>
+                  <span className="truncate">{pendingBackup.association || 'Alegria Farmers Association'}</span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider mb-2">Detected Records to Restore:</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-center">
+                    <div className="text-lg font-black text-[#1B4332]">{pendingBackup.data?.members?.length || pendingBackup.members?.length || 0}</div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Members</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-center">
+                    <div className="text-lg font-black text-emerald-700">{pendingBackup.data?.transactions?.length || pendingBackup.transactions?.length || pendingBackup.data?.financialTransactions?.length || 0}</div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Transactions</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-center">
+                    <div className="text-lg font-black text-blue-700">{pendingBackup.data?.meetings?.length || pendingBackup.meetings?.length || 0}</div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Meetings</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-center">
+                    <div className="text-lg font-black text-indigo-700">{pendingBackup.data?.resolutions?.length || pendingBackup.resolutions?.length || 0}</div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Resolutions</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-center">
+                    <div className="text-lg font-black text-amber-700">{pendingBackup.data?.products?.length || pendingBackup.products?.length || 0}</div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Products</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-center">
+                    <div className="text-lg font-black text-purple-700">{pendingBackup.data?.activities?.length || pendingBackup.activities?.length || 0}</div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Activities</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-950 text-[11px] space-y-1">
+                <div className="font-extrabold flex items-center gap-1.5 text-emerald-900">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Automatic Database Synchronization</span>
+                </div>
+                <p>
+                  Confirming this restore will update your local session and immediately synchronize and persist all rows directly to your connected PostgreSQL database (<code>afa_db</code>).
+                </p>
+              </div>
+
+              {backupRestoreError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-bold">
+                  {backupRestoreError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setPendingBackup(null)}
+                disabled={isRestoringBackup}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer text-center"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                disabled={isRestoringBackup}
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold rounded-xl cursor-pointer text-center shadow-md flex items-center justify-center gap-2"
+              >
+                {isRestoringBackup ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Restoring & Syncing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    <span>Confirm & Restore Backup</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -2806,6 +2806,149 @@ export default function App() {
     showToastMessage(`Turnover completed! The new President is ${newPresidentUser.name}!`, 'success');
   };
 
+  const handleRestoreSystemBackup = async (rawBackup: any): Promise<boolean> => {
+    try {
+      const data = rawBackup?.data || rawBackup;
+      if (!data || typeof data !== 'object') {
+        showToastMessage('Invalid backup format. Missing data structure.', 'error');
+        return false;
+      }
+
+      let restoredCounts = 0;
+
+      // 1. Members
+      if (Array.isArray(data.members)) {
+        setMembers(data.members);
+        await updateStorage('bafa_members', data.members);
+        restoredCounts += data.members.length;
+      }
+
+      // 2. Transactions
+      const txList = Array.isArray(data.transactions) ? data.transactions : (Array.isArray(data.financialTransactions) ? data.financialTransactions : null);
+      if (txList) {
+        setTransactions(txList);
+        await updateStorage('bafa_transactions', txList);
+        restoredCounts += txList.length;
+      }
+
+      // 3. Meetings
+      if (Array.isArray(data.meetings)) {
+        setMeetings(data.meetings);
+        await updateStorage('bafa_meetings', data.meetings);
+        restoredCounts += data.meetings.length;
+      }
+
+      // 4. Resolutions
+      if (Array.isArray(data.resolutions)) {
+        setResolutions(data.resolutions);
+        await updateStorage('bafa_resolutions', data.resolutions);
+        restoredCounts += data.resolutions.length;
+      }
+
+      // 5. Announcements
+      if (Array.isArray(data.announcements)) {
+        setAnnouncements(data.announcements);
+        await updateStorage('bafa_announcements', data.announcements);
+      }
+
+      // 6. Products
+      if (Array.isArray(data.products)) {
+        setProducts(data.products);
+        await updateStorage('bafa_products', data.products);
+      }
+
+      // 7. Activities
+      if (Array.isArray(data.activities)) {
+        setActivities(data.activities);
+        await updateStorage('bafa_activities', data.activities);
+      }
+
+      // 8. Achievements
+      if (Array.isArray(data.achievements)) {
+        setAchievements(data.achievements);
+        await updateStorage('bafa_achievements', data.achievements);
+      }
+
+      // 9. Organization Funds
+      if (Array.isArray(data.funds) || Array.isArray(data.organizationFunds)) {
+        const fundsList = data.funds || data.organizationFunds;
+        setFunds(fundsList);
+        await updateStorage('bafa_funds', fundsList);
+      }
+
+      // 10. Inventory
+      if (Array.isArray(data.inventory)) {
+        setInventory(data.inventory);
+        await updateStorage('bafa_inventory', data.inventory);
+      }
+
+      // 11. IGP / Hog Raising
+      const igp = data.hogRaising || data.afa_igp;
+      if (igp && typeof igp === 'object') {
+        setHogRaising(igp);
+        await updateStorage('bafa_afa_igp', igp);
+      }
+
+      // 12. Users (Preserve existing credentials if not included in safe backup)
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        const mergedUsers = [...users];
+        for (const u of data.users) {
+          const idx = mergedUsers.findIndex(existing => existing.id === u.id || existing.username?.toLowerCase() === u.username?.toLowerCase());
+          if (idx >= 0) {
+            mergedUsers[idx] = { ...mergedUsers[idx], ...u, password: mergedUsers[idx].password || u.password };
+          } else {
+            mergedUsers.push(u);
+          }
+        }
+        setUsers(mergedUsers);
+        await updateStorage('bafa_users', mergedUsers);
+      }
+
+      // 13. System Logs
+      if (Array.isArray(data.logs) || Array.isArray(data.systemLogs)) {
+        const logList = data.logs || data.systemLogs;
+        setLogs(logList);
+        await updateStorage('bafa_logs', logList);
+      }
+
+      // Sync everything directly to the database via /api/sync/push
+      const pushPayload = {
+        members: data.members || members,
+        meetings: data.meetings || meetings,
+        resolutions: data.resolutions || resolutions,
+        transactions: txList || transactions,
+        announcements: data.announcements || announcements,
+        products: data.products || products,
+        activities: data.activities || activities,
+        achievements: data.achievements || achievements,
+        funds: data.funds || data.organizationFunds || funds,
+        hogRaising: igp || hogRaising,
+        users: data.users || users,
+        logs: data.logs || data.systemLogs || logs,
+      };
+
+      try {
+        const res = await fetch('/api/sync/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pushPayload),
+        });
+        if (res.ok) {
+          checkDatabaseConnection();
+        }
+      } catch (syncErr) {
+        console.warn('[Restore Sync Warning]:', syncErr);
+      }
+
+      showToastMessage(`Backup successfully restored! ${restoredCounts} core records updated and synchronized to database.`, 'success');
+      return true;
+    } catch (err: any) {
+      console.error('[Restore Error]:', err);
+      showToastMessage(`Failed to restore backup: ${err?.message || 'Unknown error'}`, 'error');
+      return false;
+    }
+  };
+
   const handleDownloadSystemBackup = () => {
     const backupData = {
       exportDate: new Date().toISOString(),
@@ -3372,6 +3515,7 @@ export default function App() {
                 onPresidentTurnover={handlePresidentTurnover}
                 onOpenReportModal={() => setShowReportModal(true)}
                 onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
+                onRestoreBackup={currentRole === 'President' ? handleRestoreSystemBackup : undefined}
                 onApproveMeetingMinutes={handleApproveMeetingMinutes}
                 onReturnMeetingMinutes={handleReturnMeetingMinutes}
                 onPresidentApproveTransaction={handlePresidentApproveTransaction}

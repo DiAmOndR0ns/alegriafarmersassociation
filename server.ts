@@ -23,6 +23,7 @@ import {
   sessionHandler,
 } from "./src/api/auth";
 
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config();
 
 export async function createApp() {
@@ -38,10 +39,8 @@ export async function createApp() {
   app.post("/api/auth/password/change", passwordChangeHandler);
   app.post("/api/auth/password/reset", passwordResetHandler);
 
-  // API to Check Live Cloud Database (Supabase / PostgreSQL) Status
+  // API to Check Live Cloud Database (Supabase / PostgreSQL) Status (Public Health Check)
   app.get("/api/db/status", async (req, res) => {
-    const user = await requireAuthenticated(req, res);
-    if (!user) return;
     const rawUrl = (process.env.DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');
 
     if (!rawUrl) {
