@@ -44,6 +44,7 @@ import {
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
   ChevronLeft, ChevronRight, Download, Database
 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 
 export default function App() {
   // Auth & Accounts State
@@ -3724,6 +3725,7 @@ export default function App() {
         onConfirm={executeClearLocalCache}
       />
 
+      <Analytics />
     </div>
   );
 }
