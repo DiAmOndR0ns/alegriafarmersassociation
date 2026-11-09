@@ -1,12 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement, AssociationActivity, InventoryItem, HogRaisingState, OfficerRole, OrganizationFund, User } from '../types';
 import { INITIAL_FUNDS } from '../initialData';
 import { resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
 import {  getSurname } from '../utils/names';
+import { getTreasurerReportRange, getTreasurerReportRows } from '../utils/treasurerReport';
 import {
   Printer, Download, X, FileText, ShieldCheck, Coins,
   Wallet, Database, Layers, CheckCircle2, AlertCircle
 } from 'lucide-react';
+
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+}[character] as string));
+
+const csvCell = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
 
 interface OfficerReportModalProps {
   currentRole: OfficerRole;
@@ -42,11 +53,28 @@ export default function OfficerReportModal({
 }: OfficerReportModalProps) {
   const isPresident = currentRole === 'President';
   // Non-presidents are strictly locked to their own officer role report
-  const [reportDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [reportDate, setReportDate] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
+  const [reportPeriod, setReportPeriod] = useState<'day' | 'week' | 'month'>('day');
+  const [reportKind, setReportKind] = useState<'all' | 'income' | 'expenses' | 'livestock-sales'>('all');
+  const [reportCategory, setReportCategory] = useState('all');
   const [customRemarks, setCustomRemarks] = useState<string>('');
 
   // Every officer can export only the report for their assigned role.
   const activeReportRole = currentRole;
+  const isTreasurerReport = ['Treasurer', 'Assistant_Treasurer'].includes(activeReportRole);
+  const reportAnchorDate = reportDate || new Date().toISOString().split('T')[0];
+  const treasurerReportRange = getTreasurerReportRange(reportAnchorDate, reportPeriod);
+  const treasurerCategoryRows = getTreasurerReportRows(transactions, hogRaising, treasurerReportRange, reportKind);
+  const treasurerCategories = Array.from(new Set(treasurerCategoryRows.map(row => row.category))).sort((a, b) => a.localeCompare(b));
+  const treasurerReportRows = treasurerCategoryRows.filter(row => reportCategory === 'all' || row.category === reportCategory);
+  const treasurerReportTotal = treasurerReportRows.reduce((sum, row) => sum + row.amount, 0);
+
+  useEffect(() => {
+    if (reportCategory !== 'all' && !treasurerCategories.includes(reportCategory)) setReportCategory('all');
+  }, [reportCategory, treasurerCategories.join('|')]);
 
   // Calculations for Financials
   let totalIncome = 0;
@@ -144,6 +172,78 @@ export default function OfficerReportModal({
     };
 
     const docTitle = titleMap[activeReportRole] || 'AFA OFFICIAL OFFICER REPORT';
+
+    if (isTreasurerReport) {
+      const reportRowsHtml = treasurerReportRows.map(row => `
+        <tr>
+          <td>${escapeHtml(row.date)}</td>
+          <td>${escapeHtml(row.type)}</td>
+          <td>${escapeHtml(row.category)}</td>
+          <td>${escapeHtml(row.fundSource)}</td>
+          <td>${escapeHtml(row.description)}</td>
+          <td>${escapeHtml(row.recordedBy)}</td>
+          <td class="amount">PHP ${row.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+        </tr>
+      `).join('');
+      const categoryTotals = new Map<string, number>();
+      treasurerReportRows.forEach(row => categoryTotals.set(row.category, (categoryTotals.get(row.category) || 0) + row.amount));
+      const categorySummaryHtml = Array.from(categoryTotals, ([category, amount]) => `
+        <tr><td>${escapeHtml(category)}</td><td class="amount">PHP ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td></tr>
+      `).join('');
+      const reportTypeLabel = reportKind === 'all' ? 'All transactions' :
+        reportKind === 'income' ? 'Income only' :
+        reportKind === 'expenses' ? 'Expenses only' : 'Livestock sale proceeds';
+
+      printWindow.document.write(`<!doctype html>
+        <html>
+          <head>
+            <title>${escapeHtml(docTitle)} - ${escapeHtml(treasurerReportRange.label)}</title>
+            <style>
+              @page { size: landscape; margin: 14mm; }
+              body { font-family: Arial, Helvetica, sans-serif; color: #17251d; font-size: 12px; }
+              header { text-align: center; border-bottom: 2px solid #1b4332; padding-bottom: 12px; }
+              h1 { font-size: 20px; margin: 4px 0; color: #1b4332; }
+              h2 { font-size: 16px; margin: 16px 0 8px; color: #1b4332; }
+              .meta { margin: 14px 0; padding: 10px; background: #f0f5f1; }
+              table { width: 100%; border-collapse: collapse; margin: 8px 0 20px; }
+              th, td { border: 1px solid #87978b; padding: 7px; text-align: left; vertical-align: top; }
+              th { background: #e6eee8; }
+              .amount { text-align: right; white-space: nowrap; }
+              .empty { padding: 16px; text-align: center; border: 1px solid #87978b; }
+              @media print { tr { break-inside: avoid; } }
+            </style>
+          </head>
+          <body>
+            <header>
+              <div>Republic of the Philippines · Province of Cebu · Municipality of Tuburan</div>
+              <h1>ALEGRIA FARMERS ASSOCIATION (AFA)</h1>
+              <div>Barangay Alegria, Tuburan, Cebu</div>
+              <h2>${escapeHtml(docTitle)}</h2>
+            </header>
+            <div class="meta">
+              <strong>Period:</strong> ${escapeHtml(treasurerReportRange.label)} &nbsp; | &nbsp;
+              <strong>Report type:</strong> ${escapeHtml(reportTypeLabel)} &nbsp; | &nbsp;
+              <strong>Category:</strong> ${escapeHtml(reportCategory === 'all' ? 'All categories' : reportCategory)}<br />
+              <strong>Prepared by:</strong> ${escapeHtml(getOfficerNameByRole(activeReportRole))} &nbsp; | &nbsp;
+              <strong>Records:</strong> ${treasurerReportRows.length} &nbsp; | &nbsp;
+              <strong>Total amount:</strong> PHP ${treasurerReportTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </div>
+            <h2>Totals by category</h2>
+            ${categorySummaryHtml
+              ? `<table><thead><tr><th>Category</th><th class="amount">Total (PHP)</th></tr></thead><tbody>${categorySummaryHtml}</tbody></table>`
+              : '<p class="empty">No records match the selected period and filters.</p>'}
+            <h2>Detailed records</h2>
+            ${reportRowsHtml
+              ? `<table><thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Registered fund source</th><th>Description</th><th>Recorded by</th><th class="amount">Amount</th></tr></thead><tbody>${reportRowsHtml}</tbody></table>`
+              : '<p class="empty">No records to print.</p>'}
+            ${customRemarks ? `<p><strong>Remarks:</strong> ${escapeHtml(customRemarks).replace(/\n/g, '<br />')}</p>` : ''}
+            <p>Generated ${escapeHtml(new Date().toLocaleString())} · Figures are from the registered treasury ledger and livestock records.</p>
+            <script>window.onload = function() { window.print(); };</script>
+          </body>
+        </html>`);
+      printWindow.document.close();
+      return;
+    }
 
     let contentHtml = '';
 
@@ -646,6 +746,47 @@ export default function OfficerReportModal({
   const handleExportCSV = () => {
     const csvRows: string[] = [];
 
+    if (isTreasurerReport) {
+      const reportTypeLabel = reportKind === 'all' ? 'All transactions' :
+        reportKind === 'income' ? 'Income only' :
+        reportKind === 'expenses' ? 'Expenses only' : 'Livestock sale proceeds';
+      csvRows.push('AFA OFFICIAL TREASURER ACTIVITY REPORT');
+      csvRows.push(`Period,${csvCell(treasurerReportRange.label)}`);
+      csvRows.push(`Report Type,${csvCell(reportTypeLabel)}`);
+      csvRows.push(`Category,${csvCell(reportCategory === 'all' ? 'All categories' : reportCategory)}`);
+      csvRows.push(`Prepared By,${csvCell(getOfficerNameByRole(activeReportRole))}`);
+      csvRows.push(`Record Count,${treasurerReportRows.length}`);
+      csvRows.push(`Total Amount (PHP),${treasurerReportTotal.toFixed(2)}`);
+      csvRows.push('');
+      csvRows.push('TOTALS BY CATEGORY');
+      csvRows.push('Category,Amount (PHP)');
+      const categoryTotals = new Map<string, number>();
+      treasurerReportRows.forEach(row => categoryTotals.set(row.category, (categoryTotals.get(row.category) || 0) + row.amount));
+      categoryTotals.forEach((amount, category) => csvRows.push(`${csvCell(category)},${amount.toFixed(2)}`));
+      csvRows.push('');
+      csvRows.push('Date,Type,Category,Registered Fund Source,Description,Recorded By,Amount (PHP)');
+      treasurerReportRows.forEach(row => {
+        csvRows.push([
+          csvCell(row.date),
+          csvCell(row.type),
+          csvCell(row.category),
+          csvCell(row.fundSource),
+          csvCell(row.description),
+          csvCell(row.recordedBy),
+          row.amount.toFixed(2)
+        ].join(','));
+      });
+
+      const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvRows.join('\n'));
+      const link = document.createElement('a');
+      link.setAttribute('href', csvContent);
+      link.setAttribute('download', `AFA_Treasurer_Report_${reportPeriod}_${reportAnchorDate}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
     if (activeReportRole === 'Treasurer' || activeReportRole === 'Assistant_Treasurer') {
       csvRows.push('AFA OFFICIAL TREASURER FINANCIAL REPORT');
       csvRows.push(`Date Generated,${reportDate}`);
@@ -938,8 +1079,140 @@ export default function OfficerReportModal({
             </div>
           )}
 
+          {isTreasurerReport && (
+            <section aria-labelledby="treasurer-report-filters-heading" className="rounded-2xl border-2 border-[#B8CDBE] bg-white p-4 sm:p-6 space-y-5">
+              <div>
+                <h3 id="treasurer-report-filters-heading" className="text-xl font-black text-[#1B4332]">
+                  Treasurer Activity Report
+                </h3>
+                <p className="mt-1 text-base text-[#33473D]">
+                  Choose a day, week, or month, then print or export only the matching records.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="treasurer-report-period" className="block text-base font-bold text-[#1B4332] mb-1.5">
+                    Report period
+                  </label>
+                  <select
+                    id="treasurer-report-period"
+                    value={reportPeriod}
+                    onChange={event => setReportPeriod(event.target.value as 'day' | 'week' | 'month')}
+                    className="w-full min-h-12 rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-base text-[#1B4332] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
+                  >
+                    <option value="day">One day</option>
+                    <option value="week">One week (Monday to Sunday)</option>
+                    <option value="month">One month</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="treasurer-report-date" className="block text-base font-bold text-[#1B4332] mb-1.5">
+                    {reportPeriod === 'day' ? 'Report date' : 'Choose a date in the period'}
+                  </label>
+                  <input
+                    id="treasurer-report-date"
+                    type="date"
+                    required
+                    value={reportDate}
+                    onChange={event => setReportDate(event.target.value)}
+                    className="w-full min-h-12 rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-base text-[#1B4332] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="treasurer-report-kind" className="block text-base font-bold text-[#1B4332] mb-1.5">
+                    Records to include
+                  </label>
+                  <select
+                    id="treasurer-report-kind"
+                    value={reportKind}
+                    onChange={event => {
+                      setReportKind(event.target.value as 'all' | 'income' | 'expenses' | 'livestock-sales');
+                      setReportCategory('all');
+                    }}
+                    className="w-full min-h-12 rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-base text-[#1B4332] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
+                  >
+                    <option value="all">All transactions</option>
+                    <option value="income">Income only</option>
+                    <option value="expenses">Expenses only</option>
+                    <option value="livestock-sales">Livestock sale proceeds only</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="treasurer-report-category" className="block text-base font-bold text-[#1B4332] mb-1.5">
+                    Category
+                  </label>
+                  <select
+                    id="treasurer-report-category"
+                    value={reportCategory}
+                    onChange={event => setReportCategory(event.target.value)}
+                    className="w-full min-h-12 rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-base text-[#1B4332] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
+                  >
+                    <option value="all">All categories</option>
+                    {treasurerCategories.map(category => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2 flex items-end">
+                  <p className="w-full rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-base font-semibold text-[#1B4332]" aria-live="polite">
+                    Period: {treasurerReportRange.label}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-[#B8CDBE] bg-[#F7F9F7] p-4">
+                  <span className="block text-sm font-bold uppercase text-[#33473D]">Matching records</span>
+                  <span className="mt-1 block text-2xl font-black text-[#1B4332]">{treasurerReportRows.length}</span>
+                </div>
+                <div className="rounded-xl border border-[#B8CDBE] bg-[#F7F9F7] p-4">
+                  <span className="block text-sm font-bold uppercase text-[#33473D]">Total amount in this report</span>
+                  <span className="mt-1 block text-2xl font-black text-[#1B4332]">
+                    PHP {treasurerReportTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-[#B8CDBE]">
+                <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                  <thead className="bg-[#EAF6EE] text-[#1B4332]">
+                    <tr>
+                      <th scope="col" className="p-3 font-bold">Date</th>
+                      <th scope="col" className="p-3 font-bold">Type</th>
+                      <th scope="col" className="p-3 font-bold">Category</th>
+                      <th scope="col" className="p-3 font-bold">Description</th>
+                      <th scope="col" className="p-3 font-bold">Fund source</th>
+                      <th scope="col" className="p-3 text-right font-bold">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {treasurerReportRows.length ? treasurerReportRows.map(row => (
+                      <tr key={`${row.type}-${row.id}`} className="border-t border-[#D5CFC1] odd:bg-white even:bg-[#F7F9F7]">
+                        <td className="p-3 whitespace-nowrap">{row.date}</td>
+                        <td className="p-3">{row.type}</td>
+                        <td className="p-3">{row.category}</td>
+                        <td className="p-3">{row.description}</td>
+                        <td className="p-3">{row.fundSource}</td>
+                        <td className="p-3 text-right whitespace-nowrap font-mono font-bold">PHP {row.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={6} className="p-6 text-center text-base font-semibold text-[#33473D]">
+                          No records match these choices. Try another date, period, record type, or category.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
           {/* REPORT PREVIEW CARD */}
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] p-5 rounded-2xl space-y-4 text-xs text-[#1B4332]">
+          <div className={isTreasurerReport ? 'hidden' : 'bg-[#F7F4EF] border border-[#D5CFC1] p-5 rounded-2xl space-y-4 text-xs text-[#1B4332]'}>
             <div className="flex flex-wrap justify-between items-center gap-2 border-b border-[#D5CFC1] pb-3">
               <div>
                 <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Official Document Preview</span>

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import FinancialStatement from './FinancialStatement';
 import TreasurerFinancialReport from './TreasurerFinancialReport';
+import OfficerReportModal from './OfficerReportModal';
 import { AssociationActivity, FinancialTransaction } from '../types';
 
 const transactions: FinancialTransaction[] = [
@@ -74,5 +75,29 @@ describe('annual financial reports', () => {
     expect(markup).toContain('1,200.00');
     expect(markup).toContain('300.00');
     expect(markup).not.toContain('98,765.00');
+  });
+
+  it('shows Treasurer day, week, month, record type, and category controls in the report center', () => {
+    const markup = renderToStaticMarkup(
+      <OfficerReportModal
+        currentRole="Treasurer"
+        users={[]}
+        members={[]}
+        meetings={[]}
+        resolutions={[]}
+        transactions={transactions}
+        announcements={[]}
+        logs={[]}
+        funds={[]}
+        onClose={() => {}}
+      />
+    );
+
+    expect(markup).toContain('Treasurer Activity Report');
+    expect(markup).toContain('One day');
+    expect(markup).toContain('One week (Monday to Sunday)');
+    expect(markup).toContain('One month');
+    expect(markup).toContain('Livestock sale proceeds only');
+    expect(markup).toContain('treasurer-report-category');
   });
 });
