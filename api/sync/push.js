@@ -113,6 +113,10 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audit_notes TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_by TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
@@ -161,6 +165,19 @@ async function runSchemaMigrations(client) {
       description TEXT NOT NULL,
       icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
     );`,
+    `CREATE TABLE IF NOT EXISTS organization_funds (
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      code VARCHAR(50) NOT NULL,
+      allocated_amount NUMERIC DEFAULT 0,
+      current_balance NUMERIC DEFAULT 0,
+      description TEXT,
+      custodian TEXT,
+      last_updated VARCHAR(50)
+    );`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
+    `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
       id VARCHAR(100) PRIMARY KEY,
