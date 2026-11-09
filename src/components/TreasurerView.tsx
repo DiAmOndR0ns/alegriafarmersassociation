@@ -132,7 +132,7 @@ export default function TreasurerView({
     setNewCategoryName('');
     setShowCategoryModal(false);
   };
-  
+
   // The analytics year filter covers both association ledger and IGP entries.
   const availableYears = useMemo(() => {
     const yearsSet = new Set<string>();
@@ -712,6 +712,7 @@ export default function TreasurerView({
             id="treasurer-financial-statement-btn"
             type="button"
             onClick={() => setShowFinancialStatement(true)}
+            style={{ color: '#ffffff' }}
             className="flex min-h-14 items-center justify-center gap-2 px-4 py-3 text-base font-bold bg-[#14532D] hover:bg-[#123F25] text-white border border-[#14532D] rounded-xl shadow-sm transition-all w-full xl:w-auto cursor-pointer focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
           >
             <FileText className="w-5 h-5 shrink-0" />
@@ -1489,6 +1490,27 @@ export default function TreasurerView({
           </div>
         </div>
       )}
-  </div>
+         {/* THE ASSOCIATION'S OFFICIAL FINANCIAL STATEMENT — segregated exportable,
+          separate from the Treasurer's other report exports. */}
+      {showFinancialStatement && (
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-4 no-print">
+          <div className="mx-auto max-w-5xl rounded-2xl bg-white p-4 shadow-2xl">
+            <div className="mb-3 flex justify-end gap-2 no-print">
+              <button type="button" onClick={() => window.print()} className="rounded-xl bg-[#1B4332] px-4 py-2 text-sm font-bold text-white">Print / Save PDF</button>
+              <button type="button" onClick={() => setShowFinancialStatement(false)} className="rounded-xl border-[#D5CFC1] px-4 py-2 text-sm font-bold text-[#1B4332]">Close</button>
+            </div>
+            <FinancialStatement
+              transactions={transactions}
+              activities={activities}
+              funds={funds}
+              hogRaising={hogRaising}
+              inventory={inventory}
+              users={users}
+              year={new Date().getFullYear()}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

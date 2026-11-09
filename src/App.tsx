@@ -29,7 +29,7 @@ const OfficerReportModal = lazy(() => import('./components/OfficerReportModal'))
 const PresidentReport = lazy(() => import('./components/PresidentReport'));
 const ProductManagementModal = lazy(() => import('./components/ProductManagementModal'));
 import { buildReportData } from './components/PresidentReport';
-import TreasurerFinancialReport from './components/TreasurerFinancialReport';
+import FinancialStatement from './components/FinancialStatement';
 import PasswordChangePrompt from './components/PasswordChangePrompt';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useDatabaseStatus } from './hooks/useDatabaseStatus';
@@ -63,7 +63,7 @@ export default function App() {
   const [officerTab, setOfficerTab] = useState<'tasks' | 'hog-raising' | 'announcements' | 'member-view' | 'products'>('tasks');
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showPresidentReport, setShowPresidentReport] = useState<boolean>(false);
-  const [showTreasurerFinancialReport, setShowTreasurerFinancialReport] = useState<boolean>(false);
+  const [showOfficialFinancialStatement, setShowOfficialFinancialStatement] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
   const [showClearCacheConfirmModal, setShowClearCacheConfirmModal] = useState<boolean>(false);
 
@@ -3347,11 +3347,11 @@ export default function App() {
               <button
                 id="sidebar-treasurer-report-btn"
                 type="button"
-                onClick={() => setShowTreasurerFinancialReport(true)}
+                onClick={() => setShowOfficialFinancialStatement(true)}
                 className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
               >
                 <FileText className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
-                <span className="truncate">Financial Report (PDF)</span>
+                <span className="truncate">Official Financial Statement</span>
               </button>
             )}
 
@@ -3830,23 +3830,35 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* TREASURER'S OFFICIAL FINANCIAL REPORT (print / save as PDF) — SEGREGATED:
-          all financial exports belong exclusively to the Treasurer's dashboard. */}
-      {showTreasurerFinancialReport && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
-          <div className="mx-auto max-w-[210mm]">
-            <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading financial report...</div>}>
-              <TreasurerFinancialReport
-                year={new Date().getFullYear()}
-                transactions={transactions}
-                activities={activities}
-                funds={funds}
-                hogRaising={hogRaising}
-                inventory={inventory}
-                users={users}
-                onClose={() => setShowTreasurerFinancialReport(false)}
-              />
-            </Suspense>
+      {/* Treasurer's official statement is also available from the sidebar. */}
+      {showOfficialFinancialStatement && (
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-4 no-print">
+          <div className="mx-auto max-w-5xl rounded-2xl bg-white p-4 shadow-2xl">
+            <div className="mb-3 flex justify-end gap-3 no-print">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="min-h-12 rounded-xl bg-[#1B4332] px-5 py-3 text-base font-bold text-white"
+              >
+                Print / Save PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowOfficialFinancialStatement(false)}
+                className="min-h-12 rounded-xl border border-[#8FA99A] px-5 py-3 text-base font-bold text-[#1B4332]"
+              >
+                Close
+              </button>
+            </div>
+            <FinancialStatement
+              transactions={transactions}
+              activities={activities}
+              funds={funds}
+              hogRaising={hogRaising}
+              inventory={inventory}
+              users={users}
+              year={new Date().getFullYear()}
+            />
           </div>
         </div>
       )}
