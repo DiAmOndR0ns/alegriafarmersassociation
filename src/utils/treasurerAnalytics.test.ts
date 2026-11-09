@@ -20,7 +20,7 @@ const fund: OrganizationFund = {
   name: 'DOLE Livelihood Fund',
   category: 'Grant',
   source: 'Department of Labor and Employment',
-  allocatedAmount: 10000,
+  initialFund: 10000,
   currentBalance: 8000,
   description: 'Livelihood support',
   custodian: 'Treasurer',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AssociationActivity, FinancialTransaction, HogRaisingState, InventoryItem, OrganizationFund, User } from '../types';
 import { resolveOfficerName } from '../utils/officers';
+import { getInitialFund } from '../utils/fundBalance';
 
 interface FinancialStatementProps {
   transactions?: FinancialTransaction[];
@@ -69,7 +70,7 @@ export default function FinancialStatement({
   const netSurplus = totalIncome - totalExpense;
 
   const totalFundBalance = funds.reduce((sum, fund) => sum + Number(fund.currentBalance || 0), 0);
-  const totalAllocated = funds.reduce((sum, fund) => sum + Number(fund.allocatedAmount || 0), 0);
+  const totalAllocated = funds.reduce((sum, fund) => sum + getInitialFund(fund), 0);
 
   const incomeCategoryTotals: Record<string, number> = {};
   const expenseCategoryTotals: Record<string, number> = {};

@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { AuditorReport, DelegationRequest } from '../types';
+import { getInitialFund } from '../utils/fundBalance';
 
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
 const PgPool = (pg as any)?.Pool || (pg as any)?.default?.Pool || (pg as any)?.default || pg;
@@ -221,6 +222,8 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     );`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
+    `UPDATE organization_funds SET initial_fund = allocated_amount WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;`,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
 
     // Formal Auditor Reports (Proposal Requirement)
@@ -517,7 +520,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
         code VARCHAR(50) NOT NULL,
-        allocated_amount NUMERIC DEFAULT 0,
+        initial_fund NUMERIC DEFAULT 0,
         current_balance NUMERIC DEFAULT 0,
         description TEXT,
         custodian TEXT,
@@ -527,7 +530,16 @@ export async function initDatabaseSchema(pool: pg.Pool) {
     await client.query(`
       ALTER TABLE organization_funds
         ADD COLUMN IF NOT EXISTS category TEXT,
-        ADD COLUMN IF NOT EXISTS source_origin TEXT;
+        ADD COLUMN IF NOT EXISTS source_origin TEXT,
+        ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
+    `);
+    // Backfill the initial fund from the legacy allocated_amount column.
+    await client.query(`
+      UPDATE organization_funds
+         SET initial_fund = allocated_amount
+       WHERE (initial_fund IS NULL OR initial_fund = 0)
+         AND allocated_amount IS NOT NULL
+         AND allocated_amount <> 0;
     `);
     // Fund codes are auto-derived from the fund name, so two funds can legitimately
     // share initials. A UNIQUE constraint here silently rolled back the whole sync.
@@ -1028,7 +1040,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       id: r.id,
       name: r.name,
       code: r.code,
-      allocatedAmount: Number(r.allocated_amount || 0),
+      initialFund: Number(r.initial_fund ?? r.allocated_amount ?? 0),
       currentBalance: Number(r.current_balance || 0),
       category: r.category || '',
       source: r.source_origin || '',
@@ -1762,7 +1774,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['description', 'description', (r) => r.description], ['icon', 'icon', (r) => r.icon || 'Trophy']
       ] },
       { table: 'organization_funds', deletedIds: deletedFundIds, fields: [
-        ['name', 'name', (r) => r.name], ['code', 'code', (r) => r.code], ['allocated_amount', 'allocatedAmount', (r) => r.allocatedAmount || 0],
+        ['name', 'name', (r) => r.name], ['code', 'code', (r) => r.code], ['initial_fund', 'initialFund', (r) => getInitialFund(r)],
         ['current_balance', 'currentBalance', (r) => r.currentBalance || 0], ['description', 'description', (r) => r.description || ''],
         ['custodian', 'custodian', (r) => r.custodian || ''], ['last_updated', 'lastUpdated', (r) => r.lastUpdated || new Date().toISOString().split('T')[0]],
         ['category', 'category', (r) => r.category || null], ['source_origin', 'source', (r) => r.source || null]

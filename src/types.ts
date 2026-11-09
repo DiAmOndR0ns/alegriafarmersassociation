@@ -284,7 +284,9 @@ export interface OrganizationFund {
   code: string;
   category?: string;
   source?: string;
-  allocatedAmount: number;
+  /** The initial fund placed into this account. Never mutated by transactions. */
+  initialFund: number;
+  /** Live balance = initialFund + income - expenses. Derived, never stored as truth. */
   currentBalance: number;
   description: string;
   custodian: string;

@@ -18,6 +18,7 @@
 import { useEffect, useRef } from 'react';
 import { AssociationActivity, FinancialTransaction, HogRaisingState, InventoryItem, OfficerRole, OrganizationFund, User } from '../types';
 import { resolveOfficerName } from '../utils/officers';
+import { getInitialFund } from '../utils/fundBalance';
 
 interface TreasurerFinancialReportProps {
   /** Fiscal year of the statement — defaults to the CURRENT year when omitted. */
@@ -80,7 +81,7 @@ export default function TreasurerFinancialReport({
 
   // Fund accounts: cash on hand per treasury account
   const totalFundBalance = funds.reduce((s, f) => s + f.currentBalance, 0);
-  const totalAllocated = funds.reduce((s, f) => s + f.allocatedAmount, 0);
+  const totalAllocated = funds.reduce((s, f) => s + getInitialFund(f), 0);
 
   // Income & expenditure by category (per association ledger categories)
   const incomeCategoryTotals: Record<string, number> = {};

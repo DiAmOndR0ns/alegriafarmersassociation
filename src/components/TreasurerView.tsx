@@ -6,6 +6,7 @@ import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { INITIAL_FUNDS, INITIAL_HOG_RAISING } from '../initialData';
 import FinancialStatement from './FinancialStatement';
 import { getTreasurerAnalytics } from '../utils/treasurerAnalytics';
+import { getInitialFund } from '../utils/fundBalance';
 import { 
   Coins, ArrowUpRight, ArrowDownRight, Plus, 
   Search, ShieldCheck, AlertTriangle, CheckCircle, 
@@ -86,8 +87,7 @@ export default function TreasurerView({
   const [fundFormCode, setFundFormCode] = useState('');
   const [fundFormCategory, setFundFormCategory] = useState('Grant');
   const [fundFormSource, setFundFormSource] = useState('');
-  const [fundFormAllocated, setFundFormAllocated] = useState('');
-  const [fundFormBalance, setFundFormBalance] = useState('');
+  const [fundFormInitialFund, setFundFormInitialFund] = useState('');
   const defaultCustodian = useMemo(() => {
     if (currentRole === 'Assistant_Treasurer') {
       return `Assistant Treasurer ${currentUser?.name || resolveOfficerPrefixed(users, 'Assistant_Treasurer')}`;
@@ -165,8 +165,7 @@ export default function TreasurerView({
     e.preventDefault();
     if (!onAddFund || !fundFormName.trim() || !fundFormCategory || !fundFormSource.trim()) return;
 
-    const allocated = parseFloat(fundFormAllocated) || 0;
-    const balance = fundFormBalance ? parseFloat(fundFormBalance) : allocated;
+    const initialFund = parseFloat(fundFormInitialFund) || 0;
     const code = fundFormCode.trim().toUpperCase() ||
                  fundFormName.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 8);
 
@@ -175,8 +174,9 @@ export default function TreasurerView({
       code,
       category: fundFormCategory,
       source: fundFormSource.trim(),
-      allocatedAmount: allocated,
-      currentBalance: balance,
+      initialFund,
+      // A brand-new fund has no ledger yet, so its live balance equals the initial fund.
+      currentBalance: initialFund,
       custodian: fundFormCustodian.trim() || resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole),
       description: fundFormDescription.trim() || 'Opisyal nga pundo sa asosasyon'
     });
@@ -190,8 +190,7 @@ export default function TreasurerView({
     setFundFormCode('');
     setFundFormCategory('Grant');
     setFundFormSource('');
-    setFundFormAllocated('');
-    setFundFormBalance('');
+    setFundFormInitialFund('');
     setFundFormCustodian(defaultCustodian);
     setFundFormDescription('');
     setShowAddFundModal(false);
@@ -351,7 +350,7 @@ export default function TreasurerView({
                 <div className="pt-2 border-t border-[#D5CFC1] grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <span className="text-[10px] uppercase font-semibold text-[#4A5F57] block">Allocated Capital</span>
-                    <span className="font-mono font-bold text-[#1B4332]">PHP {fund.allocatedAmount.toLocaleString('en-US')}</span>
+                    <span className="font-mono font-bold text-[#1B4332]">PHP {getInitialFund(fund).toLocaleString('en-US')}</span>
                   </div>
                   <div>
                     <span className="text-[10px] uppercase font-semibold text-[#4A5F57] block">Audited Live Balance</span>
@@ -1291,19 +1290,14 @@ export default function TreasurerView({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">
-                    Allocated Budget (PHP)
+                    Initial Fund (PHP)
                   </label>
                   <input
                     type="number"
                     step="any"
                     min="0"
-                    value={fundFormAllocated}
-                    onChange={(e) => {
-                      setFundFormAllocated(e.target.value);
-                      if (!fundFormBalance) {
-                        setFundFormBalance(e.target.value);
-                      }
-                    }}
+                    value={fundFormInitialFund}
+                    onChange={(e) => setFundFormInitialFund(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-500"
                   />
                 </div>

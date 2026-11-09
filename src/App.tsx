@@ -39,6 +39,7 @@ import { generateInitialPassword, getPasswordExpiryStatus, hashPassword as hashP
 import { LanguageToggle } from './i18n/LanguageContext';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
 import { runNightlyBackupCheck } from './utils/backupSystem';
+import { computeFundBalances, getInitialFund } from './utils/fundBalance';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
@@ -1502,21 +1503,11 @@ export default function App() {
       addToSyncQueue('create', 'transaction', newTx);
     }
 
-    // Automatically update the live balance of the affected Organization Fund if matching account exists.
-    // The push must happen after the state commit (never inside the updater), otherwise the
-    // payload is built from a stale snapshot and the balance change is lost.
+    // Recompute the live balance from the initial fund plus the full ledger.
+    // Deriving (rather than incrementing) means the balance can never drift from
+    // the transactions that produced it, and overspending shows as negative.
     if (newTx.fundSource) {
-      const diff = newTx.type === 'income' ? newTx.amount : -newTx.amount;
-      const updatedFunds = funds.map(f => {
-        if (f.id === registeredFund.id) {
-          return {
-            ...f,
-            currentBalance: Math.max(0, f.currentBalance + diff),
-            lastUpdated: new Date().toISOString().split('T')[0]
-          };
-        }
-        return f;
-      });
+      const updatedFunds = computeFundBalances(funds, updated);
 
       setFunds(updatedFunds);
       updateStorage('bafa_funds', updatedFunds);
@@ -1532,7 +1523,9 @@ export default function App() {
       id: `fund-${Date.now()}`,
       lastUpdated: new Date().toISOString().split('T')[0]
     };
-    const updated = [...funds, newFund];
+    // Derive the balance from the initial fund and any existing ledger entries
+    // already tagged to this fund source, so the figure is accurate from day one.
+    const updated = computeFundBalances([...funds, newFund], transactions);
     setFunds(updated);
     updateStorage('bafa_funds', updated);
 

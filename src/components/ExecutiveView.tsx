@@ -7,6 +7,7 @@ import {
   Sprout, MapPin, Search, Lock, Download, ShieldAlert, Shield, Upload, Database, RefreshCw
 } from 'lucide-react';
 import { buildAuditChain } from '../utils/audit';
+import { getInitialFund } from '../utils/fundBalance';
 import { generateInitialPassword } from '../utils/passwordPolicy';
 import PrintMinutesModal from './PrintMinutesModal';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -473,7 +474,7 @@ export default function ExecutiveView({
     fundSourceTotals.set(fund.id, {
       name: `${fund.code} · ${fund.name}`,
       balance: Number(fund.currentBalance) || 0,
-      allocated: Number(fund.allocatedAmount) || 0,
+      allocated: getInitialFund(fund),
       income: 0,
       expenses: 0,
       registered: true

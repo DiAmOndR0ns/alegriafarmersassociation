@@ -1,4 +1,5 @@
 import { AssociationActivity, FinancialTransaction, HogRaisingState, OrganizationFund } from '../types';
+import { getInitialFund } from './fundBalance';
 
 export interface TreasurerAnalyticsMonth {
   monthKey: string;
@@ -87,7 +88,7 @@ export function getTreasurerAnalytics(
       category: fund.category,
       source: fund.source,
       balance: Number(fund.currentBalance) || 0,
-      allocated: Number(fund.allocatedAmount) || 0,
+      allocated: getInitialFund(fund),
       income: 0,
       expenses: 0
     });

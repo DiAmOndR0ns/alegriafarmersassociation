@@ -4,6 +4,7 @@ import { INITIAL_FUNDS } from '../initialData';
 import { resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
 import {  getSurname } from '../utils/names';
 import { getTreasurerReportRange, getTreasurerReportRows } from '../utils/treasurerReport';
+import { getInitialFund } from '../utils/fundBalance';
 import {
   Printer, Download, X, FileText, ShieldCheck, Coins,
   Wallet, Database, Layers, CheckCircle2, AlertCircle
@@ -278,7 +279,7 @@ export default function OfficerReportModal({
                 <td><strong>${f.code}</strong></td>
                 <td><strong>${f.name}</strong><br/><span style="font-size: 8.5px; color:#64748b;">${f.description}</span></td>
                 <td>${f.code.includes('DOLE') ? 'DOLE Region VII' : f.code.includes('SLP') ? 'DSWD-SLP / LGU' : f.code.includes('ATI') ? 'ATI-RTC VII' : f.code.includes('FCCT') ? 'FCCT Cooperative Bank' : f.code.includes('DISP') ? '5% Statutory Reserve Pool' : 'AFA Member Equity'}</td>
-                <td>PHP ${f.allocatedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                <td>PHP ${getInitialFund(f).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                 <td style="color: #065f46; font-weight: bold;">PHP ${f.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                 <td>${f.custodian}</td>
               </tr>
@@ -805,7 +806,7 @@ export default function OfficerReportModal({
           `"${f.code}"`,
           `"${f.name.replace(/"/g, '""')}"`,
           `"${origin}"`,
-          f.allocatedAmount.toFixed(2),
+          getInitialFund(f).toFixed(2),
           f.currentBalance.toFixed(2),
           `"${f.custodian.replace(/"/g, '""')}"`
         ].join(','));
