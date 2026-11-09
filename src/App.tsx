@@ -879,6 +879,13 @@ export default function App() {
           const pending = remainingQueue.length > 0;
           setHasPendingCloudSync(pending);
           await updateStorage('bafa_pending_cloud_sync', pending);
+        } else {
+          // Scoped pushes (auditorReview / presidentApproval / eggHarvests / roleUpdate)
+          // still represent a completed write. Recompute the pending flag from the
+          // real sources instead of leaving it stuck at `true` forever.
+          const stillPending = syncQueueRef.current.length > 0 || hasPendingDeletions();
+          setHasPendingCloudSync(stillPending);
+          await updateStorage('bafa_pending_cloud_sync', stillPending);
         }
 
         // Refresh database row stats and status
@@ -981,7 +988,7 @@ export default function App() {
     };
 
     const handleWindowFocus = () => {
-      if (navigator.onLine && (syncQueueRef.current.length > 0 || hasPendingDeletions() || hasPendingCloudSync)) {
+      if (navigator.onLine && !isSyncingRef.current && (syncQueueRef.current.length > 0 || hasPendingDeletions())) {
         console.log('[Auto-Sync]: Window focused with pending items. Triggering auto-sync...');
         pushAllDataToCloud(undefined, { silent: true, source: 'Auto-Sync (Focus)' });
       }
@@ -991,18 +998,25 @@ export default function App() {
     window.addEventListener('offline', handleOffline);
     window.addEventListener('focus', handleWindowFocus);
 
-    // Fast reactive sync: If online and there are pending items or deletions, trigger auto-sync after ultra-fast debounce
+    // Fast reactive sync: If online and there are pending items or deletions, trigger auto-sync after ultra-fast debounce.
+    // Reads the ref (not the closed-over state) so it stays correct without re-running this effect.
     let reactiveTimer: any = null;
-    if (isOnline && (syncQueue.length > 0 || hasPendingDeletions())) {
+    if (isOnline && (syncQueueRef.current.length > 0 || hasPendingDeletions())) {
       reactiveTimer = setTimeout(() => {
+        if (isSyncingRef.current) return;
         console.log('[Auto-Sync Reactive]: Detected pending queue while online. Automatically syncing to database...');
         pushAllDataToCloud(undefined, { silent: true, source: 'Auto-Sync (Reactive)' });
       }, 150);
     }
 
-    // Periodic auto-sync heartbeat every 5 seconds: ensures officers never have to push a button
+    // Periodic auto-sync heartbeat: ensures officers never have to push a button.
+    // Only fires when there is real unsynced work, and never while a push is in flight.
     const intervalId = setInterval(() => {
-      if (currentUser && navigator.onLine && (syncQueueRef.current.length > 0 || hasPendingDeletions() || hasPendingCloudSync || logs.some(l => l.syncStatus === 'pending'))) {
+      if (!currentUser || !navigator.onLine || isSyncingRef.current) return;
+      const hasWork = syncQueueRef.current.length > 0
+        || hasPendingDeletions()
+        || logs.some(l => l.syncStatus === 'pending');
+      if (hasWork) {
         console.log('[Auto-Sync Heartbeat]: Automatically synchronizing pending items to database...');
         pushAllDataToCloud(undefined, { silent: true, source: 'Auto-Sync (Heartbeat)' });
       }
@@ -1015,7 +1029,10 @@ export default function App() {
       if (reactiveTimer) clearTimeout(reactiveTimer);
       clearInterval(intervalId);
     };
-  }, [isOnline, syncQueue.length, currentUser?.id, hasPendingCloudSync]);
+    // Intentionally keyed on identity/connectivity only. Including `hasPendingCloudSync`
+    // or `syncQueue.length` here rebuilt the interval on every flag flip, which
+    // re-armed the reactive timer and kept the UI in a permanent "Synchronizing" state.
+  }, [isOnline, currentUser?.id]);
 
   // Keep the server session alive while the user is active. The server refreshes
   // the signed cookie only when the current session is still valid.
