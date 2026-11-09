@@ -132,23 +132,7 @@ export default function TreasurerView({
     setNewCategoryName('');
     setShowCategoryModal(false);
   };
-
-  const calculateBalances = () => {
-    let income = 0;
-    let expenses = 0;
-    transactions.forEach(t => {
-      if (t.type === 'income') income += t.amount;
-      else expenses += t.amount;
-    });
-    return {
-      total: income - expenses,
-      income,
-      expenses
-    };
-  };
-
-  const { total: currentBalance, income: totalIncome, expenses: totalExpenses } = calculateBalances();
-
+  
   // The analytics year filter covers both association ledger and IGP entries.
   const availableYears = useMemo(() => {
     const yearsSet = new Set<string>();
@@ -309,51 +293,6 @@ export default function TreasurerView({
         </div>
       </div>
 
-      {/* FINANCIAL OVERVIEW CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Total General Funds */}
-        <div className="bg-[#F7F4EF] border border-[#D5CFC1] p-5 rounded-2xl shadow-md relative overflow-hidden">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-semibold text-[#4A5F57] uppercase tracking-wider">Association General Fund</span>
-            <Coins className="w-5 h-5 text-amber-500" />
-          </div>
-          <div className="text-2xl font-black text-[#1B4332] font-mono">
-            PHP {currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <p className="text-[10px] text-emerald-700 mt-1 flex items-center gap-1 font-medium">
-            <span>● Account active</span>
-            <span className="text-[#4A5F57] font-normal">| Barangay Alegria, Tuburan</span>
-          </p>
-        </div>
-
-        {/* Total Income */}
-        <div className="bg-[#F7F4EF] border border-[#D5CFC1] p-5 rounded-2xl shadow-md relative overflow-hidden">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-semibold text-[#4A5F57] uppercase tracking-wider">Total Income</span>
-            <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/10">
-              <ArrowUpRight className="w-4 h-4 text-emerald-600" />
-            </div>
-          </div>
-          <div className="text-xl font-bold text-emerald-700 font-mono">
-            + PHP {totalIncome.toLocaleString('en-US')}
-          </div>
-        </div>
-
-
-        {/* Total Expenses */}
-        <div className="bg-[#F7F4EF] border border-[#D5CFC1] p-5 rounded-2xl shadow-md relative overflow-hidden">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-semibold text-[#4A5F57] uppercase tracking-wider">Total Expenditures</span>
-            <div className="bg-rose-500/10 p-1.5 rounded-lg border border-rose-500/10">
-              <ArrowDownRight className="w-4 h-4 text-rose-600" />
-            </div>
-          </div>
-          <div className="text-xl font-bold text-rose-600 font-mono">
-            - PHP {totalExpenses.toLocaleString('en-US')}
-          </div>
-        </div>
-      </div>
-
       {/* REGISTERED ORGANIZATION FUNDS & TREASURY ACCOUNTS */}
       <div className="bg-[#F7F4EF] border border-[#D5CFC1] p-5 rounded-2xl space-y-4 shadow-md">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-[#D5CFC1]">
@@ -453,20 +392,21 @@ export default function TreasurerView({
       </div>
 
       {/* ASSOCIATION-WIDE FINANCIAL ANALYTICS */}
-      <div className="bg-slate-800 border border-slate-700/70 p-5 sm:p-6 rounded-2xl space-y-5 shadow-lg relative">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-slate-700/70">
+      <div className="bg-[#F7F4EF] border border-[#B8CDBE] p-5 sm:p-6 rounded-2xl space-y-6 shadow-lg relative">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-[#B8CDBE]">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                <Briefcase className="w-5 h-5 text-emerald-400" />              </div>
+              <div className="p-2.5 bg-emerald-100 border border-emerald-300 rounded-xl">
+                <Briefcase className="w-6 h-6 text-emerald-800" />
+              </div>
               <div>
-                <h3 className="text-base font-black text-white flex items-center gap-2">
+                <h3 className="text-lg sm:text-xl font-black text-[#1B4332] flex flex-wrap items-center gap-2">
                   <span>Association Financial Analytics</span>
-                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="text-xs uppercase font-bold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300">
                     Ledger + Livestock IGP
                   </span>
                 </h3>
-                <p className="text-xs text-slate-300">
+                <p className="text-sm sm:text-base text-[#33473D] mt-1">
                   Income and expenses from every association fund source, linked activities, and livestock projects
                 </p>
               </div>
@@ -475,51 +415,52 @@ export default function TreasurerView({
 
           {/* Interactive Filters */}
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-[#D5CFC1] text-xs">
-              <Calendar className="w-3.5 h-3.5 text-[#4A5F57]" />
-              <span className="text-[#4A5F57] font-semibold text-[11px]">Year:</span>
+            <label htmlFor="treasurer-analytics-year" className="flex items-center gap-2 bg-white px-3 py-2.5 rounded-xl border border-[#8FA99A] text-sm">
+              <Calendar className="w-5 h-5 text-[#1B4332]" aria-hidden="true" />
+              <span className="text-[#1B4332] font-bold">Show year:</span>
               <select
+                id="treasurer-analytics-year"
                 value={chartYear}
                 onChange={(e) => setChartYear(e.target.value)}
-                className="bg-transparent text-[#1B4332] font-bold focus:outline-none cursor-pointer"
+                className="min-h-11 bg-transparent text-[#1B4332] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F] cursor-pointer"
               >
                 <option value="all" className="bg-white text-[#1B4332]">All Years</option>
                 {availableYears.map(y => (
                   <option key={y} value={y} className="bg-white text-[#1B4332]">{y}</option>
                 ))}
               </select>
-            </div>
+            </label>
           </div>
         </div>
 
         {/* SUMMARY KPI CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total Income</span>
-            <div className="text-lg font-black text-emerald-700 font-mono mt-0.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-white border border-[#B8CDBE] p-4 sm:p-5 rounded-xl shadow-sm">
+            <span className="text-sm font-bold text-[#33473D] uppercase tracking-wide block">Total Income</span>
+            <div className="text-xl sm:text-2xl font-black text-emerald-800 font-mono mt-1">
               PHP {treasurerAnalytics.totalIncome.toLocaleString('en-US')}
             </div>
-            <span className="text-[10px] text-[#4A5F57] mt-1 block">
+            <span className="text-sm text-[#33473D] mt-1.5 block">
               Association ledger + livestock IGP
             </span>
           </div>
 
-          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Total Expenses</span>
-            <div className="text-lg font-black text-rose-700 font-mono mt-0.5">
+          <div className="bg-white border border-[#B8CDBE] p-4 sm:p-5 rounded-xl shadow-sm">
+            <span className="text-sm font-bold text-[#33473D] uppercase tracking-wide block">Total Expenses</span>
+            <div className="text-xl sm:text-2xl font-black text-rose-800 font-mono mt-1">
               PHP {treasurerAnalytics.totalExpenses.toLocaleString('en-US')}
             </div>
-            <span className="text-[10px] text-[#4A5F57] mt-1 block">
+            <span className="text-sm text-[#33473D] mt-1.5 block">
               Recorded expenses + livestock costs
             </span>
           </div>
 
-          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-[#4A5F57] uppercase tracking-wider block">Net Cash Flow</span>
-            <div className={`text-lg font-black font-mono mt-0.5 ${treasurerAnalytics.totalIncome - treasurerAnalytics.totalExpenses >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+          <div className="bg-white border border-[#B8CDBE] p-4 sm:p-5 rounded-xl shadow-sm">
+            <span className="text-sm font-bold text-[#33473D] uppercase tracking-wide block">Net Cash Flow</span>
+            <div className={`text-xl sm:text-2xl font-black font-mono mt-1 ${treasurerAnalytics.totalIncome - treasurerAnalytics.totalExpenses >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
               {treasurerAnalytics.totalIncome >= treasurerAnalytics.totalExpenses ? '+' : ''}PHP {(treasurerAnalytics.totalIncome - treasurerAnalytics.totalExpenses).toLocaleString('en-US')}
             </div>
-            <span className="text-[10px] text-[#4A5F57] mt-1 block">
+            <span className="text-sm text-[#33473D] mt-1.5 block">
               {funds.length} registered sources · PHP {currentRegisteredFundBalance.toLocaleString('en-US')} balance
             </span>
           </div>
@@ -529,7 +470,7 @@ export default function TreasurerView({
         {/* RECHARTS BAR CHART CANVAS */}
         {treasurerAnalytics.months.length > 0 ? (
           <div className="space-y-4">
-            <div className="h-[300px] w-full bg-white p-2 sm:p-4 rounded-xl border border-[#D5CFC1]">
+            <div className="h-[340px] sm:h-[380px] w-full bg-white p-3 sm:p-5 rounded-xl border border-[#B8CDBE]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={treasurerAnalytics.months}
@@ -539,12 +480,12 @@ export default function TreasurerView({
                   <XAxis
                     dataKey="shortMonth"
                     stroke="#647A6E"
-                    tick={{ fill: '#4A5F57', fontSize: 12, fontWeight: 600 }}
+                    tick={{ fill: '#33473D', fontSize: 14, fontWeight: 600 }}
                     tickLine={{ stroke: '#B8CDBE' }}
                   />
                   <YAxis
                     stroke="#647A6E"
-                    tick={{ fill: '#4A5F57', fontSize: 11 }}
+                    tick={{ fill: '#33473D', fontSize: 14 }}
                     tickLine={{ stroke: '#B8CDBE' }}
                     tickFormatter={(val) => `₱${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
                   />
@@ -553,10 +494,10 @@ export default function TreasurerView({
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
                         return (
-                          <div className="bg-white border border-[#D5CFC1] p-3.5 rounded-xl shadow-lg text-xs space-y-2.5 min-w-[210px]">
-                            <div className="flex items-center justify-between border-b border-slate-700/80 pb-1.5">
+                          <div className="bg-white border border-[#8FA99A] p-4 rounded-xl shadow-lg text-sm space-y-3 min-w-[240px]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#B8CDBE] pb-2">
                               <span className="font-bold text-[#1B4332] text-sm">{data.monthLabel}</span>
-                              <span className="text-[10px] font-mono text-emerald-800 font-bold bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200">
+                              <span className="text-xs font-mono text-emerald-900 font-bold bg-emerald-100 px-2 py-1 rounded border border-emerald-300">
                                 Association + IGP
                               </span>
                             </div>
@@ -583,25 +524,25 @@ export default function TreasurerView({
                               </div>
 
                               {data.associationIncome > 0 && (
-                                <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
+                                <div className="pl-4 text-sm text-[#33473D] flex justify-between">
                                   <span>• Association income:</span>
                                   <span className="font-mono">PHP {data.associationIncome.toLocaleString('en-US')}</span>
                                 </div>
                               )}
                               {data.igpIncome > 0 && (
-                                <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
+                                <div className="pl-4 text-sm text-[#33473D] flex justify-between">
                                   <span>• Livestock IGP income:</span>
                                   <span className="font-mono">PHP {data.igpIncome.toLocaleString('en-US')}</span>
                                 </div>
                               )}
                               {data.associationExpenses > 0 && (
-                                <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
+                                <div className="pl-4 text-sm text-[#33473D] flex justify-between">
                                   <span>• Association expenses:</span>
                                   <span className="font-mono">PHP {data.associationExpenses.toLocaleString('en-US')}</span>
                                 </div>
                               )}
                               {data.igpExpenses > 0 && (
-                                <div className="pl-4 text-[11px] text-[#4A5F57] flex justify-between">
+                                <div className="pl-4 text-sm text-[#33473D] flex justify-between">
                                   <span>• Livestock IGP expenses:</span>
                                   <span className="font-mono">PHP {data.igpExpenses.toLocaleString('en-US')}</span>
                                 </div>
@@ -624,8 +565,8 @@ export default function TreasurerView({
                     verticalAlign="top"
                     align="right"
                     iconType="circle"
-                    wrapperStyle={{ paddingBottom: '10px', fontSize: '12px' }}
-                    formatter={(value) => <span className="text-[#1B4332] font-medium text-xs mr-3">{value}</span>}
+                    wrapperStyle={{ paddingBottom: '10px', fontSize: '14px' }}
+                    formatter={(value) => <span className="text-[#1B4332] font-semibold text-sm mr-3">{value}</span>}
                   />
                   <Bar
                     dataKey="income"
@@ -646,134 +587,134 @@ export default function TreasurerView({
             </div>
 
             {/* MONTHLY SUMMARY CHIPS */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 pt-1">
               {treasurerAnalytics.months.map((m) => (
-                <div key={m.monthKey} className="bg-white border border-[#D5CFC1] p-2.5 rounded-xl space-y-1 text-xs">
-                  <span className="font-bold text-[#1B4332] block">{m.shortMonth}</span>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-emerald-400 font-mono">+{m.income >= 1000 ? `${(m.income/1000).toFixed(0)}k` : m.income}</span>
-                    <span className="text-rose-400 font-mono">-{m.expenses >= 1000 ? `${(m.expenses/1000).toFixed(0)}k` : m.expenses}</span>
+                <div key={m.monthKey} className="bg-white border border-[#B8CDBE] p-3.5 rounded-xl space-y-2 text-sm shadow-sm">
+                  <span className="font-bold text-[#1B4332] block text-base">{m.shortMonth}</span>
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span className="text-emerald-800 font-mono">Income: +{m.income >= 1000 ? `${(m.income/1000).toFixed(0)}k` : m.income}</span>
+                    <span className="text-rose-800 font-mono">Expenses: -{m.expenses >= 1000 ? `${(m.expenses/1000).toFixed(0)}k` : m.expenses}</span>
                   </div>
-                  <div className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded text-center ${
+                  <div className={`text-sm font-mono font-bold px-2 py-1 rounded text-center ${
                     m.net >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                   }`}>
-                    {m.net >= 0 ? '+' : ''}₱{Math.abs(m.net).toLocaleString('en-US')}
+                    Net: {m.net >= 0 ? '+' : ''}₱{Math.abs(m.net).toLocaleString('en-US')}
                   </div>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div className="bg-[#EAF6EE] border border-[#B6E3C0] p-8 rounded-xl text-center space-y-2">
-            <BarChart3 className="w-8 h-8 text-[#2D6A4F] mx-auto" />
-            <p className="text-sm font-bold text-[#1B4332]">No financial activity recorded for the selected year.</p>
-            <p className="text-xs text-[#2B3D33]">Choose another year or record an association transaction or livestock sale/expense.</p>
+          <div className="bg-[#EAF6EE] border border-[#83C99A] p-8 sm:p-10 rounded-xl text-center space-y-3">
+            <BarChart3 className="w-10 h-10 text-[#1B5E3B] mx-auto" aria-hidden="true" />
+            <p className="text-base sm:text-lg font-bold text-[#1B4332]">No financial activity recorded for the selected year.</p>
+            <p className="text-base text-[#2B3D33]">Choose another year or record an association transaction or livestock sale/expense.</p>
           </div>
         )}
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <div className="bg-slate-900/70 border border-slate-700 rounded-xl p-4">
-            <h4 className="text-sm font-bold text-white mb-3">Expenses linked to activities</h4>
+          <div className="bg-white border border-[#B8CDBE] rounded-xl p-4 sm:p-5 shadow-sm">
+            <h4 className="text-base sm:text-lg font-bold text-[#1B4332] mb-4">Expenses linked to activities</h4>
             {treasurerAnalytics.eventExpenses.length ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {treasurerAnalytics.eventExpenses.map(item => (
-                  <div key={item.name} className="space-y-1">
-                    <div className="flex justify-between gap-3 text-xs">
-                      <span className="text-slate-200 truncate">{item.name}</span>
-                      <span className="text-rose-300 font-mono shrink-0">PHP {item.expenses.toLocaleString('en-US')}</span>
+                  <div key={item.name} className="space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-3 text-base">
+                      <span className="text-[#243B31] break-words">{item.name}</span>
+                      <span className="text-rose-800 font-mono font-bold shrink-0">PHP {item.expenses.toLocaleString('en-US')}</span>
                     </div>
-                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-3 bg-[#E4EBE6] rounded-full overflow-hidden" aria-hidden="true">
                       <div
-                        className="h-full bg-rose-400 rounded-full"
+                        className="h-full bg-rose-700 rounded-full"
                         style={{ width: `${Math.min(100, item.expenses / Math.max(...treasurerAnalytics.eventExpenses.map(event => event.expenses)) * 100)}%` }}
                       />
                     </div>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-xs text-slate-400">No ledger expenses are linked to activities in this period.</p>}
+            ) : <p className="text-base text-[#33473D]">No ledger expenses are linked to activities in this period.</p>}
           </div>
 
-          <div className="bg-slate-900/70 border border-slate-700 rounded-xl p-4">
-            <h4 className="text-sm font-bold text-white mb-3">Livestock project expenses</h4>
+          <div className="bg-white border border-[#B8CDBE] rounded-xl p-4 sm:p-5 shadow-sm">
+            <h4 className="text-base sm:text-lg font-bold text-[#1B4332] mb-4">Livestock project expenses</h4>
             {treasurerAnalytics.livestockExpenses.length ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {treasurerAnalytics.livestockExpenses.map(item => (
-                  <div key={item.name} className="space-y-1">
-                    <div className="flex justify-between gap-3 text-xs">
-                      <span className="text-slate-200 truncate">{item.name}</span>
-                      <span className="text-amber-300 font-mono shrink-0">PHP {item.expenses.toLocaleString('en-US')}</span>
+                  <div key={item.name} className="space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-3 text-base">
+                      <span className="text-[#243B31] break-words">{item.name}</span>
+                      <span className="text-amber-800 font-mono font-bold shrink-0">PHP {item.expenses.toLocaleString('en-US')}</span>
                     </div>
-                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-3 bg-[#E4EBE6] rounded-full overflow-hidden" aria-hidden="true">
                       <div
-                        className="h-full bg-amber-400 rounded-full"
+                        className="h-full bg-amber-700 rounded-full"
                         style={{ width: `${Math.min(100, item.expenses / Math.max(...treasurerAnalytics.livestockExpenses.map(expense => expense.expenses)) * 100)}%` }}
                       />
                     </div>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-xs text-slate-400">No livestock expenses are recorded in this period.</p>}
+            ) : <p className="text-base text-[#33473D]">No livestock expenses are recorded in this period.</p>}
           </div>
         </div>
 
-        <div className="bg-slate-900/70 border border-slate-700 rounded-xl p-4">
+        <div className="bg-white border border-[#B8CDBE] rounded-xl p-4 sm:p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
-            <h4 className="text-sm font-bold text-white">All fund sources</h4>
-            <span className="text-[11px] text-slate-400">Registered balances and recorded transaction flows</span>
+            <h4 className="text-base sm:text-lg font-bold text-[#1B4332]">All fund sources</h4>
+            <span className="text-sm text-[#33473D]">Registered balances and recorded transaction flows</span>
           </div>
           {treasurerAnalytics.fundSources.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {treasurerAnalytics.fundSources.map(source => (
-                <div key={source.id} className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+                <div key={source.id} className="bg-[#F7F9F7] border border-[#B8CDBE] rounded-lg p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-100">{source.name}</span>
-                    <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${source.registered ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                    <span className="text-base font-bold text-[#1B4332] break-words">{source.name}</span>
+                    <span className={`text-xs uppercase font-bold px-2 py-1 rounded shrink-0 ${source.registered ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}>
                       {source.registered ? 'Registered' : 'Unregistered'}
                     </span>
                   </div>
                   {(source.category || source.source) && (
-                    <div className="mt-1.5 space-y-0.5 text-[10px] text-slate-400">
-                      {source.category && <p>Category: <span className="text-emerald-200">{source.category}</span></p>}
-                      {source.source && <p>From: <span className="text-slate-200">{source.source}</span></p>}
+                    <div className="mt-2 space-y-1 text-sm text-[#33473D]">
+                      {source.category && <p>Category: <span className="font-semibold text-emerald-900">{source.category}</span></p>}
+                      {source.source && <p>From: <span className="font-semibold text-[#243B31]">{source.source}</span></p>}
                     </div>
                   )}
                   {source.registered && (
-                    <div className="text-[11px] text-slate-300 mt-2">
-                      Current balance: <span className="font-mono text-white">PHP {(source.balance || 0).toLocaleString('en-US')}</span>
-                      <span className="text-slate-500"> / PHP {(source.allocated || 0).toLocaleString('en-US')} allocated</span>
+                    <div className="text-sm text-[#33473D] mt-3">
+                      Current balance: <span className="font-mono font-bold text-[#1B4332]">PHP {(source.balance || 0).toLocaleString('en-US')}</span>
+                      <span className="text-[#52665C]"> / PHP {(source.allocated || 0).toLocaleString('en-US')} allocated</span>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]">
-                    <span className="text-emerald-300">Income: PHP {source.income.toLocaleString('en-US')}</span>
-                    <span className="text-rose-300">Expenses: PHP {source.expenses.toLocaleString('en-US')}</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-sm font-semibold">
+                    <span className="text-emerald-900">Income: PHP {source.income.toLocaleString('en-US')}</span>
+                    <span className="text-rose-900">Expenses: PHP {source.expenses.toLocaleString('en-US')}</span>
                   </div>
                 </div>
               ))}
             </div>
-          ) : <p className="text-xs text-slate-400">No registered or transaction fund sources are available.</p>}
+          ) : <p className="text-base text-[#33473D]">No registered or transaction fund sources are available.</p>}
         </div>
       </div>
 
       {/* OFFICER SUMMARY DESCRIPTION AND TOOLS */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-800 p-4 rounded-2xl border border-slate-700/65">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-[#F7F4EF] p-4 sm:p-5 rounded-2xl border border-[#B8CDBE]">
         <div>
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <Coins className="w-5 h-5 text-emerald-400" />
+          <h3 className="text-lg sm:text-xl font-bold text-[#1B4332] flex items-center gap-2">
+            <Coins className="w-6 h-6 text-emerald-800" />
             <span>Treasurer Financial Ledger</span>
           </h3>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:flex items-stretch gap-3 w-full xl:w-auto">
           {/* SEGREGATED EXPORTABLE — the association's official FINANCIAL STATEMENT format,
               kept separate from the Treasurer's other exports (OfficerReportModal etc.). */}
           <button
             id="treasurer-financial-statement-btn"
             type="button"
             onClick={() => setShowFinancialStatement(true)}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold bg-emerald-900 hover:bg-emerald-800 text-emerald-100 border border-emerald-500/40 rounded-xl shadow-sm transition-all w-full md:w-auto cursor-pointer"
+            className="flex min-h-14 items-center justify-center gap-2 px-4 py-3 text-base font-bold bg-[#14532D] hover:bg-[#123F25] text-white border border-[#14532D] rounded-xl shadow-sm transition-all w-full xl:w-auto cursor-pointer focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
           >
-            <FileText className="w-4 h-4 shrink-0" />
+            <FileText className="w-5 h-5 shrink-0" />
             <span>Financial Statement (Official Format)</span>
           </button>
 
@@ -782,9 +723,9 @@ export default function TreasurerView({
               id="treasurer-report-btn"
               type="button"
               onClick={onOpenReportModal}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold bg-slate-700 hover:bg-slate-600 text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 hover:border-emerald-400 rounded-xl shadow-sm transition-all w-full md:w-auto cursor-pointer"
+              className="flex min-h-14 items-center justify-center gap-2 px-4 py-3 text-base font-bold bg-white hover:bg-emerald-50 text-[#14532D] border border-[#2D6A4F] rounded-xl shadow-sm transition-all w-full xl:w-auto cursor-pointer focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
             >
-              <FileText className="w-4 h-4 shrink-0" />
+              <FileText className="w-5 h-5 shrink-0" />
               <span>Export Financial Report</span>
             </button>
           )}
@@ -792,9 +733,9 @@ export default function TreasurerView({
           <button
             id="record-tx-btn"
             onClick={() => setShowAddModal(true)}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all w-full md:w-auto"
+            className="flex min-h-14 items-center justify-center gap-2 px-4 py-3 text-base font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl shadow-sm transition-all w-full xl:w-auto focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-5 h-5" />
             <span>Log Transaction</span>
           </button>
         </div>
@@ -802,16 +743,17 @@ export default function TreasurerView({
 
       {/* FILTER & LEDGER LIST */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between gap-3 bg-[#EAF6EE] p-3 rounded-xl border border-[#D5CFC1]">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-[#1B4332] uppercase shrink-0">
-            <Filter className="w-3.5 h-3.5" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#EAF6EE] p-4 rounded-xl border border-[#B8CDBE]">
+          <div className="flex items-center gap-2 text-base font-bold text-[#1B4332] uppercase shrink-0">
+            <Filter className="w-5 h-5" />
             <span>Filters:</span>
           </div>
           <div className="flex flex-wrap gap-2">
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as any)}
-              className="px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] focus:outline-none focus:border-[#2D6A4F]"
+              aria-label="Filter transactions by type"
+              className="min-h-12 px-4 py-2 text-base bg-white border border-[#8FA99A] rounded-lg text-[#1B4332] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F]"
             >
               <option value="all">All Types</option>
               <option value="income">Income Only</option>
@@ -821,7 +763,8 @@ export default function TreasurerView({
             <select
               value={filterAudit}
               onChange={(e) => setFilterAudit(e.target.value as any)}
-              className="px-3 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] focus:outline-none focus:border-[#2D6A4F]"
+              aria-label="Filter transactions by audit status"
+              className="min-h-12 px-4 py-2 text-base bg-white border border-[#8FA99A] rounded-lg text-[#1B4332] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F]"
             >
               <option value="all">All Audit Statuses</option>
               <option value="Unaudited">Unaudited</option>
@@ -1546,29 +1489,6 @@ export default function TreasurerView({
           </div>
         </div>
       )}
-
-      {/* THE ASSOCIATION'S OFFICIAL FINANCIAL STATEMENT — segregated exportable,
-          separate from the Treasurer's other report exports. */}
-      {showFinancialStatement && (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-4 no-print">
-          <div className="mx-auto max-w-5xl rounded-2xl bg-white p-4 shadow-2xl">
-            <div className="mb-3 flex justify-end gap-2 no-print">
-              <button type="button" onClick={() => window.print()} className="rounded-xl bg-[#1B4332] px-4 py-2 text-sm font-bold text-white">Print / Save PDF</button>
-              <button type="button" onClick={() => setShowFinancialStatement(false)} className="rounded-xl border-[#D5CFC1] px-4 py-2 text-sm font-bold text-[#1B4332]">Close</button>
-            </div>
-            <FinancialStatement
-              transactions={transactions}
-              activities={activities}
-              funds={funds}
-              hogRaising={hogRaising}
-              inventory={inventory}
-              users={users}
-              year={new Date().getFullYear()}
-            />
-          </div>
-        </div>
-      )}
-
-    </div>
+  </div>
   );
 }
