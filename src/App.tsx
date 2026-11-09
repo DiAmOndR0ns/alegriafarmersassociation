@@ -42,7 +42,7 @@ import { runNightlyBackupCheck } from './utils/backupSystem';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
-  ChevronLeft, ChevronRight, Download, Database
+  ChevronLeft, ChevronRight, Database
 } from 'lucide-react';
 
 export default function App() {
@@ -3361,18 +3361,6 @@ export default function App() {
               >
                 <FileText className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
                 <span className="truncate">Financial Report (PDF)</span>
-              </button>
-            )}
-
-            {currentRole === 'President' && (
-              <button
-                id="sidebar-download-backup-btn"
-                type="button"
-                onClick={handleDownloadSystemBackup}
-                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
-              >
-                <Download className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
-                <span className="truncate">Download Backup</span>
               </button>
             )}
 
