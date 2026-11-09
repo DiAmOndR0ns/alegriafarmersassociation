@@ -242,6 +242,7 @@ export interface IgpSale {
   revenue: number;
   recordedBy: string;
   notes?: string;
+  fundSource?: string;
 }
 
 export interface IgpGroup {

@@ -38,6 +38,8 @@ interface TreasurerViewProps {
   currentRole?: OfficerRole;
 }
 
+const getFundSourceValue = (fund: OrganizationFund) => `${fund.code} (${fund.name})`;
+
 export default function TreasurerView({
   transactions,
   activities = [],
@@ -69,21 +71,14 @@ export default function TreasurerView({
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [txFundSource, setTxFundSource] = useState('GF-SLP (General Fund / DSWD-SLP Operational Buffer)');
+  const [txFundSource, setTxFundSource] = useState('');
+  const [txFundSourceError, setTxFundSourceError] = useState('');
   const [txAmount, setTxAmount] = useState('');
   const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
   const [txDesc, setTxDesc] = useState('');
   const [txPurpose, setTxPurpose] = useState('');
   const [txActivityId, setTxActivityId] = useState('');
   const [txActivityError, setTxActivityError] = useState('');
-
-  // Custom / Different Fund Source Option in Transaction Modal
-  const [isCustomFundSource, setIsCustomFundSource] = useState(false);
-  const [customFundName, setCustomFundName] = useState('');
-  const [customFundCode, setCustomFundCode] = useState('');
-  const [customFundCategory, setCustomFundCategory] = useState('Grant');
-  const [customFundSource, setCustomFundSource] = useState('');
-  const [saveCustomToFunds, setSaveCustomToFunds] = useState(true);
 
   // Add Organization Fund Modal
   const [showAddFundModal, setShowAddFundModal] = useState(false);
@@ -118,6 +113,12 @@ export default function TreasurerView({
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!funds.some(fund => getFundSourceValue(fund) === txFundSource)) {
+      setTxFundSource(funds[0] ? getFundSourceValue(funds[0]) : '');
+    }
+  }, [funds, txFundSource]);
 
   const availableCategories = [...CATEGORIES[txType], ...customCategories.filter(category => !CATEGORIES[txType].includes(category))];
 
@@ -157,35 +158,32 @@ export default function TreasurerView({
   const handleTypeChange = (type: 'income' | 'expense') => {
     setTxType(type);
     setTxCategory(CATEGORIES[type][0]);
-    setIsCustomFundSource(false);
     setTxPurpose('');
   };
 
   const handleAddFundSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fundFormName.trim() || !fundFormCategory || !fundFormSource.trim()) return;
+    if (!onAddFund || !fundFormName.trim() || !fundFormCategory || !fundFormSource.trim()) return;
 
     const allocated = parseFloat(fundFormAllocated) || 0;
     const balance = fundFormBalance ? parseFloat(fundFormBalance) : allocated;
     const code = fundFormCode.trim().toUpperCase() ||
                  fundFormName.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 8);
 
-    if (onAddFund) {
-      onAddFund({
-        name: fundFormName.trim(),
-        code,
-        category: fundFormCategory,
-        source: fundFormSource.trim(),
-        allocatedAmount: allocated,
-        currentBalance: balance,
-        custodian: fundFormCustodian.trim() || resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole),
-        description: fundFormDescription.trim() || 'Opisyal nga pundo sa asosasyon'
-      });
-    }
+    onAddFund({
+      name: fundFormName.trim(),
+      code,
+      category: fundFormCategory,
+      source: fundFormSource.trim(),
+      allocatedAmount: allocated,
+      currentBalance: balance,
+      custodian: fundFormCustodian.trim() || resolveOfficerPrefixed(users, 'Treasurer' as OfficerRole),
+      description: fundFormDescription.trim() || 'Opisyal nga pundo sa asosasyon'
+    });
 
     // Set this newly created fund as active in the transaction modal
     setTxFundSource(`${code} (${fundFormName.trim()})`);
-    setIsCustomFundSource(false);
+    setTxFundSourceError('');
 
     // Reset fund form
     setFundFormName('');
@@ -202,6 +200,12 @@ export default function TreasurerView({
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!txAmount || parseFloat(txAmount) <= 0 || !txDesc.trim()) return;
+    const selectedFund = funds.find(fund => getFundSourceValue(fund) === txFundSource);
+    if (!selectedFund) {
+      setTxFundSourceError('Choose a registered fund source, or add and register one before recording this transaction.');
+      return;
+    }
+    setTxFundSourceError('');
     if (txType === 'expense' && !txPurpose.trim()) return;
     if (txType === 'expense' && txActivityId) {
       const selectedActivity = activities.find(activity => activity.id === txActivityId);
@@ -216,29 +220,6 @@ export default function TreasurerView({
       ? new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       : undefined;
 
-    let finalFundSource = txFundSource;
-    if (isCustomFundSource) {
-      if (!customFundName.trim()) return;
-      if (saveCustomToFunds && !customFundSource.trim()) return;
-      const codeDerived = customFundCode.trim().toUpperCase() ||
-        customFundName.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 8);
-      finalFundSource = `${codeDerived} (${customFundName.trim()})`;
-
-      // If Treasurer opted to register this as an official permanent fund account
-      if (saveCustomToFunds && onAddFund) {
-        onAddFund({
-          name: customFundName.trim(),
-          code: codeDerived,
-          category: customFundCategory,
-          source: customFundSource.trim() || customFundName.trim(),
-          allocatedAmount: txType === 'income' ? parseFloat(txAmount) : 0,
-          currentBalance: txType === 'income' ? parseFloat(txAmount) : 0,
-          custodian: defaultCustodian,
-          description: `Tinubdan sa pundo nga gi-rehistro ni Treasurer alang sa ${txType === 'income' ? 'nadawat nga kita' : 'gasto'}: ${effectivePurpose}`
-        });
-      }
-    }
-
     onAddTransaction({
       type: txType,
       category: txCategory,
@@ -248,7 +229,7 @@ export default function TreasurerView({
       activityId: txActivityId || undefined,
       purpose: effectivePurpose,
       liquidationDeadline,
-      fundSource: finalFundSource,
+      fundSource: getFundSourceValue(selectedFund),
       recordedBy: defaultCustodian
     });
 
@@ -257,9 +238,6 @@ export default function TreasurerView({
     setTxPurpose('');
     setTxActivityId('');
     setTxActivityError('');
-    setCustomFundName('');
-    setCustomFundCode('');
-    setIsCustomFundSource(false);
     setTxDate(new Date().toISOString().split('T')[0]);
     setShowAddModal(false);
   };
@@ -712,7 +690,6 @@ export default function TreasurerView({
             id="treasurer-financial-statement-btn"
             type="button"
             onClick={() => setShowFinancialStatement(true)}
-            style={{ color: '#ffffff' }}
             className="flex min-h-14 items-center justify-center gap-2 px-4 py-3 text-base font-bold bg-[#14532D] hover:bg-[#123F25] text-white border border-[#14532D] rounded-xl shadow-sm transition-all w-full xl:w-auto cursor-pointer focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
           >
             <FileText className="w-5 h-5 shrink-0" />
@@ -931,7 +908,6 @@ export default function TreasurerView({
               <button
                 onClick={() => {
                   setShowAddModal(false);
-                  setIsCustomFundSource(false);
                 }}
                 className="text-[#33473D] hover:text-[#1B4332] text-2xl font-bold p-1 shrink-0 cursor-pointer"
               >
@@ -945,7 +921,7 @@ export default function TreasurerView({
                 <label className="block text-xs font-bold text-[#18372D] uppercase mb-1 flex items-center justify-between">
                   <span>Transaction Type</span>
                   <span className={`text-[10px] font-black ${txType === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    {txType === 'income' ? '● MISULOD (INFLOW / DEPOSIT)' : '● MIGAWAZ (OUTFLOW / DISBURSEMENT)'}
+                    {txType === 'income' ? '● MISULOD (INFLOW / DEPOSIT)' : '● MIGAWAS (OUTFLOW / DISBURSEMENT)'}
                   </span>
                 </label>
                 <div className="grid grid-cols-2 gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-750">
@@ -1085,166 +1061,42 @@ export default function TreasurerView({
 
                 <div className="flex flex-col gap-2 pt-1">
                   <select
-                    value={isCustomFundSource ? '__custom__' : txFundSource}
+                    required
+                    value={txFundSource}
                     onChange={(e) => {
-                      if (e.target.value === '__custom__') {
-                        setIsCustomFundSource(true);
-                      } else {
-                        setIsCustomFundSource(false);
-                        setTxFundSource(e.target.value);
-                      }
+                      setTxFundSource(e.target.value);
+                      setTxFundSourceError('');
                     }}
-                    className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
+                    className="w-full min-h-12 px-3.5 py-2 text-base bg-white border border-[#8FA99A] rounded-xl text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2D6A4F]"
                   >
-                    {/* Registered Dynamic Funds */}
-                    {funds.length > 0 && (
-                      <optgroup label={txType === 'income' ? 'Registered Funds (Deposit Destination)' : 'Registered Funds (Budget Source)'}>
-                        {funds.map(f => (
-                          <option key={f.id} value={`${f.code} (${f.name})`}>
-                            {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} {f.code} - {f.name} (Bal: ₱{f.currentBalance.toLocaleString()})
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-
-                    {/* Standard Statutory & Partner Accounts */}
-                    <optgroup label="Standard Co-op & Partner Allocations">
-                      <option value="GF-SLP (General Fund / DSWD-SLP Operational Buffer)">
-                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} GF-SLP (General Fund / DSWD-SLP Operational Buffer)
+                    <option value="" disabled>
+                      {funds.length ? 'Select a registered fund source' : 'No registered fund sources yet'}
+                    </option>
+                    {funds.map(fund => (
+                      <option key={fund.id} value={getFundSourceValue(fund)}>
+                        {txType === 'income' ? 'Deposit to: ' : 'Expense from: '}
+                        {fund.code} - {fund.name} (Balance: PHP {fund.currentBalance.toLocaleString()})
                       </option>
-                      <option value="DOLE Integrated Livelihood Program (DILP) Capital Allocation">
-                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} DOLE Integrated Livelihood Program (DILP) Capital Allocation
-                      </option>
-                      <option value="CBU (Member Capital Build-Up & Equity Fund)">
-                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} CBU (Member Capital Build-Up & Equity Fund)
-                      </option>
-                      <option value="FCCT-SAVINGS (FCCT Cooperative Bank Deposit)">
-                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} FCCT-SAVINGS (FCCT Cooperative Bank Deposit)
-                      </option>
-                      <option value="ATI-TRG (ATI Training & Capacity Building Fund)">
-                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} ATI-TRG (ATI Training & Capacity Building Fund)
-                      </option>
-                      <option value="DISP-5% (Dispersal & Livestock Insurance Risk Pool)">
-                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} DISP-5% (Dispersal & Livestock Insurance Risk Pool)
-                      </option>
-                      <option value="LGU Tuburan Agriculture Assistance Fund">
-                        {txType === 'income' ? 'Ideposito sa: ' : 'Kuhaon sa: '} LGU Tuburan Agriculture Assistance Fund
-                      </option>
-                    </optgroup>
-
-                    <optgroup label="Lahi nga Tinubdan / Different Source">
-                      <option value="__custom__">
-                        {txType === 'income'
-                          ? '+ Magdugang og Lahi nga Pundo nga Sudlan (Specify Different Target Fund)...'
-                          : '+ Magdugang og Lahi nga Tinubdan sa Pundo (Specify Different Source)...'}
-                      </option>
-                    </optgroup>
+                    ))}
                   </select>
 
+                  {txFundSourceError && <p role="alert" className="text-sm font-bold text-rose-800">{txFundSourceError}</p>}
+                  {!funds.length && (
+                    <p className="text-sm text-[#33473D]">
+                      Register a fund source before recording income or expenses.
+                    </p>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setShowAddFundModal(true)}
-                    title="Rehistro og bag-ong permanenteng pundo sa asosasyon"
-                    style={{ color: '#ffffff' }}
-                    className="w-full py-2.5 bg-[#1B4332] hover:bg-[#123326] rounded-xl text-sm font-bold border border-[#2D6A4F] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    onClick={() => onAddFund && setShowAddFundModal(true)}
+                    disabled={!onAddFund}
+                    title="Register a new fund source"
+                    className="w-full min-h-12 py-2.5 bg-[#1B4332] hover:bg-[#123326] disabled:bg-slate-400 disabled:cursor-not-allowed rounded-xl text-base font-bold text-white border border-[#2D6A4F] flex items-center justify-center gap-2 transition-all cursor-pointer focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#2D6A4F]"
                   >
-                    <Plus className="w-4 h-4" style={{ color: '#ffffff' }} />
-                    <span>Add New Budget Source</span>
+                    <Plus className="w-5 h-5" />
+                    <span>Register New Budget Source</span>
                   </button>
                 </div>
-
-                {/* Inline Different Fund Source Input */}
-                {isCustomFundSource && (
-                  <div className="mt-2.5 p-3.5 bg-white rounded-xl border border-[#2D6A4F]/40 space-y-2.5 animate-fade-in">
-                    <div className="flex items-center justify-between text-xs text-[#1B4332] font-bold">
-                      <span>
-                        {txType === 'income' ? 'Different Target Fund (Income)' : 'Different Budget Source'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsCustomFundSource(false);
-                          setTxFundSource(funds[0] ? `${funds[0].code} (${funds[0].name})` : 'GF-SLP (General Fund / DSWD-SLP Operational Buffer)');
-                        }}
-                        className="text-[11px] text-[#2D6A4F] hover:underline cursor-pointer"
-                      >
-                        Balik sa lista
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-semibold text-[#1B4332] mb-0.5">
-                          Pangalan sa Pundo / Fund Name <span className="text-rose-700">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          required={isCustomFundSource}
-                          value={customFundName}
-                          onChange={(e) => setCustomFundName(e.target.value)}
-                          className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-300 mb-0.5">
-                          Code / Tag (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={customFundCode}
-                          onChange={(e) => setCustomFundCode(e.target.value)}
-                          className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white font-mono uppercase focus:outline-none focus:border-emerald-500"
-                        />
-                      </div>
-                    </div>
-
-                    {saveCustomToFunds && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[11px] font-semibold text-[#1B4332] mb-0.5">Source category</label>
-                          <select
-                            value={customFundCategory}
-                            onChange={(e) => setCustomFundCategory(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
-                          >
-                            <option>Grant</option>
-                            <option>Government Program</option>
-                            <option>Donation / Sponsorship</option>
-                            <option>Association Funds</option>
-                            <option>Cooperative / Bank</option>
-                            <option>Member Contribution</option>
-                            <option>Other</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-semibold text-[#1B4332] mb-0.5">Grantor / source</label>
-                          <input
-                            type="text"
-                            required={isCustomFundSource && saveCustomToFunds}
-                            value={customFundSource}
-                            onChange={(e) => setCustomFundSource(e.target.value)}
-                            placeholder="e.g. Department of Agriculture"
-                            className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-lg text-slate-900 focus:outline-none focus:border-[#2D6A4F]"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="pt-1">
-                      <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={saveCustomToFunds}
-                          onChange={(e) => setSaveCustomToFunds(e.target.checked)}
-                          className="rounded border-slate-600 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span className="text-[11px]">
-                         Save to permanent fund accounts
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Purpose of Funds */}
@@ -1291,7 +1143,6 @@ export default function TreasurerView({
                   type="button"
                   onClick={() => {
                     setShowAddModal(false);
-                    setIsCustomFundSource(false);
                   }}
                   style={{ color: '#1B4332' }}
                   className="flex-1 py-2.5 text-sm font-bold bg-white hover:bg-[#F5F8F4] border-2 border-[#B8CDBE] hover:border-[#1B4332] rounded-xl transition-all cursor-pointer"

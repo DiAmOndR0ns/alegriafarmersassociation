@@ -29,7 +29,7 @@ const OfficerReportModal = lazy(() => import('./components/OfficerReportModal'))
 const PresidentReport = lazy(() => import('./components/PresidentReport'));
 const ProductManagementModal = lazy(() => import('./components/ProductManagementModal'));
 import { buildReportData } from './components/PresidentReport';
-import FinancialStatement from './components/FinancialStatement';
+import TreasurerFinancialReport from './components/TreasurerFinancialReport';
 import PasswordChangePrompt from './components/PasswordChangePrompt';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useDatabaseStatus } from './hooks/useDatabaseStatus';
@@ -63,7 +63,7 @@ export default function App() {
   const [officerTab, setOfficerTab] = useState<'tasks' | 'hog-raising' | 'announcements' | 'member-view' | 'products'>('tasks');
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showPresidentReport, setShowPresidentReport] = useState<boolean>(false);
-  const [showOfficialFinancialStatement, setShowOfficialFinancialStatement] = useState<boolean>(false);
+  const [showTreasurerFinancialReport, setShowTreasurerFinancialReport] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
   const [showClearCacheConfirmModal, setShowClearCacheConfirmModal] = useState<boolean>(false);
 
@@ -1362,6 +1362,11 @@ export default function App() {
       showToastMessage('Only the Treasurer or Assistant Treasurer may record income or expenses.', 'error');
       return;
     }
+    const registeredFund = funds.find(fund => txData.fundSource === `${fund.code} (${fund.name})`);
+    if (!registeredFund) {
+      showToastMessage('Select a registered fund source before recording income or expenses.', 'error');
+      return;
+    }
     if (txData.type === 'expense' && txData.activityId) {
       const activity = activities.find(item => item.id === txData.activityId);
       if (!activity || !isActivityOpenForExpenses(activity)) {
@@ -1389,12 +1394,8 @@ export default function App() {
     // Automatically update the live balance of the affected Organization Fund if matching account exists
     if (newTx.fundSource) {
       setFunds(prevFunds => {
-        let hasUpdated = false;
         const updatedFunds = prevFunds.map(f => {
-          const isMatch = (f.code && newTx.fundSource?.includes(f.code)) ||
-                          (f.name && newTx.fundSource?.toLowerCase().includes(f.name.toLowerCase()));
-          if (isMatch) {
-            hasUpdated = true;
+          if (f.id === registeredFund.id) {
             const diff = newTx.type === 'income' ? newTx.amount : -newTx.amount;
             return {
               ...f,
@@ -1405,11 +1406,9 @@ export default function App() {
           return f;
         });
 
-        if (hasUpdated) {
-          updateStorage('bafa_funds', updatedFunds);
-          if (isOnline) {
-            pushAllDataToCloud({ funds: updatedFunds }, { silent: true, source: 'Fund Balance Updated' });
-          }
+        updateStorage('bafa_funds', updatedFunds);
+        if (isOnline) {
+          pushAllDataToCloud({ funds: updatedFunds }, { silent: true, source: 'Fund Balance Updated' });
         }
         return updatedFunds;
       });
@@ -1485,6 +1484,10 @@ export default function App() {
 
   // AFA IGP HANDLERS
   const handleAddPigExpense = (expData: Omit<IgpExpense, 'id' | 'recordedBy'>) => {
+    if (!funds.some(fund => expData.fundSource === `${fund.code} (${fund.name})`)) {
+      showToastMessage('Select a registered budget source before recording this livestock expense.', 'error');
+      return;
+    }
     const officerLabel = currentUser ? `${currentUser.role.replace('_', ' ')} (${currentUser.name})` : `Treasurer (${getOfficerName('Treasurer')})`;
     const newExp: IgpExpense = {
       ...expData,
@@ -1507,6 +1510,7 @@ export default function App() {
       amount: expData.amount,
       date: expData.date,
       description: `[${projectLabel} IGP${stageLabel}] ${expData.category}${expData.quantity ? ` (${expData.quantity})` : ''}: ${expData.description}`,
+      fundSource: expData.fundSource,
       recordedBy: officerLabel
     });
 
@@ -1520,6 +1524,10 @@ export default function App() {
   };
 
   const handleAddHogSale = (saleData: Omit<IgpSale, 'id' | 'recordedBy'>) => {
+    if (!funds.some(fund => saleData.fundSource === `${fund.code} (${fund.name})`)) {
+      showToastMessage('Select a registered deposit destination before recording this livestock income.', 'error');
+      return;
+    }
     const officerLabel = currentUser ? `${currentUser.role.replace('_', ' ')} (${currentUser.name})` : `Treasurer (${getOfficerName('Treasurer')})`;
     const newSale: IgpSale = {
       ...saleData,
@@ -1542,6 +1550,7 @@ export default function App() {
       amount: saleData.revenue,
       date: saleData.date,
       description: `[${projectLabel} IGP] Revenue (${saleData.hogsCount} unit/head${stageLabel}): ${saleData.notes || `${projectLabel} sale/rental income.`}`,
+      fundSource: saleData.fundSource,
       recordedBy: officerLabel
     });
 
@@ -3347,11 +3356,11 @@ export default function App() {
               <button
                 id="sidebar-treasurer-report-btn"
                 type="button"
-                onClick={() => setShowOfficialFinancialStatement(true)}
+                onClick={() => setShowTreasurerFinancialReport(true)}
                 className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
               >
                 <FileText className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
-                <span className="truncate">Official Financial Statement</span>
+                <span className="truncate">Financial Report (PDF)</span>
               </button>
             )}
 
@@ -3674,6 +3683,7 @@ export default function App() {
             <div id="officer-hog-raising-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900 text-left">
               <LivestockMonitor
                 state={hogRaising}
+                funds={funds}
                 members={members}
                 meetings={meetings}
                 onAddExpense={handleAddPigExpense}
@@ -3830,35 +3840,23 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* Treasurer's official statement is also available from the sidebar. */}
-      {showOfficialFinancialStatement && (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-4 no-print">
-          <div className="mx-auto max-w-5xl rounded-2xl bg-white p-4 shadow-2xl">
-            <div className="mb-3 flex justify-end gap-3 no-print">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="min-h-12 rounded-xl bg-[#1B4332] px-5 py-3 text-base font-bold text-white"
-              >
-                Print / Save PDF
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowOfficialFinancialStatement(false)}
-                className="min-h-12 rounded-xl border border-[#8FA99A] px-5 py-3 text-base font-bold text-[#1B4332]"
-              >
-                Close
-              </button>
-            </div>
-            <FinancialStatement
-              transactions={transactions}
-              activities={activities}
-              funds={funds}
-              hogRaising={hogRaising}
-              inventory={inventory}
-              users={users}
-              year={new Date().getFullYear()}
-            />
+      {/* TREASURER'S OFFICIAL FINANCIAL REPORT (print / save as PDF) — SEGREGATED:
+          all financial exports belong exclusively to the Treasurer's dashboard. */}
+      {showTreasurerFinancialReport && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
+          <div className="mx-auto max-w-[210mm]">
+            <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading financial report...</div>}>
+              <TreasurerFinancialReport
+                year={new Date().getFullYear()}
+                transactions={transactions}
+                activities={activities}
+                funds={funds}
+                hogRaising={hogRaising}
+                inventory={inventory}
+                users={users}
+                onClose={() => setShowTreasurerFinancialReport(false)}
+              />
+            </Suspense>
           </div>
         </div>
       )}

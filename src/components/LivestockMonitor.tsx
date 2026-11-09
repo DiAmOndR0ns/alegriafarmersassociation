@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  HogRaisingState, HogStage, HogHerdBreakdown, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting
+  HogRaisingState, HogStage, HogHerdBreakdown, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund
 } from '../types';
 import {
   Briefcase, Plus, Trash2, Printer, Calculator, Lock, ArrowDownRight, ArrowUpRight,
@@ -11,6 +11,7 @@ import { getAvailableEggCount } from '../utils/eggInventory';
 
 interface LivestockMonitorProps {
   state: HogRaisingState;
+  funds?: OrganizationFund[];
   members: Member[];
   meetings?: Meeting[];
   onAddExpense: (expense: Omit<IgpExpense, 'id' | 'recordedBy'>) => void;
@@ -89,6 +90,7 @@ const getExpenseCategories = (produce: string): string[] => {
 
 const inputCls = 'w-full px-3 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600 font-semibold';
 const labelCls = 'block text-[11px] font-black text-[#1B4332] uppercase mb-1';
+const fundSourceValue = (fund: OrganizationFund) => `${fund.code} (${fund.name})`;
 
 // Stage matchers used by the inventory reconciliation.
 const inFattening = (s?: HogStage) => s === 'Fattening';
@@ -99,6 +101,7 @@ const inRtl = (s?: HogStage) => s === 'RTL' || !s;
 
 export default function LivestockMonitor({
   state,
+  funds = [],
   members,
   meetings = [],
   onAddExpense,
@@ -301,6 +304,7 @@ export default function LivestockMonitor({
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
   const [expDate, setExpDate] = useState(today());
+  const [expFundSource, setExpFundSource] = useState('');
 
   // Sale Form Fields
   const [saleStage, setSaleStage] = useState<HogStage>('Fattening');
@@ -308,6 +312,16 @@ export default function LivestockMonitor({
   const [saleRevenue, setSaleRevenue] = useState('');
   const [saleDate, setSaleDate] = useState(today());
   const [saleNotes, setSaleNotes] = useState('');
+  const [saleFundSource, setSaleFundSource] = useState('');
+
+  useEffect(() => {
+    if (!funds.some(fund => fundSourceValue(fund) === expFundSource)) {
+      setExpFundSource(funds[0] ? fundSourceValue(funds[0]) : '');
+    }
+    if (!funds.some(fund => fundSourceValue(fund) === saleFundSource)) {
+      setSaleFundSource(funds[0] ? fundSourceValue(funds[0]) : '');
+    }
+  }, [funds, expFundSource, saleFundSource]);
 
   // Egg Harvest Submission Form Fields (member daily harvest)
   const [showEggModal, setShowEggModal] = useState(false);
@@ -350,6 +364,7 @@ export default function LivestockMonitor({
     setExpDesc('');
     setExpAmount('');
     setExpDate(today());
+    setExpFundSource(funds[0] ? fundSourceValue(funds[0]) : '');
     setFormError('');
     setShowExpenseModal(true);
   };
@@ -363,6 +378,7 @@ export default function LivestockMonitor({
     setExpDesc(expense.description);
     setExpAmount(String(expense.amount));
     setExpDate(expense.date);
+    setExpFundSource(expense.fundSource || (funds[0] ? fundSourceValue(funds[0]) : ''));
     setFormError('');
     setShowExpenseModal(true);
   };
@@ -374,6 +390,7 @@ export default function LivestockMonitor({
     setSaleRevenue('');
     setSaleNotes('');
     setSaleDate(today());
+    setSaleFundSource(funds[0] ? fundSourceValue(funds[0]) : '');
     setFormError('');
     setShowSaleModal(true);
   };
@@ -385,6 +402,7 @@ export default function LivestockMonitor({
     setSaleRevenue(String(sale.revenue));
     setSaleNotes(sale.notes || '');
     setSaleDate(sale.date);
+    setSaleFundSource(sale.fundSource || (funds[0] ? fundSourceValue(funds[0]) : ''));
     setFormError('');
     setShowSaleModal(true);
   };
@@ -397,6 +415,9 @@ export default function LivestockMonitor({
   const submitExpense = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isTreasurer) return setFormError('Only the treasurer can record or change expenses.');
+    if (!funds.some(fund => fundSourceValue(fund) === expFundSource)) {
+      return setFormError('Select a registered budget source before recording this expense.');
+    }
     const amount = parseFloat(expAmount);
     if (!(amount > 0) || !expDesc.trim()) return setFormError('Please enter a valid amount and description.');
     const closed = closedMsg(expDate);
@@ -416,6 +437,7 @@ export default function LivestockMonitor({
         description: expDesc.trim(),
         amount,
         date: expDate,
+        fundSource: expFundSource,
       });
     } else {
       onAddExpense({
@@ -426,6 +448,7 @@ export default function LivestockMonitor({
         description: expDesc.trim(),
         amount,
         date: expDate,
+        fundSource: expFundSource,
       });
     }
     setShowExpenseModal(false);
@@ -434,6 +457,9 @@ export default function LivestockMonitor({
   const submitSale = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isTreasurer) return setFormError('Only the treasurer can record or change income.');
+    if (!funds.some(fund => fundSourceValue(fund) === saleFundSource)) {
+      return setFormError('Select a registered deposit destination before recording this income.');
+    }
     const isDispersalSale = saleStage === 'Dispersal';
     const revenue = saleRevenue.trim() === '' && isDispersalSale ? 0 : parseFloat(saleRevenue);
     const qty = parseInt(saleQty, 10);
@@ -468,6 +494,7 @@ export default function LivestockMonitor({
         produceCount: qty,
         revenue,
         notes: saleNotes.trim() || undefined,
+        fundSource: saleFundSource,
       });
     } else {
       onAddSale({
@@ -478,6 +505,7 @@ export default function LivestockMonitor({
         produceCount: qty,
         revenue,
         notes: saleNotes.trim() || undefined,
+        fundSource: saleFundSource,
       });
     }
     setShowSaleModal(false);
@@ -1126,6 +1154,29 @@ export default function LivestockMonitor({
             </div>
 
             <div>
+              <label className={labelCls} htmlFor="livestock-expense-fund">
+                Registered Budget Source
+              </label>
+              <select
+                id="livestock-expense-fund"
+                required
+                value={expFundSource}
+                onChange={(e) => setExpFundSource(e.target.value)}
+                className={inputCls}
+              >
+                <option value="" disabled>
+                  {funds.length ? 'Select a registered fund' : 'No registered funds available'}
+                </option>
+                {funds.map(fund => (
+                  <option key={fund.id} value={fundSourceValue(fund)}>
+                    {fund.code} - {fund.name}
+                  </option>
+                ))}
+              </select>
+              {!funds.length && <p className="mt-1 text-sm text-rose-800">Register a budget source in the Treasurer dashboard first.</p>}
+            </div>
+
+            <div>
               <label className={labelCls}>Description / Purpose</label>
               <input
                 type="text"
@@ -1258,6 +1309,29 @@ export default function LivestockMonitor({
                 className={inputCls}
                 placeholder="0.00"
               />
+            </div>
+
+            <div>
+              <label className={labelCls} htmlFor="livestock-sale-fund">
+                Registered Deposit Destination
+              </label>
+              <select
+                id="livestock-sale-fund"
+                required
+                value={saleFundSource}
+                onChange={(e) => setSaleFundSource(e.target.value)}
+                className={inputCls}
+              >
+                <option value="" disabled>
+                  {funds.length ? 'Select a registered fund' : 'No registered funds available'}
+                </option>
+                {funds.map(fund => (
+                  <option key={fund.id} value={fundSourceValue(fund)}>
+                    {fund.code} - {fund.name}
+                  </option>
+                ))}
+              </select>
+              {!funds.length && <p className="mt-1 text-sm text-rose-800">Register a deposit destination in the Treasurer dashboard first.</p>}
             </div>
 
             <div>

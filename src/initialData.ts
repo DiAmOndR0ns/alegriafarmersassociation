@@ -8,68 +8,7 @@ export const INITIAL_MEMBERS: Member[] = [];
 export const INITIAL_MEETINGS: Meeting[] = [];
 export const INITIAL_RESOLUTIONS: Resolution[] = [];
 export const INITIAL_TRANSACTIONS: FinancialTransaction[] = [];
-export const INITIAL_FUNDS: OrganizationFund[] = [
-  {
-    id: 'fund-gf-slp',
-    code: 'GF-SLP',
-    name: 'General Fund / DSWD-SLP Operational Buffer',
-    category: 'Government Program',
-    source: 'Department of Social Welfare and Development - Sustainable Livelihood Program',
-    allocatedAmount: 50000,
-    currentBalance: 50000,
-    description: 'Pang-operasyon ug general reserve fund sa asosasyon gikan sa DSWD Sustainable Livelihood Program operational buffer.',
-    custodian: 'Treasurer',
-    lastUpdated: '2026-09-01'
-  },
-  {
-    id: 'fund-dole-dilp',
-    code: 'DOLE-DILP',
-    name: 'DOLE Integrated Livelihood Program Capital Allocation',
-    category: 'Grant',
-    source: 'Department of Labor and Employment',
-    allocatedAmount: 85000,
-    currentBalance: 85000,
-    description: 'Kapital nga gigahin alang sa livelihood project, hog raising ug gamit sa produksyon sa asosasyon.',
-    custodian: 'Treasurer',
-    lastUpdated: '2026-09-01'
-  },
-  {
-    id: 'fund-cbu',
-    code: 'CBU-EQUITY',
-    name: 'Member Capital Build-Up & Equity Fund',
-    category: 'Member Contribution',
-    source: 'Association members',
-    allocatedAmount: 25000,
-    currentBalance: 25000,
-    description: 'Tampo ug equity sa mga miyembro alang sa institutional stability ug emergency buffer.',
-    custodian: 'Treasurer',
-    lastUpdated: '2026-09-01'
-  },
-  {
-    id: 'fund-ati-trg',
-    code: 'ATI-TRG',
-    name: 'ATI Training & Capacity Building Fund',
-    category: 'Government Program',
-    source: 'Agricultural Training Institute',
-    allocatedAmount: 15000,
-    currentBalance: 15000,
-    description: 'Gahin alang sa mga pagbansay-bansay, seminar, ug edukasyon sa mga opisyal ug mag-uuma.',
-    custodian: 'Treasurer',
-    lastUpdated: '2026-09-01'
-  },
-  {
-    id: 'fund-fcct',
-    code: 'FCCT-SAVINGS',
-    name: 'FCCT Cooperative Bank Deposit',
-    category: 'Cooperative / Bank',
-    source: 'FCCT Cooperative Bank',
-    allocatedAmount: 40000,
-    currentBalance: 40000,
-    description: 'Opisyal nga bank savings account sa asosasyon sa FCCT Cooperative Bank.',
-    custodian: 'Treasurer',
-    lastUpdated: '2026-09-01'
-  }
-];
+export const INITIAL_FUNDS: OrganizationFund[] = [];
 export const INITIAL_ANNOUNCEMENTS: Announcement[] = [];
 export const INITIAL_LOGS: SystemLog[] = [];
 export const INITIAL_ACTIVITIES: AssociationActivity[] = [];
