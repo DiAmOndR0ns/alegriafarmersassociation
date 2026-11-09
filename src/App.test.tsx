@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import App from './App';
+import App, { mergeSyncRecordsById } from './App';
 import ConfirmationModal from './components/ConfirmationModal';
+import SyncQueuePanel from './components/SyncQueuePanel';
 import { useDatabaseStatus } from './hooks/useDatabaseStatus';
 import { generateTotpCode, verifyTotpCode, getTotpUri, generateTotpSecret } from './utils/totp';
 import ExecutiveView from './components/ExecutiveView';
@@ -42,6 +43,38 @@ describe('App Component', () => {
         json: () => Promise.resolve({})
       });
     }));
+  });
+
+  it('merges locally pending records over cloud records and honors pending deletions', () => {
+    const merged = mergeSyncRecordsById(
+      [{ id: 'existing', value: 'cloud' }, { id: 'remote-only', value: 'keep' }],
+      [{ id: 'existing', value: 'local' }, { id: 'local-only', value: 'upload' }],
+      ['deleted']
+    );
+
+    expect(merged).toEqual([
+      { id: 'existing', value: 'local' },
+      { id: 'remote-only', value: 'keep' },
+      { id: 'local-only', value: 'upload' }
+    ]);
+  });
+
+  it('allows a manual retry when a full database sync is pending without queued records', () => {
+    const markup = renderToString(
+      <SyncQueuePanel
+        queue={[]}
+        isOnline={true}
+        hasPendingCloudSync={true}
+        onSync={() => {}}
+        isSyncing={false}
+        onClearQueue={() => {}}
+        onRemoveItem={() => {}}
+      />
+    );
+
+    expect(markup).toContain('Database sync pending.');
+    expect(markup).toContain('id="sync-trigger-panel-btn"');
+    expect(markup).not.toContain('id="sync-trigger-panel-btn" disabled=""');
   });
 
   it('is defined and can be imported', () => {

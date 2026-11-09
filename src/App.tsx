@@ -45,6 +45,32 @@ import {
   ChevronLeft, ChevronRight, Database
 } from 'lucide-react';
 
+export function mergeSyncRecordsById<T extends { id: string }>(
+  remoteRecords: T[],
+  localRecords: T[],
+  deletedIds: string[] = []
+): T[] {
+  const records = new Map(remoteRecords.map(record => [record.id, record]));
+  localRecords.forEach(record => records.set(record.id, record));
+  deletedIds.forEach(id => records.delete(id));
+  return Array.from(records.values());
+}
+
+interface StoredDeletedIds {
+  users?: string[];
+  members?: string[];
+  meetings?: string[];
+  resolutions?: string[];
+  financialTransactions?: string[];
+  transactions?: string[];
+  announcements?: string[];
+  products?: string[];
+  activities?: string[];
+  achievements?: string[];
+  funds?: string[];
+  inventory?: string[];
+}
+
 export default function App() {
   // Auth & Accounts State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -82,9 +108,12 @@ export default function App() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [isHydrating, setIsHydrating] = useState(true);
+  const [hasPendingCloudSync, setHasPendingCloudSync] = useState(false);
 
   // Ref to prevent overlapping push requests and track synchronization status
   const isSyncingRef = useRef<boolean>(false);
+  const syncQueueRef = useRef<SyncQueueItem[]>([]);
+  const deletedIdsRef = useRef<StoredDeletedIds>({});
   const pendingSyncsRef = useRef<Array<{ run: () => Promise<boolean>; resolve: (synced: boolean) => void }>>([]);
   const appDataRef = useRef({
     users: [] as User[],
@@ -138,11 +167,11 @@ export default function App() {
     let cancelled = false;
     const loadLocalData = async () => {
       try {
-        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_sync_queue', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
+        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
         clearSecureItems(['bafa_hog_raising']);
         await migrateSecureItems(storageKeys);
       if (cancelled) return;
-      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers] = await Promise.all([
+      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds] = await Promise.all([
         getSecureItem<Member[]>('bafa_members'),
         getSecureItem<Meeting[]>('bafa_meetings'),
         getSecureItem<Resolution[]>('bafa_resolutions'),
@@ -156,8 +185,13 @@ export default function App() {
         getSecureItem<InventoryItem[]>('bafa_inventory'),
         getSecureItem<SyncQueueItem[]>('bafa_sync_queue'),
         getSecureItem<SystemLog[]>('bafa_logs'),
-        getSecureItem<User[]>('bafa_users')
+        getSecureItem<User[]>('bafa_users'),
+        getSecureItem<boolean>('bafa_pending_cloud_sync'),
+        getSecureItem<StoredDeletedIds>('bafa_deleted_ids')
       ]);
+      deletedIdsRef.current = storedDeletedIds || {};
+      const hasStoredDeletions = Object.values(deletedIdsRef.current).some(ids => Array.isArray(ids) && ids.length > 0);
+      setHasPendingCloudSync(Boolean(storedPendingCloudSync) || Boolean(storedQueue?.length) || hasStoredDeletions);
 
       // Detect and clear legacy dummy seed data from previous versions (e.g. Roberto Cañete / m-001)
       const storedMembersText = JSON.stringify(storedMembers || []);
@@ -196,7 +230,8 @@ export default function App() {
         setInventory(storedInventory || []);
       }
 
-      setSyncQueue(storedQueue || []);
+      syncQueueRef.current = storedQueue || [];
+      setSyncQueue(syncQueueRef.current);
 
       const parsedUsers = storedUsers || [];
       // Filter out any dummy members from users and strip any plain-text passwords
@@ -293,12 +328,16 @@ export default function App() {
         })
         .then(res => {
           if (res?.success && res.data) {
-            // Deletions pending for this session only; do not trust browser-persisted deletion markers.
+            // Pending deletes are derived from the encrypted sync queue.
             let bootDeletedIds: StoredDeletedIds = {};
             try {
-              bootDeletedIds = getStoredDeletedIds();
+              bootDeletedIds = getStoredDeletedIds(storedQueue || []);
             } catch {}
 
+            const hasPendingLocalChanges = Boolean(storedPendingCloudSync) || Boolean(storedQueue?.length) || hasStoredDeletions;
+            const hasQueuedEntity = (...entities: string[]) => storedQueue?.some(item =>
+              entities.includes(String(item.entityType).toLowerCase())
+            ) || false;
             const delUsers = new Set(bootDeletedIds.users || []);
             const delMembers = new Set(bootDeletedIds.members || []);
             const delMeetings = new Set(bootDeletedIds.meetings || []);
@@ -318,28 +357,53 @@ export default function App() {
             const cleanAnnouncements = Array.isArray(res.data.announcements) ? res.data.announcements.filter((a: any) => !delAnnouncements.has(a.id)) : [];
             const cleanProducts = Array.isArray(res.data.products) ? res.data.products.filter((p: any) => !delProducts.has(p.id)) : [];
             const cleanActivities = Array.isArray(res.data.activities) ? res.data.activities.filter((a: any) => !delActivities.has(a.id)) : [];
-            const hasPendingAchievementChanges = Array.isArray(storedQueue) &&
-              storedQueue.some(item => item.entityType === 'achievement');
-            const achievementSource = hasPendingAchievementChanges && Array.isArray(storedAchievements)
-              ? storedAchievements
-              : Array.isArray(res.data.achievements) ? res.data.achievements : [];
+            const localMembers = hasOldSeedMembers ? [] : storedMembers || [];
+            const legacySeedProductIds = new Set(['prod-chairs-rental', 'prod-sacks-rental', 'prod-coffee', 'prod-corn', 'prod-coconut']);
+            const localProducts = Array.isArray(storedProducts)
+              ? storedProducts.filter(product => !legacySeedProductIds.has(product.id))
+              : [];
+            const syncedMembers = storedPendingCloudSync || hasQueuedEntity('member') || delMembers.size > 0
+              ? mergeSyncRecordsById(cleanMembers, localMembers, bootDeletedIds.members) : cleanMembers;
+            const syncedMeetings = storedPendingCloudSync || hasQueuedEntity('meeting') || delMeetings.size > 0
+              ? mergeSyncRecordsById(cleanMeetings, storedMeetings || [], bootDeletedIds.meetings) : cleanMeetings;
+            const syncedResolutions = storedPendingCloudSync || hasQueuedEntity('resolution') || delResolutions.size > 0
+              ? mergeSyncRecordsById(cleanResolutions, storedResolutions || [], bootDeletedIds.resolutions) : cleanResolutions;
+            const syncedTransactions = storedPendingCloudSync || hasQueuedEntity('transaction') || delTx.size > 0
+              ? mergeSyncRecordsById(cleanTx, storedTransactions || [], bootDeletedIds.financialTransactions) : cleanTx;
+            const syncedAnnouncements = storedPendingCloudSync || hasQueuedEntity('announcement') || delAnnouncements.size > 0
+              ? mergeSyncRecordsById(cleanAnnouncements, storedAnnouncements || [], bootDeletedIds.announcements) : cleanAnnouncements;
+            const syncedProducts = storedPendingCloudSync || hasQueuedEntity('product') || delProducts.size > 0
+              ? mergeSyncRecordsById(cleanProducts, localProducts, bootDeletedIds.products) : cleanProducts;
+            const syncedActivities = storedPendingCloudSync || hasQueuedEntity('activity') || delActivities.size > 0
+              ? mergeSyncRecordsById(cleanActivities, storedActivities || [], bootDeletedIds.activities) : cleanActivities;
+            const achievementSource = Array.isArray(res.data.achievements) ? res.data.achievements : [];
             const cleanAchievements = achievementSource.filter((achievement: AssociationAchievement) => !delAchievements.has(achievement.id));
             const cleanFunds = Array.isArray(res.data.funds) ? res.data.funds.filter((f: any) => !delFunds.has(f.id)) : [];
             const cleanInventory = Array.isArray(res.data.inventory) ? res.data.inventory.filter((i: any) => !delInventory.has(i.id)) : [];
+            const syncedAchievements = storedPendingCloudSync || hasQueuedEntity('achievement') || delAchievements.size > 0
+              ? mergeSyncRecordsById(cleanAchievements, storedAchievements || [], bootDeletedIds.achievements)
+              : cleanAchievements;
+            const syncedFunds = storedPendingCloudSync || hasQueuedEntity('fund') || delFunds.size > 0
+              ? mergeSyncRecordsById(cleanFunds, storedFunds || [], bootDeletedIds.funds) : cleanFunds;
+            const syncedInventory = storedPendingCloudSync || hasQueuedEntity('inventory') || delInventory.size > 0
+              ? mergeSyncRecordsById(cleanInventory, storedInventory || [], bootDeletedIds.inventory) : cleanInventory;
+            const hasPendingHogChanges = storedPendingCloudSync || hasQueuedEntity('hog_expense', 'hog_sale', 'hog_chore', 'egg_harvest');
+            const syncedHogRaising = hasPendingHogChanges && storedHogRaising
+              ? storedHogRaising
+              : res.data.hogRaising || storedHogRaising || INITIAL_HOG_RAISING;
 
-            if (Array.isArray(res.data.members)) { setMembers(cleanMembers); updateStorage('bafa_members', cleanMembers); }
-            if (Array.isArray(res.data.meetings)) { setMeetings(cleanMeetings); updateStorage('bafa_meetings', cleanMeetings); }
-            if (Array.isArray(res.data.resolutions)) { setResolutions(cleanResolutions); updateStorage('bafa_resolutions', cleanResolutions); }
-            if (Array.isArray(res.data.financialTransactions)) { setTransactions(cleanTx); updateStorage('bafa_transactions', cleanTx); }
-            if (Array.isArray(res.data.announcements)) { setAnnouncements(cleanAnnouncements); updateStorage('bafa_announcements', cleanAnnouncements); }
-            if (Array.isArray(res.data.products)) { setProducts(cleanProducts); updateStorage('bafa_products', cleanProducts); }
-            if (Array.isArray(res.data.activities)) { setActivities(cleanActivities); updateStorage('bafa_activities', cleanActivities); }
-            if (Array.isArray(res.data.achievements)) { setAchievements(cleanAchievements); updateStorage('bafa_achievements', cleanAchievements); }
-            if (Array.isArray(res.data.funds)) { setFunds(cleanFunds); updateStorage('bafa_funds', cleanFunds); }
-            if (Array.isArray(res.data.inventory)) { setInventory(cleanInventory); updateStorage('bafa_inventory', cleanInventory); }
-            if (res.data.hogRaising) { setHogRaising(res.data.hogRaising); updateStorage('bafa_afa_igp', res.data.hogRaising); }
-            if (Array.isArray(res.data.users)) {
-              const cleanUsers = res.data.users
+            if (Array.isArray(res.data.members) || hasPendingLocalChanges) { setMembers(syncedMembers); updateStorage('bafa_members', syncedMembers); }
+            if (Array.isArray(res.data.meetings) || hasPendingLocalChanges) { setMeetings(syncedMeetings); updateStorage('bafa_meetings', syncedMeetings); }
+            if (Array.isArray(res.data.resolutions) || hasPendingLocalChanges) { setResolutions(syncedResolutions); updateStorage('bafa_resolutions', syncedResolutions); }
+            if (Array.isArray(res.data.financialTransactions) || hasPendingLocalChanges) { setTransactions(syncedTransactions); updateStorage('bafa_transactions', syncedTransactions); }
+            if (Array.isArray(res.data.announcements) || hasPendingLocalChanges) { setAnnouncements(syncedAnnouncements); updateStorage('bafa_announcements', syncedAnnouncements); }
+            if (Array.isArray(res.data.products) || hasPendingLocalChanges) { setProducts(syncedProducts); updateStorage('bafa_products', syncedProducts); }
+            if (Array.isArray(res.data.activities) || hasPendingLocalChanges) { setActivities(syncedActivities); updateStorage('bafa_activities', syncedActivities); }
+            if (Array.isArray(res.data.achievements) || hasPendingLocalChanges) { setAchievements(syncedAchievements); updateStorage('bafa_achievements', syncedAchievements); }
+            if (Array.isArray(res.data.funds) || hasPendingLocalChanges) { setFunds(syncedFunds); updateStorage('bafa_funds', syncedFunds); }
+            if (Array.isArray(res.data.inventory) || hasPendingLocalChanges) { setInventory(syncedInventory); updateStorage('bafa_inventory', syncedInventory); }
+            if (res.data.hogRaising || hasPendingLocalChanges) { setHogRaising(syncedHogRaising); updateStorage('bafa_afa_igp', syncedHogRaising); }
+            const cleanUsers = Array.isArray(res.data.users) ? res.data.users
                 .filter((u: any) => !delUsers.has(u.id))
                 .map((user: User) => {
                   // The database row is the source of truth for credentials. Older rows store a
@@ -360,11 +424,15 @@ export default function App() {
                   }
                   upgraded.mustChangePassword = false;
                   return upgraded;
-                });
-              setUsers(cleanUsers);
-              updateStorage('bafa_users', cleanUsers);
-              if (isOnline && cleanUsers.some((user: User) => !user.passwordHash?.startsWith('$2'))) {
-                pushAllDataToCloud({ users: cleanUsers }, { silent: true, source: 'Password Hash Upgrade' });
+                }) : [];
+            const syncedUsers = storedPendingCloudSync || hasQueuedEntity('user', 'officer', 'member') || delUsers.size > 0
+              ? mergeSyncRecordsById(cleanUsers, sanitizedUsers, bootDeletedIds.users)
+              : cleanUsers;
+            if (Array.isArray(res.data.users) || hasPendingLocalChanges) {
+              setUsers(syncedUsers);
+              updateStorage('bafa_users', syncedUsers);
+              if (isOnline && syncedUsers.some((user: User) => !user.passwordHash?.startsWith('$2'))) {
+                pushAllDataToCloud({ users: syncedUsers }, { silent: true, source: 'Password Hash Upgrade' });
               }
             }
             console.log('[Cloud DB] Successfully loaded fresh data from PostgreSQL Cloud DB');
@@ -375,40 +443,24 @@ export default function App() {
               checking: false,
             }));
 
-            // If there were pending offline operations or pending deletions queued in local storage, sync them immediately
-            const hasQueuedItems = Array.isArray(storedQueue) ? storedQueue.length > 0 : Boolean(storedQueue);
-            const hasQueuedDeletions = Object.values(bootDeletedIds).some(arr => Array.isArray(arr) && arr.length > 0);
-
-            if (hasQueuedItems || hasQueuedDeletions) {
-              try {
-                console.log('[Auto-Sync]: Found pending offline contributions or deletions. Syncing to database...');
-                fetch('/api/sync/push', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    users: cleanMembers.length > 0 ? (res.data.users || sanitizedUsers) : sanitizedUsers,
-                    members: cleanMembers,
-                    meetings: cleanMeetings,
-                    resolutions: cleanResolutions,
-                    financialTransactions: cleanTx,
-                    announcements: cleanAnnouncements,
-                    products: cleanProducts,
-                    activities: cleanActivities,
-                    achievements: cleanAchievements,
-                    funds: cleanFunds,
-                    inventory: cleanInventory,
-                    hogRaising: res.data.hogRaising || INITIAL_HOG_RAISING,
-                    systemLogs: activeLogs,
-                    deletedIds: bootDeletedIds
-                  })
-                }).then(r => r.json()).then(pushRes => {
-                  if (pushRes?.success) {
-                    setSyncQueue([]);
-                    void updateStorage('bafa_sync_queue', []);
-                    console.log('[Auto-Sync]: Synced offline items and deletions on boot and purged local pending queue.');
-                  }
-                }).catch(e => console.warn('[Boot sync push error]:', e));
-              } catch {}
+            if (hasPendingLocalChanges) {
+              console.log('[Auto-Sync]: Found locally pending changes. Merged them with cloud records and queued a full sync.');
+              void pushAllDataToCloud({
+                users: syncedUsers,
+                members: syncedMembers,
+                meetings: syncedMeetings,
+                resolutions: syncedResolutions,
+                financialTransactions: syncedTransactions,
+                announcements: syncedAnnouncements,
+                products: syncedProducts,
+                activities: syncedActivities,
+                achievements: syncedAchievements,
+                funds: syncedFunds,
+                inventory: syncedInventory,
+                hogRaising: syncedHogRaising,
+                systemLogs: activeLogs,
+                deletedIds: bootDeletedIds
+              }, { silent: true, source: 'Boot Sync' });
             }
           } else if (res?.offlineMode) {
             console.log('[Cloud DB] Running in offline / local-first storage mode.');
@@ -427,6 +479,7 @@ export default function App() {
       setAchievements([]);
       setFunds(INITIAL_FUNDS);
       setInventory([]);
+      syncQueueRef.current = [];
       setSyncQueue([]);
       setLogs(INITIAL_LOGS);
       setUsers([]);
@@ -513,24 +566,13 @@ export default function App() {
   };
 
   // Deletion persistence tracking for PostgreSQL / Supabase
-  interface StoredDeletedIds {
-    users?: string[];
-    members?: string[];
-    meetings?: string[];
-    resolutions?: string[];
-    financialTransactions?: string[];
-    transactions?: string[];
-    announcements?: string[];
-    products?: string[];
-    activities?: string[];
-    achievements?: string[];
-    funds?: string[];
-    inventory?: string[];
-  }
-
-  const getStoredDeletedIds = (): StoredDeletedIds => {
+  const getStoredDeletedIds = (queue: SyncQueueItem[] = syncQueueRef.current): StoredDeletedIds => {
     const result: StoredDeletedIds = {};
-    for (const item of syncQueue) {
+    (Object.keys(deletedIdsRef.current) as Array<keyof StoredDeletedIds>).forEach(key => {
+      const ids = deletedIdsRef.current[key];
+      if (Array.isArray(ids)) result[key] = [...ids];
+    });
+    for (const item of queue) {
       if (item.action !== 'delete' || !item.payload?.id) continue;
       const id = item.payload.id;
       const entity = (item.entityType || '').toLowerCase();
@@ -555,11 +597,22 @@ export default function App() {
     } else if (entity === 'transactions') {
       current.financialTransactions = Array.from(new Set([...(current.financialTransactions || []), id]));
     }
+    deletedIdsRef.current = current;
+    void updateStorage('bafa_deleted_ids', current);
+    setHasPendingCloudSync(true);
     return current;
   };
 
-  const clearStoredDeletedIds = () => {
-    // Pending deletion markers are session-local and kept in the sync queue.
+  const clearStoredDeletedIds = (syncedIds: StoredDeletedIds) => {
+    const remaining: StoredDeletedIds = {};
+    (Object.keys(deletedIdsRef.current) as Array<keyof StoredDeletedIds>).forEach(key => {
+      const current = deletedIdsRef.current[key] || [];
+      const synced = new Set(syncedIds[key] || []);
+      const unsynced = current.filter(id => !synced.has(id));
+      if (unsynced.length > 0) remaining[key] = unsynced;
+    });
+    deletedIdsRef.current = remaining;
+    void updateStorage('bafa_deleted_ids', remaining);
   };
 
   const hasPendingDeletions = (): boolean => {
@@ -691,9 +744,11 @@ export default function App() {
       entityType,
       payload
     };
-    const updatedQueue = [...syncQueue, queueItem];
+    const updatedQueue = [...syncQueueRef.current, queueItem];
+    syncQueueRef.current = updatedQueue;
     setSyncQueue(updatedQueue);
     updateStorage('bafa_sync_queue', updatedQueue);
+    setHasPendingCloudSync(true);
 
     // Also record a pending log
     logAction(
@@ -728,9 +783,23 @@ export default function App() {
     },
     options?: { silent?: boolean; source?: string; scope?: 'eggHarvests' | 'roleUpdate' }
   ): Promise<boolean> => {
-    if (!navigator.onLine) return false;
-    if (await refreshDatabaseConfiguration() !== true) return false;
+    const tracksFullSnapshot = options?.scope !== 'eggHarvests' && options?.scope !== 'roleUpdate';
+    const markFullSyncPending = async () => {
+      if (!tracksFullSnapshot) return;
+      setHasPendingCloudSync(true);
+      await updateStorage('bafa_pending_cloud_sync', true);
+    };
+
+    if (!navigator.onLine) {
+      await markFullSyncPending();
+      return false;
+    }
+    if (await refreshDatabaseConfiguration() !== true) {
+      await markFullSyncPending();
+      return false;
+    }
     if (isSyncingRef.current) {
+      await markFullSyncPending();
       console.log('[Auto-Sync]: Synchronization already in-flight; queueing this update.');
       return new Promise((resolve) => {
         pendingSyncsRef.current.push({
@@ -742,8 +811,11 @@ export default function App() {
 
     isSyncingRef.current = true;
     setIsSyncing(true);
+    const queuedIdsAtStart = new Set(syncQueueRef.current.map(item => item.id));
+    const pendingLogIdsAtStart = new Set(logs.filter(log => log.syncStatus === 'pending').map(log => log.id));
 
     try {
+      await markFullSyncPending();
       const currentDeletedIds = overrides?.deletedIds || getStoredDeletedIds();
       const snap = appDataRef.current;
       const payload = options?.scope === 'eggHarvests'
@@ -779,18 +851,26 @@ export default function App() {
         return false;
       }
       const result = await res.json();
-      if (result?.success && !result?.offlineMode) {
-        if (options?.scope !== 'eggHarvests' && options?.scope !== 'roleUpdate') {
-          // A scoped sync must not clear unrelated pending work.
-          setSyncQueue([]);
-          void updateStorage('bafa_sync_queue', []);
-          clearStoredDeletedIds();
+      if (res.ok && result?.success && !result?.offlineMode) {
+        if (tracksFullSnapshot) {
+          const remainingQueue = syncQueueRef.current.filter(item => !queuedIdsAtStart.has(item.id));
+          syncQueueRef.current = remainingQueue;
+          setSyncQueue(remainingQueue);
+          void updateStorage('bafa_sync_queue', remainingQueue);
+          clearStoredDeletedIds(currentDeletedIds);
 
           setLogs(prev => {
-            const updated = prev.map(l => l.syncStatus === 'pending' ? { ...l, syncStatus: 'synced' as const } : l);
+            const updated = prev.map(log =>
+              pendingLogIdsAtStart.has(log.id) && log.syncStatus === 'pending'
+                ? { ...log, syncStatus: 'synced' as const }
+                : log
+            );
             updateStorage('bafa_logs', updated);
             return updated;
           });
+          const pending = remainingQueue.length > 0;
+          setHasPendingCloudSync(pending);
+          await updateStorage('bafa_pending_cloud_sync', pending);
         }
 
         // Refresh database row stats and status
@@ -854,18 +934,24 @@ export default function App() {
 
   const executeClearLocalCache = () => {
     setShowClearCacheConfirmModal(false);
-    clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_funds', 'bafa_hog_raising', 'bafa_logs', 'bafa_sync_queue', 'bafa_deleted_ids']);
+    clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_hog_raising', 'bafa_logs', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync']);
+    syncQueueRef.current = [];
+    deletedIdsRef.current = {};
+    setSyncQueue([]);
+    setHasPendingCloudSync(false);
     showToastMessage('Local browser cache cleared! Operating in Zero-Residual Cloud Database mode.', 'success');
   };
 
   const handleClearQueue = () => {
+    syncQueueRef.current = [];
     setSyncQueue([]);
     void updateStorage('bafa_sync_queue', []);
     showToastMessage('Pending queue cleared. Confidential data purged from local cache.', 'info');
   };
 
   const handleRemoveQueueItem = (id: string) => {
-    const updated = syncQueue.filter(item => item.id !== id);
+    const updated = syncQueueRef.current.filter(item => item.id !== id);
+    syncQueueRef.current = updated;
     setSyncQueue(updated);
     void updateStorage('bafa_sync_queue', updated);
     showToastMessage('Removed pending change from queue.', 'warning');
@@ -887,7 +973,7 @@ export default function App() {
     };
 
     const handleWindowFocus = () => {
-      if (navigator.onLine && (syncQueue.length > 0 || hasPendingDeletions())) {
+      if (navigator.onLine && (syncQueueRef.current.length > 0 || hasPendingDeletions() || hasPendingCloudSync)) {
         console.log('[Auto-Sync]: Window focused with pending items. Triggering auto-sync...');
         pushAllDataToCloud(undefined, { silent: true, source: 'Auto-Sync (Focus)' });
       }
@@ -908,7 +994,7 @@ export default function App() {
 
     // Periodic auto-sync heartbeat every 5 seconds: ensures officers never have to push a button
     const intervalId = setInterval(() => {
-      if (currentUser && navigator.onLine && (syncQueue.length > 0 || hasPendingDeletions() || logs.some(l => l.syncStatus === 'pending'))) {
+      if (currentUser && navigator.onLine && (syncQueueRef.current.length > 0 || hasPendingDeletions() || hasPendingCloudSync || logs.some(l => l.syncStatus === 'pending'))) {
         console.log('[Auto-Sync Heartbeat]: Automatically synchronizing pending items to database...');
         pushAllDataToCloud(undefined, { silent: true, source: 'Auto-Sync (Heartbeat)' });
       }
@@ -921,7 +1007,7 @@ export default function App() {
       if (reactiveTimer) clearTimeout(reactiveTimer);
       clearInterval(intervalId);
     };
-  }, [isOnline, syncQueue.length, currentUser?.id]);
+  }, [isOnline, syncQueue.length, currentUser?.id, hasPendingCloudSync]);
 
   // Keep the server session alive while the user is active. The server refreshes
   // the signed cookie only when the current session is still valid.
@@ -2948,36 +3034,30 @@ export default function App() {
         await updateStorage('bafa_logs', logList);
       }
 
-      // Sync everything directly to the database via /api/sync/push
-      const pushPayload = {
+      const restoredState = {
+        users: data.users || users,
         members: data.members || members,
         meetings: data.meetings || meetings,
         resolutions: data.resolutions || resolutions,
-        transactions: txList || transactions,
+        financialTransactions: txList || transactions,
         announcements: data.announcements || announcements,
         products: data.products || products,
         activities: data.activities || activities,
         achievements: data.achievements || achievements,
         funds: data.funds || data.organizationFunds || funds,
+        inventory: data.inventory || inventory,
         hogRaising: igp || hogRaising,
-        users: data.users || users,
-        logs: data.logs || data.systemLogs || logs,
+        systemLogs: data.logs || data.systemLogs || logs,
       };
 
-      try {
-        const res = await fetch('/api/sync/push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pushPayload),
-        });
-        if (res.ok) {
-          checkDatabaseConnection();
-        }
-      } catch (syncErr) {
-        console.warn('[Restore Sync Warning]:', syncErr);
+      const synced = await pushAllDataToCloud(restoredState, { silent: true, source: 'Backup Restore' });
+      if (synced) {
+        checkDatabaseConnection();
+        showToastMessage(`Backup successfully restored and synchronized! ${restoredCounts} core records updated.`, 'success');
+      } else {
+        showToastMessage(`Backup restored locally, but cloud synchronization is pending. ${restoredCounts} core records are saved on this device and will retry automatically.`, 'warning');
       }
 
-      showToastMessage(`Backup successfully restored! ${restoredCounts} core records updated and synchronized to database.`, 'success');
       return true;
     } catch (err: any) {
       console.error('[Restore Error]:', err);
@@ -3345,9 +3425,9 @@ export default function App() {
             >
               <Layers className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
               <span className="truncate">Sync Queue</span>
-              {syncQueue.length > 0 && (
+              {(syncQueue.length > 0 || hasPendingCloudSync) && (
                 <span className="ml-auto min-w-6 text-center bg-amber-500 text-[#1B4332] text-[11px] font-black px-1.5 py-0.5 rounded-full">
-                  {syncQueue.length}
+                  {syncQueue.length || 1}
                 </span>
               )}
             </button>
@@ -3784,6 +3864,7 @@ export default function App() {
             <SyncQueuePanel
               queue={syncQueue}
               isOnline={isOnline}
+              hasPendingCloudSync={hasPendingCloudSync}
               onSync={handleSynchronize}
               isSyncing={isSyncing}
               onClearQueue={handleClearQueue}

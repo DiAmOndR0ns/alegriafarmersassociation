@@ -5,6 +5,7 @@ import { RotateCw, Trash2, Cloud, CloudOff, RefreshCw, Layers, CheckCircle2, Arr
 interface SyncQueuePanelProps {
   queue: SyncQueueItem[];
   isOnline: boolean;
+  hasPendingCloudSync: boolean;
   onSync: () => void;
   isSyncing: boolean;
   onClearQueue: () => void;
@@ -14,6 +15,7 @@ interface SyncQueuePanelProps {
 export default function SyncQueuePanel({
   queue,
   isOnline,
+  hasPendingCloudSync,
   onSync,
   isSyncing,
   onClearQueue,
@@ -44,16 +46,16 @@ export default function SyncQueuePanel({
 
           <button
             id="sync-trigger-panel-btn"
-            disabled={!isOnline || queue.length === 0 || isSyncing}
+            disabled={!isOnline || (queue.length === 0 && !hasPendingCloudSync) || isSyncing}
             onClick={onSync}
             className={`flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all w-full sm:w-auto ${
-              !isOnline || queue.length === 0
+              !isOnline || (queue.length === 0 && !hasPendingCloudSync)
                 ? 'bg-slate-900 text-slate-500 border border-slate-750 cursor-not-allowed'
                 : isSyncing
                 ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-500/30'
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white border-transparent shadow-md'
             }`}
-            title="Manual sync pulse (Optional — system auto-syncs continuously)"
+            title="Retry pending database synchronization"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>{isSyncing ? 'Synchronizing...' : 'Force Sync Now (Optional)'}</span>
@@ -116,6 +118,11 @@ export default function SyncQueuePanel({
               );
             })}
           </div>
+        </div>
+      ) : hasPendingCloudSync ? (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-900">
+          <Server className="w-4 h-4 shrink-0" />
+          <span><strong>Database sync pending.</strong> Local changes are saved locally and will retry automatically when the database is available.</span>
         </div>
       ) : (
         <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-2.5 text-xs text-slate-300">
