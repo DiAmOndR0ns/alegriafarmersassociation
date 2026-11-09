@@ -316,6 +316,13 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      ALTER TABLE financial_transactions
+        ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approved_by TEXT,
+        ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS announcements (
         id VARCHAR(100) PRIMARY KEY,
         title TEXT NOT NULL,
@@ -418,7 +425,7 @@ async function initDatabaseSchema(pool) {
       CREATE TABLE IF NOT EXISTS organization_funds (
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
-        code VARCHAR(50) UNIQUE NOT NULL,
+        code VARCHAR(50) NOT NULL,
         allocated_amount NUMERIC DEFAULT 0,
         current_balance NUMERIC DEFAULT 0,
         description TEXT,
@@ -430,6 +437,10 @@ async function initDatabaseSchema(pool) {
       ALTER TABLE organization_funds
         ADD COLUMN IF NOT EXISTS category TEXT,
         ADD COLUMN IF NOT EXISTS source_origin TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE organization_funds
+        DROP CONSTRAINT IF EXISTS organization_funds_code_key;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS auditor_reports (
@@ -793,7 +804,45 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Members saved");
     }
     const rawTxList = state.financialTransactions || state.transactions;
-    if (rawTxList && Array.isArray(rawTxList)) {
+    if (rawTxList && Array.isArray(rawTxList) && state.auditorReviewOnly === true) {
+      for (const tx of rawTxList) {
+        if (!tx?.id || deletedTxIds.has(tx.id)) continue;
+        await client.query(`
+          UPDATE financial_transactions SET
+            audited_status = COALESCE($2, audited_status),
+            audited_by = COALESCE($3, audited_by),
+            audited_date = COALESCE($4, audited_date),
+            audit_notes = COALESCE($5, audit_notes)
+          WHERE id = $1;
+        `, [
+          tx.id,
+          tx.auditedStatus || null,
+          tx.auditedBy || null,
+          tx.auditedDate || null,
+          tx.auditNotes || null
+        ]);
+      }
+      console.log("[DB DEBUG] Auditor financial reviews saved");
+    } else if (rawTxList && Array.isArray(rawTxList) && state.presidentApprovalOnly === true) {
+      for (const tx of rawTxList) {
+        if (!tx?.id || deletedTxIds.has(tx.id)) continue;
+        await client.query(`
+          UPDATE financial_transactions SET
+            president_approval_status = COALESCE($2, president_approval_status),
+            president_approved_by = COALESCE($3, president_approved_by),
+            president_approved_date = COALESCE($4, president_approved_date),
+            president_approval_remarks = COALESCE($5, president_approval_remarks)
+          WHERE id = $1 AND audited_status = 'Audited';
+        `, [
+          tx.id,
+          tx.presidentApprovalStatus || null,
+          tx.presidentApprovedBy || null,
+          tx.presidentApprovedDate || null,
+          tx.presidentApprovalRemarks || null
+        ]);
+      }
+      console.log("[DB DEBUG] President financial approvals saved");
+    } else if (rawTxList && Array.isArray(rawTxList)) {
       const txList = rawTxList.filter((tx) => !deletedTxIds.has(tx.id));
       console.log("[DB DEBUG] Saving", txList.length, "transactions...");
       for (const tx of txList) {
@@ -1621,6 +1670,57 @@ var ASSIGNABLE_ROLES = [
 function isValidSyncState(state) {
   return typeof state === "object" && state !== null && !Array.isArray(state);
 }
+var PRESIDENT_APPROVAL_FIELDS = [
+  "presidentApprovalStatus",
+  "presidentApprovedBy",
+  "presidentApprovedDate",
+  "presidentApprovalRemarks"
+];
+var AUDITOR_REVIEW_FIELDS = [
+  "auditedStatus",
+  "auditedBy",
+  "auditedDate",
+  "auditNotes"
+];
+function extractAuditorReview(state, role) {
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
+  if (normalized !== "auditor") return null;
+  const incoming = state.financialTransactions ?? state.transactions;
+  if (!Array.isArray(incoming)) return null;
+  const reviews = [];
+  for (const record of incoming) {
+    if (!record || typeof record !== "object") continue;
+    const row = record;
+    if (typeof row.id !== "string" || !row.id) continue;
+    const status = row.auditedStatus;
+    if (status !== "Audited" && status !== "Flagged") continue;
+    const review = { id: row.id };
+    for (const field of AUDITOR_REVIEW_FIELDS) {
+      if (row[field] !== void 0) review[field] = row[field];
+    }
+    reviews.push(review);
+  }
+  return reviews.length > 0 ? reviews : null;
+}
+function extractPresidentFinancialApproval(state, role) {
+  if (!isPresidentRole(role)) return null;
+  const incoming = state.financialTransactions ?? state.transactions;
+  if (!Array.isArray(incoming)) return null;
+  const approvals = [];
+  for (const record of incoming) {
+    if (!record || typeof record !== "object") continue;
+    const row = record;
+    if (typeof row.id !== "string" || !row.id) continue;
+    const status = row.presidentApprovalStatus;
+    if (status !== "Approved" && status !== "Returned") continue;
+    const approval = { id: row.id };
+    for (const field of PRESIDENT_APPROVAL_FIELDS) {
+      if (row[field] !== void 0) approval[field] = row[field];
+    }
+    approvals.push(approval);
+  }
+  return approvals.length > 0 ? approvals : null;
+}
 function separateEggHarvestsFromFinancialState(state, role, name) {
   const safeState = { ...state };
   const hogRaising = safeState.hogRaising;
@@ -1718,10 +1818,24 @@ async function handler(req, res) {
       }
     }
     if (!isTreasurerRole(user.role)) {
+      const presidentApproval = extractPresidentFinancialApproval(state, user.role);
+      const auditorReview = extractAuditorReview(state, user.role);
       safeState = separateEggHarvestsFromFinancialState(safeState, user.role, user.name);
-      const stripped = ["transactions", "financialTransactions", "funds", "organizationFunds", "hogRaising"].filter((key) => key in state);
+      if (presidentApproval) {
+        safeState.financialTransactions = presidentApproval;
+        safeState.presidentApprovalOnly = true;
+      } else if (auditorReview) {
+        safeState.financialTransactions = auditorReview;
+        safeState.auditorReviewOnly = true;
+      }
+      const allowedFinancialWrite = Boolean(presidentApproval || auditorReview);
+      const stripped = ["transactions", "financialTransactions", "funds", "organizationFunds", "hogRaising"].filter((key) => key in state && !(allowedFinancialWrite && key === "financialTransactions"));
       if (stripped.length > 0) {
         console.warn(`[Cloud DB Push] Ignoring financial fields from role "${user.role}": ${stripped.join(", ")}`);
+        return sendResponse(res, 403, {
+          success: false,
+          message: `Only the Treasurer or Assistant Treasurer may update financial records (${stripped.join(", ")}).`
+        });
       }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
@@ -1733,9 +1847,10 @@ async function handler(req, res) {
   } catch (error) {
     console.error("[Cloud DB Push Error]:", error?.message || error);
     const statusCode = error?.statusCode === 413 ? 413 : error?.code === "23505" ? 409 : 500;
+    const isFundCodeConflict = error?.code === "23505" && /organization_funds/i.test(String(error?.constraint || error?.detail || ""));
     return sendResponse(res, statusCode, {
       success: false,
-      message: error?.statusCode === 413 ? "Request body exceeds the allowed limit." : error?.code === "23505" ? "That officer position is already assigned." : "Unable to sync state."
+      message: error?.statusCode === 413 ? "Request body exceeds the allowed limit." : isFundCodeConflict ? "A fund source with that code already exists. Choose a different fund code." : error?.code === "23505" ? "That officer position is already assigned." : "Unable to sync state."
     });
   }
 }

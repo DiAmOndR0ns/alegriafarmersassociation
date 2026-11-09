@@ -374,6 +374,14 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         audit_notes TEXT
       );
     `);
+    // President sign-off on audited financial records (Auditor → President).
+    await client.query(`
+      ALTER TABLE financial_transactions
+        ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approved_by TEXT,
+        ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;
+    `);
 
     // 6. Announcements
     await client.query(`
@@ -491,7 +499,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       CREATE TABLE IF NOT EXISTS organization_funds (
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
-        code VARCHAR(50) UNIQUE NOT NULL,
+        code VARCHAR(50) NOT NULL,
         allocated_amount NUMERIC DEFAULT 0,
         current_balance NUMERIC DEFAULT 0,
         description TEXT,
@@ -503,6 +511,12 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       ALTER TABLE organization_funds
         ADD COLUMN IF NOT EXISTS category TEXT,
         ADD COLUMN IF NOT EXISTS source_origin TEXT;
+    `);
+    // Fund codes are auto-derived from the fund name, so two funds can legitimately
+    // share initials. A UNIQUE constraint here silently rolled back the whole sync.
+    await client.query(`
+      ALTER TABLE organization_funds
+        DROP CONSTRAINT IF EXISTS organization_funds_code_key;
     `);
 
     // 12. Auditor Reports
@@ -914,7 +928,11 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       auditedStatus: r.audited_status,
       auditedBy: r.audited_by,
       auditedDate: r.audited_date,
-      auditNotes: r.audit_notes
+      auditNotes: r.audit_notes,
+      presidentApprovalStatus: r.president_approval_status || undefined,
+      presidentApprovedBy: r.president_approved_by || undefined,
+      presidentApprovedDate: r.president_approved_date || undefined,
+      presidentApprovalRemarks: r.president_approval_remarks || undefined
     }));
 
     const announcements = announcementsRes.rows.map(r => ({
@@ -1276,8 +1294,45 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     }
 
     // 3. Transactions (filtered to never re-insert deleted transactions)
+    // A President push carries approval-only rows (id + presidentApproval*). Those
+    // must update the sign-off columns and nothing else, so the Treasurer's
+    // amounts and fund sources are never overwritten by an approval action.
     const rawTxList = state.financialTransactions || state.transactions;
-    if (rawTxList && Array.isArray(rawTxList)) {
+    if (rawTxList && Array.isArray(rawTxList) && state.auditorReviewOnly === true) {
+      // Auditor step: verify the ledger entry. Amounts and fund sources are untouched.
+      for (const tx of rawTxList) {
+        if (!tx?.id || deletedTxIds.has(tx.id)) continue;
+        await client.query(`
+          UPDATE financial_transactions SET
+            audited_status = COALESCE($2, audited_status),
+            audited_by = COALESCE($3, audited_by),
+            audited_date = COALESCE($4, audited_date),
+            audit_notes = COALESCE($5, audit_notes)
+          WHERE id = $1;
+        `, [
+          tx.id, tx.auditedStatus || null, tx.auditedBy || null,
+          tx.auditedDate || null, tx.auditNotes || null
+        ]);
+      }
+      console.log('[DB DEBUG] Auditor financial reviews saved');
+    } else if (rawTxList && Array.isArray(rawTxList) && state.presidentApprovalOnly === true) {
+      // President step: only records the Auditor has already verified may be signed off.
+      for (const tx of rawTxList) {
+        if (!tx?.id || deletedTxIds.has(tx.id)) continue;
+        await client.query(`
+          UPDATE financial_transactions SET
+            president_approval_status = COALESCE($2, president_approval_status),
+            president_approved_by = COALESCE($3, president_approved_by),
+            president_approved_date = COALESCE($4, president_approved_date),
+            president_approval_remarks = COALESCE($5, president_approval_remarks)
+          WHERE id = $1 AND audited_status = 'Audited';
+        `, [
+          tx.id, tx.presidentApprovalStatus || null, tx.presidentApprovedBy || null,
+          tx.presidentApprovedDate || null, tx.presidentApprovalRemarks || null
+        ]);
+      }
+      console.log('[DB DEBUG] President financial approvals saved');
+    } else if (rawTxList && Array.isArray(rawTxList)) {
       const txList = rawTxList.filter((tx: any) => !deletedTxIds.has(tx.id));
       console.log('[DB DEBUG] Saving', txList.length, 'transactions...');
       for (const tx of txList) {

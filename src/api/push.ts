@@ -33,6 +33,8 @@ export interface PushSyncState {
   deleteItem?: { entity?: string; id?: string };
   deletedIds?: Record<string, unknown>;
   roleUpdate?: { userId?: unknown; role?: unknown };
+  presidentApprovalOnly?: boolean;
+  auditorReviewOnly?: boolean;
   [key: string]: unknown;
 }
 
@@ -50,6 +52,79 @@ const ASSIGNABLE_ROLES = [
 
 function isValidSyncState(state: unknown): state is PushSyncState {
   return typeof state === 'object' && state !== null && !Array.isArray(state);
+}
+
+const PRESIDENT_APPROVAL_FIELDS = [
+  'presidentApprovalStatus',
+  'presidentApprovedBy',
+  'presidentApprovedDate',
+  'presidentApprovalRemarks',
+] as const;
+
+const AUDITOR_REVIEW_FIELDS = [
+  'auditedStatus',
+  'auditedBy',
+  'auditedDate',
+  'auditNotes',
+] as const;
+
+/**
+ * The Auditor verifies ledger entries before they reach the President. Like the
+ * President's sign-off, an audit must never carry amounts or fund sources.
+ */
+export function extractAuditorReview(
+  state: PushSyncState,
+  role: string
+): Array<Record<string, unknown>> | null {
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, '_');
+  if (normalized !== 'auditor') return null;
+  const incoming = state.financialTransactions ?? state.transactions;
+  if (!Array.isArray(incoming)) return null;
+
+  const reviews: Array<Record<string, unknown>> = [];
+  for (const record of incoming) {
+    if (!record || typeof record !== 'object') continue;
+    const row = record as Record<string, unknown>;
+    if (typeof row.id !== 'string' || !row.id) continue;
+    const status = row.auditedStatus;
+    if (status !== 'Audited' && status !== 'Flagged') continue;
+    const review: Record<string, unknown> = { id: row.id };
+    for (const field of AUDITOR_REVIEW_FIELDS) {
+      if (row[field] !== undefined) review[field] = row[field];
+    }
+    reviews.push(review);
+  }
+  return reviews.length > 0 ? reviews : null;
+}
+
+/**
+ * The President signs off on audited financial records but must never author
+ * financial data. When a non-Treasurer pushes `financialTransactions`, keep only
+ * the approval fields of each record and drop everything else (amounts, fund
+ * sources, new rows). Returns null when the role may not approve at all.
+ */
+export function extractPresidentFinancialApproval(
+  state: PushSyncState,
+  role: string
+): Array<Record<string, unknown>> | null {
+  if (!isPresidentRole(role)) return null;
+  const incoming = state.financialTransactions ?? state.transactions;
+  if (!Array.isArray(incoming)) return null;
+
+  const approvals: Array<Record<string, unknown>> = [];
+  for (const record of incoming) {
+    if (!record || typeof record !== 'object') continue;
+    const row = record as Record<string, unknown>;
+    if (typeof row.id !== 'string' || !row.id) continue;
+    const status = row.presidentApprovalStatus;
+    if (status !== 'Approved' && status !== 'Returned') continue;
+    const approval: Record<string, unknown> = { id: row.id };
+    for (const field of PRESIDENT_APPROVAL_FIELDS) {
+      if (row[field] !== undefined) approval[field] = row[field];
+    }
+    approvals.push(approval);
+  }
+  return approvals.length > 0 ? approvals : null;
 }
 
 export function separateEggHarvestsFromFinancialState(
@@ -173,12 +248,31 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
     // Keep egg-harvest records separate from the financial IGP state. Members may
     // add their own pending submissions; only the Auditor and President may
     // update the approval workflow.
+    //
+    // Only the Treasurer (or Assistant Treasurer) may write financial records.
+    // The President's approval workflow is handled separately below so that
+    // approving a budget does not strip the fund ledger from the snapshot.
     if (!isTreasurerRole(user.role)) {
+      const presidentApproval = extractPresidentFinancialApproval(state, user.role);
+      const auditorReview = extractAuditorReview(state, user.role);
       safeState = separateEggHarvestsFromFinancialState(safeState, user.role, user.name);
+      if (presidentApproval) {
+        safeState.financialTransactions = presidentApproval;
+        safeState.presidentApprovalOnly = true;
+      } else if (auditorReview) {
+        safeState.financialTransactions = auditorReview;
+        safeState.auditorReviewOnly = true;
+      }
+      const allowedFinancialWrite = Boolean(presidentApproval || auditorReview);
       const stripped = ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'hogRaising']
-        .filter((key) => key in state);
+        .filter((key) => key in state && !(allowedFinancialWrite && key === 'financialTransactions'));
       if (stripped.length > 0) {
         console.warn(`[Cloud DB Push] Ignoring financial fields from role "${user.role}": ${stripped.join(', ')}`);
+        // Never report success for a write that was silently discarded.
+        return sendResponse(res, 403, {
+          success: false,
+          message: `Only the Treasurer or Assistant Treasurer may update financial records (${stripped.join(', ')}).`,
+        });
       }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
@@ -190,13 +284,16 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
   } catch (error: any) {
     console.error('[Cloud DB Push Error]:', error?.message || error);
     const statusCode = error?.statusCode === 413 ? 413 : error?.code === '23505' ? 409 : 500;
+    const isFundCodeConflict = error?.code === '23505' && /organization_funds/i.test(String(error?.constraint || error?.detail || ''));
     return sendResponse(res, statusCode, {
       success: false,
       message: error?.statusCode === 413
         ? 'Request body exceeds the allowed limit.'
-        : error?.code === '23505'
-          ? 'That officer position is already assigned.'
-          : 'Unable to sync state.',
+        : isFundCodeConflict
+          ? 'A fund source with that code already exists. Choose a different fund code.'
+          : error?.code === '23505'
+            ? 'That officer position is already assigned.'
+            : 'Unable to sync state.',
     });
   }
 }

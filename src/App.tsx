@@ -780,10 +780,11 @@ export default function App() {
       systemLogs?: SystemLog[];
       deletedIds?: StoredDeletedIds;
       roleUpdate?: { userId: string; role: OfficerRole | 'Member' };
+      presidentApprovalOnly?: boolean;
     },
-    options?: { silent?: boolean; source?: string; scope?: 'eggHarvests' | 'roleUpdate' }
+    options?: { silent?: boolean; source?: string; scope?: 'eggHarvests' | 'roleUpdate' | 'presidentApproval' | 'auditorReview' }
   ): Promise<boolean> => {
-    const tracksFullSnapshot = options?.scope !== 'eggHarvests' && options?.scope !== 'roleUpdate';
+    const tracksFullSnapshot = options?.scope !== 'eggHarvests' && options?.scope !== 'roleUpdate' && options?.scope !== 'presidentApproval' && options?.scope !== 'auditorReview';
     const markFullSyncPending = async () => {
       if (!tracksFullSnapshot) return;
       setHasPendingCloudSync(true);
@@ -822,6 +823,13 @@ export default function App() {
         ? { eggHarvests: overrides?.eggHarvests || snap.hogRaising.eggHarvests || [] }
         : options?.scope === 'roleUpdate'
           ? { roleUpdate: overrides?.roleUpdate }
+        : options?.scope === 'presidentApproval'
+          // Send ONLY the sign-off. A full snapshot here would carry `funds` and
+          // the server would strip them, wiping the ledger on every approval.
+          ? { financialTransactions: overrides?.financialTransactions || [], presidentApprovalOnly: true }
+        : options?.scope === 'auditorReview'
+          // Same reasoning for the Auditor step: send only the reviewed record.
+          ? { financialTransactions: overrides?.financialTransactions || [], auditorReviewOnly: true }
         : {
             users: overrides?.users || snap.users,
             members: overrides?.members || snap.members,
@@ -1477,27 +1485,27 @@ export default function App() {
       addToSyncQueue('create', 'transaction', newTx);
     }
 
-    // Automatically update the live balance of the affected Organization Fund if matching account exists
+    // Automatically update the live balance of the affected Organization Fund if matching account exists.
+    // The push must happen after the state commit (never inside the updater), otherwise the
+    // payload is built from a stale snapshot and the balance change is lost.
     if (newTx.fundSource) {
-      setFunds(prevFunds => {
-        const updatedFunds = prevFunds.map(f => {
-          if (f.id === registeredFund.id) {
-            const diff = newTx.type === 'income' ? newTx.amount : -newTx.amount;
-            return {
-              ...f,
-              currentBalance: Math.max(0, f.currentBalance + diff),
-              lastUpdated: new Date().toISOString().split('T')[0]
-            };
-          }
-          return f;
-        });
-
-        updateStorage('bafa_funds', updatedFunds);
-        if (isOnline) {
-          pushAllDataToCloud({ funds: updatedFunds }, { silent: true, source: 'Fund Balance Updated' });
+      const diff = newTx.type === 'income' ? newTx.amount : -newTx.amount;
+      const updatedFunds = funds.map(f => {
+        if (f.id === registeredFund.id) {
+          return {
+            ...f,
+            currentBalance: Math.max(0, f.currentBalance + diff),
+            lastUpdated: new Date().toISOString().split('T')[0]
+          };
         }
-        return updatedFunds;
+        return f;
       });
+
+      setFunds(updatedFunds);
+      updateStorage('bafa_funds', updatedFunds);
+      if (isOnline) {
+        pushAllDataToCloud({ funds: updatedFunds }, { silent: true, source: 'Fund Balance Updated' });
+      }
     }
   };
 
@@ -1562,7 +1570,12 @@ export default function App() {
         `${status === 'Audited' ? 'Verified' : 'Flagged'} ledger item: ${txDescStr}. Comments: "${notes}"`
       );
       showToastMessage(`Audit submitted: marked as ${status}.`);
-      pushAllDataToCloud({ financialTransactions: updated }, { silent: true });
+      // Send only the audited record. A full snapshot would carry `funds`, which the
+      // server strips for non-Treasurer roles, wiping the ledger on every audit.
+      pushAllDataToCloud(
+        { financialTransactions: updated.filter(t => t.id === id) },
+        { silent: true, scope: 'auditorReview' }
+      );
     } else {
       addToSyncQueue('update', 'transaction', { id, status, notes, desc: txDescStr });
     }
@@ -2207,7 +2220,10 @@ export default function App() {
     if (isOnline) {
       logAction('President Approved Financial Record', `President approved the audited financial record: ${txDescStr}${remarks ? `. Remarks: "${remarks}"` : ''}`);
       showToastMessage(`Financial record approved by the President.`, 'success');
-      pushAllDataToCloud({ financialTransactions: updated }, { silent: true });
+      pushAllDataToCloud(
+        { financialTransactions: updated.filter(t => t.id === id), presidentApprovalOnly: true },
+        { silent: true, scope: 'presidentApproval' }
+      );
     } else {
       addToSyncQueue('update', 'transaction', { id, presidentApprovalStatus: 'Approved', remarks });
     }
@@ -2232,7 +2248,10 @@ export default function App() {
     if (isOnline) {
       logAction('President Returned Financial Record', `President returned the financial record for revision: ${txDescStr}. Remarks: "${remarks}"`);
       showToastMessage(`Financial record returned for revision.`, 'warning');
-      pushAllDataToCloud({ financialTransactions: updated }, { silent: true });
+      pushAllDataToCloud(
+        { financialTransactions: updated.filter(t => t.id === id), presidentApprovalOnly: true },
+        { silent: true, scope: 'presidentApproval' }
+      );
     } else {
       addToSyncQueue('update', 'transaction', { id, presidentApprovalStatus: 'Returned', remarks });
     }

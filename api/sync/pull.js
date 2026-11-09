@@ -684,7 +684,11 @@ async function fetchAllDataFromPostgres(pool) {
       auditedStatus: r.audited_status,
       auditedBy: r.audited_by,
       auditedDate: r.audited_date,
-      auditNotes: r.audit_notes
+      auditNotes: r.audit_notes,
+      presidentApprovalStatus: r.president_approval_status || void 0,
+      presidentApprovedBy: r.president_approved_by || void 0,
+      presidentApprovedDate: r.president_approved_date || void 0,
+      presidentApprovalRemarks: r.president_approval_remarks || void 0
     }));
     const announcements = announcementsRes.rows.map((r) => ({
       id: r.id,
