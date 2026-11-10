@@ -349,7 +349,7 @@ export default function TreasurerView({
 
                 <div className="pt-2 border-t border-[#D5CFC1] grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span className="text-[10px] uppercase font-semibold text-[#4A5F57] block">Allocated Capital</span>
+                    <span className="text-[10px] uppercase font-semibold text-[#4A5F57] block">Initial Fund</span>
                     <span className="font-mono font-bold text-[#1B4332]">PHP {getInitialFund(fund).toLocaleString('en-US')}</span>
                   </div>
                   <div>
