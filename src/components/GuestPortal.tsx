@@ -429,7 +429,7 @@ export default function GuestPortal({
                       )}
                       <div className="text-[11px] text-slate-600 flex items-center gap-2 flex-wrap font-medium">
                         <span className="flex items-center gap-1"><MapPin className="w-4 h-4 text-slate-600" />{act.location}</span>
-                        <span className="flex items-center gap-1"><Users className="w-4 h-4 text-slate-600" />{act.targetAudience}</span>
+                        <span className="flex items-center gap-1">{act.targetAudience}</span>
                       </div>
                     </div>
                   ))}
