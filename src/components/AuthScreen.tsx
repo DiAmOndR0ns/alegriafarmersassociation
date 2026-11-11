@@ -327,11 +327,6 @@ export default function AuthScreen({
               <h2 className="text-xl sm:text-2xl font-black font-display leading-tight text-white">
                 Farmer Access Portal
               </h2>
-              <p className="text-sm sm:text-[15px] text-[#D7F0DF] leading-relaxed font-medium">
-                {en
-                  ? 'This portal is designed to be simple, easy to use, and easy to understand for our fellow farmers and officers.'
-                  : 'Kini nga sistema gidisenyo aron mahimong yano, sayon gamiton, ug daling masabtan sa atong mga kaubang mag-uuma ug opisyal.'}
-              </p>
 
               <div className="space-y-3 pt-2 text-sm text-white">
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
@@ -370,14 +365,6 @@ export default function AuthScreen({
               </div>
             </div>
           </div>
-
-          <div className="relative mt-8 pt-4 border-t border-bafa-600 flex items-center justify-between text-[11px] text-bafa-100">
-            <span className="font-medium">Tuburan, Cebu Province</span>
-            <span className="font-bold flex items-center gap-1 bg-bafa-700 px-2.5 py-1.5 rounded-full border border-bafa-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              {en ? 'Local / Works Offline' : 'Lokal / Magamit bisan walay internet'}
-            </span>
-          </div>
         </div>
 
         <div className="md:col-span-7 bg-white rounded-[28px] p-5 sm:p-7 shadow-[0_24px_60px_rgba(19,39,31,0.10)] border-2 border-bafa-200 flex flex-col justify-between">
@@ -385,11 +372,9 @@ export default function AuthScreen({
             <div className="flex justify-between items-center border-b border-bafa-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <span className="text-sm font-extrabold font-display text-bafa-800 tracking-[0.08em]">
-                  {en ? 'SYSTEM SIGN IN' : 'PAGSULOD SA SISTEMA (Log In)'}
+                  {en ? 'SIGN IN' : 'SIGN IN'}
                 </span>
               </div>
-
-
             </div>
 
             {showResetForm ? (
@@ -505,7 +490,6 @@ export default function AuthScreen({
                       <label className="block text-xs font-black text-bafa-neutral-800 uppercase tracking-[0.12em]">
                         Username
                       </label>
-                      <span className="text-[10px] text-bafa-neutral-700 italic">{en ? 'Use your username' : 'Gamita ang imong username'}</span>
                     </div>
                     <div className="relative">
                       <UserIcon className="absolute left-3.5 top-3.5 w-4 h-4 text-[#4D615A]" />
@@ -575,7 +559,6 @@ export default function AuthScreen({
                       onClick={onBackToGuest}
                       className="w-full py-3 bg-[#FAF8F5] border-2 border-[#9E9785] text-[#1B4332] hover:bg-[#D8F3DC] rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-2.5"
                     >
-                      <Sprout className="w-4.5 h-4.5 text-[#1B4332]" />
                       <span className="font-display">Back to Public Portal</span>
                     </button>
                   )}
@@ -670,11 +653,6 @@ export default function AuthScreen({
 
                 <div className="mt-4 p-3.5 bg-[#FAF8F5] rounded-2xl border border-[#E8E3D8] flex items-center gap-2.5 text-xs text-[#5D6B54]">
                   <Shield className="w-4 h-4 text-[#1B4332] shrink-0" />
-                  <span>
-                    {en
-                      ? 'No public sign-up. All officers and members must be validated and approved in the system.'
-                      : 'Walay public sign-up. Ang tanang opisyal ug miyembro kinahanglan ma-validate ug ma-approve sa sistema.'}
-                  </span>
                 </div>
               </div>
             )}
@@ -682,8 +660,8 @@ export default function AuthScreen({
 
           <div className="text-center text-[10px] text-[#85947E] mt-6 border-t border-[#F0EBE1] pt-3">
             {en
-              ? 'AFA System v1.1 • Designed to be easy for every farmer and officer to use.'
-              : 'Sistemang AFA v1.1 • Gidisenyo nga sayon gamiton sa matag mag-uuma ug opisyal.'}
+              ? 'AFA System v1.1'
+              : 'Sistemang AFA v1.1'}
           </div>
         </div>
       </div>

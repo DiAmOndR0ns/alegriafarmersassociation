@@ -298,7 +298,6 @@ export default function GuestPortal({
                 <div className="min-w-0 flex-1">
                   <span className="block text-sm font-black text-slate-600 uppercase tracking-wider leading-tight">{t('Rehistradong mga Mag-uuma', 'Registered Farmers')}</span>
                   <span className="text-2xl sm:text-3xl font-black text-[#1B4332] font-mono leading-tight block break-words">{registeredMembersCount} {t('Miyembro', 'Members')}</span>
-                  <span className="block text-sm text-slate-700 mt-1 font-bold break-words">{activeMembersCount} {t('Aktibo sa 4 ka sitio', 'Active across 4 sitios')}</span>
                 </div>
               </div>
 
@@ -309,7 +308,6 @@ export default function GuestPortal({
                 <div className="min-w-0 flex-1">
                   <span className="block text-sm font-black text-slate-600 uppercase tracking-wider leading-tight">{t('Mga gamit ug abangan sa komunidad', 'Community rentals')}</span>
                   <span className="text-xl sm:text-2xl font-black text-[#1B4332] font-mono leading-tight block break-words">{t('Lingkoranan ug sako', 'Chairs & sacks')}</span>
-                  <span className="block text-sm text-emerald-800 mt-1 font-bold break-words">{t('Abangan sa tanan', 'Available for everyone to rent')}</span>
                 </div>
               </div>
 
@@ -321,12 +319,6 @@ export default function GuestPortal({
                 <h3 className="text-lg sm:text-xl md:text-2xl font-black text-[#1B4332] font-display break-words">
                   {t('Mahitungod sa Alegria Farmers Association', 'About Alegria Farmers Association')}
                 </h3>
-                <p className="text-xs sm:text-sm md:text-base text-slate-700 leading-relaxed font-semibold break-words">
-                  {t(
-                    'Ang AFA naghatag og suporta ug dugang kita sa lokal nga mga mag-uuma pinaagi sa Kape sa Tuburan, saging, mais, ug mga proyekto sa komunidad sama sa pag-abang og kagamitan.',
-                    'AFA supports local farmers and helps create income through Tuburan Coffee, bananas, corn, and community projects such as equipment rentals.'
-                  )}
-                </p>
                 <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 sm:gap-4 pt-2">
                   <button
                     onClick={() => setActiveTab('history')}
@@ -634,14 +626,6 @@ export default function GuestPortal({
                     )}
                   </p>
                 </div>
-
-                <p>
-                  {en ? (
-                    <>Today, AFA serves many farming families. Its programs include collective sales of <strong className="text-[#BF360C]">Tuburan Coffee</strong>, fertilizer distribution, and community livelihood projects such as <strong className="text-[#1B4332]">chair and sack rentals</strong>.</>
-                  ) : (
-                    <>Karon, nagserbisyo ang AFA sa daghang pamilya sa mag-uuma. Lakip sa mga programa niini ang hiniusang pagbaligya sa <strong className="text-[#BF360C]">Kape sa Tuburan</strong>, pag-apod-apod og abono, ug mga proyekto sa panginabuhian sama sa <strong className="text-[#1B4332]">pag-abang og lingkoranan ug sako</strong>.</>
-                  )}
-                </p>
               </div>
 
               <div className="lg:col-span-4 space-y-6 min-w-0">
@@ -849,7 +833,6 @@ export default function GuestPortal({
               <span className="font-black text-sm tracking-wider uppercase">{t('Rehistradong Portal sa LGU ug DA', 'LGU & DA Registered Portal')}</span>
             </span>
             <a href="/privacy" className="inline-flex min-h-11 items-center text-sm font-bold text-[#D8F3DC] hover:text-white hover:underline">{t('Palisiya sa Pribasiya', 'Privacy Policy')}</a>
-            <span className="text-sm text-[#B7E4C7] break-words">© 2026 AFA • {t('Gidisenyo aron sayon gamiton sa mga tigulang', 'Designed for older adults')}</span>
           </div>
         </div>
       </footer>
