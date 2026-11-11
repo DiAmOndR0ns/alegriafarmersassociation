@@ -10,6 +10,8 @@ export default async function handler(req: any, res: any) {
     return sendResponse(res, 200, {
       success: false,
       offlineMode: true,
+      storageMode: 'local',
+      provider: 'Local',
       message: 'Database is not configured. Using locally saved achievements.'
     });
   }

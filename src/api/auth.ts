@@ -38,6 +38,9 @@ type TokenClaims = { kind: 'session' | 'mfa-login' | 'mfa-setup'; sub: string; e
 function signingSecret(): Buffer {
   const value = process.env.SESSION_SECRET || '';
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
+    // Derive a stable fallback so sign-in still works when SESSION_SECRET is not set.
+    // The seed is the hosted database URL, so tokens stay valid across restarts and
+    // instances; setting SESSION_SECRET is still recommended to rotate independently.
     const seed = process.env.DATABASE_URL || 'afa-farmers-association-session-secret-seed-key-tuburan-cebu';
     return createHash('sha256').update(seed).digest();
   }
@@ -262,8 +265,8 @@ export async function loginHandler(req: any, res: any) {
     pool = getPool();
     await initialize(pool);
   } catch (error: any) {
-    return errorResponse(res, 503, error?.message === 'SESSION_SECRET must be configured with at least 32 characters.'
-      ? 'Authentication is not configured.' : 'Authentication service is unavailable.');
+    console.error('[Auth login setup failure]', error?.message || error);
+    return errorResponse(res, 503, 'Authentication service is unavailable.');
   }
   const body = await readBody(req);
   if (!body || typeof body.username !== 'string' || typeof body.password !== 'string') {
@@ -413,7 +416,8 @@ export async function bootstrapHandler(req: any, res: any) {
     signingSecret();
     pool = getPool();
     await initialize(pool);
-  } catch {
+  } catch (error: any) {
+    console.error('[Auth bootstrap setup failure]', error?.message || error);
     return errorResponse(res, 503, 'Authentication service is unavailable.');
   }
   const body = await readBody(req);

@@ -22,33 +22,40 @@ function sendResponse(res, statusCode, data) {
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
 var poolInstance = null;
 var lastUsedConnectionString = null;
+function isLoopbackDatabaseUrl(rawUrl) {
+  const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
+  try {
+    const hostname = new URL(urlStr).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+  } catch {
+    return /^[a-z]+:\/\/.*@(localhost|127\.0\.0\.1|\[::1\])([:/?]|$)/i.test(urlStr);
+  }
+}
 function cleanDatabaseUrl(rawUrl) {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
-  let hostInfo = "PostgreSQL";
+  let hostInfo = "Supabase";
   try {
     const parsed = new URL(urlStr);
     hostInfo = `${parsed.hostname}${parsed.port ? ":" + parsed.port : ""}${parsed.pathname}`;
-    const sslParam = parsed.searchParams.get("sslmode")?.toLowerCase() || parsed.searchParams.get("ssl")?.toLowerCase();
-    const isLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1";
-    const isSsl = !isLocal && sslParam !== "disable";
     parsed.searchParams.delete("sslmode");
     parsed.searchParams.delete("ssl");
     return {
       connectionString: parsed.toString(),
-      isSsl,
+      isSsl: true,
       hostInfo
     };
   } catch {
-    const isLocal = /localhost|127\.0\.0\.1|::1/.test(urlStr);
-    const isDisable = /sslmode=disable|ssl=false|ssl=0/.test(urlStr);
     const cleaned = urlStr.replace(/[\?&]sslmode=[^&]*/g, "").replace(/[\?&]ssl=[^&]*/g, "").replace(/\?$/, "");
-    return { connectionString: cleaned, isSsl: !isLocal && !isDisable, hostInfo };
+    return { connectionString: cleaned, isSsl: true, hostInfo };
   }
 }
 function getStatusPool() {
   const rawDbUrl = process.env.DATABASE_URL;
-  if (!rawDbUrl) throw new Error("DATABASE_URL environment variable is not configured");
-  const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
+  if (!rawDbUrl) throw new Error("DATABASE_URL is not set for the hosted Supabase project");
+  if (isLoopbackDatabaseUrl(rawDbUrl)) {
+    throw new Error("DATABASE_URL points at a local database; the hosted Supabase connection string is required");
+  }
+  const { connectionString } = cleanDatabaseUrl(rawDbUrl);
   if (!poolInstance || lastUsedConnectionString !== connectionString) {
     if (poolInstance) {
       poolInstance.end().catch(() => {
@@ -56,7 +63,7 @@ function getStatusPool() {
     }
     poolInstance = new PgPool({
       connectionString,
-      ssl: isSsl ? { rejectUnauthorized: false } : false,
+      ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 5e3,
       max: 5
     });
@@ -107,41 +114,40 @@ async function handler(req, res) {
   try {
     if (req.method !== "GET") return sendResponse(res, 405, { error: "Method not allowed" });
     const rawUrl = (process.env.DATABASE_URL || "").trim().replace(/^["']|["']$/g, "");
+    const localStorageStatus = (message) => ({
+      connected: false,
+      configured: false,
+      storageMode: "local",
+      provider: "Local",
+      message
+    });
     if (!rawUrl) {
-      return sendResponse(res, 200, {
-        connected: false,
-        configured: false,
-        provider: "Local Storage",
-        message: "DATABASE_URL is not set in Vercel environment variables. Go to Vercel Project Settings > Environment Variables, add DATABASE_URL (check Production), and Redeploy."
-      });
+      return sendResponse(res, 200, localStorageStatus(
+        "DATABASE_URL is not set in Vercel environment variables. Go to Vercel Project Settings > Environment Variables, add DATABASE_URL (check Production), and Redeploy."
+      ));
+    }
+    if (isLoopbackDatabaseUrl(rawUrl)) {
+      return sendResponse(res, 200, localStorageStatus(
+        "DATABASE_URL points at a local database. Remove it and use the hosted Supabase connection string (Project Settings > Database) to enable cloud sync."
+      ));
     }
     if (rawUrl.includes("[YOUR-PASSWORD]") || rawUrl.includes("<password>") || rawUrl.includes("YOUR_PASSWORD")) {
-      return sendResponse(res, 200, {
-        connected: false,
-        configured: false,
-        provider: "Supabase",
-        message: 'DATABASE_URL still contains the placeholder "[YOUR-PASSWORD]". Replace it with your actual Supabase database password in Vercel Settings and redeploy.'
-      });
+      return sendResponse(res, 200, localStorageStatus(
+        'DATABASE_URL still contains the placeholder "[YOUR-PASSWORD]". Replace it with your actual Supabase database password in Vercel Settings and redeploy.'
+      ));
     }
     if (/:\[[^\]]+\]@/.test(rawUrl)) {
-      return sendResponse(res, 200, {
-        connected: false,
-        configured: false,
-        provider: "Supabase",
-        message: "DATABASE_URL has square brackets around your password like :[password]@. Remove the brackets [ and ] from the password."
-      });
+      return sendResponse(res, 200, localStorageStatus(
+        "DATABASE_URL has square brackets around your password like :[password]@. Remove the brackets [ and ] from the password."
+      ));
     }
     if (!rawUrl.startsWith("postgres://") && !rawUrl.startsWith("postgresql://")) {
-      return sendResponse(res, 200, {
-        connected: false,
-        configured: false,
-        provider: "Local Storage",
-        message: 'DATABASE_URL must start with "postgresql://" or "postgres://". Please copy the URI from Supabase Project Settings > Database.'
-      });
+      return sendResponse(res, 200, localStorageStatus(
+        'DATABASE_URL must start with "postgresql://" or "postgres://". Please copy the URI from Supabase Project Settings > Database.'
+      ));
     }
-    const isSupabase = rawUrl.toLowerCase().includes("supabase");
     const isDirectPort = rawUrl.includes(":5432") && rawUrl.includes("db.");
-    const provider = isSupabase ? "Supabase" : "PostgreSQL";
+    const provider = "Supabase";
     const pool = getStatusPool();
     const queryPromise = pool.query("SELECT NOW() as current_time, current_database() as db_name");
     const statsPromise = getLiveTableStats(pool);
@@ -161,6 +167,7 @@ async function handler(req, res) {
     return sendResponse(res, 200, {
       connected: true,
       configured: true,
+      storageMode: "supabase",
       provider,
       database: result.rows[0]?.db_name || "postgres",
       timestamp: result.rows[0]?.current_time,
@@ -170,8 +177,6 @@ async function handler(req, res) {
       message: `Connected to ${provider} (${result.rows[0]?.db_name || "postgres"}) \u2014 ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`
     });
   } catch (err) {
-    const rawUrl = (process.env.DATABASE_URL || "").trim().replace(/^["']|["']$/g, "");
-    const isSupabase = rawUrl.toLowerCase().includes("supabase");
     const errMsg = err?.message || "Connection failed";
     let helpfulTip = "";
     if (errMsg.includes("password authentication failed")) {
@@ -182,9 +187,10 @@ async function handler(req, res) {
     return sendResponse(res, 200, {
       connected: false,
       configured: true,
-      provider: isSupabase ? "Supabase" : "PostgreSQL",
+      storageMode: "local",
+      provider: "Local",
       error: errMsg,
-      message: `Failed to connect to ${isSupabase ? "Supabase" : "database"}: ${errMsg}.${helpfulTip}`
+      message: `Failed to reach Supabase, so the app is running on local device storage until the connection is restored: ${errMsg}.${helpfulTip}`
     });
   }
 }

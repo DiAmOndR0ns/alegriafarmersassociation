@@ -4,6 +4,7 @@ import { DatabaseStatus } from '../types';
 export interface DatabaseStatusApiResponse {
   connected?: boolean;
   configured?: boolean;
+  storageMode?: 'supabase' | 'local';
   provider?: string;
   database?: string;
   timestamp?: string;
@@ -31,8 +32,9 @@ export function useDatabaseStatus(initialStatus?: Partial<DatabaseStatus>) {
         setDbStatus({
           connected: false,
           configured: false,
-          provider: 'Local Storage',
-          message: 'Offline mode active.',
+          storageMode: 'local',
+          provider: 'Local',
+          message: 'Unable to reach the database status endpoint; running on local storage.',
           checking: false,
         });
         return;
@@ -42,12 +44,14 @@ export function useDatabaseStatus(initialStatus?: Partial<DatabaseStatus>) {
       try {
         data = JSON.parse(text) as DatabaseStatusApiResponse;
       } catch {
-        data = { connected: false, configured: false, provider: 'Local Storage', message: 'Offline mode active.' };
+        data = { connected: false, configured: false, storageMode: 'local', provider: 'Local', message: 'Unable to read the database status response; running on local storage.' };
       }
+      const connected = Boolean(data.connected);
       setDbStatus({
-        connected: Boolean(data.connected),
+        connected,
         configured: Boolean(data.configured),
-        provider: data.provider || (data.configured ? 'Supabase' : 'Local Storage'),
+        storageMode: data.storageMode || (connected ? 'supabase' : 'local'),
+        provider: connected ? 'Supabase' : 'Local',
         database: data.database,
         timestamp: data.timestamp || new Date().toISOString(),
         message: data.message,
@@ -61,8 +65,9 @@ export function useDatabaseStatus(initialStatus?: Partial<DatabaseStatus>) {
       setDbStatus({
         connected: false,
         configured: false,
-        provider: 'Local Storage',
-        message: 'Running in local offline-first storage mode.',
+        storageMode: 'local',
+        provider: 'Local',
+        message: 'Supabase is unreachable; running on local storage and queuing changes until the sync succeeds.',
         checking: false,
       });
     }

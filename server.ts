@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { 
   getPool, 
   isDatabaseConfigured, 
+  isLoopbackDatabaseUrl,
   ensureDatabaseSchema,
   getTableStats
 } from "./src/api/db";
@@ -39,50 +40,51 @@ export async function createApp() {
   app.post("/api/auth/password/change", passwordChangeHandler);
   app.post("/api/auth/password/reset", passwordResetHandler);
 
-  // API to Check Live Cloud Database (Supabase / PostgreSQL) Status (Public Health Check)
+  // API to Check Live Cloud Database (Supabase) Status (Public Health Check)
+  // `provider` tells the UI which storage mode is active: 'Supabase' (cloud sync)
+  // or 'Local' (device-only offline-first mode, used whenever Supabase is unreachable).
   app.get("/api/db/status", async (req, res) => {
     const rawUrl = (process.env.DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');
+    const provider = 'Supabase';
+    const localStorageStatus = (message: string) => ({
+      connected: false,
+      configured: false,
+      storageMode: 'local' as const,
+      provider: 'Local',
+      message,
+    });
 
     if (!rawUrl) {
-      return res.json({
-        connected: false,
-        configured: false,
-        provider: 'Local Storage',
-        message: 'DATABASE_URL is missing from environment. Please check your environment variables and restart/redeploy.',
-      });
+      return res.json(localStorageStatus(
+        'DATABASE_URL is missing from environment. Running on local device storage; add the Supabase connection string and restart/redeploy to enable cloud sync.'
+      ));
+    }
+
+    if (isLoopbackDatabaseUrl(rawUrl)) {
+      return res.json(localStorageStatus(
+        'DATABASE_URL points at a local database. Remove it and use the hosted Supabase connection string (Project Settings > Database) to enable cloud sync.'
+      ));
     }
 
     if (rawUrl.includes('[YOUR-PASSWORD]') || rawUrl.includes('<password>') || rawUrl.includes('YOUR_PASSWORD')) {
-      return res.json({
-        connected: false,
-        configured: false,
-        provider: 'Supabase',
-        message: 'DATABASE_URL still contains placeholder "[YOUR-PASSWORD]". Replace it with your real password.',
-      });
+      return res.json(localStorageStatus(
+        'DATABASE_URL still contains placeholder "[YOUR-PASSWORD]". Replace it with your real Supabase password.'
+      ));
     }
 
     if (/:\[[^\]]+\]@/.test(rawUrl)) {
-      return res.json({
-        connected: false,
-        configured: false,
-        provider: 'Supabase',
-        message: 'DATABASE_URL has square brackets around the password like :[password]@. Remove the square brackets [ and ].',
-      });
+      return res.json(localStorageStatus(
+        'DATABASE_URL has square brackets around the password like :[password]@. Remove the square brackets [ and ].'
+      ));
     }
 
     if (!rawUrl.startsWith('postgres://') && !rawUrl.startsWith('postgresql://')) {
-      return res.json({
-        connected: false,
-        configured: false,
-        provider: 'Local Storage',
-        message: 'DATABASE_URL must start with "postgresql://" or "postgres://".',
-      });
+      return res.json(localStorageStatus(
+        'DATABASE_URL must start with "postgresql://" or "postgres://".'
+      ));
     }
 
-    const isSupabase = rawUrl.toLowerCase().includes('supabase');
-    const isLocal = rawUrl.includes('localhost') || rawUrl.includes('127.0.0.1') || rawUrl.includes('::1');
     const isDirectPort = rawUrl.includes(':5432') && rawUrl.includes('db.');
-    const provider = isSupabase ? 'Supabase' : (isLocal ? 'Local PostgreSQL' : 'PostgreSQL');
 
     try {
       const pool = getPool();
@@ -107,6 +109,7 @@ export async function createApp() {
       return res.json({
         connected: true,
         configured: true,
+        storageMode: 'supabase',
         provider,
         database: result.rows[0]?.db_name || 'postgres',
         timestamp: result.rows[0]?.current_time,
@@ -126,9 +129,10 @@ export async function createApp() {
       return res.json({
         connected: false,
         configured: true,
-        provider,
+        storageMode: 'local',
+        provider: 'Local',
         error: errMsg,
-        message: `Failed to connect to ${provider}: ${errMsg}.${helpfulTip}`,
+        message: `Failed to reach Supabase, so the app is running on local device storage until the connection is restored: ${errMsg}.${helpfulTip}`,
       });
     }
   });

@@ -538,7 +538,8 @@ export default function App() {
         ...previous,
         configured,
         connected: Boolean(status.connected),
-        provider: status.provider || (configured ? 'Supabase' : 'Local Storage'),
+        storageMode: status.storageMode,
+        provider: status.provider,
         message: status.message,
         error: status.error,
         timestamp: status.timestamp || new Date().toISOString(),
@@ -3489,7 +3490,7 @@ export default function App() {
           <div className="px-5 py-4 border-t border-white/10">
             <div className="flex items-center gap-2 text-xs font-bold text-[#D8F3DC]">
               <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dbStatus.connected ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
-              <span className="truncate">{dbStatus.checking ? 'Checking database…' : dbStatus.connected ? `${dbStatus.provider} connected` : 'Offline local mode'}</span>
+              <span className="truncate">{dbStatus.checking ? 'Checking database…' : dbStatus.connected ? 'Supabase' : 'Local'}</span>
             </div>
           </div>
         </aside>

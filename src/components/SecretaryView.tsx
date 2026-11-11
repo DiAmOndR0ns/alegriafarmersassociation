@@ -529,7 +529,7 @@ export default function SecretaryView({
         <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-300 p-3.5 rounded-xl text-xs text-amber-950 shadow-xs">
           <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
           <div>
-            <span className="font-extrabold text-amber-900">Local Storage Enabled (Offline PWA):</span> You are working in offline mode. Newly added members, meetings, or resolutions are stored securely on your device and queued to sync automatically once your connection is restored.
+            <span className="font-extrabold text-amber-900">Local mode (Offline PWA):</span> Supabase is unreachable, so you are working on local storage. Newly added members, meetings, or resolutions are stored securely on your device and queued to sync automatically once the connection to Supabase is restored.
           </div>
         </div>
       )}

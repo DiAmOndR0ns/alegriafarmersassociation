@@ -138,14 +138,14 @@ describe('App Component', () => {
   it('provides useDatabaseStatus hook with expected structure and functions', () => {
     function HookConsumer() {
       const { dbStatus, checkDatabaseConnection } = useDatabaseStatus({
-        provider: 'Local Storage',
+        provider: 'Local',
         connected: false
       });
       return <div>Status: {dbStatus.provider} - {typeof checkDatabaseConnection}</div>;
     }
 
     const html = renderToString(<HookConsumer />);
-    expect(html).toContain('Local Storage');
+    expect(html).toContain('Local');
     expect(html).toContain('function');
   });
 

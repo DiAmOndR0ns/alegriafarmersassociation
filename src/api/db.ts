@@ -34,6 +34,19 @@ function scheduleIdleEviction(connectionString: string) {
   if (typeof (timer as any)?.unref === 'function') (timer as any).unref();
   poolIdleTimers.set(connectionString, timer);
 }
+export const DATABASE_URL_ERROR = 'DATABASE_URL must point at the hosted Supabase PostgreSQL project.';
+
+/** True when the URL targets a loopback host, i.e. a local database instead of Supabase. */
+export function isLoopbackDatabaseUrl(rawUrl: string): boolean {
+  const urlStr = rawUrl.trim().replace(/^["']|["']$/g, '');
+  try {
+    const hostname = new URL(urlStr).hostname.toLowerCase();
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+  } catch {
+    return /^[a-z]+:\/\/.*@(localhost|127\.0\.0\.1|\[::1\])([:/?]|$)/i.test(urlStr);
+  }
+}
+
 export function isDatabaseConfigured(): boolean {
   const dbUrl = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, '');
   return Boolean(
@@ -43,42 +56,46 @@ export function isDatabaseConfigured(): boolean {
     !dbUrl.includes('<password>') &&
     !dbUrl.includes('YOUR_PASSWORD') &&
     !dbUrl.includes('your_supabase_connection_string') &&
-    (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://'))
+    (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://')) &&
+    !isLoopbackDatabaseUrl(dbUrl)
   );
 }
 
+/**
+ * Normalizes the Supabase connection string. TLS is always required for the
+ * hosted database, so any `sslmode`/`ssl` query parameter is stripped here and
+ * the `ssl` option is set explicitly on the pool instead.
+ */
 export function cleanDatabaseUrl(rawUrl: string): { connectionString: string; isSsl: boolean; hostInfo: string } {
-  let urlStr = rawUrl.trim().replace(/^["']|["']$/g, '');
-  let hostInfo = 'PostgreSQL';
+  const urlStr = rawUrl.trim().replace(/^["']|["']$/g, '');
+  let hostInfo = 'Supabase';
 
   try {
     const parsed = new URL(urlStr);
     hostInfo = `${parsed.hostname}${parsed.port ? ':' + parsed.port : ''}${parsed.pathname}`;
-    const sslParam = parsed.searchParams.get('sslmode')?.toLowerCase() || parsed.searchParams.get('ssl')?.toLowerCase();
-    const isLocal = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
-    const isSsl = !isLocal && sslParam !== 'disable';
     parsed.searchParams.delete('sslmode');
     parsed.searchParams.delete('ssl');
     return {
       connectionString: parsed.toString(),
-      isSsl,
+      isSsl: true,
       hostInfo,
     };
   } catch {
-    const isLocal = /localhost|127\.0\.0\.1|::1/.test(urlStr);
-    const isDisable = /sslmode=disable|ssl=false|ssl=0/.test(urlStr);
     const cleaned = urlStr
       .replace(/[\?&]sslmode=[^&]*/g, '')
       .replace(/[\?&]ssl=[^&]*/g, '')
       .replace(/\?$/, '');
-    return { connectionString: cleaned, isSsl: !isLocal && !isDisable, hostInfo };
+    return { connectionString: cleaned, isSsl: true, hostInfo };
   }
 }
 
 export function getPool(): pg.Pool {
   const rawDbUrl = process.env.DATABASE_URL;
+  if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
+    throw new Error(DATABASE_URL_ERROR);
+  }
   if (!rawDbUrl || !isDatabaseConfigured()) {
-    throw new Error('DATABASE_URL environment variable is not configured');
+    throw new Error(DATABASE_URL_ERROR);
   }
 
   const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
@@ -94,14 +111,14 @@ export function getPool(): pg.Pool {
   }
 
   // NOTE: Do not set process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0' here.
-  // Supabase's certificate is accepted per-connection via the `ssl` option below,
+  // Supabase's certificate is trusted per-connection via the `ssl` option below,
   // which is scoped to this pool. The global env flag disabled certificate
   // verification process-wide (triggering a Node security warning) and was redundant.
+  // TLS is always on: the hosted database is never reached over plaintext, and the
+  // self-signed chain behind the Supabase pooler is accepted by this pool only.
   const pool = new PgPool({
     connectionString,
-    ssl: isSsl ? {
-      rejectUnauthorized: false
-    } : false,
+    ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 7000,
     idleTimeoutMillis: 10000,
     max: 6,

@@ -20,39 +20,46 @@ function scheduleIdleEviction(connectionString) {
   if (typeof timer?.unref === "function") timer.unref();
   poolIdleTimers.set(connectionString, timer);
 }
+function isLoopbackDatabaseUrl(rawUrl) {
+  const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
+  try {
+    const hostname = new URL(urlStr).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+  } catch {
+    return /^[a-z]+:\/\/.*@(localhost|127\.0\.0\.1|\[::1\])([:/?]|$)/i.test(urlStr);
+  }
+}
 function isDatabaseConfigured() {
   const dbUrl = process.env.DATABASE_URL?.trim().replace(/^["']|["']$/g, "");
   return Boolean(
-    dbUrl && dbUrl !== "" && !dbUrl.includes("[YOUR-PASSWORD]") && !dbUrl.includes("<password>") && !dbUrl.includes("YOUR_PASSWORD") && !dbUrl.includes("your_supabase_connection_string") && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://"))
+    dbUrl && dbUrl !== "" && !dbUrl.includes("[YOUR-PASSWORD]") && !dbUrl.includes("<password>") && !dbUrl.includes("YOUR_PASSWORD") && !dbUrl.includes("your_supabase_connection_string") && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://")) && !isLoopbackDatabaseUrl(dbUrl)
   );
 }
 function cleanDatabaseUrl(rawUrl) {
-  let urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
-  let hostInfo = "PostgreSQL";
+  const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
+  let hostInfo = "Supabase";
   try {
     const parsed = new URL(urlStr);
     hostInfo = `${parsed.hostname}${parsed.port ? ":" + parsed.port : ""}${parsed.pathname}`;
-    const sslParam = parsed.searchParams.get("sslmode")?.toLowerCase() || parsed.searchParams.get("ssl")?.toLowerCase();
-    const isLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1";
-    const isSsl = !isLocal && sslParam !== "disable";
     parsed.searchParams.delete("sslmode");
     parsed.searchParams.delete("ssl");
     return {
       connectionString: parsed.toString(),
-      isSsl,
+      isSsl: true,
       hostInfo
     };
   } catch {
-    const isLocal = /localhost|127\.0\.0\.1|::1/.test(urlStr);
-    const isDisable = /sslmode=disable|ssl=false|ssl=0/.test(urlStr);
     const cleaned = urlStr.replace(/[\?&]sslmode=[^&]*/g, "").replace(/[\?&]ssl=[^&]*/g, "").replace(/\?$/, "");
-    return { connectionString: cleaned, isSsl: !isLocal && !isDisable, hostInfo };
+    return { connectionString: cleaned, isSsl: true, hostInfo };
   }
 }
 function getPool() {
   const rawDbUrl = process.env.DATABASE_URL;
+  if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
+    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+  }
   if (!rawDbUrl || !isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL environment variable is not configured");
+    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
   }
   const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
   const cached = poolCache.get(connectionString);
@@ -64,9 +71,7 @@ function getPool() {
   }
   const pool = new PgPool({
     connectionString,
-    ssl: isSsl ? {
-      rejectUnauthorized: false
-    } : false,
+    ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 7e3,
     idleTimeoutMillis: 1e4,
     max: 6
@@ -900,7 +905,9 @@ async function handler(req, res) {
     return sendResponse(res, 200, {
       success: false,
       offlineMode: true,
-      message: "DATABASE_URL is not configured. Running in offline/local storage mode."
+      storageMode: "local",
+      provider: "Local",
+      message: "DATABASE_URL is not configured. Running in local storage mode; data stays on this device."
     });
   }
   let user;

@@ -309,7 +309,10 @@ export interface HogRaisingState {
 export interface DatabaseStatus {
   connected: boolean;
   configured: boolean;
-  provider: 'Supabase' | 'PostgreSQL' | 'Local Storage' | string;
+  /** 'Supabase' when cloud sync is live, 'Local' when Supabase is unreachable. */
+  provider: 'Supabase' | 'Local' | string;
+  /** 'supabase' when cloud sync is live, 'local' when records stay on this device. */
+  storageMode?: 'supabase' | 'local';
   database?: string;
   timestamp?: string;
   error?: string;

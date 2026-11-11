@@ -11,7 +11,9 @@ export default async function handler(req: any, res: any) {
     return sendResponse(res, 200, {
       success: false,
       offlineMode: true,
-      message: 'DATABASE_URL is not configured. Running in offline/local storage mode.',
+      storageMode: 'local',
+      provider: 'Local',
+      message: 'DATABASE_URL is not configured. Running in local storage mode; data stays on this device.',
     });
   }
 
