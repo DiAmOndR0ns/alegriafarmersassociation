@@ -240,7 +240,16 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
-    `UPDATE organization_funds SET initial_fund = allocated_amount WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;`,
+    // Legacy databases still carry allocated_amount; newer ones only have initial_fund.
+    // Guard the backfill so a missing legacy column cannot fail the whole migration.
+    `DO $$
+     BEGIN
+       IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+         UPDATE organization_funds SET initial_fund = allocated_amount
+          WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+       END IF;
+     END $$;`,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
 
     // Formal Auditor Reports (Proposal Requirement)
@@ -550,13 +559,17 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         ADD COLUMN IF NOT EXISTS source_origin TEXT,
         ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
     `);
-    // Backfill the initial fund from the legacy allocated_amount column.
+    // Backfill the initial fund from the legacy allocated_amount column, but only
+    // when that column exists: fresh databases are created with initial_fund only.
     await client.query(`
-      UPDATE organization_funds
-         SET initial_fund = allocated_amount
-       WHERE (initial_fund IS NULL OR initial_fund = 0)
-         AND allocated_amount IS NOT NULL
-         AND allocated_amount <> 0;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+          UPDATE organization_funds SET initial_fund = allocated_amount
+           WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+        END IF;
+      END $$;
     `);
     // Fund codes are auto-derived from the fund name, so two funds can legitimately
     // share initials. A UNIQUE constraint here silently rolled back the whole sync.
@@ -1656,12 +1669,12 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Saving', fundList.length, 'organization funds...');
       for (const f of fundList) {
         await client.query(`
-          INSERT INTO organization_funds (id, name, code, allocated_amount, current_balance, description, custodian, last_updated, category, source_origin)
+          INSERT INTO organization_funds (id, name, code, initial_fund, current_balance, description, custodian, last_updated, category, source_origin)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             code = EXCLUDED.code,
-            allocated_amount = EXCLUDED.allocated_amount,
+            initial_fund = EXCLUDED.initial_fund,
             current_balance = EXCLUDED.current_balance,
             description = EXCLUDED.description,
             custodian = EXCLUDED.custodian,
@@ -1669,7 +1682,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             category = EXCLUDED.category,
             source_origin = EXCLUDED.source_origin;
         `, [
-          f.id, f.name, f.code, f.allocatedAmount || 0, f.currentBalance || 0,
+          f.id, f.name, f.code, getInitialFund(f), f.currentBalance || 0,
           f.description || '', f.custodian || '', f.lastUpdated || new Date().toISOString().split('T')[0],
           f.category || null, f.source || null
         ]);

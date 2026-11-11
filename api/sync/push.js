@@ -174,7 +174,7 @@ async function runSchemaMigrations(client) {
       id VARCHAR(100) PRIMARY KEY,
       name TEXT NOT NULL,
       code VARCHAR(50) NOT NULL,
-      allocated_amount NUMERIC DEFAULT 0,
+      initial_fund NUMERIC DEFAULT 0,
       current_balance NUMERIC DEFAULT 0,
       description TEXT,
       custodian TEXT,
@@ -182,6 +182,7 @@ async function runSchemaMigrations(client) {
     );`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
@@ -448,7 +449,7 @@ async function initDatabaseSchema(pool) {
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
         code VARCHAR(50) NOT NULL,
-        allocated_amount NUMERIC DEFAULT 0,
+        initial_fund NUMERIC DEFAULT 0,
         current_balance NUMERIC DEFAULT 0,
         description TEXT,
         custodian TEXT,
@@ -458,7 +459,8 @@ async function initDatabaseSchema(pool) {
     await client.query(`
       ALTER TABLE organization_funds
         ADD COLUMN IF NOT EXISTS category TEXT,
-        ADD COLUMN IF NOT EXISTS source_origin TEXT;
+        ADD COLUMN IF NOT EXISTS source_origin TEXT,
+        ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
     `);
     await client.query(`
       ALTER TABLE organization_funds
@@ -1175,12 +1177,12 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Saving", fundList.length, "organization funds...");
       for (const f of fundList) {
         await client.query(`
-          INSERT INTO organization_funds (id, name, code, allocated_amount, current_balance, description, custodian, last_updated, category, source_origin)
+          INSERT INTO organization_funds (id, name, code, initial_fund, current_balance, description, custodian, last_updated, category, source_origin)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             code = EXCLUDED.code,
-            allocated_amount = EXCLUDED.allocated_amount,
+            initial_fund = EXCLUDED.initial_fund,
             current_balance = EXCLUDED.current_balance,
             description = EXCLUDED.description,
             custodian = EXCLUDED.custodian,
@@ -1191,7 +1193,7 @@ async function saveFullStateToPostgres(pool, state) {
           f.id,
           f.name,
           f.code,
-          f.allocatedAmount || 0,
+          Number.isFinite(Number(f.initialFund)) ? Number(f.initialFund) : Number(f.allocatedAmount) || 0,
           f.currentBalance || 0,
           f.description || "",
           f.custodian || "",
@@ -1385,7 +1387,7 @@ async function saveFullStateToPostgres(pool, state) {
       { table: "organization_funds", deletedIds: deletedFundIds, fields: [
         ["name", "name", (r) => r.name],
         ["code", "code", (r) => r.code],
-        ["allocated_amount", "allocatedAmount", (r) => r.allocatedAmount || 0],
+        ["initial_fund", "initialFund", (r) => Number.isFinite(Number(r.initialFund)) ? Number(r.initialFund) : Number(r.allocatedAmount) || 0],
         ["current_balance", "currentBalance", (r) => r.currentBalance || 0],
         ["description", "description", (r) => r.description || ""],
         ["custodian", "custodian", (r) => r.custodian || ""],

@@ -423,8 +423,8 @@ async function initDatabaseSchema(pool) {
       CREATE TABLE IF NOT EXISTS organization_funds (
         id VARCHAR(100) PRIMARY KEY,
         name TEXT NOT NULL,
-        code VARCHAR(50) UNIQUE NOT NULL,
-        allocated_amount NUMERIC DEFAULT 0,
+        code VARCHAR(50) NOT NULL,
+        initial_fund NUMERIC DEFAULT 0,
         current_balance NUMERIC DEFAULT 0,
         description TEXT,
         custodian TEXT,
@@ -434,7 +434,8 @@ async function initDatabaseSchema(pool) {
     await client.query(`
       ALTER TABLE organization_funds
         ADD COLUMN IF NOT EXISTS category TEXT,
-        ADD COLUMN IF NOT EXISTS source_origin TEXT;
+        ADD COLUMN IF NOT EXISTS source_origin TEXT,
+        ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS auditor_reports (
@@ -766,7 +767,7 @@ async function fetchAllDataFromPostgres(pool) {
       id: r.id,
       name: r.name,
       code: r.code,
-      allocatedAmount: Number(r.allocated_amount || 0),
+      initialFund: Number(r.initial_fund ?? r.allocated_amount ?? 0),
       currentBalance: Number(r.current_balance || 0),
       category: r.category || "",
       source: r.source_origin || "",
