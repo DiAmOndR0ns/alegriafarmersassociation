@@ -650,10 +650,6 @@ export default function AuthScreen({
                     </div>
                   </form>
                 )}
-
-                <div className="mt-4 p-3.5 bg-[#FAF8F5] rounded-2xl border border-[#E8E3D8] flex items-center gap-2.5 text-xs text-[#5D6B54]">
-                  <Shield className="w-4 h-4 text-[#1B4332] shrink-0" />
-                </div>
               </div>
             )}
           </div>
