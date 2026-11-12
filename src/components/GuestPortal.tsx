@@ -184,7 +184,7 @@ export default function GuestPortal({
   const activeMembersCount = members.filter(m => m.status === 'Active').length;
   const boardMemberNames = resolveBoardMemberNames(users);
   const tabs: { id: 'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'; label: string; icon: typeof Sparkles }[] = [
-    { id: 'home', label: t('Kinatibuk-ang Tan-aw', 'Overview'), icon: Sparkles },
+    { id: 'home', label: t('Overview', 'Overview'), icon: Sparkles },
     { id: 'announcements', label: t('Pahibalo', 'Announcements'), icon: Megaphone },
     { id: 'activities', label: t('Kalihokan', 'Activities'), icon: Calendar },
     { id: 'products', label: t('Produkto', 'Products'), icon: Coffee },
@@ -352,7 +352,7 @@ export default function GuestPortal({
                     onClick={() => setActiveTab('announcements')}
                     className="text-xs font-black text-[#BF360C] hover:underline cursor-pointer flex items-center gap-1"
                   >
-                    <span>{t('Tan-awa ang tanan', 'View all')}</span>
+                    <span>{t('View all', 'View all')}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -391,7 +391,7 @@ export default function GuestPortal({
                     onClick={() => setActiveTab('activities')}
                     className="text-xs font-black text-emerald-800 hover:underline cursor-pointer flex items-center gap-1"
                   >
-                    <span>{t('Tan-awa ang tanan', 'View all')}</span>
+                    <span>{t('View all', 'View all')}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -816,9 +816,9 @@ export default function GuestPortal({
           <div className="flex flex-col items-center md:items-end gap-1.5 shrink-0">
             <span className="flex items-center gap-1.5 bg-[#143326] px-3.5 py-1.5 rounded-xl border border-emerald-600/30">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="font-black text-sm tracking-wider uppercase">{t('Rehistradong Portal sa LGU ug DA', 'LGU & DA Registered Portal')}</span>
+              <span className="font-black text-sm tracking-wider uppercase">{t('LGU & DA Registered Portal', 'LGU & DA Registered Portal')}</span>
             </span>
-            <a href="/privacy" className="inline-flex min-h-11 items-center text-sm font-bold text-[#D8F3DC] hover:text-white hover:underline">{t('Palisiya sa Pribasiya', 'Privacy Policy')}</a>
+            <a href="/privacy" className="inline-flex min-h-11 items-center text-sm font-bold text-[#D8F3DC] hover:text-white hover:underline">{t('Privacy Policy', 'Privacy Policy')}</a>
           </div>
         </div>
       </footer>
