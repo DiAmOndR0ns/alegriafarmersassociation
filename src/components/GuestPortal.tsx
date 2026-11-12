@@ -762,9 +762,6 @@ export default function GuestPortal({
                     aria-label={`${t('Tan-awa ang detalye sa', 'View details for')} ${prod.name}`}
                     className="w-full min-h-24 text-left bg-white border-2 border-[#D5CFC1] hover:border-[#1B4332] hover:shadow-lg transition-all duration-200 rounded-2xl p-4 flex items-start gap-3 min-w-0 cursor-pointer group"
                   >
-                    <div aria-hidden="true" className={`p-2.5 rounded-xl ${cardColor} border shadow-inner shrink-0`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
                     <div className="min-w-0 flex-1 space-y-1">
                       <h4 className="text-sm font-black text-[#1B4332] font-display leading-snug break-words group-hover:text-emerald-800 transition-colors">
                         {prod.name}
