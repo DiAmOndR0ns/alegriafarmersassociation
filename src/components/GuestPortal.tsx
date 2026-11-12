@@ -486,7 +486,7 @@ export default function GuestPortal({
                       </span>
                       <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
-                        {t('Gipatik:', 'Posted:')} {ann.datePosted}
+                        {t('Posted:', 'Posted:')} {ann.datePosted}
                       </span>
                     </div>
 
@@ -499,7 +499,7 @@ export default function GuestPortal({
                       <Tag className="w-3.5 h-3.5 text-emerald-700" />
                       {ann.category}
                     </span>
-                    <span>{t('Gipatik ni:', 'Posted by:')} {ann.postedBy}</span>
+                    <span>{t('Posted by:', 'Posted by:')} {ann.postedBy}</span>
                   </div>
                 </div>
               ))}
@@ -727,7 +727,7 @@ export default function GuestPortal({
               })}
               {displayAchievements.length === 0 && (
                 <div className="bg-white border-2 border-dashed border-[#D5CFC1] rounded-2xl p-6 text-sm text-slate-600">
-                  {t('Wala pay gipatik nga mga kalampusan ang asosasyon.', 'The association has not published any achievements yet.')}
+                  {t('The association has not published any achievements yet.', 'The association has not published any achievements yet.')}
                 </div>
               )}
             </div>
