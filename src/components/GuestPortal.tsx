@@ -191,6 +191,11 @@ export default function GuestPortal({
     { id: 'achievements', label: t('Kalampusan', 'Achievements'), icon: Trophy },
     { id: 'history', label: t('Kasaysayan', 'History'), icon: BookOpen }
   ];
+  const priorityLabel = (priority: string) => {
+    if (priority === 'High') return t('High');
+    if (priority === 'Medium') return t('Medium');
+    return t('Low');
+  };
   const activityStatusLabel = (status: string) => {
     if (status === 'Completed') return t('Nahuman', 'Completed');
     if (status === 'In Progress') return t('Nagpadayon', 'In progress');
@@ -341,7 +346,7 @@ export default function GuestPortal({
                 <div className="flex items-center justify-between border-b border-[#D5CFC1] pb-2.5">
                   <h4 className="font-black text-[#1B4332] text-sm sm:text-base flex items-center gap-2">
                     <Megaphone className="w-4 h-4 sm:w-5 sm:h-5 text-[#BF360C]" />
-                    <span>{t('Mga Pahibalo', 'Announcements')}</span>
+                    <span>{t('Pahibalo', 'Announcements')}</span>
                   </h4>
                   <button
                     onClick={() => setActiveTab('announcements')}
@@ -361,6 +366,7 @@ export default function GuestPortal({
                           ann.priority === 'Medium' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                           'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         }`}>
+                          {priorityLabel(ann.priority)} {t('prayoridad', 'priority')}
                         </span>
                         <span className="text-slate-500 font-semibold">{ann.datePosted}</span>
                       </div>
@@ -379,7 +385,7 @@ export default function GuestPortal({
                 <div className="flex items-center justify-between border-b border-[#D5CFC1] pb-2.5">
                   <h4 className="font-black text-[#1B4332] text-sm sm:text-base flex items-center gap-2">
                     <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" />
-                    <span>{t('Mga Kalihokan', 'Activities')}</span>
+                    <span>{t('Kalihokan', 'Activities')}</span>
                   </h4>
                   <button
                     onClick={() => setActiveTab('activities')}
@@ -476,6 +482,7 @@ export default function GuestPortal({
                         ann.priority === 'Medium' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
                         'bg-emerald-100 text-emerald-900 border border-emerald-300'
                       }`}>
+                        {priorityLabel(ann.priority)} {t('prayoridad', 'priority')}
                       </span>
                       <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
@@ -512,7 +519,7 @@ export default function GuestPortal({
               <div className="border-b-2 border-[#F0EBE1] pb-3.5 sm:pb-4 flex items-center gap-2.5 flex-wrap">
                 <Calendar className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-700 shrink-0" />
                 <h3 className="text-lg sm:text-xl md:text-2xl font-black text-[#1B4332] font-display break-words">
-                  {t('Mga Kalihokan sa Komunidad', 'Community Activities')}
+                  {t('Kalihokan sa Komunidad', 'Community Activities')}
                 </h3>
               </div>
             </div>
@@ -646,7 +653,7 @@ export default function GuestPortal({
                 <div className="bg-[#EAF4EC] border-2 border-[#1B4332]/30 p-4 sm:p-6 rounded-2xl space-y-3.5 text-left min-w-0">
                   <h4 className="font-black text-[#1B4332] text-xs sm:text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-emerald-950/15 pb-2 font-display break-words">
                     <Users className="w-4 h-4 sm:w-5 sm:h-5 text-[#1B4332] shrink-0" />
-                    <span>{t('Mga Opisyales sa AFA (2026)', 'AFA Officers (2026)')}</span>
+                    <span>{t('Opisyales sa AFA (2026)', 'AFA Officers (2026)')}</span>
                   </h4>
                   <div className="space-y-2 text-xs text-slate-700 font-medium min-w-0">
                     {resolveOfficerRoster(users).map((officer, i) => (
