@@ -197,11 +197,11 @@ export default function GuestPortal({
     return t('Low', 'Low');
   };
   const activityStatusLabel = (status: string) => {
-    if (status === 'Completed') return t('Nahuman', 'Completed');
-    if (status === 'In Progress') return t('Nagpadayon', 'In progress');
-    if (status === 'Postponed') return t('Gibalhin sa petsa', 'Postponed');
-    if (status === 'Cancelled') return t('Gikansela', 'Cancelled');
-    return t('Naka-iskedyul', 'Scheduled');
+    if (status === 'Completed') return t('Completed', 'Completed');
+    if (status === 'In Progress') return t('In Progress', 'In progress');
+    if (status === 'Postponed') return t('Postponed', 'Postponed');
+    if (status === 'Cancelled') return t('Cancelled', 'Cancelled');
+    return t('Scheduled', 'Scheduled');
   };
 
   // Theme styling tailored for senior citizens (high contrast, warm, large readable text)
