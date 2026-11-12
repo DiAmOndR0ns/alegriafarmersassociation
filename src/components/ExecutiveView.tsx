@@ -778,60 +778,64 @@ const CategoryTick = ({ x, y, payload }: any) => (
           </p>
         )}
       </div>
+      
+{/* Livestock expenses */}
+{(() => {
+  const sorted = [...livestockExpenseData].sort((a, b) => b.expenses - a.expenses);
+  const total = sorted.reduce((sum, d) => sum + d.expenses, 0);
+  const max = sorted[0]?.expenses || 1;
+  const fmt = (v: number) => Number(v).toLocaleString('en-US');
 
-      {/* Livestock expenses */}
-<div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
-  <h4 className="text-sm font-extrabold text-[#1B4332] mb-3">Livestock expenses</h4>
-  {livestockExpenseData.length ? (
-    <div className="w-full overflow-x-auto">
-      <div style={{ height: 320, minWidth: Math.max(320, livestockExpenseData.length * 64) }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={livestockExpenseData}
-            margin={{ top: 20, right: 12, left: 0, bottom: 4 }}
-            barCategoryGap="25%"
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" vertical={false} />
-            <XAxis
-              dataKey="name"
-              interval={0}
-              height={70}
-              tick={<CategoryTick />}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              type="number"
-              width={52}
-              domain={[0, 'dataMax']}
-              tick={{ fill: '#5D6B54', fontSize: 10 }}
-              tickFormatter={(v: unknown) => `₱${compact(Number(v) || 0)}`}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              cursor={{ fill: '#FAF9F5' }}
-              formatter={(v) => [peso(Number(v)), 'Livestock expenses']}
-              contentStyle={{ borderRadius: 12, border: '1px solid #E9E4D9', fontSize: 12 }}
-            />
-            <Bar dataKey="expenses" name="Livestock expenses" fill="#8B5CF6" radius={[4, 4, 0, 0]} maxBarSize={40}>
-              <LabelList
-                dataKey="expenses"
-                position="top"
-                formatter={(v: unknown) => `₱${compact(Number(v) || 0)}`}
-                style={{ fill: '#1B4332', fontSize: 10, fontWeight: 700 }}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+  return (
+    <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h4 className="text-sm font-extrabold text-[#1B4332]">Livestock expenses</h4>
+          <p className="text-[11px] font-semibold text-[#85947E]">
+            {analyticsYear} · {sorted.length} {sorted.length === 1 ? 'category' : 'categories'}
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#5D6B54]">Total</div>
+          <div className="text-lg font-black font-display text-[#1B4332] tabular-nums">
+            PHP {fmt(total)}
+          </div>
+        </div>
       </div>
+
+      {sorted.length ? (
+        <ul className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+          {sorted.map((item) => {
+            const share = total ? (item.expenses / total) * 100 : 0;
+            return (
+              <li key={item.name} title={`${item.name}: PHP ${fmt(item.expenses)}`}>
+                <div className="flex items-baseline justify-between gap-3 mb-1">
+                  <span className="text-xs font-bold text-[#1B4332] truncate">{item.name}</span>
+                  <span className="text-xs font-bold text-[#5D6B54] tabular-nums shrink-0">
+                    PHP {fmt(item.expenses)}
+                    <span className="ml-1 text-[10px] font-semibold text-[#85947E]">
+                      · {share.toFixed(0)}%
+                    </span>
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-[#F1EDE3] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[#8B5CF6]"
+                    style={{ width: `${(item.expenses / max) * 100}%` }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
+          No livestock expenses recorded for {analyticsYear}.
+        </p>
+      )}
     </div>
-  ) : (
-    <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
-      No livestock expenses recorded for {analyticsYear}.
-    </p>
-  )}
-</div>
+  );
+})()}
     </div>
   );
 })()}
