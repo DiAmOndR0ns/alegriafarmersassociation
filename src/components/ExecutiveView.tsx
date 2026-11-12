@@ -516,8 +516,8 @@ export default function ExecutiveView({
             <ShieldCheck className="w-6 h-6 text-[#D8F3DC] shrink-0" />
             <span className="break-words">
               {currentRole === 'President'
-                ? 'President\'s Suite'
-                : 'Vice President\'s Desk'}
+                ? 'President Dashboard'
+                : 'Vice President Dashboard'}
             </span>
           </h2>
         </div>
@@ -554,75 +554,88 @@ export default function ExecutiveView({
       </div>
 
       {/* OVERVIEW SCOREBOARD */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Members */}
-        <div className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left">
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Total Members</span>
-            <Users className="w-5 h-5 text-[#1B4332]" />
-          </div>
-          <div className="text-3xl font-black font-display text-[#1B4332]">{totalMembers}</div>
-        </div>
+{(() => {
+  // Shared card style: same height/padding/layout for every box
+  const card =
+    "bg-white border border-[#E9E4D9] p-4 rounded-2xl shadow-sm text-left h-32 flex flex-col justify-between min-w-0";
+  const clickable =
+    " cursor-pointer transition-all group select-none hover:bg-[#FAF9F5]";
+  const label =
+    "text-[11px] font-bold uppercase tracking-wider leading-tight line-clamp-2";
+  const value = "text-2xl font-black font-display truncate";
 
-        {/* Association Funds */}
-        <div className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left">
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">All Registered Fund Balances</span>
-            <Coins className="w-5 h-5 text-[#E65100]" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black font-display text-[#1B4332] tracking-tight">
-            PHP {totalRegisteredFundBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-          </div>
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Total Members */}
+      <div className={card}>
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={label}>Total Members</span>
+          <Users className="w-5 h-5 shrink-0 text-[#1B4332]" />
         </div>
+        <div className={`${value} text-[#1B4332]`}>{totalMembers}</div>
+      </div>
 
-        {/* Assemblies */}
-        <div
-          onClick={() => setShowMeetingsModal(true)}
-          className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-[#1B4332] hover:bg-[#FAF9F5] transition-all group select-none"
-        >
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider group-hover:text-[#1B4332]">General Assembly</span>
-            <BookOpen className="w-5 h-5 text-[#0D47A1] group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="text-3xl font-black font-display text-[#1B4332] flex items-baseline gap-2">
-            <span>{meetings.length}</span>
-            <span className="text-[10px] font-bold text-[#0D47A1] hover:underline">View / Print</span>
-          </div>
+      {/* Association Funds */}
+      <div className={card}>
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={label}>All Registered Fund Balances</span>
+          <Coins className="w-5 h-5 shrink-0 text-[#E65100]" />
         </div>
-
-        {/* Pending Approvals */}
-        <div className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left">
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Aprobahan (Resolutions)</span>
-            <FileCheck className="w-5 h-5 text-[#E65100]" />
-          </div>
-          <div className="text-3xl font-black font-display text-[#E65100]">{pendingResolutions.length}</div>
-        </div>
-
-        {/* Minutes of Meeting Awaiting President Approval (Secretary drafts → President approves) */}
-        <div
-          onClick={() => setShowMeetingsModal(true)}
-          className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-[#1B4332] hover:bg-[#FAF9F5] transition-all group select-none"
-        >
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider group-hover:text-[#1B4332]">Minutes for Approval</span>
-            <BookOpen className="w-5 h-5 text-purple-700 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="text-3xl font-black font-display text-purple-700">{pendingMinutesMeetings.length}</div>
-        </div>
-
-        {/* Audited Financial Records Awaiting President Approval (Auditor → President) */}
-        <div
-          onClick={() => setShowFinancialApprovalsModal(true)}
-          className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-emerald-700 hover:bg-[#FAF9F5] transition-all group select-none"
-        >
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider group-hover:text-emerald-700">Financial Approvals</span>
-            <Coins className="w-5 h-5 text-emerald-700 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="text-3xl font-black font-display text-emerald-700">{auditedPendingTx.length}</div>
+        <div className={`${value} text-[#1B4332] tracking-tight`}>
+          PHP {totalRegisteredFundBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
         </div>
       </div>
+
+      {/* Assemblies */}
+      <div
+        onClick={() => setShowMeetingsModal(true)}
+        className={`${card}${clickable} hover:border-[#1B4332]`}
+      >
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={`${label} group-hover:text-[#1B4332]`}>General Assembly</span>
+          <BookOpen className="w-5 h-5 shrink-0 text-[#0D47A1] group-hover:scale-110 transition-transform" />
+        </div>
+        <div className={`${value} text-[#1B4332] flex items-baseline gap-2`}>
+          <span>{meetings.length}</span>
+          <span className="text-[10px] font-bold text-[#0D47A1] hover:underline">View / Print</span>
+        </div>
+      </div>
+
+      {/* Resolutions */}
+      <div className={card}>
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={label}>Resolutions</span>
+          <FileCheck className="w-5 h-5 shrink-0 text-[#E65100]" />
+        </div>
+        <div className={`${value} text-[#E65100]`}>{pendingResolutions.length}</div>
+      </div>
+
+      {/* Minutes for Approval (Secretary drafts → President approves) */}
+      <div
+        onClick={() => setShowMeetingsModal(true)}
+        className={`${card}${clickable} hover:border-[#1B4332]`}
+      >
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={`${label} group-hover:text-[#1B4332]`}>Minutes for Approval</span>
+          <BookOpen className="w-5 h-5 shrink-0 text-purple-700 group-hover:scale-110 transition-transform" />
+        </div>
+        <div className={`${value} text-purple-700`}>{pendingMinutesMeetings.length}</div>
+      </div>
+
+      {/* Financial Approvals (Auditor → President) */}
+      <div
+        onClick={() => setShowFinancialApprovalsModal(true)}
+        className={`${card}${clickable} hover:border-emerald-700`}
+      >
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={`${label} group-hover:text-emerald-700`}>Financial Approvals</span>
+          <Coins className="w-5 h-5 shrink-0 text-emerald-700 group-hover:scale-110 transition-transform" />
+        </div>
+        <div className={`${value} text-emerald-700`}>{auditedPendingTx.length}</div>
+      </div>
+    </div>
+  );
+})()}
 
       <section className="space-y-4 text-left" aria-labelledby="executive-analytics-title">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
@@ -1851,7 +1864,7 @@ export default function ExecutiveView({
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5.5 h-5.5 text-[#D8F3DC]" />
                 <div>
-                  <h3 className="font-extrabold text-white text-sm">Mga Agi sa Asembliya ug Miting</h3>
+                  <h3 className="font-extrabold text-white text-sm">Assemblies and Meetings</h3>
                 </div>
               </div>
               <button 
