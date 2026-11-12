@@ -185,17 +185,12 @@ export default function GuestPortal({
   const boardMemberNames = resolveBoardMemberNames(users);
   const tabs: { id: 'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'; label: string; icon: typeof Sparkles }[] = [
     { id: 'home', label: t('Kinatibuk-ang Tan-aw', 'Overview'), icon: Sparkles },
-    { id: 'announcements', label: t('Mga Pahibalo', 'Announcements'), icon: Megaphone },
-    { id: 'activities', label: t('Mga Kalihokan', 'Activities'), icon: Calendar },
-    { id: 'products', label: t('Mga Produkto', 'Products'), icon: Coffee },
-    { id: 'achievements', label: t('Mga Kalampusan', 'Achievements'), icon: Trophy },
+    { id: 'announcements', label: t('Pahibalo', 'Announcements'), icon: Megaphone },
+    { id: 'activities', label: t('Kalihokan', 'Activities'), icon: Calendar },
+    { id: 'products', label: t('Produkto', 'Products'), icon: Coffee },
+    { id: 'achievements', label: t('Kalampusan', 'Achievements'), icon: Trophy },
     { id: 'history', label: t('Kasaysayan', 'History'), icon: BookOpen }
   ];
-  const priorityLabel = (priority: string) => {
-    if (priority === 'High') return t('Taas', 'High');
-    if (priority === 'Medium') return t('Kasagaran', 'Medium');
-    return t('Ubos', 'Low');
-  };
   const activityStatusLabel = (status: string) => {
     if (status === 'Completed') return t('Nahuman', 'Completed');
     if (status === 'In Progress') return t('Nagpadayon', 'In progress');
@@ -366,7 +361,6 @@ export default function GuestPortal({
                           ann.priority === 'Medium' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                           'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         }`}>
-                          {priorityLabel(ann.priority)} {t('prayoridad', 'priority')}
                         </span>
                         <span className="text-slate-500 font-semibold">{ann.datePosted}</span>
                       </div>
@@ -482,7 +476,6 @@ export default function GuestPortal({
                         ann.priority === 'Medium' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
                         'bg-emerald-100 text-emerald-900 border border-emerald-300'
                       }`}>
-                        {priorityLabel(ann.priority)} {t('prayoridad', 'priority')}
                       </span>
                       <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
