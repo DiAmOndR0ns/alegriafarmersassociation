@@ -211,6 +211,7 @@ export default function GuestPortal({
     headerText: 'text-bafa-700 font-black',
     accentText: 'text-bafa-coral-600 font-black',
     accentBg: 'bg-bafa-gold-200 text-bafa-coral-600',
+  
     primaryBtn: 'bg-bafa-700 hover:bg-bafa-800 text-white shadow-lg text-sm sm:text-base font-black px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl cursor-pointer'
   };
 

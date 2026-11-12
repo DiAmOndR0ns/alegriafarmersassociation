@@ -319,7 +319,7 @@ export default function AuthScreen({
               </div>
               <div>
                 <h1 className="text-2xl sm:text-[2rem] font-black font-display tracking-tight text-white uppercase leading-none">AFA</h1>
-                <p className="text-[10px] text-[#D9F5E3] font-bold tracking-[0.18em] uppercase mt-1">Alegria, Tuburan, Cebu</p>
+                <p className="text-[10px] text-[#D9F5E3] font-bold tracking-[0.18em] uppercase mt-1">Alegria Farmers Association</p>
               </div>
             </div>
 
