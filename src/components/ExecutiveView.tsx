@@ -707,14 +707,22 @@ export default function ExecutiveView({
   const chartHeight = (n: number) => Math.max(180, n * rowHeight + 40);
 
   // Y-axis label: truncated text, full name on hover
-  const CategoryTick = ({ x, y, payload }: any) => (
-    <g transform={`translate(${x},${y})`}>
-      <title>{payload.value}</title>
-      <text x={-6} y={0} dy={3} textAnchor="end" fill="#5D6B54" fontSize={10}>
-        {truncate(String(payload.value))}
-      </text>
-    </g>
-  );
+const CategoryTick = ({ x, y, payload }: any) => (
+  <g transform={`translate(${x},${y})`}>
+    <title>{payload.value}</title>
+    <text
+      x={0}
+      y={0}
+      dy={10}
+      textAnchor="end"
+      transform="rotate(-35)"
+      fill="#5D6B54"
+      fontSize={10}
+    >
+      {truncate(String(payload.value), 16)}
+    </text>
+  </g>
+);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -772,57 +780,58 @@ export default function ExecutiveView({
       </div>
 
       {/* Livestock expenses */}
-      <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
-        <h4 className="text-sm font-extrabold text-[#1B4332] mb-3">Livestock expenses</h4>
-        {livestockExpenseData.length ? (
-          <div className="w-full" style={{ height: chartHeight(livestockExpenseData.length) }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={livestockExpenseData}
-                layout="vertical"
-                margin={{ top: 4, right: 56, left: 4, bottom: 4 }}
-                barCategoryGap="25%"
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, 'dataMax']}
-                  tick={{ fill: '#5D6B54', fontSize: 10 }}
-                  tickFormatter={(v: number) => `₱${compact(v)}`}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={130}
-                  tick={<CategoryTick />}
-                  interval={0}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  cursor={{ fill: '#FAF9F5' }}
-                  formatter={(v) => [peso(Number(v)), 'Livestock expenses']}
-                  contentStyle={{ borderRadius: 12, border: '1px solid #E9E4D9', fontSize: 12 }}
-                />
-                <Bar dataKey="expenses" name="Livestock expenses" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={18}>
-                  <LabelList
-                    dataKey="expenses"
-                    position="right"
-                    formatter={(v: unknown) => `₱${compact(Number(v) || 0)}`}
-                    style={{ fill: '#1B4332', fontSize: 10, fontWeight: 700 }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
-            No livestock expenses recorded for {analyticsYear}.
-          </p>
-        )}
+<div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
+  <h4 className="text-sm font-extrabold text-[#1B4332] mb-3">Livestock expenses</h4>
+  {livestockExpenseData.length ? (
+    <div className="w-full overflow-x-auto">
+      <div style={{ height: 320, minWidth: Math.max(320, livestockExpenseData.length * 64) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={livestockExpenseData}
+            margin={{ top: 20, right: 12, left: 0, bottom: 4 }}
+            barCategoryGap="25%"
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" vertical={false} />
+            <XAxis
+              dataKey="name"
+              interval={0}
+              height={70}
+              tick={<CategoryTick />}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              type="number"
+              width={52}
+              domain={[0, 'dataMax']}
+              tick={{ fill: '#5D6B54', fontSize: 10 }}
+              tickFormatter={(v: unknown) => `₱${compact(Number(v) || 0)}`}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              cursor={{ fill: '#FAF9F5' }}
+              formatter={(v) => [peso(Number(v)), 'Livestock expenses']}
+              contentStyle={{ borderRadius: 12, border: '1px solid #E9E4D9', fontSize: 12 }}
+            />
+            <Bar dataKey="expenses" name="Livestock expenses" fill="#8B5CF6" radius={[4, 4, 0, 0]} maxBarSize={40}>
+              <LabelList
+                dataKey="expenses"
+                position="top"
+                formatter={(v: unknown) => `₱${compact(Number(v) || 0)}`}
+                style={{ fill: '#1B4332', fontSize: 10, fontWeight: 700 }}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
+    </div>
+  ) : (
+    <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
+      No livestock expenses recorded for {analyticsYear}.
+    </p>
+  )}
+</div>
     </div>
   );
 })()}
