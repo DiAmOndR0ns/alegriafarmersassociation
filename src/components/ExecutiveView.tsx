@@ -576,15 +576,35 @@ export default function ExecutiveView({
       </div>
 
       {/* Association Funds */}
-      <div className={card}>
-        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
-          <span className={label}>All Registered Fund Balances</span>
-          <Coins className="w-5 h-5 shrink-0 text-[#E65100]" />
-        </div>
-        <div className={`${value} text-[#1B4332] tracking-tight`}>
-          PHP {totalRegisteredFundBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-        </div>
+{(() => {
+  const fundNumber = totalRegisteredFundBalance.toLocaleString('en-US', {
+    maximumFractionDigits: 0,
+  });
+
+  // Shrink the font as the number gets longer so it never gets cut off
+  const fundSize =
+    fundNumber.length <= 7 ? "text-2xl" :
+    fundNumber.length <= 9 ? "text-xl" :
+    fundNumber.length <= 11 ? "text-lg" :
+    "text-base";
+
+  return (
+    <div className={card} title={`PHP ${fundNumber}`}>
+      <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+        <span className="text-[10px] font-bold uppercase tracking-wider leading-tight line-clamp-2">
+          Fund Balances
+        </span>
+        <Coins className="w-5 h-5 shrink-0 text-[#E65100]" />
       </div>
+      <div className="flex items-baseline gap-1 whitespace-nowrap text-[#1B4332]">
+        <span className="text-xs font-bold text-[#5D6B54]">PHP</span>
+        <span className={`${fundSize} font-black font-display tracking-tight tabular-nums`}>
+          {fundNumber}
+        </span>
+      </div>
+    </div>
+  );
+})()}
 
       {/* Assemblies */}
       <div
