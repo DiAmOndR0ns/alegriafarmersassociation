@@ -192,9 +192,9 @@ export default function GuestPortal({
     { id: 'history', label: t('Kasaysayan', 'History'), icon: BookOpen }
   ];
   const priorityLabel = (priority: string) => {
-    if (priority === 'High') return t('High');
-    if (priority === 'Medium') return t('Medium');
-    return t('Low');
+    if (priority === 'High') return t('High', 'High');
+    if (priority === 'Medium') return t('Medium', 'Medium');
+    return t('Low', 'Low');
   };
   const activityStatusLabel = (status: string) => {
     if (status === 'Completed') return t('Nahuman', 'Completed');
