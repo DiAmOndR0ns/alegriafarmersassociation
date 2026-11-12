@@ -814,7 +814,6 @@ const CategoryTick = ({ x, y, payload }: any) => (
                   <span className="text-xs font-bold text-[#5D6B54] tabular-nums shrink-0">
                     PHP {fmt(item.expenses)}
                     <span className="ml-1 text-[10px] font-semibold text-[#85947E]">
-                      · {share.toFixed(0)}%
                     </span>
                   </span>
                 </div>
@@ -844,7 +843,6 @@ const CategoryTick = ({ x, y, payload }: any) => (
           <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
             <div>
               <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
-              <p className="text-[11px] text-[#5D6B54]">Balances for all registered funds, with recorded income and expenses by source.</p>
             </div>
             <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
               {funds.length} registered · {fundSourceAnalytics.length} sources tracked
