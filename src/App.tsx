@@ -3359,10 +3359,9 @@ export default function App() {
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <h1 className="text-base sm:text-lg font-black tracking-tight text-white uppercase font-display break-words">Alegria Farmers Association</h1>
                 <span className="text-[9px] sm:text-[10px] bg-bafa-600 text-bafa-100 px-2 py-0.5 rounded-full border border-bafa-500 font-black font-mono shrink-0">
-                  Barangay Portal
+                  AFA Portal
                 </span>
               </div>
-              <p className="text-[11px] sm:text-xs text-[#D8F3DC]/80 mt-0.5 font-medium truncate">Tuburan, Cebu Province • Official Officer Suite</p>
             </div>
           </div>
 
