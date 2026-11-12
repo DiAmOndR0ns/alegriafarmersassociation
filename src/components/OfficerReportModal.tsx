@@ -1027,13 +1027,8 @@ export default function OfficerReportModal({
             </div>
             <div className="min-w-0">
               <h2 className="text-sm sm:text-base font-black text-[#1B4332] uppercase tracking-wider flex flex-wrap items-center gap-2">
-                <span className="truncate">{isPresident ? "President's Executive Summary & Export Center" : `${currentRole.replace('_', ' ')} Official Report Center`}</span>
+                <span className="truncate">{isPresident ? "Executive Summary & Export" : `${currentRole.replace('_', ' ')} Official Report Center`}</span>
               </h2>
-              <p className="text-xs text-[#4A5F57] font-medium truncate">
-                {isPresident
-                  ? "Generate only the President's executive summary. Each other officer exports their own assigned department report."
-                  : `Generate, the official ${currentRole.replace('_', ' ')} department report.`}
-              </p>
             </div>
           </div>
           <button
@@ -1048,7 +1043,7 @@ export default function OfficerReportModal({
         {/* MODAL BODY */}
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
           {/* ROLE ACCESS BANNER */}
-          {!isPresident ? (
+          {!isPresident && (
             <div className="bg-[#F0EDE7] border border-[#D5CFC1] p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
                 <ShieldCheck className="w-5 h-5 text-[#1B4332] shrink-0" />
@@ -1061,21 +1056,6 @@ export default function OfficerReportModal({
               </div>
               <span className="bg-[#1B4332] text-[#D8F3DC] font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#2D6A4F] font-bold shrink-0">
                 {currentRole} Report Only
-              </span>
-            </div>
-          ) : (
-            <div className="bg-[#F0EDE7] border border-[#D5CFC1] p-3.5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <FileText className="w-5 h-5 text-[#1B4332] shrink-0" />
-                <div className="min-w-0">
-                  <span className="font-extrabold text-[#1B4332] block">President's Executive Report Access</span>
-                  <p className="text-[11px] text-[#3A4A42]">
-                    The President can export only the President's executive summary. Department reports are available to their assigned officers.
-                  </p>
-                </div>
-              </div>
-              <span className="bg-[#1B4332] text-[#D8F3DC] font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#2D6A4F] font-bold shrink-0">
-                President Mode
               </span>
             </div>
           )}
