@@ -45,6 +45,7 @@ import {
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
   ChevronLeft, ChevronRight, Database
 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 
 export function mergeSyncRecordsById<T extends { id: string }>(
   remoteRecords: T[],
@@ -4009,6 +4010,7 @@ export default function App() {
         onConfirm={executeClearLocalCache}
       />
 
+      <Analytics />
     </div>
   );
 }
