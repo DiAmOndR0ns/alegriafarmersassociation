@@ -804,17 +804,6 @@ export default function GuestPortal({
                 </p>
               )}
             </div>
-
-
-            {/* Buying Note Card */}
-            <div className="bg-[#EAF4EC] rounded-2xl p-4 sm:p-5 text-center space-y-1.5 max-w-3xl mx-auto min-w-0">
-              <h4 className="text-base sm:text-lg font-black text-[#1B4332] font-display break-words">{t('Gusto ba mo-order o mo-abang?', 'Would you like to order or rent?')}</h4>
-              <p className="text-sm sm:text-base text-slate-800 font-semibold leading-relaxed break-words">
-                {en
-                  ? `Contact or visit President ${resolveOfficerName(users, 'President')} or any AFA officer to place an order or book a rental.`
-                  : `Kontaka o bisitaha si Presidente ${resolveOfficerName(users, 'President')} o bisan kinsa nga Opisyales sa AFA aron mo-order o mo-book og abang.`}
-              </p>
-            </div>
           </div>
         )}
 
@@ -865,9 +854,6 @@ export default function GuestPortal({
               </button>
 
               <div className="flex items-start gap-3 sm:gap-4 pr-10 min-w-0">
-                <div className="p-2.5 sm:p-3 rounded-2xl bg-white/15 text-white shrink-0">
-                  {selectedProductModal.category?.includes('Rental') ? <Boxes className="w-6 h-6" /> : <Coffee className="w-6 h-6" />}
-                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                     <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-100 border border-emerald-300/30">
@@ -878,9 +864,6 @@ export default function GuestPortal({
                     </span>
                   </div>
                   <h3 id="product-dialog-title" className="text-lg sm:text-xl font-black leading-tight break-words">{selectedProductModal.name}</h3>
-                  {selectedProductModal.cebName && (
-                    <p className="text-xs sm:text-sm text-emerald-100/80 mt-0.5 break-words">{selectedProductModal.cebName}</p>
-                  )}
                 </div>
               </div>
             </div>
@@ -892,7 +875,7 @@ export default function GuestPortal({
               <div className="grid grid-cols-2 gap-3 items-stretch">
                 <div className="rounded-2xl border-2 border-[#F0D5B4] bg-[#FFF7EC] px-4 py-3 flex flex-col justify-between">
                   <span className="block text-[10px] font-black uppercase tracking-wider text-[#8A5A1E]">
-                    {t('Presyo / abang', 'Price / rental rate')}
+                    {t('Presyo', 'Price')}
                   </span>
                   <span className="block text-xl sm:text-2xl font-black font-mono text-[#BF360C] mt-1 break-words leading-tight">
                     {typeof selectedProductModal.price === 'number'
@@ -963,15 +946,6 @@ export default function GuestPortal({
                     </a>
                   )}
                 </div>
-              </div>
-
-              {/* HOW TO ORDER */}
-              <div className="rounded-2xl bg-[#EAF4EC] border-2 border-[#B7E3C4] px-4 py-3 flex items-start gap-2.5">
-                <Check className="w-4 h-4 text-[#1B4332] shrink-0 mt-0.5" />
-                <p className="text-sm font-bold text-[#1B4332] leading-relaxed">
-                  {t('Pakigkita sa opisyal sa AFA o sa Alegria Farmers Center aron mo-order o moabang.',
-                     'Contact an AFA officer or visit the Alegria Farmers Center to order or rent.')}
-                </p>
               </div>
             </div>
 
