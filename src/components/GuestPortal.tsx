@@ -366,7 +366,7 @@ export default function GuestPortal({
                           ann.priority === 'Medium' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                           'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         }`}>
-                          {priorityLabel(ann.priority)} {t('priority')}
+                          {priorityLabel(ann.priority)} {t('priority', 'priority')}
                         </span>
                         <span className="text-slate-500 font-semibold">{ann.datePosted}</span>
                       </div>
@@ -482,7 +482,7 @@ export default function GuestPortal({
                         ann.priority === 'Medium' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
                         'bg-emerald-100 text-emerald-900 border border-emerald-300'
                       }`}>
-                        {priorityLabel(ann.priority)} {t('priority')}
+                        {priorityLabel(ann.priority)} {t('priority', 'priority')}
                       </span>
                       <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
