@@ -14,7 +14,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import {
   Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, LabelList
 } from 'recharts';
-
+import { ChevronDown } from 'lucide-react';
 
 interface ExecutiveViewProps {
   members: Member[];
@@ -99,6 +99,8 @@ export default function ExecutiveView({
   const adminTasksCloseRef = React.useRef<HTMLButtonElement>(null);
   const adminPasswordInputRef = React.useRef<HTMLInputElement>(null);
   const adminTasksWasOpenRef = React.useRef(false);
+  const [fundSourcesOpen, setFundSourcesOpen] = useState(false);
+
 
   useEffect(() => {
     if (showAdminTasksModal) {
@@ -839,42 +841,64 @@ const CategoryTick = ({ x, y, payload }: any) => (
   );
 })()}
 
-        <div className="bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
-          <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
-            <div>
-              <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
-            </div>
-            <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
-              {funds.length} registered · {fundSourceAnalytics.length} sources tracked
-            </span>
-          </div>
-          {fundSourceAnalytics.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {fundSourceAnalytics.map(source => (
-                <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
-                  <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
-                  {source.registered ? (
-                    <>
-                      <div className="text-lg font-black font-mono text-[#1B4332]">PHP {(source.balance || 0).toLocaleString('en-US')}</div>
-                      <p className="text-[10px] text-[#5D6B54]">Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}</p>
-                    </>
-                  ) : (
-                    <div className="text-sm font-black font-mono text-[#5D6B54]">
-                      Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
-                    <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
-                    <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
+  <div className="bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
+  <button
+    type="button"
+    onClick={() => setFundSourcesOpen(o => !o)}
+    aria-expanded={fundSourcesOpen}
+    aria-controls="fund-sources-panel"
+    className="w-full flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors"
+  >
+    <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
+        {funds.length} registered · {fundSourceAnalytics.length} sources tracked
+      </span>
+      <ChevronDown
+        size={16}
+        className={`text-[#1B4332] transition-transform duration-300 ${fundSourcesOpen ? 'rotate-180' : ''}`}
+      />
+    </div>
+  </button>
+
+  <div
+    id="fund-sources-panel"
+    className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+      fundSourcesOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+    }`}
+  >
+    <div className="overflow-hidden">
+      <div className="px-4 sm:px-5 pb-4 sm:pb-5">
+        {fundSourceAnalytics.length ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {fundSourceAnalytics.map(source => (
+              <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
+                <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
+                {source.registered ? (
+                  <>
+                    <div className="text-lg font-black font-mono text-[#1B4332]">PHP {(source.balance || 0).toLocaleString('en-US')}</div>
+                    <p className="text-[10px] text-[#5D6B54]">Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}</p>
+                  </>
+                ) : (
+                  <div className="text-sm font-black font-mono text-[#5D6B54]">
+                    Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
                   </div>
+                )}
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                  <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
+                  <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="py-8 text-center text-xs font-semibold text-[#85947E]">No registered fund sources or attributed transactions yet.</p>
-          )}
-        </div>
-      </section>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="py-8 text-center text-xs font-semibold text-[#85947E]">No registered fund sources or attributed transactions yet.</p>
+        )}
+      </div>
+    </div>
+  </div>
+</div>
+</section>
 
       {showAdminTasksModal && (
         <div
