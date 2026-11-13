@@ -100,6 +100,7 @@ export default function ExecutiveView({
   const adminPasswordInputRef = React.useRef<HTMLInputElement>(null);
   const adminTasksWasOpenRef = React.useRef(false);
   const [fundSourcesOpen, setFundSourcesOpen] = useState(false);
+  const [livestockOpen, setLivestockOpen] = useState(false);
 
 
   useEffect(() => {
@@ -783,121 +784,204 @@ const CategoryTick = ({ x, y, payload }: any) => (
       
 {/* Livestock expenses */}
 {(() => {
+  const PREVIEW_COUNT = 2;
   const sorted = [...livestockExpenseData].sort((a, b) => b.expenses - a.expenses);
   const total = sorted.reduce((sum, d) => sum + d.expenses, 0);
   const max = sorted[0]?.expenses || 1;
   const fmt = (v: number) => Number(v).toLocaleString('en-US');
 
+  const preview = sorted.slice(0, PREVIEW_COUNT);
+  const rest = sorted.slice(PREVIEW_COUNT);
+
+  const renderRow = (item: (typeof sorted)[number]) => {
+    const share = total ? (item.expenses / total) * 100 : 0;
+    return (
+      <li key={item.name} title={`${item.name}: PHP ${fmt(item.expenses)}`}>
+        <div className="flex items-baseline justify-between gap-3 mb-1">
+          <span className="text-xs font-bold text-[#1B4332] truncate">{item.name}</span>
+          <span className="text-xs font-bold text-[#5D6B54] tabular-nums shrink-0">
+            PHP {fmt(item.expenses)}
+            <span className="ml-1 text-[10px] font-semibold text-[#85947E]">
+              {share.toFixed(1)}%
+            </span>
+          </span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-[#F1EDE3] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-[#8B5CF6]"
+            style={{ width: `${(item.expenses / max) * 100}%` }}
+          />
+        </div>
+      </li>
+    );
+  };
+
   return (
-    <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3 mb-4">
+    <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
+      <button
+        type="button"
+        onClick={() => rest.length && setLivestockOpen(o => !o)}
+        aria-expanded={livestockOpen}
+        aria-controls="livestock-expenses-panel"
+        disabled={!rest.length}
+        className="w-full flex items-start justify-between gap-3 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors disabled:cursor-default disabled:hover:bg-transparent"
+      >
         <div className="min-w-0">
           <h4 className="text-sm font-extrabold text-[#1B4332]">Livestock expenses</h4>
           <p className="text-[11px] font-semibold text-[#85947E]">
             {analyticsYear} · {sorted.length} {sorted.length === 1 ? 'category' : 'categories'}
           </p>
         </div>
-        <div className="text-right shrink-0">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-[#5D6B54]">Total</div>
-          <div className="text-lg font-black font-display text-[#1B4332] tabular-nums">
-            PHP {fmt(total)}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-right">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#5D6B54]">Total</div>
+            <div className="text-lg font-black font-display text-[#1B4332] tabular-nums">
+              PHP {fmt(total)}
+            </div>
           </div>
+          {rest.length > 0 && (
+            <ChevronDown
+              size={16}
+              className={`text-[#1B4332] transition-transform duration-300 ${livestockOpen ? 'rotate-180' : ''}`}
+            />
+          )}
         </div>
-      </div>
+      </button>
 
-      {sorted.length ? (
-        <ul className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
-          {sorted.map((item) => {
-            const share = total ? (item.expenses / total) * 100 : 0;
-            return (
-              <li key={item.name} title={`${item.name}: PHP ${fmt(item.expenses)}`}>
-                <div className="flex items-baseline justify-between gap-3 mb-1">
-                  <span className="text-xs font-bold text-[#1B4332] truncate">{item.name}</span>
-                  <span className="text-xs font-bold text-[#5D6B54] tabular-nums shrink-0">
-                    PHP {fmt(item.expenses)}
-                    <span className="ml-1 text-[10px] font-semibold text-[#85947E]">
-                    </span>
-                  </span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-[#F1EDE3] overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-[#8B5CF6]"
-                    style={{ width: `${(item.expenses / max) * 100}%` }}
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
-          No livestock expenses recorded for {analyticsYear}.
-        </p>
-      )}
-    </div>
-  );
-})()}
-    </div>
-  );
-})()}
+      <div id="livestock-expenses-panel" className="px-4 sm:px-5 pb-4 sm:pb-5">
+        {sorted.length ? (
+          <>
+            <ul className="space-y-3">{preview.map(renderRow)}</ul>
 
-  <div className="bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
-  <button
-    type="button"
-    onClick={() => setFundSourcesOpen(o => !o)}
-    aria-expanded={fundSourcesOpen}
-    aria-controls="fund-sources-panel"
-    className="w-full flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors"
-  >
-    <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
-        {funds.length} registered · {fundSourceAnalytics.length} sources tracked
-      </span>
-      <ChevronDown
-        size={16}
-        className={`text-[#1B4332] transition-transform duration-300 ${fundSourcesOpen ? 'rotate-180' : ''}`}
-      />
-    </div>
-  </button>
-
-  <div
-    id="fund-sources-panel"
-    className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-      fundSourcesOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-    }`}
-  >
-    <div className="overflow-hidden">
-      <div className="px-4 sm:px-5 pb-4 sm:pb-5">
-        {fundSourceAnalytics.length ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {fundSourceAnalytics.map(source => (
-              <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
-                <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
-                {source.registered ? (
-                  <>
-                    <div className="text-lg font-black font-mono text-[#1B4332]">PHP {(source.balance || 0).toLocaleString('en-US')}</div>
-                    <p className="text-[10px] text-[#5D6B54]">Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}</p>
-                  </>
-                ) : (
-                  <div className="text-sm font-black font-mono text-[#5D6B54]">
-                    Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
-                  <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
-                  <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
+            {rest.length > 0 && (
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                  livestockOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <ul className="space-y-3 pt-3 max-h-[320px] overflow-y-auto pr-1">
+                    {rest.map(renderRow)}
+                  </ul>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+
+            {rest.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setLivestockOpen(o => !o)}
+                className="mt-3 text-[11px] font-bold text-[#5D6B54] hover:text-[#1B4332] transition-colors"
+              >
+                {livestockOpen ? 'Show less' : `Show ${rest.length} more`}
+              </button>
+            )}
+          </>
         ) : (
-          <p className="py-8 text-center text-xs font-semibold text-[#85947E]">No registered fund sources or attributed transactions yet.</p>
+          <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
+            No livestock expenses recorded for {analyticsYear}.
+          </p>
         )}
       </div>
     </div>
-  </div>
-</div>
+  );
+})()}
+    </div>
+  );
+})()}
+
+{/* Registered fund sources */}
+{(() => {
+  const PREVIEW_COUNT = 2;
+  const preview = fundSourceAnalytics.slice(0, PREVIEW_COUNT);
+  const rest = fundSourceAnalytics.slice(PREVIEW_COUNT);
+
+  const renderSource = (source: (typeof fundSourceAnalytics)[number]) => (
+    <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
+      <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
+      {source.registered ? (
+        <>
+          <div className="text-lg font-black font-mono text-[#1B4332]">
+            PHP {(source.balance || 0).toLocaleString('en-US')}
+          </div>
+          <p className="text-[10px] text-[#5D6B54]">
+            Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}
+          </p>
+        </>
+      ) : (
+        <div className="text-sm font-black font-mono text-[#5D6B54]">
+          Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+        <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
+        <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
+      </div>
+    </div>
+  );
+
+  const gridClass = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3';
+
+  return (
+    <div className="bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
+      <button
+        type="button"
+        onClick={() => rest.length && setFundSourcesOpen(o => !o)}
+        aria-expanded={fundSourcesOpen}
+        aria-controls="fund-sources-panel"
+        disabled={!rest.length}
+        className="w-full flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
+            {funds.length} registered · {fundSourceAnalytics.length} sources tracked
+          </span>
+          {rest.length > 0 && (
+            <ChevronDown
+              size={16}
+              className={`text-[#1B4332] transition-transform duration-300 ${fundSourcesOpen ? 'rotate-180' : ''}`}
+            />
+          )}
+        </div>
+      </button>
+
+      <div id="fund-sources-panel" className="px-4 sm:px-5 pb-4 sm:pb-5">
+        {fundSourceAnalytics.length ? (
+          <>
+            <div className={gridClass}>{preview.map(renderSource)}</div>
+
+            {rest.length > 0 && (
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                  fundSourcesOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <div className={`${gridClass} pt-3`}>{rest.map(renderSource)}</div>
+                </div>
+              </div>
+            )}
+
+            {rest.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setFundSourcesOpen(o => !o)}
+                className="mt-3 text-[11px] font-bold text-[#5D6B54] hover:text-[#1B4332] transition-colors"
+              >
+                {fundSourcesOpen ? 'Show less' : `Show ${rest.length} more`}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="py-8 text-center text-xs font-semibold text-[#85947E]">
+            No registered fund sources or attributed transactions yet.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+})()}
 </section>
 
       {showAdminTasksModal && (
