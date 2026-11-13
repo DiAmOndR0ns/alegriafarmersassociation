@@ -1002,7 +1002,6 @@ const CategoryTick = ({ x, y, payload }: any) => (
                   <ShieldAlert className="w-5 h-5 text-[#D8F3DC] shrink-0" />
                   <span>Admin Tasks</span>
                 </h3>
-                <p className="text-xs text-[#D8F3DC]/80 mt-1">Officer governance, security operations, and system backups</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {isAdminUnlocked && currentRole === 'President' && onDownloadBackup && (
@@ -1059,7 +1058,7 @@ const CategoryTick = ({ x, y, payload }: any) => (
             <div>
               <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
                 <ShieldAlert className="w-5.5 h-5.5 text-[#1B4332]" />
-                <span>Executive Admin Desk — Officer Governance & Security Operations</span>
+                <span>Admin Desk</span>
               </h3>
             </div>
             <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
@@ -1089,10 +1088,6 @@ const CategoryTick = ({ x, y, payload }: any) => (
                   {showAddOfficerForm ? 'Cancel' : '+ Add Officer Account'}
                 </button>
               )}
-              <div className="inline-flex items-center gap-1.5 bg-[#EAF4EC] border border-[#2D6A4F]/30 text-[#1B4332] px-3 py-1 rounded-full text-xs font-bold shrink-0">
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Auto-Sync Active</span>
-              </div>
             </div>
           </div>
 
@@ -1830,26 +1825,34 @@ const CategoryTick = ({ x, y, payload }: any) => (
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+        {/* Horizontal log rows */}
+        <div className="flex flex-col gap-1.5 max-h-[360px] overflow-y-auto pr-1">
           {filteredLogs.length > 0 ? (
             filteredLogs.map((log) => (
               <div
                 key={log.id}
-                className="text-xs bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-2 text-left space-y-0.5 transition-all hover:border-[#85947E]"
+                title={log.details}
+                className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-1.5 text-left transition-all hover:border-[#85947E] flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-0.5"
               >
-                <div className="flex justify-between items-center gap-2 text-[9px] text-[#85947E] font-semibold">
-                  <span className="flex items-center gap-1 font-mono">
-                    <Clock className="w-2.5 h-2.5" />
-                    {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  <span className="bg-[#EAF4EC] text-[#1B4332] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0">
-                    {log.role.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="text-[11px] font-extrabold text-[#2D3A22] truncate">
+                {/* Timestamp */}
+                <span className="flex items-center gap-1 font-mono text-[9px] text-[#85947E] font-semibold shrink-0 sm:w-[135px]">
+                  <Clock className="w-2.5 h-2.5 shrink-0" />
+                  {new Date(log.timestamp).toLocaleDateString()}{' '}
+                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+
+                {/* Role badge */}
+                <span className="bg-[#EAF4EC] text-[#1B4332] text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0 sm:w-[84px] sm:text-center truncate">
+                  {log.role.replace('_', ' ')}
+                </span>
+
+                {/* User • action */}
+                <span className="text-[11px] font-extrabold text-[#2D3A22] truncate min-w-0 sm:w-[190px] sm:shrink-0">
                   {log.user} • <span className="text-[#2E7D32]">{log.action}</span>
-                </div>
-                <p className="text-[#5D6B54] leading-snug text-[10px] font-sans line-clamp-2 break-words">
+                </span>
+
+                {/* Details */}
+                <p className="text-[#5D6B54] text-[10px] font-sans leading-snug break-words w-full sm:w-auto sm:flex-1 sm:min-w-0 line-clamp-2 sm:line-clamp-1">
                   {log.details}
                 </p>
               </div>
