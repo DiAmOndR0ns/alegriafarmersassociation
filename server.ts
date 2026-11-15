@@ -18,6 +18,8 @@ import {
   loginHandler,
   logoutHandler,
   mfaConfirmHandler,
+  mfaEnrollHandler,
+  mfaResetHandler,
   passwordChangeHandler,
   passwordResetHandler,
   requireAuthenticated,
@@ -30,10 +32,35 @@ dotenv.config();
 export async function createApp() {
   const app = express();
 
+  app.disable('x-powered-by');
+
+  // Baseline response headers. The SPA has no inline scripts of its own, and the
+  // Guest portal loads images from arbitrary URLs, so img-src stays open while
+  // scripts and frames remain self-only.
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'same-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; " +
+        "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    );
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+  });
+
   app.use(express.json({ limit: '15mb' }));
 
   app.post("/api/auth/login", loginHandler);
+  app.post("/api/auth/mfa/enroll", mfaEnrollHandler);
   app.post("/api/auth/mfa/confirm", mfaConfirmHandler);
+  app.post("/api/auth/mfa/reset", mfaResetHandler);
   app.get("/api/auth/session", sessionHandler);
   app.post("/api/auth/logout", logoutHandler);
   app.post("/api/auth/bootstrap", bootstrapHandler);
@@ -118,11 +145,16 @@ export async function createApp() {
         message: `Connected to ${provider} (${result.rows[0]?.db_name || 'postgres'}) — ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`,
       });
     } catch (err: any) {
-      const errMsg = err?.message || 'Connection failed';
+      // Public health check: log the driver error, never return it to the caller.
+      const errMsg = String(err?.message || '');
+      console.error('[DB Status] Connection failure:', errMsg);
+      let reason = 'the server could not open a connection';
       let helpfulTip = '';
       if (errMsg.includes('password authentication failed')) {
+        reason = 'the database rejected the stored credentials';
         helpfulTip = ' Password incorrect. Reset your database password in Supabase > Project Settings > Database, update DATABASE_URL in Vercel, and Redeploy.';
       } else if (errMsg.includes('timed out') || errMsg.includes('ETIMEDOUT')) {
+        reason = 'the connection timed out';
         helpfulTip = ' If your Supabase project was paused due to inactivity, open your Supabase dashboard and click "Restore project". Also ensure you use the Transaction Pooler (port 6543).';
       }
 
@@ -131,8 +163,7 @@ export async function createApp() {
         configured: true,
         storageMode: 'local',
         provider: 'Local',
-        error: errMsg,
-        message: `Failed to reach Supabase, so the app is running on local device storage until the connection is restored: ${errMsg}.${helpfulTip}`,
+        message: `Failed to reach Supabase because ${reason}, so the app is running on local device storage until the connection is restored.${helpfulTip}`,
       });
     }
   });
@@ -142,6 +173,17 @@ export async function createApp() {
   app.post("/api/sync/push", pushHandler);
   app.post(["/api/db/delete", "/api/sync/delete"], deleteHandler);
   app.delete("/api/db/:entity/:id", deleteHandler);
+
+  // Any error express/middleware passes to next() must not leak a stack trace.
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (res.headersSent) return next(err);
+    const status = Number(err?.status || err?.statusCode) || 500;
+    if (status >= 500) console.error('[Unhandled request error]', err?.message || err);
+    res.status(status >= 400 && status < 600 ? status : 500).json({
+      success: false,
+      message: status === 413 ? 'Request body exceeds the allowed limit.' : 'The request could not be completed.'
+    });
+  });
 
 
   // Vite middleware for development vs static serve for production
@@ -168,6 +210,12 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`BAFA Express server listening on http://0.0.0.0:${PORT}`);
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+      console.warn('[Security] SESSION_SECRET is missing or shorter than 32 characters; set a strong value in .env.local.');
+    }
+    if (process.env.NODE_ENV !== 'production' && !process.env.APP_ORIGIN) {
+      console.warn('[Security] APP_ORIGIN is not set; cross-origin checks fall back to the Host header.');
+    }
   });
 }
 

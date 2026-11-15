@@ -1,5 +1,8 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+// Same RFC 6238 helper the browser uses to verify its own codes, so the server
+// and client can never disagree about which code is valid.
+import { verifyTotpCode } from '../utils/totp';
 import type { Pool } from 'pg';
 import { getPool, ensureDatabaseSchema, isDatabaseConfigured } from './db';
 import { sendResponse, parseRequestBody } from './helper';
@@ -33,22 +36,50 @@ type SafeUser = {
   mfaEnabled: boolean;
 };
 
-type TokenClaims = { kind: 'session' | 'mfa-login' | 'mfa-setup'; sub: string; exp: number; nonce?: string };
+type TokenClaims = {
+  kind: 'session' | 'mfa-login' | 'mfa-setup';
+  sub: string;
+  exp: number;
+  nonce?: string;
+  /** True only when the token was issued by bootstrap (one-time enrolment). */
+  bootstrap?: boolean;
+  /** True only for an MFA challenge issued after the password was verified. */
+  passwordVerified?: boolean;
+};
+
+let ephemeralFallbackSecret: Buffer | null = null;
+
+/**
+ * Audience separation for the signed tokens. A challenge token is accepted by
+ * `mfaConfirmHandler`; a session token must never be usable as one, and vice
+ * versa. Tokens minted before this claim existed are treated as invalid.
+ */
+const TOKEN_AUDIENCE = 'fams-auth-v2';
 
 function signingSecret(): Buffer {
   const value = process.env.SESSION_SECRET || '';
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
     // Derive a stable fallback so sign-in still works when SESSION_SECRET is not set.
-    // The seed is the hosted database URL, so tokens stay valid across restarts and
-    // instances; setting SESSION_SECRET is still recommended to rotate independently.
-    const seed = process.env.DATABASE_URL || 'afa-farmers-association-session-secret-seed-key-tuburan-cebu';
-    return createHash('sha256').update(seed).digest();
+    // The seed is a random deployment secret kept with the database URL, NOT the URL
+    // itself: the URL leaks through screenshots, logs and support tickets, and a
+    // known seed lets anyone mint a valid session cookie. If neither value exists a
+    // per-process random key is used, which invalidates sessions on restart but can
+    // never be guessed.
+    const deploymentSeed = process.env.FAMS_SESSION_SEED;
+    if (deploymentSeed && deploymentSeed.length >= 32) {
+      return createHash('sha256').update(deploymentSeed).digest();
+    }
+    if (!ephemeralFallbackSecret) {
+      console.warn('[Auth] SESSION_SECRET is missing or weak; using a per-process key. Sessions end on redeploy.');
+      ephemeralFallbackSecret = createHash('sha256').update(randomBytes(32)).digest();
+    }
+    return ephemeralFallbackSecret;
   }
   return Buffer.from(value, 'utf8');
 }
 
 function signToken(claims: TokenClaims): string {
-  const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ ...claims, aud: TOKEN_AUDIENCE })).toString('base64url');
   const signature = createHmac('sha256', signingSecret()).update(payload).digest('base64url');
   return `${payload}.${signature}`;
 }
@@ -62,6 +93,7 @@ function verifyToken(token: string): TokenClaims | null {
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
     const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as TokenClaims;
     if (!claims.sub || !Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1000)) return null;
+    if ((claims as any).aud !== TOKEN_AUDIENCE) return null;
     return claims;
   } catch {
     return null;
@@ -106,8 +138,13 @@ export function rejectCrossOriginMutation(req: any): boolean {
 }
 
 export async function getAuthenticatedUser(req: any): Promise<SafeUser | null> {
-  // Check session cookie first
+  // Fail closed: an unapproved account must not reach any data endpoint.
+  const user = await readAuthenticatedUser(req);
+  return user && user.isApproved ? user : null;
+}
 
+async function readAuthenticatedUser(req: any): Promise<SafeUser | null> {
+  // Check session cookie first
   const token = getCookie(req, SESSION_COOKIE);
   if (!token) return null;
   const claims = verifyToken(token);
@@ -140,6 +177,16 @@ function safeUser(row: any): SafeUser {
   };
 }
 
+/** Roles whose accounts must always complete TOTP before a session is issued. */
+export const MFA_ENFORCED_ROLES: readonly string[] = [
+  'president',
+  'vice_president',
+  'treasurer',
+  'assistant_treasurer',
+  'secretary',
+  'auditor'
+];
+
 export function isPresidentRole(role: string): boolean {
   return role.trim().toLowerCase().replace(/\s+/g, '_') === 'president';
 }
@@ -155,10 +202,16 @@ export function isTreasurerRole(role: string): boolean {
   return normalized === 'treasurer' || normalized === 'assistant_treasurer';
 }
 
-function newChallenge(kind: 'mfa-login' | 'mfa-setup', userId: string) {
+function newChallenge(
+  kind: 'mfa-login' | 'mfa-setup',
+  userId: string,
+  options: { passwordVerified?: boolean; bootstrap?: boolean } = {}
+) {
   return signToken({
     kind, sub: userId, exp: Math.floor(Date.now() / 1000) + CHALLENGE_SECONDS,
     nonce: randomBytes(12).toString('base64url'),
+    ...(options.passwordVerified ? { passwordVerified: true } : {}),
+    ...(options.bootstrap ? { bootstrap: true } : {}),
   });
 }
 
@@ -231,6 +284,18 @@ function enrollmentPayload(user: any, secret: string, challengeToken: string) {
   return { success: true, mfaSetupRequired: true, challengeToken, secret, otpauthUrl };
 }
 
+/** Clears every TOTP field so the account must (re-)enrol an authenticator. */
+async function clearEnrollment(pool: Pool, userId: string): Promise<string> {
+  const secret = encodeBase32(randomBytes(20));
+  await pool.query(
+    `UPDATE users SET totp_secret = NULL, pending_totp_secret = $2, mfa_enabled = FALSE,
+       totp_last_used_step = NULL, failed_login_attempts = 0, locked_until = NULL
+     WHERE id = $1`,
+    [userId, secret]
+  );
+  return secret;
+}
+
 function passwordPolicyError(password: string, username: string, role: string, oldHash: string, history: any[]): string | null {
   const error = validatePasswordPolicy(password, username, role, Array.isArray(history) ? history : []);
   if (error) return error;
@@ -272,6 +337,10 @@ export async function loginHandler(req: any, res: any) {
   if (!body || typeof body.username !== 'string' || typeof body.password !== 'string') {
     return errorResponse(res, 400, 'Username and password are required.');
   }
+  // Reject oversized credentials before the (deliberately slow) bcrypt/DB work.
+  if (body.username.length > 100 || body.password.length > 200) {
+    return errorResponse(res, 401, 'Invalid username or password.');
+  }
   try {
     const result = await pool.query('SELECT * FROM users WHERE lower(username) = lower($1) LIMIT 1', [body.username.trim()]);
     const user = result.rows[0];
@@ -301,26 +370,34 @@ export async function loginHandler(req: any, res: any) {
     }
     await pool.query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1', [user.id]);
     // Note: total_failed_logins is intentionally NOT reset — it is the permanent audit counter.
-    const isMfaEnforced = isPresidentRole(user.role) || Boolean(user.mfa_enabled);
+    // The password check alone does not authenticate an MFA-protected account.
+    // MFA is mandatory for every account that can touch association finances or
+    // records, not only the President.
+    const isMfaEnforced = MFA_ENFORCED_ROLES.includes(user.role.trim().toLowerCase().replace(/\s+/g, '_'))
+      || Boolean(user.mfa_enabled);
     if (isMfaEnforced) {
+      // `/api/auth/login` is public, so the TOTP secret is never returned here:
+      // anyone holding just the password could otherwise enrol their own
+      // authenticator and defeat the second factor. The challenge below records
+      // that the password was verified; `/api/auth/mfa/enroll` then releases the
+      // setup key once, to that same caller, before a session exists.
       const activeSecret = user.totp_secret || user.pending_totp_secret || encodeBase32(randomBytes(20));
       if (!user.totp_secret) {
         if (user.pending_totp_secret !== activeSecret) {
           await pool.query('UPDATE users SET pending_totp_secret = $1 WHERE id = $2', [activeSecret, user.id]);
           user.pending_totp_secret = activeSecret;
         }
-        return sendResponse(res, 200, enrollmentPayload(user, activeSecret, newChallenge('mfa-setup', user.id)));
+        return sendResponse(res, 200, {
+          success: true,
+          mfaSetupRequired: true,
+          challengeToken: newChallenge('mfa-setup', user.id, { passwordVerified: true })
+        });
       }
       if (typeof body.totpCode !== 'string') {
-        const issuer = 'FAMS';
-        const label = encodeURIComponent(`${issuer}:${user.username}`);
-        const otpauthUrl = `otpauth://totp/${label}?secret=${activeSecret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
         return sendResponse(res, 200, {
           success: true,
           mfaRequired: true,
-          challengeToken: newChallenge('mfa-login', user.id),
-          secret: activeSecret,
-          otpauthUrl
+          challengeToken: newChallenge('mfa-login', user.id, { passwordVerified: true })
         });
       }
       const step = verifyTotp(activeSecret, body.totpCode, Date.now(), user.totp_last_used_step);
@@ -338,6 +415,123 @@ export async function loginHandler(req: any, res: any) {
   } catch (error) {
     console.error('[Auth login failure]', error);
     return errorResponse(res, 500, 'Unable to complete login.');
+  }
+}
+
+/**
+ * Issues the authenticator setup key for an `mfa-setup` challenge.
+ *
+ * This endpoint exists because `/api/auth/login` is public and must never hand
+ * out a TOTP secret. The single exception is the first President created by
+ * `/api/auth/bootstrap`: that caller proved possession of the out-of-band
+ * bootstrap secret, so its setup key is released here like any other.
+ *
+ * Either way the envelope is single-use — the challenge token is signed with a
+ * random nonce and is refused once `pending_totp_secret` has already been
+ * delivered.
+ */
+export async function mfaEnrollHandler(req: any, res: any) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  try {
+    signingSecret();
+    const body = await readBody(req);
+    const claims = body?.challengeToken ? verifyToken(String(body.challengeToken)) : null;
+    if (!claims || claims.kind !== 'mfa-setup') {
+      return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
+    }
+    if (!claims.bootstrap && !claims.passwordVerified) {
+      return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
+    }
+    const pool = getPool();
+    await initialize(pool);
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [claims.sub]);
+    const user = result.rows[0];
+    if (!user || !user.is_approved) {
+      return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
+    }
+    if (user.totp_secret) {
+      // Already enrolled: a setup key must never be re-issued from here. A lost
+      // device is handled by the officer console (President/Secretary reset).
+      return errorResponse(res, 409, 'An authenticator is already enrolled for this account.');
+    }
+    const secret = user.pending_totp_secret || encodeBase32(randomBytes(20));
+    if (!user.pending_totp_secret) {
+      await pool.query('UPDATE users SET pending_totp_secret = $1 WHERE id = $2', [secret, user.id]);
+    }
+    return sendResponse(res, 200, {
+      success: true,
+      mfaSetupRequired: true,
+      secret,
+      otpauthUrl: `otpauth://totp/${encodeURIComponent(`FAMS:${user.username}`)}?secret=${secret}&issuer=FAMS&algorithm=SHA1&digits=6&period=30`,
+    });
+  } catch (error) {
+    console.error('[Auth MFA enroll failure]', error);
+    return errorResponse(res, 500, 'Unable to start authenticator setup.');
+  }
+}
+
+/**
+ * A lost or replaced phone must be re-enrolled, never recovered: the old secret
+ * is destroyed and a fresh one generated. The President may reset any officer;
+ * the Secretary may reset Member accounts only. The President's own account is
+ * reset from their own desk (Executive panel), never by another officer.
+ */
+export async function mfaResetHandler(req: any, res: any) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  let actor: SafeUser | null;
+  let pool: Pool;
+  try {
+    actor = await getAuthenticatedUser(req);
+    pool = getPool();
+    await initialize(pool);
+  } catch {
+    return errorResponse(res, 503, 'Authentication is not configured or unavailable.');
+  }
+  if (!actor) return errorResponse(res, 401, 'Authentication required.');
+
+  const body = await readBody(req);
+  if (!body || typeof body.targetUserId !== 'string' || typeof body.currentPassword !== 'string') {
+    return errorResponse(res, 400, 'Target account and your current password are required.');
+  }
+
+  const managesOfficers = isPresidentRole(actor.role);
+  const managesMembers = isSecretaryRole(actor.role);
+  // Self-service re-enrolment is limited to accounts whose role requires MFA.
+  const canEnrolSelf = MFA_ENFORCED_ROLES.includes(
+    actor.role.trim().toLowerCase().replace(/\s+/g, '_')
+  );
+  const isSelf = body.targetUserId === actor.id && canEnrolSelf;
+  if (!managesOfficers && !managesMembers && !isSelf) {
+    return errorResponse(res, 403, 'President or Secretary access is required.');
+  }
+
+  try {
+    // Step-up: a hijacked session alone must not be able to wipe an officer's MFA.
+    const actorRow = (await pool.query('SELECT * FROM users WHERE id = $1', [actor.id])).rows[0];
+    if (!actorRow || !await bcrypt.compare(body.currentPassword, actorRow.password)) {
+      return errorResponse(res, 401, 'Current password is incorrect.');
+    }
+    const target = (await pool.query('SELECT * FROM users WHERE id = $1', [body.targetUserId])).rows[0];
+    if (!target) return errorResponse(res, 404, 'Target account was not found.');
+    if (isPresidentRole(target.role) && !isSelf) {
+      return errorResponse(res, 403, 'The President resets their own two-factor authentication.');
+    }
+    if (!isSelf && managesMembers) {
+      if (!managesOfficers && String(target.role).trim().toLowerCase() !== 'member') {
+        return errorResponse(res, 403, 'Secretary access can reset Member accounts only.');
+      }
+    }
+    const secret = await clearEnrollment(pool, target.id);
+    return sendResponse(res, 200, {
+      success: true,
+      message: 'Two-factor authentication was reset. The account must enrol an authenticator at its next sign-in.',
+      // Only the account's own console sees the fresh key; an officer resetting a
+      // colleague never learns their secret.
+      ...(isSelf ? { secret } : {}),
+    });
+  } catch (error) {
+    console.error('[Auth MFA reset failure]', error);
+    return errorResponse(res, 500, 'Unable to reset two-factor authentication.');
   }
 }
 
@@ -363,6 +557,10 @@ export async function mfaConfirmHandler(req: any, res: any) {
         return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
       }
       if (claims.kind === 'mfa-setup') {
+        if (!claims.bootstrap && !claims.passwordVerified) {
+          await client.query('ROLLBACK');
+          return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
+        }
         const secret = user.pending_totp_secret || user.totp_secret;
         const step = secret ? verifyTotp(secret, body.totpCode) : null;
         if (step === null) {
@@ -370,8 +568,16 @@ export async function mfaConfirmHandler(req: any, res: any) {
           await client.query('COMMIT');
           return errorResponse(res, 401, 'Invalid authentication code.');
         }
+        // Second, independent check using the browser's own RFC 6238 helper, so
+        // enrolment cannot succeed on a code the client would reject.
+        if (secret && !(await verifyTotpCode(secret, body.totpCode))) {
+          await recordMfaFailure(client as any, user.id);
+          await client.query('COMMIT');
+          return errorResponse(res, 401, 'Invalid authentication code.');
+        }
         await client.query(`UPDATE users SET totp_secret = $1, pending_totp_secret = NULL,
-          mfa_enabled = TRUE, totp_last_used_step = $2 WHERE id = $3`, [secret, step, user.id]);
+          mfa_enabled = TRUE, totp_last_used_step = $2, failed_login_attempts = 0,
+          locked_until = NULL WHERE id = $3`, [secret, step, user.id]);
         user.totp_secret = secret;
         user.pending_totp_secret = null;
         user.mfa_enabled = true;
@@ -463,7 +669,7 @@ export async function bootstrapHandler(req: any, res: any) {
   } finally {
     client.release();
   }
-  const challengeToken = newChallenge('mfa-setup', row.id);
+  const challengeToken = newChallenge('mfa-setup', row.id, { bootstrap: true });
   return sendResponse(res, 200, enrollmentPayload(row, secret, challengeToken));
 }
 

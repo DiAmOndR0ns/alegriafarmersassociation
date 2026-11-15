@@ -139,11 +139,38 @@ export default function AuthScreen({
           return;
         }
         if (result.challengeToken) {
-          setAuthChallenge({
-            token: result.challengeToken,
-            setup: Boolean(result.mfaSetupRequired),
+          const setup = Boolean(result.mfaSetupRequired);
+          // The login response never carries a TOTP secret (it would let anyone
+          // with just the password enrol their own authenticator). For a first
+          // enrolment the setup key is fetched separately, once, with the
+          // password-verified challenge token.
+          let enrollment: { secret?: string; otpauthUrl?: string } = {
             secret: result.secret,
             otpauthUrl: result.otpauthUrl
+          };
+          if (setup) {
+            try {
+              const enrollResponse = await fetch('/api/auth/mfa/enroll', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ challengeToken: result.challengeToken })
+              });
+              const enrollResult = await enrollResponse.json();
+              if (!enrollResponse.ok || !enrollResult?.secret) {
+                toast(enrollResult?.message || 'Authenticator setup could not be started. Contact the President or Secretary.', 'error');
+                return;
+              }
+              enrollment = { secret: enrollResult.secret, otpauthUrl: enrollResult.otpauthUrl };
+            } catch {
+              toast('Authenticator setup could not reach the server. Try again when the connection is restored.', 'error');
+              return;
+            }
+          }
+          setAuthChallenge({
+            token: result.challengeToken,
+            setup,
+            secret: enrollment.secret,
+            otpauthUrl: enrollment.otpauthUrl
           });
           setMfaCode('');
           return;
@@ -436,7 +463,9 @@ export default function AuthScreen({
                   <h3 className="font-black">{authChallenge.setup ? 'Set up authenticator MFA' : 'Verify authenticator code'}</h3>
                   <p className="mt-1 text-xs leading-relaxed">
                     {authChallenge.setup
-                      ? 'Add this account to an authenticator app, then enter the current 6-digit code to complete setup.'
+                      ? authChallenge.secret
+                        ? 'Add this account to an authenticator app, then enter the current 6-digit code to complete setup.'
+                        : 'This account must first enroll an authenticator. Ask the President or Secretary to issue a fresh setup key from the officer console, then enter the current 6-digit code.'
                       : 'Enter the current 6-digit code from your authenticator app.'}
                   </p>
                   {authChallenge.secret && (

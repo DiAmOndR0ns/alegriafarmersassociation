@@ -30,6 +30,11 @@ interface ExecutiveViewProps {
   onDeleteUser?: (id: string) => void;
   onUpdateUserRole?: (id: string, newRole: OfficerRole | 'Member') => Promise<void>;
   onResetPassword?: (id: string, newPass: string, currentPassword?: string) => boolean | void | Promise<boolean | void>;
+  /**
+   * Clears an account's authenticator. The officer must re-enrol at their next
+   * sign-in; the old secret is destroyed, never recovered or displayed here.
+   */
+  onResetMfa?: (userId: string, currentPassword: string) => Promise<{ success: boolean; message?: string }>;
   onPresidentTurnover?: (
     newPresidentId: string,
     electionDate: string,
@@ -67,6 +72,7 @@ export default function ExecutiveView({
   onDeleteUser,
   onUpdateUserRole,
   onResetPassword,
+  onResetMfa,
   onPresidentTurnover,
   onOpenReportModal,
   onDownloadBackup,
@@ -203,6 +209,12 @@ export default function ExecutiveView({
   const [stepUpError, setStepUpError] = useState<string>('');
   const [lastResetCredential, setLastResetCredential] = useState<{ userId: string; password: string } | null>(null);
   const [copiedResetPassword, setCopiedResetPassword] = useState<boolean>(false);
+  // Two-factor reset (officer console action)
+  const [mfaResetTarget, setMfaResetTarget] = useState<string | null>(null);
+  const [mfaResetPassword, setMfaResetPassword] = useState<string>('');
+  const [mfaResetError, setMfaResetError] = useState<string>('');
+  const [mfaResetBusy, setMfaResetBusy] = useState<boolean>(false);
+  const [mfaResetDone, setMfaResetDone] = useState<string | null>(null);
 
   // Officer Governance & Deletion modal state
   const [officerToDelete, setOfficerToDelete] = useState<User | null>(null);
@@ -226,6 +238,11 @@ export default function ExecutiveView({
   // Authority rules:
   // Only the President (system admin) may appoint members into officer roles.
   const canAppointOfficers = currentRole === 'President';
+
+  // Roles the server enforces MFA for; only these may self-reset their authenticator.
+  const MFA_ENFORCED_ROLE_SET = new Set<string>([
+    'President', 'Vice_President', 'Treasurer', 'Assistant_Treasurer', 'Secretary', 'Auditor'
+  ]);
 
   // The President may reset another officer's password; both President and Vice President can manage credentials.
   const canResetPasswords = currentRole === 'President' || currentRole === 'Vice_President';
@@ -1192,6 +1209,80 @@ export default function ExecutiveView({
                         </form>
                       )}
 
+                      {/* Two-factor reset: confirms the acting officer's password, then
+                          destroys the target's authenticator so it re-enrols at next sign-in. */}
+                      {mfaResetTarget === officer.id && (
+                        <form
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (!onResetMfa || mfaResetBusy) return;
+                            setMfaResetBusy(true);
+                            setMfaResetError('');
+                            const result = await onResetMfa(officer.id, mfaResetPassword);
+                            setMfaResetBusy(false);
+                            if (!result.success) {
+                              setMfaResetError(result.message || 'The two-factor reset was rejected.');
+                              return;
+                            }
+                            setMfaResetTarget(null);
+                            setMfaResetPassword('');
+                            setMfaResetDone(officer.id);
+                          }}
+                          className="bg-[#FFF7ED] p-2.5 rounded-xl border border-[#F0C08A] space-y-2 animate-fade-in"
+                        >
+                          <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                            Reset {officer.name}&apos;s authenticator
+                          </p>
+                          <p className="text-[10px] text-[#8A4B08] leading-relaxed">
+                            The current authenticator key is destroyed. This officer gets a fresh key when they open the sign-in screen,
+                            so confirm their identity before continuing.
+                          </p>
+                          <input
+                            type="password"
+                            required
+                            autoComplete="current-password"
+                            placeholder="Your password"
+                            value={mfaResetPassword}
+                            onChange={(e) => setMfaResetPassword(e.target.value)}
+                            className="w-full px-2 py-1 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
+                          />
+                          {mfaResetError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{mfaResetError}</p>}
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { setMfaResetTarget(null); setMfaResetPassword(''); setMfaResetError(''); }}
+                              className="flex-1 py-1 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                            >
+                              Back
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={mfaResetBusy}
+                              className="flex-1 py-1 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center disabled:opacity-60"
+                            >
+                              {mfaResetBusy ? 'Resetting…' : 'Reset 2FA'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      {mfaResetDone === officer.id && (
+                        <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl text-[10px] font-bold text-emerald-900 flex items-start justify-between gap-2 animate-fade-in">
+                          <span className="flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            Authenticator reset. {officer.name} must enrol a new authenticator at next sign-in.
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setMfaResetDone(null)}
+                            className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer shrink-0"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
+
                       {lastResetCredential?.userId === officer.id && (
                         <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl space-y-2 animate-fade-in">
                           <div className="flex items-center justify-between gap-2">
@@ -1256,6 +1347,23 @@ export default function ExecutiveView({
                             <span>Change Pass</span>
                           </button>
                         ) : null}
+
+                        {onResetMfa && !isTargetPresident && (canResetThisOfficer || (currentUserId === officer.id && MFA_ENFORCED_ROLE_SET.has(officer.role))) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMfaResetDone(null);
+                              setMfaResetPassword('');
+                              setMfaResetError('');
+                              setMfaResetTarget(officer.id);
+                            }}
+                            className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
+                            title="Reset two-factor authentication (lost or replaced phone)"
+                          >
+                            <ShieldAlert className="w-3 h-3 text-[#B42318]" />
+                            <span>Reset 2FA</span>
+                          </button>
+                        )}
 
                         {canManageThisOfficer && (
                           <button

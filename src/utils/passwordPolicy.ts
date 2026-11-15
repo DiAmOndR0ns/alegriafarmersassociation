@@ -43,9 +43,19 @@ export function validatePasswordPolicy(
   }
 
   const lowered = password.toLowerCase();
-  const prohibited = [username, role, 'password'].filter((part) => part.trim().length > 0);
+  // Context words an attacker would try first against this deployment.
+  const prohibited = [username, role, 'password', 'farmers', 'association', 'alegria', 'bafa'].filter(
+    (part) => part.trim().length > 0
+  );
   if (prohibited.some((part) => lowered.includes(part.toLowerCase()))) {
-    return 'Password cannot contain your username, role, or the word "password".';
+    return 'Password cannot contain your username, role, association name, or the word "password".';
+  }
+  if (/(?:january|february|march|april|may|june|july|august|september|october|november|december|christmas|welcome|admin|letmein|iloveyou|fams)/i.test(password)) {
+    return 'Password cannot contain a common word, season, or month name.';
+  }
+  // A run of six or more identical characters offers almost no extra entropy.
+  if (/(.)\1{5,}/.test(password) || /^(.{1,6})\1+$/.test(password)) {
+    return 'Password cannot be a repeated or padded pattern.';
   }
   if (
     /(?:01234|12345|23456|34567|45678|56789|67890|09876|98765|87654|76543|65432|54321|43210|qwerty|asdfgh|zxcvbn)/i.test(

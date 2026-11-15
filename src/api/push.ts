@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { getPool, isDatabaseConfigured, saveFullStateToPostgres } from './db';
 import { isPresidentRole, isSecretaryRole, isTreasurerRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
 import { parseRequestBody, sendResponse } from './helper';
+import { sanitizeUserRows } from './sanitize';
 
 export type PushApiRequest = Request | (IncomingMessage & {
   body?: unknown;
@@ -37,6 +38,9 @@ export interface PushSyncState {
   auditorReviewOnly?: boolean;
   [key: string]: unknown;
 }
+
+/** Upper bound for a single day's harvest; anything larger is a typo or abuse. */
+const MAX_EGG_COUNT = 100_000;
 
 const ASSIGNABLE_ROLES = [
   'Vice_President',
@@ -164,17 +168,30 @@ export function separateEggHarvestsFromFinancialState(
   }
 
   if (isMember) {
-    safeState.eggHarvests = eggHarvests.filter((entry: any) =>
-      entry &&
-      typeof entry === 'object' &&
-      entry.status === 'Pending Audit' &&
-      typeof name === 'string' &&
-      entry.collectedBy === name &&
-      Number.isInteger(entry.eggCount) &&
-      entry.eggCount >= 0 &&
-      typeof entry.date === 'string' &&
-      typeof entry.time === 'string'
-    );
+    safeState.eggHarvests = eggHarvests
+      .filter((entry: any) =>
+        entry &&
+        typeof entry === 'object' &&
+        entry.status === 'Pending Audit' &&
+        typeof name === 'string' &&
+        entry.collectedBy === name &&
+        Number.isInteger(entry.eggCount) &&
+        entry.eggCount >= 0 &&
+        entry.eggCount <= MAX_EGG_COUNT &&
+        typeof entry.date === 'string' &&
+        typeof entry.time === 'string'
+      )
+      // Members may only add a submission, never rewrite an approved one: keep
+      // the fields a pending harvest needs and drop workflow/MFA-side data.
+      .map((entry: any) => ({
+        ...(typeof entry.id === 'string' ? { id: entry.id } : {}),
+        collectedBy: entry.collectedBy,
+        eggCount: entry.eggCount,
+        date: entry.date.slice(0, 50),
+        time: entry.time.slice(0, 50),
+        status: 'Pending Audit' as const,
+        notes: typeof entry.notes === 'string' ? entry.notes.slice(0, 1000) : undefined
+      }));
     safeState.appendEggHarvests = true;
   } else if (mayUpdateEggWorkflow) {
     safeState.eggHarvests = eggHarvests;
@@ -234,6 +251,14 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       } else {
         delete (safeState as any).users;
       }
+    }
+    // A synced user row may describe a profile, never a credential. Drop
+    // password/MFA keys and strip roles down to Member. A role change only rides
+    // along when the same request obtains the President's designation approval
+    // in the `roleUpdate` branch above, and it is then flagged as authorised.
+    const roleAuthorized = state.roleUpdate !== undefined;
+    if (Array.isArray(safeState.users)) {
+      (safeState as any).users = sanitizeUserRows(safeState.users, { roleAuthorized });
     }
     if (!isPresidentRole(user.role) && user.role.trim().toLowerCase() !== 'pio') {
       delete safeState.achievements;

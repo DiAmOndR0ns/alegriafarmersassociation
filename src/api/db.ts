@@ -1,6 +1,23 @@
 import pg from 'pg';
 import { AuditorReport, DelegationRequest } from '../types';
 import { getInitialFund } from '../utils/fundBalance';
+import { cleanDateString, cleanNumber, cleanText, cleanTextList, safeImageUrl } from './sanitize';
+
+/** Audit states a ledger row may carry. */
+const AUDITED_STATUSES: readonly string[] = ['Unaudited', 'Audited', 'Flagged'];
+
+/** Roles that the sync layer may ever store on an account. */
+const ASSIGNABLE_ROLE_VALUES: readonly string[] = [
+  'Vice_President',
+  'Secretary',
+  'Assistant_Secretary',
+  'Board_Member',
+  'Treasurer',
+  'Assistant_Treasurer',
+  'Auditor',
+  'PIO',
+  'Member'
+];
 
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
 const PgPool = (pg as any)?.Pool || (pg as any)?.default?.Pool || (pg as any)?.default || pg;
@@ -1280,23 +1297,42 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const activeUsers = state.users.filter((u: any) => !deletedUserIds.has(u.id));
       console.log('[DB DEBUG] Saving', activeUsers.length, 'users...');
       for (const u of activeUsers) {
-        if (!u || !u.username) continue;
-        const cleanUsername = String(u.username).trim().toLowerCase();
+        if (!u || typeof u.username !== 'string' || !u.username.trim()) continue;
+        // Bound the fields that reach `users` so a sync payload cannot inject markup.
+        const cleanUsername = String(u.username).trim().toLowerCase().slice(0, 100);
         const existingRow = await client.query('SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1', [cleanUsername]);
-        const targetId = existingRow.rows[0]?.id || u.id;
         const existingRole = existingRow.rows[0]?.role;
-        const incomingRole = u.role || 'Member';
+        // Accounts are matched by username only. A client-supplied id must never
+        // be able to overwrite a different account's row.
+        const targetId = existingRow.rows[0]?.id || undefined;
+        const isNewAccount = !targetId;
+        // Only a verified officer-role designation (President issue) may change a
+        // role; a plain account sync must not be able to hand out officer seats.
+        // Roles arrive pre-validated: either the server-issued designation or a
+        // new Member account. Anything else is stored as Member at minimum.
+        const incomingRole = ASSIGNABLE_ROLE_VALUES.includes(String(u.role)) ? String(u.role) : 'Member';
         const isCurrentPresident = existingRole && existingRole.toLowerCase() === 'president';
         const targetRole = isCurrentPresident && incomingRole.toLowerCase() !== 'president' ? existingRole : incomingRole;
+        // Brand-new synced accounts start unapproved until an officer approves them.
+        const isApproved = isNewAccount ? false : Boolean(u.isApproved);
+        const cleanName = cleanText(u.name, 200) || cleanUsername;
+        const rowId = typeof u.id === 'string' && u.id ? u.id : undefined;
+        let resolvedId = targetId || rowId;
+        if (!resolvedId) {
+          console.warn('[Cloud DB Push] Skipping user row without a resolvable account id:', cleanUsername);
+          continue;
+        }
 
+        // An existing account keeps its current role unless the incoming row was
+        // authorised by `roleUpdate`; otherwise a plain account sync could hand
+        // out officer seats. `$17` is the per-row authorisation flag.
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           ON CONFLICT (id) DO UPDATE SET
             username = EXCLUDED.username,
-            password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
             name = EXCLUDED.name,
-            role = CASE WHEN users.role = 'President' AND EXCLUDED.role != 'President' THEN users.role ELSE EXCLUDED.role END,
+            role = CASE WHEN $17::boolean THEN EXCLUDED.role ELSE users.role END,
             is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
@@ -1309,12 +1345,14 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
             mfa_enabled = COALESCE(users.mfa_enabled, EXCLUDED.mfa_enabled);
         `, [
-          targetId, cleanUsername, u.passwordHash || u.password || '', u.name, targetRole, Boolean(u.isApproved),
-          u.joinedDate || null, u.farmLocation || null,
-          u.primaryCrops || [], u.contactNumber || null, u.status || 'Active',
-          u.avatarUrl || null, u.memberIdNumber || null, u.rsbsaNumber || null,
+          resolvedId, cleanUsername, '', cleanName, targetRole, isApproved,
+          cleanDateString(u.joinedDate, 50), cleanText(u.farmLocation, 200),
+          cleanTextList(u.primaryCrops), cleanText(u.contactNumber, 50), u.status === 'Inactive' ? 'Inactive' : 'Active',
+          safeImageUrl(u.avatarUrl), cleanText(u.memberIdNumber, 100), cleanText(u.rsbsaNumber, 100),
           Boolean(u.isRsbsaRegistered),
-          Boolean(u.mfaEnabled || (targetRole && targetRole.toLowerCase() === 'president'))
+          // MFA is enabled by enrollment only (auth endpoints), never by a sync row.
+          false,
+          !isNewAccount && u.roleAuthorized === true
         ]);
       }
       console.log('[DB DEBUG] Users saved');
@@ -1325,6 +1363,9 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const activeMembers = state.members.filter((m: any) => !deletedMemberIds.has(m.id));
       console.log('[DB DEBUG] Saving', activeMembers.length, 'members...');
       for (const m of activeMembers) {
+        if (!m || typeof m.id !== 'string' || !m.id) continue;
+        const memberName = cleanText(m.name, 200);
+        if (!memberName) continue;
         await client.query(`
           INSERT INTO members (id, name, farm_location, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -1342,11 +1383,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             gender = EXCLUDED.gender,
             birth_date = EXCLUDED.birth_date;
         `, [
-          m.id, m.name, m.farmLocation || null,
-          m.primaryCrops || [], m.contactNumber || null, m.status || 'Active',
-          m.joinedDate || null, m.memberIdNumber || null, m.rsbsaNumber || null,
-          Boolean(m.isRsbsaRegistered), m.avatarUrl || null, m.gender || null,
-          m.birthDate || null
+          m.id, memberName, cleanText(m.farmLocation, 200),
+          cleanTextList(m.primaryCrops), cleanText(m.contactNumber, 50), m.status === 'Inactive' ? 'Inactive' : 'Active',
+          cleanDateString(m.joinedDate, 50), cleanText(m.memberIdNumber, 100), cleanText(m.rsbsaNumber, 100),
+          Boolean(m.isRsbsaRegistered), safeImageUrl(m.avatarUrl), cleanText(m.gender, 20),
+          cleanDateString(m.birthDate, 50)
         ]);
       }
       console.log('[DB DEBUG] Members saved');
@@ -1395,6 +1436,14 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const txList = rawTxList.filter((tx: any) => !deletedTxIds.has(tx.id));
       console.log('[DB DEBUG] Saving', txList.length, 'transactions...');
       for (const tx of txList) {
+        if (!tx || typeof tx.id !== 'string' || !tx.id) continue;
+        // Ledger rows are the highest-integrity records: unknown entry types are
+        // refused, amounts must be a finite non-negative number and text fields
+        // are stripped of markup before they reach the books.
+        const txType = String(tx.type || '').toLowerCase();
+        if (txType !== 'income' && txType !== 'expense') continue;
+        const txAmount = Number(tx.amount);
+        if (!Number.isFinite(txAmount) || txAmount < 0) continue;
         await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, audited_status, audited_by, audited_date, audit_notes)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -1412,9 +1461,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             audited_date = EXCLUDED.audited_date,
             audit_notes = EXCLUDED.audit_notes;
         `, [
-          tx.id, tx.type, tx.category, tx.amount, tx.date, tx.description,
-          tx.recordedBy, tx.activityId || null, tx.fundSource || null, tx.auditedStatus || 'Unaudited', tx.auditedBy || null,
-          tx.auditedDate || null, tx.auditNotes || null
+          tx.id, txType === 'income' ? 'income' : 'expense', cleanText(tx.category, 100) || 'Uncategorized',
+          cleanNumber(txAmount), cleanDateString(tx.date, 50), cleanText(tx.description, 2000),
+          cleanText(tx.recordedBy, 200), cleanText(tx.activityId, 100), cleanText(tx.fundSource, 200),
+          AUDITED_STATUSES.includes(String(tx.auditedStatus)) ? String(tx.auditedStatus) : 'Unaudited',
+          cleanText(tx.auditedBy, 200), cleanDateString(tx.auditedDate, 50), cleanText(tx.auditNotes, 2000)
         ]);
       }
       console.log('[DB DEBUG] Transactions saved');
@@ -1425,6 +1476,9 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const activeMeetings = state.meetings.filter((mt: any) => !deletedMeetingIds.has(mt.id));
       console.log('[DB DEBUG] Saving', activeMeetings.length, 'meetings...');
       for (const mt of activeMeetings) {
+        if (!mt || typeof mt.id !== 'string' || !mt.id) continue;
+        const meetingTitle = cleanText(mt.title, 300);
+        if (!meetingTitle) continue;
         await client.query(`
           INSERT INTO meetings (id, title, date, location, attendance_count, agenda, minutes, officer_in_charge, attendance_record)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -1438,9 +1492,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             officer_in_charge = EXCLUDED.officer_in_charge,
             attendance_record = EXCLUDED.attendance_record;
         `, [
-          mt.id, mt.title, mt.date, mt.location, mt.attendanceCount || 0,
-          mt.agenda || '', mt.minutes || '', mt.officerInCharge || '',
-          JSON.stringify(mt.attendanceRecord || {})
+          mt.id, meetingTitle, cleanDateString(mt.date, 50), cleanText(mt.location, 200),
+          Math.min(Math.max(0, Math.floor(Number(mt.attendanceCount) || 0)), 100000),
+          cleanText(mt.agenda, 20000) || '', cleanText(mt.minutes, 20000) || '', cleanText(mt.officerInCharge, 200) || '',
+          JSON.stringify(mt.attendanceRecord && typeof mt.attendanceRecord === 'object' ? mt.attendanceRecord : {})
         ]);
       }
       console.log('[DB DEBUG] Meetings saved');
@@ -1532,8 +1587,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             hash = EXCLUDED.hash,
             previous_hash = EXCLUDED.previous_hash;
         `, [
-          lg.id, lg.timestamp, (lg as any).user || (lg as any).userName || 'Officer', lg.role, lg.action, lg.details,
-          lg.syncStatus || 'synced', lg.hash || null, lg.previousHash || null
+          lg.id, cleanDateString(lg.timestamp, 100), cleanText((lg as any).user || (lg as any).userName, 200) || 'Officer',
+          cleanText(lg.role, 50), cleanText(lg.action, 300), cleanText(lg.details, 4000),
+          lg.syncStatus === 'pending' ? 'pending' : 'synced',
+          /^[a-f0-9]{64}$/i.test(String(lg.hash || '')) ? String(lg.hash) : null,
+          /^[a-f0-9]{1,64}$/i.test(String(lg.previousHash || '')) ? String(lg.previousHash) : null
         ]);
       }
       console.log('[DB DEBUG] System logs saved');
@@ -1544,6 +1602,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const activeProducts = state.products.filter((p: any) => !deletedProductIds.has(p.id));
       console.log('[DB DEBUG] Saving', activeProducts.length, 'products...');
       for (const p of activeProducts) {
+        if (!p || typeof p.id !== 'string' || !p.id || !cleanText(p.name, 300)) continue;
         await client.query(`
           INSERT INTO products (id, name, ceb_name, category, description, unit, price, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
@@ -1566,11 +1625,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             managed_by = EXCLUDED.managed_by,
             date_updated = EXCLUDED.date_updated;
         `, [
-          p.id, p.name, p.cebName || null, p.category, p.description, p.unit,
-          p.price, p.quantityAvailable || null, p.stockStatus, p.farmerName || null,
-          p.farmerSitio || null, p.farmerPhone || null, p.contactPerson || null,
-          p.imageUrl || null, p.isPublished ?? true, p.updatedBy || null,
-          p.managedBy || null, p.dateUpdated || null
+          p.id, cleanText(p.name, 300) || 'Unnamed product', cleanText(p.cebName, 300), cleanText(p.category, 100),
+          cleanText(p.description, 5000), cleanText(p.unit, 50), cleanNumber(p.price), cleanText(p.quantityAvailable, 100),
+          cleanText(p.stockStatus, 50), cleanText(p.farmerName, 200), cleanText(p.farmerSitio, 200), cleanText(p.farmerPhone, 50),
+          cleanText(p.contactPerson, 200), safeImageUrl(p.imageUrl), p.isPublished !== false,
+          cleanText(p.updatedBy, 200), cleanText(p.managedBy, 200), cleanDateString(p.dateUpdated, 50)
         ]);
       }
       console.log('[DB DEBUG] Products saved');
@@ -1581,6 +1640,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const activeResolutions = state.resolutions.filter((r: any) => !deletedResolutionIds.has(r.id));
       console.log('[DB DEBUG] Saving', activeResolutions.length, 'resolutions...');
       for (const r of activeResolutions) {
+        if (!r || typeof r.id !== 'string' || !r.id) continue;
+        if (!cleanText(r.resolutionNumber, 100) || !cleanText(r.title, 300)) continue;
         await client.query(`
           INSERT INTO resolutions (id, resolution_number, title, description, date_agreed, moved_by, seconded_by, vote_in_favor, vote_against, vote_abstain, status)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -1596,8 +1657,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             vote_abstain = EXCLUDED.vote_abstain,
             status = EXCLUDED.status;
         `, [
-          r.id, r.resolutionNumber, r.title, r.description, r.dateAgreed,
-          r.movedBy, r.secondedBy, r.voteInFavor, r.voteAgainst, r.voteAbstain, r.status
+          r.id, cleanText(r.resolutionNumber, 100), cleanText(r.title, 300), cleanText(r.description, 20000),
+          cleanDateString(r.dateAgreed, 50), cleanText(r.movedBy, 200), cleanText(r.secondedBy, 200),
+          Math.floor(cleanNumber(r.voteInFavor, 100000)), Math.floor(cleanNumber(r.voteAgainst, 100000)),
+          Math.floor(cleanNumber(r.voteAbstain, 100000)), cleanText(r.status, 50)
         ]);
       }
       console.log('[DB DEBUG] Resolutions saved');
@@ -1608,6 +1671,9 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const activeAnnouncements = state.announcements.filter((a: any) => !deletedAnnouncementIds.has(a.id));
       console.log('[DB DEBUG] Saving', activeAnnouncements.length, 'announcements...');
       for (const a of activeAnnouncements) {
+        if (!a || typeof a.id !== 'string' || !a.id) continue;
+        const announcementTitle = cleanText(a.title, 300);
+        if (!announcementTitle) continue;
         await client.query(`
           INSERT INTO announcements (id, title, category, content, date_posted, priority, posted_by)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -1618,7 +1684,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             date_posted = EXCLUDED.date_posted,
             priority = EXCLUDED.priority,
             posted_by = EXCLUDED.posted_by;
-        `, [a.id, a.title, a.category, a.content, a.datePosted, a.priority, a.postedBy]);
+        `, [
+          a.id, announcementTitle, cleanText(a.category, 100), cleanText(a.content, 20000),
+          cleanDateString(a.datePosted, 50), cleanText(a.priority, 50), cleanText(a.postedBy, 200)
+        ]);
       }
       console.log('[DB DEBUG] Announcements saved');
     }
@@ -1628,6 +1697,9 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const activeActivities = state.activities.filter((act: any) => !deletedActivityIds.has(act.id));
       console.log('[DB DEBUG] Saving', activeActivities.length, 'activities...');
       for (const act of activeActivities) {
+        if (!act || typeof act.id !== 'string' || !act.id) continue;
+        const activityTitle = cleanText(act.title, 300);
+        if (!activityTitle) continue;
         await client.query(`
           INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, status_reason, documented_notes, attendees_count, target_audience, image_url)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
@@ -1649,14 +1721,15 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             target_audience = EXCLUDED.target_audience,
             image_url = EXCLUDED.image_url;
         `, [
-          act.id, act.title, act.cebTitle || null, act.category,
-          act.scheduledDate || act.dateScheduled || null,
-          act.dateScheduled || act.scheduledDate || null,
-          act.scheduledTime || act.timeScheduled || null,
-          act.timeScheduled || act.scheduledTime || null,
-          act.location, act.description, act.organizer, act.status,
-          act.statusReason || null, act.documentedNotes || null, act.attendeesCount || 0,
-          act.targetAudience || null, act.imageUrl || null
+          act.id, activityTitle, cleanText(act.cebTitle, 300), cleanText(act.category, 100),
+          cleanDateString(act.scheduledDate || act.dateScheduled, 50),
+          cleanDateString(act.dateScheduled || act.scheduledDate, 50),
+          cleanText(act.scheduledTime || act.timeScheduled, 100),
+          cleanText(act.timeScheduled || act.scheduledTime, 100),
+          cleanText(act.location, 200), cleanText(act.description, 20000), cleanText(act.organizer, 200), cleanText(act.status, 50),
+          cleanText(act.statusReason, 1000), cleanText(act.documentedNotes, 20000),
+          Math.min(Math.max(0, Math.floor(Number(act.attendeesCount) || 0)), 100000),
+          cleanText(act.targetAudience, 300), safeImageUrl(act.imageUrl)
         ]);
       }
       console.log('[DB DEBUG] Activities saved');
@@ -1668,6 +1741,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const fundList = rawFundList.filter((f: any) => !deletedFundIds.has(f.id));
       console.log('[DB DEBUG] Saving', fundList.length, 'organization funds...');
       for (const f of fundList) {
+        if (!f || typeof f.id !== 'string' || !f.id) continue;
+        const fundName = cleanText(f.name, 200);
+        if (!fundName) continue;
+        // A fund code is printed on statements; keep it short and alphanumeric.
+        const fundCode = (cleanText(f.code, 50) || fundName).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 50) || 'FUND';
         await client.query(`
           INSERT INTO organization_funds (id, name, code, initial_fund, current_balance, description, custodian, last_updated, category, source_origin)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -1682,9 +1760,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             category = EXCLUDED.category,
             source_origin = EXCLUDED.source_origin;
         `, [
-          f.id, f.name, f.code, getInitialFund(f), f.currentBalance || 0,
-          f.description || '', f.custodian || '', f.lastUpdated || new Date().toISOString().split('T')[0],
-          f.category || null, f.source || null
+          f.id, fundName, fundCode, cleanNumber(getInitialFund(f)), cleanNumber(f.currentBalance),
+          cleanText(f.description, 2000) || '', cleanText(f.custodian, 200) || '',
+          cleanDateString(f.lastUpdated, 50) || new Date().toISOString().split('T')[0],
+          cleanText(f.category, 100), cleanText(f.source, 200)
         ]);
       }
       console.log('[DB DEBUG] Organization funds saved');
@@ -1711,9 +1790,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             date_submitted = EXCLUDED.date_submitted,
             date_certified = EXCLUDED.date_certified;
         `, [
-          ar.id, ar.reportPeriod, ar.reportType, ar.totalIncome || 0, ar.totalExpenses || 0,
-          ar.netSurplus || 0, ar.findings || '', ar.recommendations || '', ar.preparedBy,
-          ar.certifiedBy || null, ar.status || 'Submitted', ar.dateSubmitted, ar.dateCertified || null
+          ar.id, cleanText(ar.reportPeriod, 100) || 'Unscheduled', cleanText(ar.reportType, 50) || 'General',
+          cleanNumber(ar.totalIncome), cleanNumber(ar.totalExpenses), cleanNumber(ar.netSurplus),
+          cleanText(ar.findings, 20000) || '', cleanText(ar.recommendations, 20000) || '',
+          cleanText(ar.preparedBy, 200) || 'Auditor', cleanText(ar.certifiedBy, 200),
+          cleanText(ar.status, 50) || 'Submitted', cleanDateString(ar.dateSubmitted, 50), cleanDateString(ar.dateCertified, 50)
         ]);
       }
       console.log('[DB DEBUG] Auditor reports saved');
@@ -1737,9 +1818,10 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             reviewed_date = EXCLUDED.reviewed_date,
             remarks = EXCLUDED.remarks;
         `, [
-          dr.id, dr.requestedBy, dr.reason, dr.requestedDate, dr.effectiveStart || null,
-          dr.effectiveEnd || null, dr.status || 'Pending', dr.reviewedBy || null,
-          dr.reviewedDate || null, dr.remarks || null
+          dr.id, cleanText(dr.requestedBy, 200) || 'Officer', cleanText(dr.reason, 2000) || 'Delegation',
+          cleanDateString(dr.requestedDate, 50), cleanDateString(dr.effectiveStart, 50),
+          cleanDateString(dr.effectiveEnd, 50), cleanText(dr.status, 50) || 'Pending', cleanText(dr.reviewedBy, 200),
+          cleanDateString(dr.reviewedDate, 50), cleanText(dr.remarks, 2000)
         ]);
       }
       console.log('[DB DEBUG] Delegation requests saved');

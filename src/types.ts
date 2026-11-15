@@ -18,6 +18,8 @@ export interface MemberAffiliation {
 }
 
 export interface User {
+  /** Id of the linked member profile; allows a President sync to carry role changes. */
+  memberId?: string;
   id: string;
   username: string;
   password?: string; // Legacy in-memory credentials only; never persisted in plaintext

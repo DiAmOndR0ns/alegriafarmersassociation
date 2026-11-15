@@ -91,6 +91,9 @@ describe('storage mode reporting', () => {
     expect(payload.connected).toBe(false);
     expect(payload.storageMode).toBe('local');
     expect(payload.provider).toBe('Local');
-    expect(payload.error).toBeTruthy();
+    // The public health check must not echo raw driver errors (host, user, port).
+    expect(payload.error).toBeUndefined();
+    expect(payload.message).not.toContain('postgresql://');
+    expect(payload.message).not.toContain('192.0.2.1');
   }, 20000);
 });

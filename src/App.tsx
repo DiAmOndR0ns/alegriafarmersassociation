@@ -2497,6 +2497,54 @@ export default function App() {
       : 'invalid';
   };
 
+  /**
+   * Destroys an account's authenticator so it re-enrols at next sign-in.
+   * The server verifies the acting officer's password and enforces who may
+   * reset whom (President: any officer; Secretary: members; self: MFA roles).
+   */
+  const handleResetMfa = async (
+    userId: string,
+    currentPassword: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    if (!currentUser) return { success: false, message: 'Sign in to continue.' };
+    const target = users.find(u => u.id === userId);
+    if (!target) return { success: false, message: 'Target account was not found.' };
+
+    if (import.meta.env.PROD || dbStatus.configured) {
+      try {
+        const response = await fetch('/api/auth/mfa/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ targetUserId: userId, currentPassword })
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.success) {
+          return { success: false, message: result?.message || 'Two-factor reset was rejected.' };
+        }
+        logAction('Reset 2FA', `Authenticator reset for ${target.name} (@${target.username}); re-enrolment required.`);
+        return { success: true };
+      } catch {
+        return { success: false, message: 'Two-factor reset could not reach the server.' };
+      }
+    }
+
+    // Offline mode has no server-side authenticator state to clear; the account
+    // simply loses its local secret and must complete MFA setup on next sign-in.
+    const updated = users.map(u =>
+      u.id === userId ? { ...u, totpSecret: undefined, mfaEnabled: false } : u
+    );
+    setUsers(updated);
+    updateStorage('bafa_users', updated);
+    if (currentUser.id === userId) {
+      const nextCurrent = { ...currentUser, totpSecret: undefined, mfaEnabled: false };
+      setCurrentUser(nextCurrent);
+      updateStorage('bafa_current_user', nextCurrent);
+    }
+    logAction('Reset 2FA', `Authenticator reset for ${target.name} (@${target.username}); re-enrolment required.`);
+    return { success: true };
+  };
+
   const handleResetPassword = async (userId: string, newPass: string, currentPassword = ''): Promise<boolean> => {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return false;
@@ -3647,6 +3695,7 @@ export default function App() {
                 onDeleteUser={handleDeleteUser}
                 onUpdateUserRole={handleUpdateUserRole}
                 onResetPassword={handleResetPassword}
+                onResetMfa={handleResetMfa}
                 onPresidentTurnover={handlePresidentTurnover}
                 onOpenReportModal={() => setShowReportModal(true)}
                 onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}

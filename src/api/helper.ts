@@ -4,6 +4,11 @@ export function sendResponse(res: any, statusCode: number, data: any) {
   try {
     if (res.headersSent) return;
     
+    if (typeof res.setHeader === 'function') {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'no-store');
+    }
+
     // Check if Express/Vercel helper methods are available
     if (typeof res.status === 'function' && typeof res.json === 'function') {
       return res.status(statusCode).json(data);

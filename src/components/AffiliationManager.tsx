@@ -58,11 +58,10 @@ function PresetPills({ selectedNames, onAdd }: PresetPillsProps) {
               type="button"
               onClick={() => onAdd(preset)}
               disabled={isSelected}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
-                isSelected
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 opacity-60 cursor-not-allowed'
-                  : 'bg-white hover:bg-[#D8F3DC] text-[#1B4332] border border-[#D5CFC1] hover:border-[#1B4332]'
-              }`}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition-all cursor-pointer ${isSelected
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 opacity-60 cursor-not-allowed'
+                : 'bg-white hover:bg-[#D8F3DC] text-[#1B4332] border border-[#D5CFC1] hover:border-[#1B4332]'
+                }`}
               title={isSelected ? 'Na-add na kini' : `Idugang ang ${preset.name}`}
             >
               <span>{preset.icon}</span>

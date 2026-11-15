@@ -170,12 +170,18 @@ export default async function handler(req: any, res: any) {
       message: `Connected to ${provider} (${result.rows[0]?.db_name || 'postgres'}) — ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`,
     });
   } catch (err: any) {
-    const errMsg = err?.message || 'Connection failed';
+    // This endpoint is public. Driver errors include host, port, user and
+    // sometimes the connection string, so log them and return a fixed reason.
+    const errMsg = String(err?.message || '');
+    console.error('[DB Status] Connection failure:', errMsg);
 
+    let reason = 'the server could not open a connection';
     let helpfulTip = '';
     if (errMsg.includes('password authentication failed')) {
+      reason = 'the database rejected the stored credentials';
       helpfulTip = ' Password incorrect. Reset your database password in Supabase > Project Settings > Database, update DATABASE_URL in Vercel, and Redeploy.';
     } else if (errMsg.includes('timed out') || errMsg.includes('ETIMEDOUT')) {
+      reason = 'the connection timed out';
       helpfulTip = ' If your Supabase project was paused due to inactivity, open your Supabase dashboard and click "Restore project". Also ensure you use the Transaction Pooler (port 6543).';
     }
 
@@ -184,8 +190,7 @@ export default async function handler(req: any, res: any) {
       configured: true,
       storageMode: 'local',
       provider: 'Local',
-      error: errMsg,
-      message: `Failed to reach Supabase, so the app is running on local device storage until the connection is restored: ${errMsg}.${helpfulTip}`,
+      message: `Failed to reach Supabase because ${reason}, so the app is running on local device storage until the connection is restored.${helpfulTip}`,
     });
   }
 }

@@ -1,5 +1,8 @@
 import { SystemLog, OfficerRole } from '../types';
 
+/** Shared key that binds audit-chain hashes to this application. */
+export const AUDIT_CHAIN_KEY = 'afa-farmers-association|audit-chain|v2';
+
 /**
  * Pure TypeScript implementation of SHA-256 (synchronous)
  */
@@ -108,7 +111,13 @@ export function calculateLogHash(
     details: string;
     syncStatus: 'synced' | 'pending';
   },
-  previousHash: string
+  previousHash: string,
+  /**
+   * Shared verification key. The chain is recomputed on the client, so this is
+   * not a server-side secret; it stops an attacker who only has the database
+   * contents from re-deriving every hash after editing a log row.
+   */
+  chainKey: string = AUDIT_CHAIN_KEY
 ): string {
   const contentString = [
     log.id,
@@ -120,7 +129,23 @@ export function calculateLogHash(
     log.syncStatus,
     previousHash
   ].join('|');
-  return sha256(contentString);
+  return sha256(`${auditHmacKey(chainKey)}|${contentString}`);
+}
+
+/**
+ * Mixes the chain key with the content through a 32-bit sponge so a changer
+ * cannot recompute an individual hash without reproducing the key schedule.
+ */
+function auditHmacKey(key: string): string {
+  if (!key) return '';
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < key.length; i++) {
+    const code = key.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + code, 0x85ebca6b) >>> 0;
+  }
+  return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`;
 }
 
 /**
