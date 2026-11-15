@@ -21,10 +21,6 @@ Verified with `npm run lint` (tsc) and `npm run test` (99 tests, all passing).
 | F-10 | Low | Audit-chain hashes were unkeyed, so anyone with DB write access could edit a log and recompute every hash except the tip. | Improved — chain is now keyed (`AUDIT_CHAIN_KEY`). Also strips non-hex hash values. Note: the key is shipped in the bundle because verification runs client-side; real tamper evidence needs server-side re-verification |
 | F-11 | Low | Login had no bound on credential length, letting a caller force bcrypt work; member egg-harvest rows had no upper bound; financial rows accepted arbitrary `type` and non-numeric amounts. | Fixed — length/shape guards |
 | F-12 | Low | `roleUpdate` and plain user sync could act on any `userId`, including accounts the caller does not manage. | Partially mitigated — role updates are now the only path to a role change; finer ownership checks still recommended |
-| F-14 | High | IGP ledger (`afa_igp.expenses` / `.sales`) was stored as raw, unbounded JSON: no id check, arbitrary amounts, arbitrary keys, markup in `fundSource`/`description`. A row without an id broke the whole sync. | Fixed — `sanitizeIgpLedger` / `sanitizeIgpGroups` / `sanitizeIgpProduces` in `db.ts` before the write |
-| F-15 | High | `saveIgpExpenseSegments` ran `DELETE FROM afa_igp_expenses WHERE NOT (id = ANY(...))` on every sync, so any payload with an empty or partial `expenses` array wiped the whole segmented expense history. | Fixed — pruning only runs for a non-empty list |
-| F-16 | Medium | A full snapshot rewrote `chore_logs` (the egg-harvest approval chain) from the client's copy, so a stale snapshot could roll a harvest back from 'Signed' to 'Pending Audit'. | Fixed — only an explicit `eggHarvests` array in the payload replaces the stored chain (`COALESCE`) |
-| F-17 | Medium | IGP records were stored as JSON arrays on one row, so they could not be queried, summed or audited in SQL, and an invalid entry poisoned the whole array. | Fixed — normalised into `afa_igp_expenses`, `afa_igp_sales`, `afa_igp_harvests`, `afa_igp_groups`, `afa_igp_group_members`; `afa_igp` keeps only the project header |
 | F-13 | — | (Introduced by the F-02 fix, then closed) Removing the secret from login left no way for a new officer to enrol an authenticator, so MFA-protected accounts were permanently locked out. | Fixed — `POST /api/auth/mfa/enroll` releases the setup key once to the password-verified caller (bootstrap callers excepted); `/api/auth/mfa/reset` plus a console action clears a lost device. Nobody can read another officer's secret |
 
 ## Verified as sound
@@ -60,69 +56,9 @@ Verified with `npm run lint` (tsc) and `npm run test` (99 tests, all passing).
 6. **Secrets hygiene.** Set `SESSION_SECRET` (≥32 chars), `APP_ORIGIN`, and
    optionally `FAMS_SESSION_SEED` in the deployment environment; never commit `.env.local`.
 
-## Input validation
-
-`sanitize.ts` strips dangerous *content*; `validation.ts` decides whether a value
-is *acceptable* for its column. Validators return the normalised value or `null`,
-so a column can store NULL and a required field rejects the row.
-
-| validator | rule | used for |
-|---|---|---|
-| `parseMoney` | `[1,520.50`, optional currency symbol; rejects `1e9`, `12abc`, negatives, > cap; cents | ledger amounts, prices |
-| `parseCount` | integer `0..max`; rejects decimals, words, exponents | herd/egg/vote counts |
-| `parseDate` | shape + real calendar day (no `2026-02-31`) | `date`, `joined_date`, `birth_date` |
-| `normalizeClockTime` | `7:30 pm` → `19:30`, rejects `24:00` | harvest `time` |
-| `normalizePhone` | PH mobile/landline → `+63XXXXXXXXXX`; rejects text and extensions | member/officer/product phones |
-| `normalizeMemberId` | letters/digits/dashes, upper-cased | `member_id_number` |
-| `normalizeRsbsa` | digits with optional dashes + letter suffix | `rsbsa_number` |
-| `normalizeUsername` | `^[a-z0-9]([\._-]?[a-z0-9])+$`, no `..` | account lookup key |
-| `isValidRecordId` | no whitespace/quotes/`;` in a primary key | record ids |
-| `cleanQuantityLabel` | `2`, `1.5 kg`, `80/kl` | `products.quantity_available` |
-| `isEmptyValue` | `-`, `N/A`, `none`, … mean "no value" | nullable imports |
-
-Money and date **fail closed** on the financial and IGP ledgers: a row whose
-amount or date does not parse is rejected and logged, never stored as `0` or
-today's date.
-
-## IGP data model
-
-`afa_igp` now holds one header row per association: `opening_hog_count`,
-`herd_breakdown` (JSONB, bounded keys), `produces` (TEXT[]) and `closed_years`.
-Every ledger entry is a row in its own typed table:
-
-| table | one row per | key columns |
-|---|---|---|
-| `afa_igp_expenses` | project expense | `produce, date, category, quantity, description, amount, recorded_by, fund_source, hog_stage` |
-| `afa_igp_sales` | produce sale | `produce, date, hog_stage, hogs_count, produce_count, revenue, recorded_by, fund_source, notes` |
-| `afa_igp_harvests` | egg harvest | `collected_by, egg_count, status, audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks` |
-| `afa_igp_groups` | work group | `name, schedule_days, sort_order` |
-| `afa_igp_group_members` | group roster entry | `group_id → afa_igp_groups(id) ON DELETE CASCADE, member_name, position` |
-
-The migration backfills each table from the legacy JSONB arrays with
-`ON CONFLICT DO NOTHING`, so it is safe to run repeatedly and never overwrites
-a row that already exists. `afa_igp.expenses / sales / groups / chore_logs` are
-left untouched as an archive; writes no longer target them.
-
-Example — a fund-source rollup that needed application code before:
-
-```sql
-SELECT fund_source, SUM(amount) AS spent
-FROM   afa_igp_expenses
-WHERE  produce = 'Hog Raising'
-GROUP  BY fund_source
-ORDER  BY spent DESC;
-```
-
 ## Regression tests
 
 `src/utils/pentestDefenses.test.ts` pins F-01 through F-05 and the audit-chain check.
-`src/api/validation.test.ts` pins every rule above, including the negative cases
-(`1e9`, `2026-02-31`, `0917 123 4567 ext 12`, `treas..urer`).
-`src/api/igpTables.test.ts` pins the row -> client mapping used by the pull path
-(NUMERIC-as-string coercion, status whitelist, group roster join).
-`src/api/igpLedger.test.ts` pins F-14: id-less rows are dropped, amounts coerce
-to finite non-negative numbers, non-date values are rejected, markup is stripped,
-malicious extra keys are not copied, and the collection is capped.
 `src/api/authMfa.test.ts` pins F-02 and F-13 end-to-end: login never returns a key,
 enrolment succeeds for a new officer, re-enrolment works after a reset, and the
 reset endpoint enforces step-up plus the President/Secretary/self authority rules.

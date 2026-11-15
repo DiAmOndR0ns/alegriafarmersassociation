@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { Request, Response } from 'express';
-import { getPool, IGP_HARVEST_STATUSES, isDatabaseConfigured, saveFullStateToPostgres } from './db';
+import { getPool, isDatabaseConfigured, saveFullStateToPostgres } from './db';
 import { isPresidentRole, isSecretaryRole, isTreasurerRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
 import { parseRequestBody, sendResponse } from './helper';
 import { sanitizeUserRows } from './sanitize';
@@ -194,24 +194,7 @@ export function separateEggHarvestsFromFinancialState(
       }));
     safeState.appendEggHarvests = true;
   } else if (mayUpdateEggWorkflow) {
-    // The Auditor verifies and the President signs, but only into a status the
-    // workflow defines. `saveIgpHarvestRows` upserts these rows by id, so an
-    // unknown status would otherwise be written verbatim.
-    // The same bound a member's submission gets: an auditor or the President
-    // cannot log an impossible harvest for a member.
-    safeState.eggHarvests = eggHarvests
-      .filter((entry: any) =>
-        entry &&
-        typeof entry === 'object' &&
-        typeof entry.id === 'string' &&
-        Number.isInteger(entry.eggCount) &&
-        entry.eggCount >= 0 &&
-        entry.eggCount <= MAX_EGG_COUNT
-      )
-      .map((entry: any) => ({
-        ...entry,
-        status: IGP_HARVEST_STATUSES.includes(entry?.status) ? entry.status : 'Pending Audit'
-      }));
+    safeState.eggHarvests = eggHarvests;
     delete safeState.appendEggHarvests;
   } else {
     delete safeState.eggHarvests;
