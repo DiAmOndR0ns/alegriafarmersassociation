@@ -1,7 +1,28 @@
 import pg from 'pg';
 import { AuditorReport, DelegationRequest } from '../types';
 import { getInitialFund } from '../utils/fundBalance';
-import { cleanDateString, cleanNumber, cleanText, cleanTextList, safeImageUrl } from './sanitize';
+import {
+  cleanLabel,
+  cleanQuantityLabel,
+  normalizeClockTime,
+  normalizeMemberId,
+  normalizePhone,
+  normalizeRsbsa,
+  normalizeUsername,
+  parseCount,
+  parseDate,
+  parseMoney
+} from './validation';
+import {
+  cleanDateString,
+  cleanNumber,
+  cleanText,
+  cleanTextList,
+  safeImageUrl,
+  sanitizeIgpGroups,
+  sanitizeIgpLedger,
+  sanitizeIgpProduces
+} from './sanitize';
 
 /** Audit states a ledger row may carry. */
 const AUDITED_STATUSES: readonly string[] = ['Unaudited', 'Audited', 'Flagged'];
@@ -195,19 +216,98 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
 
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
-    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
+    // The herd breakdown is stored as JSONB but its keys are declared by the
+    // application (fattening, gestation, lactating, dispersal, cattleFattening,
+    // cattleDispersal, rtlCount). Keep the default in step with the writer; the
+    // column is added first so this ALTER cannot reference a missing column.
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
+    `ALTER TABLE afa_igp ALTER COLUMN herd_breakdown SET DEFAULT '{"fattening":0,"gestation":0,"lactating":0,"dispersal":0,"cattleFattening":0,"cattleDispersal":0,"rtlCount":0}'::jsonb;`,
+    // IGP ledger. Each record is its own row with typed columns so the books can
+    // be queried, summed and audited in SQL. `expense_data` is kept only as the
+    // original snapshot for rollback; the columns are the source of truth.
     `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT NOT NULL,
       date VARCHAR(50),
-      expense_data JSONB NOT NULL
+      category VARCHAR(100),
+      quantity NUMERIC DEFAULT 0,
+      description TEXT,
+      amount NUMERIC NOT NULL DEFAULT 0,
+      recorded_by TEXT,
+      fund_source TEXT,
+      hog_stage VARCHAR(50),
+      expense_data JSONB
     );`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS category VARCHAR(100);`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 0;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS description TEXT;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS amount NUMERIC NOT NULL DEFAULT 0;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS recorded_by TEXT;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS hog_stage VARCHAR(50);`,
+    `ALTER TABLE afa_igp_expenses ALTER COLUMN expense_data DROP NOT NULL;`,
     `CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);`,
-    `INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
+    `CREATE INDEX IF NOT EXISTS afa_igp_expenses_date_idx ON afa_igp_expenses (date);`,
+
+    `CREATE TABLE IF NOT EXISTS afa_igp_sales (
+      id VARCHAR(100) PRIMARY KEY,
+      produce TEXT NOT NULL,
+      date VARCHAR(50),
+      hog_stage VARCHAR(50),
+      hogs_count INTEGER NOT NULL DEFAULT 0,
+      produce_count INTEGER NOT NULL DEFAULT 0,
+      revenue NUMERIC NOT NULL DEFAULT 0,
+      recorded_by TEXT,
+      fund_source TEXT,
+      notes TEXT
+    );`,
+    `CREATE INDEX IF NOT EXISTS afa_igp_sales_produce_idx ON afa_igp_sales (produce);`,
+    `CREATE INDEX IF NOT EXISTS afa_igp_sales_date_idx ON afa_igp_sales (date);`,
+
+    `CREATE TABLE IF NOT EXISTS afa_igp_harvests (
+      id VARCHAR(100) PRIMARY KEY,
+      produce TEXT,
+      date VARCHAR(50),
+      time VARCHAR(50),
+      collected_by TEXT NOT NULL,
+      egg_count INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
+      audited_by TEXT,
+      audited_date VARCHAR(50),
+      audit_remarks TEXT,
+      signed_by TEXT,
+      signed_date VARCHAR(50),
+      signature_remarks TEXT
+    );`,
+    `CREATE INDEX IF NOT EXISTS afa_igp_harvests_status_idx ON afa_igp_harvests (status);`,
+    `CREATE INDEX IF NOT EXISTS afa_igp_harvests_collected_idx ON afa_igp_harvests (collected_by);`,
+
+    `CREATE TABLE IF NOT EXISTS afa_igp_groups (
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      schedule_days TEXT[],
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_group_members (
+      group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id) ON DELETE CASCADE,
+      member_name TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (group_id, member_name)
+    );`,
+
+    // --- Backfill from the legacy JSONB arrays (idempotent). ---
+    `INSERT INTO afa_igp_expenses (id, produce, date, category, quantity, description, amount, recorded_by, fund_source, hog_stage, expense_data)
       SELECT expense->>'id',
         COALESCE(NULLIF(expense->>'produce', ''), 'Swine Raising (Baboyan)'),
-        expense->>'date',
+        NULLIF(expense->>'date', ''),
+        NULLIF(expense->>'category', ''),
+        COALESCE(NULLIF(expense->>'quantity', ''), '0')::numeric,
+        expense->>'description',
+        COALESCE(NULLIF(expense->>'amount', ''), '0')::numeric,
+        NULLIF(expense->>'recordedBy', ''),
+        NULLIF(expense->>'fundSource', ''),
+        NULLIF(expense->>'hogStage', ''),
         expense
       FROM afa_igp AS igp
       CROSS JOIN LATERAL jsonb_array_elements(
@@ -215,6 +315,68 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
       ) AS item(expense)
       WHERE NULLIF(expense->>'id', '') IS NOT NULL
       ON CONFLICT (id) DO NOTHING;`,
+    `INSERT INTO afa_igp_sales (id, produce, date, hog_stage, hogs_count, produce_count, revenue, recorded_by, fund_source, notes)
+      SELECT sale->>'id',
+        COALESCE(NULLIF(sale->>'produce', ''), 'Swine Raising (Baboyan)'),
+        NULLIF(sale->>'date', ''),
+        NULLIF(sale->>'hogStage', ''),
+        COALESCE(NULLIF(sale->>'hogsCount', ''), '0')::integer,
+        COALESCE(NULLIF(sale->>'produceCount', ''), '0')::integer,
+        COALESCE(NULLIF(sale->>'revenue', ''), '0')::numeric,
+        NULLIF(sale->>'recordedBy', ''),
+        NULLIF(sale->>'fundSource', ''),
+        NULLIF(sale->>'notes', '')
+      FROM afa_igp AS igp
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(igp.sales) = 'array' THEN igp.sales ELSE '[]'::jsonb END
+      ) AS item(sale)
+      WHERE NULLIF(sale->>'id', '') IS NOT NULL
+      ON CONFLICT (id) DO NOTHING;`,
+    `INSERT INTO afa_igp_harvests (id, produce, date, time, collected_by, egg_count, notes, status, audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks)
+      SELECT harvest->>'id',
+        NULLIF(harvest->>'produce', ''),
+        NULLIF(harvest->>'date', ''),
+        NULLIF(harvest->>'time', ''),
+        COALESCE(NULLIF(harvest->>'collectedBy', ''), 'Unknown'),
+        COALESCE(NULLIF(harvest->>'eggCount', ''), '0')::integer,
+        NULLIF(harvest->>'notes', ''),
+        COALESCE(NULLIF(harvest->>'status', ''), 'Pending Audit'),
+        NULLIF(harvest->>'auditedBy', ''),
+        NULLIF(harvest->>'auditedDate', ''),
+        NULLIF(harvest->>'auditRemarks', ''),
+        NULLIF(harvest->>'signedBy', ''),
+        NULLIF(harvest->>'signedDate', ''),
+        NULLIF(harvest->>'signatureRemarks', '')
+      FROM afa_igp AS igp
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(igp.chore_logs) = 'array' THEN igp.chore_logs ELSE '[]'::jsonb END
+      ) AS item(harvest)
+      WHERE NULLIF(harvest->>'id', '') IS NOT NULL
+      ON CONFLICT (id) DO NOTHING;`,
+    `INSERT INTO afa_igp_groups (id, name, schedule_days, sort_order)
+      SELECT grp->>'id',
+        COALESCE(NULLIF(grp->>'name', ''), 'Group'),
+        CASE WHEN jsonb_typeof(grp->'scheduleDays') = 'array'
+          THEN ARRAY(SELECT jsonb_array_elements_text(grp->'scheduleDays'))
+          ELSE ARRAY[]::text[] END,
+        row_number() OVER ()
+      FROM afa_igp AS igp
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
+      ) AS item(grp)
+      WHERE NULLIF(grp->>'id', '') IS NOT NULL
+      ON CONFLICT (id) DO NOTHING;`,
+    `INSERT INTO afa_igp_group_members (group_id, member_name, position)
+      SELECT grp->>'id', member, position - 1
+      FROM afa_igp AS igp
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
+      ) AS item(grp)
+      CROSS JOIN LATERAL jsonb_array_elements_text(
+        CASE WHEN jsonb_typeof(grp->'members') = 'array' THEN grp->'members' ELSE '[]'::jsonb END
+      ) WITH ORDINALITY AS m(member, position)
+      WHERE NULLIF(grp->>'id', '') IS NOT NULL
+      ON CONFLICT (group_id, member_name) DO NOTHING;`,
     `DROP TABLE IF EXISTS hog_raising;`,
 
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
@@ -489,15 +651,76 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       );
     `);
 
+    // IGP ledger tables. A fresh database gets the full shape directly; existing
+    // databases are upgraded column-by-column by `runSchemaMigrations`.
     await client.query(`
       CREATE TABLE IF NOT EXISTS afa_igp_expenses (
         id VARCHAR(100) PRIMARY KEY,
         produce TEXT NOT NULL,
         date VARCHAR(50),
-        expense_data JSONB NOT NULL
+        category VARCHAR(100),
+        quantity NUMERIC DEFAULT 0,
+        description TEXT,
+        amount NUMERIC NOT NULL DEFAULT 0,
+        recorded_by TEXT,
+        fund_source TEXT,
+        hog_stage VARCHAR(50),
+        expense_data JSONB
       );
     `);
     await client.query('CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);');
+    await client.query('CREATE INDEX IF NOT EXISTS afa_igp_expenses_date_idx ON afa_igp_expenses (date);');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_sales (
+        id VARCHAR(100) PRIMARY KEY,
+        produce TEXT NOT NULL,
+        date VARCHAR(50),
+        hog_stage VARCHAR(50),
+        hogs_count INTEGER NOT NULL DEFAULT 0,
+        produce_count INTEGER NOT NULL DEFAULT 0,
+        revenue NUMERIC NOT NULL DEFAULT 0,
+        recorded_by TEXT,
+        fund_source TEXT,
+        notes TEXT
+      );
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS afa_igp_sales_produce_idx ON afa_igp_sales (produce);');
+    await client.query('CREATE INDEX IF NOT EXISTS afa_igp_sales_date_idx ON afa_igp_sales (date);');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_harvests (
+        id VARCHAR(100) PRIMARY KEY,
+        produce TEXT,
+        date VARCHAR(50),
+        time VARCHAR(50),
+        collected_by TEXT NOT NULL,
+        egg_count INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
+        audited_by TEXT,
+        audited_date VARCHAR(50),
+        audit_remarks TEXT,
+        signed_by TEXT,
+        signed_date VARCHAR(50),
+        signature_remarks TEXT
+      );
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS afa_igp_harvests_status_idx ON afa_igp_harvests (status);');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_groups (
+        id VARCHAR(100) PRIMARY KEY,
+        name TEXT NOT NULL,
+        schedule_days TEXT[],
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_group_members (
+        group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id) ON DELETE CASCADE,
+        member_name TEXT NOT NULL,
+        position INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (group_id, member_name)
+      );
+    `);
 
     // 9. Products
     await client.query(`
@@ -799,23 +1022,96 @@ export async function ensureDatabaseSchema(pool: pg.Pool) {
   }
 }
 
-function mergeIgpExpenses(legacyExpenses: unknown, segmentedRows: Array<{ id: string; expense_data: unknown }>) {
-  const expensesById = new Map<string, any>();
-  const legacy = Array.isArray(legacyExpenses) ? legacyExpenses : [];
+// --- IGP row -> client shape -------------------------------------------------
+// Numeric columns arrive from `pg` as strings (NUMERIC preserves precision), so
+// every amount is coerced back to a number here.
 
-  legacy.forEach((expense, index) => {
-    const id = typeof expense?.id === 'string' && expense.id ? expense.id : `legacy-${index}`;
-    expensesById.set(id, expense);
-  });
+const toNum = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
-  for (const row of segmentedRows) {
-    const expense = typeof row.expense_data === 'string'
-      ? JSON.parse(row.expense_data)
-      : row.expense_data;
-    expensesById.set(row.id, expense);
+const orUndefined = (value: unknown): string | undefined =>
+  value === null || value === '' || value === undefined ? undefined : String(value);
+
+export function mapIgpExpenseRow(row: any) {
+  return {
+    id: String(row.id),
+    produce: orUndefined(row.produce),
+    category: orUndefined(row.category) || 'Other',
+    quantity: toNum(row.quantity),
+    description: orUndefined(row.description) || '',
+    amount: toNum(row.amount),
+    date: orUndefined(row.date) || '',
+    recordedBy: orUndefined(row.recorded_by) || 'Officer',
+    fundSource: orUndefined(row.fund_source),
+    hogStage: orUndefined(row.hog_stage)
+  };
+}
+
+export function mapIgpSaleRow(row: any) {
+  return {
+    id: String(row.id),
+    produce: orUndefined(row.produce),
+    date: orUndefined(row.date) || '',
+    hogStage: orUndefined(row.hog_stage),
+    // Legacy field kept for older clients; a sale always states both counts.
+    hogsCount: toNum(row.hogs_count) || toNum(row.produce_count),
+    produceCount: toNum(row.produce_count) || toNum(row.hogs_count),
+    revenue: toNum(row.revenue),
+    recordedBy: orUndefined(row.recorded_by) || 'Officer',
+    fundSource: orUndefined(row.fund_source),
+    notes: orUndefined(row.notes)
+  };
+}
+
+export function mapIgpHarvestRow(row: any) {
+  return {
+    id: String(row.id),
+    produce: orUndefined(row.produce),
+    date: orUndefined(row.date) || '',
+    time: orUndefined(row.time) || '',
+    collectedBy: orUndefined(row.collected_by) || '',
+    eggCount: toNum(row.egg_count),
+    notes: orUndefined(row.notes),
+    status: IGP_HARVEST_STATUSES.includes(row.status) ? row.status : 'Pending Audit',
+    auditedBy: orUndefined(row.audited_by),
+    auditedDate: orUndefined(row.audited_date),
+    auditRemarks: orUndefined(row.audit_remarks),
+    signedBy: orUndefined(row.signed_by),
+    signedDate: orUndefined(row.signed_date),
+    signatureRemarks: orUndefined(row.signature_remarks)
+  };
+}
+
+export function mapIgpGroups(groupRows: any[], memberRows: Array<{ group_id: string; member_name: string }>) {
+  const membersByGroup = new Map<string, string[]>();
+  for (const member of memberRows) {
+    const list = membersByGroup.get(member.group_id) || [];
+    list.push(member.member_name);
+    membersByGroup.set(member.group_id, list);
   }
+  return groupRows.map((row) => ({
+    id: String(row.id),
+    name: orUndefined(row.name) || 'Group',
+    members: membersByGroup.get(String(row.id)) || [],
+    scheduleDays: Array.isArray(row.schedule_days) ? row.schedule_days : []
+  }));
+}
 
-  return Array.from(expensesById.values());
+/**
+ * Last-resort read for an expense array in the legacy `afa_igp.expenses` blob,
+ * used only when the normalised table is still empty (before the first write
+ * after the migration). Rows without an id get a stable positional id.
+ */
+function mergeIgpExpenses(legacyExpenses: unknown) {
+  const legacy = Array.isArray(legacyExpenses) ? legacyExpenses : [];
+  return legacy
+    .filter((expense: any) => expense && typeof expense === 'object')
+    .map((expense: any, index: number) => ({
+      ...expense,
+      id: typeof expense.id === 'string' && expense.id ? expense.id : `legacy-${index}`
+    }));
 }
 
 export async function fetchAllDataFromPostgres(pool: pg.Pool) {
@@ -831,7 +1127,23 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const logsRes = await client.query('SELECT * FROM system_logs ORDER BY timestamp DESC');
     const hogQuery = await client.query("SELECT * FROM afa_igp WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
     const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query('SELECT * FROM afa_igp LIMIT 1');
-    const igpExpenseRows = await client.query('SELECT id, expense_data FROM afa_igp_expenses ORDER BY date DESC, id ASC');
+    // Ledger entries are assembled from their own tables. Each map below turns a
+    // typed row back into the client's camelCase shape.
+    const igpExpenseRows = await client.query(
+      'SELECT * FROM afa_igp_expenses ORDER BY date DESC, id ASC'
+    );
+    const igpSaleRows = await client.query(
+      'SELECT * FROM afa_igp_sales ORDER BY date DESC, id ASC'
+    );
+    const igpHarvestRows = await client.query(
+      'SELECT * FROM afa_igp_harvests ORDER BY date DESC, time DESC, id ASC'
+    );
+    const igpGroupRows = await client.query(
+      'SELECT * FROM afa_igp_groups ORDER BY sort_order ASC, id ASC'
+    );
+    const igpGroupMemberRows = await client.query(
+      'SELECT group_id, member_name FROM afa_igp_group_members ORDER BY group_id ASC, position ASC'
+    );
     const productsRes = await client.query('SELECT * FROM products ORDER BY name ASC');
     const activitiesRes = await client.query('SELECT * FROM activities ORDER BY scheduled_date DESC');
     const achievementsRes = await client.query('SELECT * FROM achievements ORDER BY year DESC, title ASC');
@@ -909,6 +1221,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       const rawProduces: string[] = Array.isArray(row.produces) ? row.produces : [];
       const cleanProduces = rawProduces.filter((p: string) => Boolean(p && p.trim()) && p !== 'Tilapia Breeding' && !p.toLowerCase().includes('tilapia'));
       const rawBreakdown = row.herd_breakdown && typeof row.herd_breakdown === 'object' ? row.herd_breakdown : {};
+      const harvests = igpHarvestRows.rows.map(mapIgpHarvestRow);
       hogState = {
         openingHogCount: Number(row.opening_hog_count || 0),
         herdBreakdown: {
@@ -921,12 +1234,28 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
           rtlCount: Math.max(0, Math.floor(Number(rawBreakdown.rtlCount) || 0))
         },
         produces: cleanProduces,
-        expenses: mergeIgpExpenses(row.expenses, igpExpenseRows.rows),
-        sales: row.sales || [],
-        groups: row.groups || [],
-        choreLogs: row.chore_logs || [],
-        eggHarvests: row.chore_logs || [],
+        expenses: igpExpenseRows.rows.length > 0
+          ? igpExpenseRows.rows.map(mapIgpExpenseRow)
+          : mergeIgpExpenses(row.expenses),
+        sales: igpSaleRows.rows.length > 0 ? igpSaleRows.rows.map(mapIgpSaleRow) : row.sales || [],
+        groups: igpGroupRows.rows.length > 0
+          ? mapIgpGroups(igpGroupRows.rows, igpGroupMemberRows.rows)
+          : row.groups || [],
+        choreLogs: harvests,
+        eggHarvests: harvests,
         closedYears: row.closed_years || []
+      };
+    } else {
+      // No header row yet (fresh database) but ledger rows may exist after a
+      // scoped write; surface them so the client never loses entries.
+      const harvests = igpHarvestRows.rows.map(mapIgpHarvestRow);
+      hogState = {
+        ...hogState,
+        expenses: igpExpenseRows.rows.map(mapIgpExpenseRow),
+        sales: igpSaleRows.rows.map(mapIgpSaleRow),
+        groups: mapIgpGroups(igpGroupRows.rows, igpGroupMemberRows.rows),
+        choreLogs: harvests,
+        eggHarvests: harvests
       };
     }
 
@@ -1149,36 +1478,159 @@ async function saveEntity(
   }
 }
 
-async function saveIgpExpenseSegments(
+export const IGP_HARVEST_STATUSES = ['Pending Audit', 'Audited', 'Signed', 'Returned'] as const;
+
+/**
+ * Prunes rows of one IGP table that the client no longer references.
+ * Never sweeps from an empty list: a scoped or filtered payload would otherwise
+ * delete the whole history.
+ */
+async function pruneIgpTable(
   client: pg.PoolClient,
-  expenses: any[],
-  defaultProduce?: string
+  table: 'afa_igp_expenses' | 'afa_igp_sales' | 'afa_igp_harvests' | 'afa_igp_groups',
+  ids: string[]
 ) {
+  if (ids.length === 0) return;
+  await client.query(`DELETE FROM ${table} WHERE NOT (id = ANY($1::varchar[]))`, [ids]);
+}
+
+async function saveIgpExpenseRows(client: pg.PoolClient, expenses: any[], defaultProduce?: string) {
   const ids: string[] = [];
   for (const expense of expenses) {
     if (typeof expense?.id !== 'string' || !expense.id.trim()) {
       throw new Error('Cannot sync IGP expense without a valid id');
     }
-
     const produce = typeof expense.produce === 'string' && expense.produce.trim()
       ? expense.produce
       : defaultProduce || 'Swine Raising (Baboyan)';
-    const segmentedExpense = { ...expense, produce };
+    // An expense is a money record: an unparseable amount or date is rejected
+    // rather than stored as 0 / blank.
+    const amount = parseMoney(expense.amount);
+    const expenseDate = parseDate(expense.date, 50);
+    if (amount === null || !expenseDate) {
+      console.warn('[cloud db push] rejected igp expense with invalid amount or date:', expense.id);
+      continue;
+    }
     ids.push(expense.id);
     await client.query(`
-      INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
+      INSERT INTO afa_igp_expenses
+        (id, produce, date, category, quantity, description, amount, recorded_by, fund_source, hog_stage, expense_data)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (id) DO UPDATE SET
+        produce = EXCLUDED.produce, date = EXCLUDED.date, category = EXCLUDED.category,
+        quantity = EXCLUDED.quantity, description = EXCLUDED.description, amount = EXCLUDED.amount,
+        recorded_by = EXCLUDED.recorded_by, fund_source = EXCLUDED.fund_source,
+        hog_stage = EXCLUDED.hog_stage, expense_data = EXCLUDED.expense_data;
+    `, [
+      expense.id, produce, expenseDate, expense.category || null,
+      parseCount(expense.quantity, 1_000_000) ?? 0, expense.description || null, amount,
+      expense.recordedBy || null, expense.fundSource || null, expense.hogStage || null,
+      JSON.stringify({ ...expense, produce })
+    ]);
+  }
+  await pruneIgpTable(client, 'afa_igp_expenses', ids);
+}
+
+async function saveIgpSaleRows(client: pg.PoolClient, sales: any[], defaultProduce?: string) {
+  const ids: string[] = [];
+  for (const sale of sales) {
+    if (typeof sale?.id !== 'string' || !sale.id.trim()) {
+      throw new Error('Cannot sync IGP sale without a valid id');
+    }
+    const produce = typeof sale.produce === 'string' && sale.produce.trim()
+      ? sale.produce
+      : defaultProduce || 'Swine Raising (Baboyan)';
+    const revenue = parseMoney(sale.revenue);
+    const saleDate = parseDate(sale.date, 50);
+    if (revenue === null || !saleDate) {
+      console.warn('[cloud db push] rejected igp sale with invalid revenue or date:', sale.id);
+      continue;
+    }
+    ids.push(sale.id);
+    await client.query(`
+      INSERT INTO afa_igp_sales
+        (id, produce, date, hog_stage, hogs_count, produce_count, revenue, recorded_by, fund_source, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (id) DO UPDATE SET
+        produce = EXCLUDED.produce, date = EXCLUDED.date, hog_stage = EXCLUDED.hog_stage,
+        hogs_count = EXCLUDED.hogs_count, produce_count = EXCLUDED.produce_count,
+        revenue = EXCLUDED.revenue, recorded_by = EXCLUDED.recorded_by,
+        fund_source = EXCLUDED.fund_source, notes = EXCLUDED.notes;
+    `, [
+      sale.id, produce, saleDate, sale.hogStage || null,
+      parseCount(sale.hogsCount, 1_000_000) ?? 0, parseCount(sale.produceCount, 1_000_000) ?? 0,
+      revenue, sale.recordedBy || null, sale.fundSource || null, sale.notes || null
+    ]);
+  }
+  await pruneIgpTable(client, 'afa_igp_sales', ids);
+}
+
+async function saveIgpHarvestRows(client: pg.PoolClient, harvests: any[]) {
+  const ids: string[] = [];
+  for (const harvest of harvests) {
+    if (typeof harvest?.id !== 'string' || !harvest.id.trim()) continue;
+    if (!harvest.collectedBy) continue;
+    // The harvest count and day drive the egg production report, so both must
+    // parse exactly. A `HH:MM` time is normalised to 24h.
+    const eggCount = parseCount(harvest.eggCount, 1_000_000);
+    const harvestDate = parseDate(harvest.date, 50);
+    const harvestTime = normalizeClockTime(harvest.time);
+    if (eggCount === null || !harvestDate || !harvestTime) {
+      console.warn('[Cloud DB Push] Rejected IGP harvest with invalid count, date or time:', harvest.id);
+      continue;
+    }
+    const status = IGP_HARVEST_STATUSES.includes(harvest.status) ? harvest.status : 'Pending Audit';
+    ids.push(harvest.id);
+    await client.query(`
+      INSERT INTO afa_igp_harvests
+        (id, produce, date, time, collected_by, egg_count, notes, status, audited_by,
+         audited_date, audit_remarks, signed_by, signed_date, signature_remarks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ON CONFLICT (id) DO UPDATE SET
+        produce = EXCLUDED.produce, date = EXCLUDED.date, time = EXCLUDED.time,
+        collected_by = EXCLUDED.collected_by, egg_count = EXCLUDED.egg_count, notes = EXCLUDED.notes,
+        status = EXCLUDED.status, audited_by = EXCLUDED.audited_by, audited_date = EXCLUDED.audited_date,
+        audit_remarks = EXCLUDED.audit_remarks, signed_by = EXCLUDED.signed_by,
+        signed_date = EXCLUDED.signed_date, signature_remarks = EXCLUDED.signature_remarks;
+    `, [
+      harvest.id, harvest.produce || null, harvestDate, harvestTime,
+      harvest.collectedBy, eggCount, harvest.notes || null,
+      status, harvest.auditedBy || null, harvest.auditedDate || null, harvest.auditRemarks || null,
+      harvest.signedBy || null, harvest.signedDate || null, harvest.signatureRemarks || null
+    ]);
+  }
+  await pruneIgpTable(client, 'afa_igp_harvests', ids);
+}
+
+async function saveIgpGroupRows(client: pg.PoolClient, groups: any[]) {
+  const ids: string[] = [];
+  for (const [index, group] of groups.entries()) {
+    if (typeof group?.id !== 'string' || !group.id.trim()) continue;
+    // Roster names must look like names; a stray object or markup is dropped
+    // rather than stored as a group member.
+    const members: string[] = Array.isArray(group.members)
+      ? group.members.map((m: any) => cleanLabel(m, 200)).filter((m: string | null): m is string => Boolean(m))
+      : [];
+    const scheduleDays: string[] = Array.isArray(group.scheduleDays)
+      ? group.scheduleDays.map((d: any) => cleanLabel(d, 20)).filter((d: string | null): d is string => Boolean(d))
+      : [];
+    ids.push(group.id);
+    await client.query(`
+      INSERT INTO afa_igp_groups (id, name, schedule_days, sort_order)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (id) DO UPDATE SET
-        produce = EXCLUDED.produce,
-        date = EXCLUDED.date,
-        expense_data = EXCLUDED.expense_data;
-    `, [expense.id, produce, expense.date || null, JSON.stringify(segmentedExpense)]);
+        name = EXCLUDED.name, schedule_days = EXCLUDED.schedule_days, sort_order = EXCLUDED.sort_order;
+    `, [group.id, group.name || 'Group', scheduleDays, index]);
+    // Members live in their own table; replace the roster for this group.
+    await client.query('DELETE FROM afa_igp_group_members WHERE group_id = $1', [group.id]);
+    for (const [position, member] of members.entries()) {
+      await client.query(
+        'INSERT INTO afa_igp_group_members (group_id, member_name, position) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+        [group.id, member, position]
+      );
+    }
   }
-
-  await client.query(
-    'DELETE FROM afa_igp_expenses WHERE NOT (id = ANY($1::varchar[]))',
-    [ids]
-  );
+  await pruneIgpTable(client, 'afa_igp_groups', ids);
 }
 
 export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
@@ -1298,8 +1750,14 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Saving', activeUsers.length, 'users...');
       for (const u of activeUsers) {
         if (!u || typeof u.username !== 'string' || !u.username.trim()) continue;
-        // Bound the fields that reach `users` so a sync payload cannot inject markup.
-        const cleanUsername = String(u.username).trim().toLowerCase().slice(0, 100);
+        // Bound the fields that reach `users` so a sync payload cannot inject
+        // markup. The username also has to be a real account name: it is the
+        // lookup key, so a malformed one would create an unreachable account.
+        const cleanUsername = normalizeUsername(u.username);
+        if (!cleanUsername) {
+          console.warn('[Cloud DB Push] Skipping user row with an invalid username.');
+          continue;
+        }
         const existingRow = await client.query('SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1', [cleanUsername]);
         const existingRole = existingRow.rows[0]?.role;
         // Accounts are matched by username only. A client-supplied id must never
@@ -1346,9 +1804,9 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             mfa_enabled = COALESCE(users.mfa_enabled, EXCLUDED.mfa_enabled);
         `, [
           resolvedId, cleanUsername, '', cleanName, targetRole, isApproved,
-          cleanDateString(u.joinedDate, 50), cleanText(u.farmLocation, 200),
-          cleanTextList(u.primaryCrops), cleanText(u.contactNumber, 50), u.status === 'Inactive' ? 'Inactive' : 'Active',
-          safeImageUrl(u.avatarUrl), cleanText(u.memberIdNumber, 100), cleanText(u.rsbsaNumber, 100),
+          parseDate(u.joinedDate, 50), cleanText(u.farmLocation, 200),
+          cleanTextList(u.primaryCrops), normalizePhone(u.contactNumber), u.status === 'Inactive' ? 'Inactive' : 'Active',
+          safeImageUrl(u.avatarUrl), normalizeMemberId(u.memberIdNumber), normalizeRsbsa(u.rsbsaNumber),
           Boolean(u.isRsbsaRegistered),
           // MFA is enabled by enrollment only (auth endpoints), never by a sync row.
           false,
@@ -1384,10 +1842,12 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             birth_date = EXCLUDED.birth_date;
         `, [
           m.id, memberName, cleanText(m.farmLocation, 200),
-          cleanTextList(m.primaryCrops), cleanText(m.contactNumber, 50), m.status === 'Inactive' ? 'Inactive' : 'Active',
-          cleanDateString(m.joinedDate, 50), cleanText(m.memberIdNumber, 100), cleanText(m.rsbsaNumber, 100),
-          Boolean(m.isRsbsaRegistered), safeImageUrl(m.avatarUrl), cleanText(m.gender, 20),
-          cleanDateString(m.birthDate, 50)
+          cleanTextList(m.primaryCrops), normalizePhone(m.contactNumber), m.status === 'Inactive' ? 'Inactive' : 'Active',
+          parseDate(m.joinedDate, 50), normalizeMemberId(m.memberIdNumber), normalizeRsbsa(m.rsbsaNumber),
+          // A number that does not validate means "not RSBSA-registered", not "whatever was typed".
+          Boolean(m.isRsbsaRegistered) && normalizeRsbsa(m.rsbsaNumber) !== null,
+          safeImageUrl(m.avatarUrl), cleanText(m.gender, 20),
+          parseDate(m.birthDate, 50)
         ]);
       }
       console.log('[DB DEBUG] Members saved');
@@ -1440,10 +1900,16 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         // Ledger rows are the highest-integrity records: unknown entry types are
         // refused, amounts must be a finite non-negative number and text fields
         // are stripped of markup before they reach the books.
-        const txType = String(tx.type || '').toLowerCase();
+        const txType = String(tx.type || '').trim().toLowerCase();
         if (txType !== 'income' && txType !== 'expense') continue;
-        const txAmount = Number(tx.amount);
-        if (!Number.isFinite(txAmount) || txAmount < 0) continue;
+        // A ledger entry without a usable amount or date is rejected outright:
+        // storing 0 (or today's date) would misstate the books silently.
+        const txAmount = parseMoney(tx.amount);
+        const txDate = parseDate(tx.date, 50);
+        if (txAmount === null || !txDate) {
+          console.warn('[Cloud DB Push] Rejected financial row with invalid amount or date:', tx.id);
+          continue;
+        }
         await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, audited_status, audited_by, audited_date, audit_notes)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -1461,8 +1927,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             audited_date = EXCLUDED.audited_date,
             audit_notes = EXCLUDED.audit_notes;
         `, [
-          tx.id, txType === 'income' ? 'income' : 'expense', cleanText(tx.category, 100) || 'Uncategorized',
-          cleanNumber(txAmount), cleanDateString(tx.date, 50), cleanText(tx.description, 2000),
+          tx.id, txType, cleanText(tx.category, 100) || 'Uncategorized',
+          txAmount, txDate, cleanText(tx.description, 2000),
           cleanText(tx.recordedBy, 200), cleanText(tx.activityId, 100), cleanText(tx.fundSource, 200),
           AUDITED_STATUSES.includes(String(tx.auditedStatus)) ? String(tx.auditedStatus) : 'Unaudited',
           cleanText(tx.auditedBy, 200), cleanDateString(tx.auditedDate, 50), cleanText(tx.auditNotes, 2000)
@@ -1515,58 +1981,74 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         rtlCount: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.rtlCount) || 0))
       };
 
+      // These JSON blobs *are* the IGP ledger. Bound every row before it is
+      // stored so a malformed or hostile payload cannot corrupt the books.
+      const produces = sanitizeIgpProduces(state.hogRaising.produces);
+      // `recordedBy` is not part of HogRaisingState; read it off the record rows.
+      const defaults = {
+        produce: produces[0],
+        recordedBy: Array.isArray(state.hogRaising.expenses) && state.hogRaising.expenses[0]?.recordedBy
+      };
+      const expenses = sanitizeIgpLedger('expenses', state.hogRaising.expenses, defaults) ?? [];
+      const sales = sanitizeIgpLedger('sales', state.hogRaising.sales, defaults) ?? [];
+      const groups = sanitizeIgpGroups(state.hogRaising.groups) ?? [];
+      const closedYears = Array.isArray(state.hogRaising.closedYears)
+        ? state.hogRaising.closedYears
+            .map((year: unknown) => Math.floor(Number(year)))
+            .filter((year: number) => Number.isFinite(year) && year >= 1900 && year <= 2999)
+            .slice(0, 200)
+        : [];
+      const harvests = Array.isArray(state.hogRaising.eggHarvests)
+        ? state.hogRaising.eggHarvests
+        : undefined;
+      if (Array.isArray(state.hogRaising.expenses) && expenses.length !== state.hogRaising.expenses.length) {
+        console.warn('[Cloud DB Push] Dropped IGP expense rows that had no valid id or shape.');
+      }
+
+      // The afa_igp row now holds only the project header (opening herd, the
+      // herd breakdown, the produce list and closed years). Every ledger entry
+      // is written to its own table below.
       await client.query(`
-        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, expenses, sales, groups, chore_logs, closed_years)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, closed_years)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (id) DO UPDATE SET
           opening_hog_count = EXCLUDED.opening_hog_count,
           herd_breakdown = EXCLUDED.herd_breakdown,
           produces = EXCLUDED.produces,
-          expenses = EXCLUDED.expenses,
-          sales = EXCLUDED.sales,
-          groups = EXCLUDED.groups,
-          chore_logs = EXCLUDED.chore_logs,
           closed_years = EXCLUDED.closed_years;
       `, [
         'main_state',
         Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
         JSON.stringify(safeBreakdown),
-        state.hogRaising.produces || [],
-        JSON.stringify(state.hogRaising.expenses || []),
-        JSON.stringify(state.hogRaising.sales || []),
-        JSON.stringify(state.hogRaising.groups || []),
-        JSON.stringify(state.hogRaising.eggHarvests || state.hogRaising.choreLogs || []),
-        state.hogRaising.closedYears || []
+        produces,
+        closedYears
       ]);
       await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
-      await saveIgpExpenseSegments(
-        client,
-        state.hogRaising.expenses || [],
-        state.hogRaising.produces?.[0]
-      );
-      console.log('[DB DEBUG] AFA IGP state saved');
+
+      await saveIgpExpenseRows(client, expenses, produces[0]);
+      await saveIgpSaleRows(client, sales, produces[0]);
+      await saveIgpGroupRows(client, groups);
+      // A full snapshot must not roll the harvest approval chain back to the
+      // client's older copy; only an explicit list in *this* payload replaces it.
+      if (harvests !== undefined) await saveIgpHarvestRows(client, harvests.slice(0, 5000));
+      console.log('[DB DEBUG] AFA IGP state saved (header + ledger tables)');
     }
 
     if (Array.isArray(state.eggHarvests) && !state.hogRaising) {
       let eggHarvests = state.eggHarvests;
       if (state.appendEggHarvests) {
+        // Members only append: keep the stored workflow rows and add this
+        // submission alongside them, by id.
         const existing = await client.query(
-          "SELECT chore_logs FROM afa_igp WHERE id = 'main_state' FOR UPDATE"
+          "SELECT id FROM afa_igp_harvests"
         );
-        const existingEggHarvests = Array.isArray(existing.rows[0]?.chore_logs)
-          ? existing.rows[0].chore_logs
-          : [];
-        const existingIds = new Set(existingEggHarvests.map((harvest: any) => harvest?.id));
-        eggHarvests = [
-          ...eggHarvests.filter((harvest: any) => !existingIds.has(harvest?.id)),
-          ...existingEggHarvests
-        ];
+        const existingIds = new Set(existing.rows.map((row: any) => row.id));
+        eggHarvests = eggHarvests.filter((harvest: any) => !existingIds.has(harvest?.id));
+        await saveIgpHarvestRows(client, eggHarvests.slice(0, 5000));
+      } else {
+        // Audited / Signed workflow update: upsert the reviewed rows in place.
+        await saveIgpHarvestRows(client, eggHarvests.slice(0, 5000));
       }
-      await client.query(`
-        INSERT INTO afa_igp (id, chore_logs)
-        VALUES ('main_state', $1)
-        ON CONFLICT (id) DO UPDATE SET chore_logs = EXCLUDED.chore_logs
-      `, [JSON.stringify(eggHarvests)]);
     }
 
     // 6. System Logs
@@ -1626,8 +2108,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             date_updated = EXCLUDED.date_updated;
         `, [
           p.id, cleanText(p.name, 300) || 'Unnamed product', cleanText(p.cebName, 300), cleanText(p.category, 100),
-          cleanText(p.description, 5000), cleanText(p.unit, 50), cleanNumber(p.price), cleanText(p.quantityAvailable, 100),
-          cleanText(p.stockStatus, 50), cleanText(p.farmerName, 200), cleanText(p.farmerSitio, 200), cleanText(p.farmerPhone, 50),
+          cleanText(p.description, 5000), cleanText(p.unit, 50), parseMoney(p.price), cleanQuantityLabel(p.quantityAvailable),
+          cleanText(p.stockStatus, 50), cleanText(p.farmerName, 200), cleanText(p.farmerSitio, 200), normalizePhone(p.farmerPhone),
           cleanText(p.contactPerson, 200), safeImageUrl(p.imageUrl), p.isPublished !== false,
           cleanText(p.updatedBy, 200), cleanText(p.managedBy, 200), cleanDateString(p.dateUpdated, 50)
         ]);

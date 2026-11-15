@@ -82,6 +82,112 @@ export function cleanNumber(value: unknown, max = 1_000_000_000): number {
   return Math.min(Math.max(parsed, 0), max);
 }
 
+/** Entry types an IGP money record may carry. */
+const IGP_AMOUNT_KEYS: Record<string, string> = {
+  expenses: 'amount',
+  sales: 'revenue'
+};
+
+const MAX_IGP_ROWS = 5000;
+
+function cleanIgpGroup(entry: unknown, index: number): Record<string, unknown> | null {
+  if (!entry || typeof entry !== 'object') return null;
+  const row = entry as Record<string, unknown>;
+  const members = Array.isArray(row.members)
+    ? row.members.map((m) => cleanText(m, 200)?.trim()).filter((m): m is string => Boolean(m)).slice(0, 500)
+    : [];
+  const scheduleDays = Array.isArray(row.scheduleDays)
+    ? row.scheduleDays.map((d) => cleanText(d, 20)?.trim()).filter((d): d is string => Boolean(d)).slice(0, 7)
+    : [];
+  return {
+    id: typeof row.id === 'string' && row.id ? row.id : `group-${index}`,
+    name: cleanText(row.name, 200) || `Group ${index + 1}`,
+    members,
+    scheduleDays
+  };
+}
+
+/**
+ * The IGP ledger (hog/poultry/cattle projects) arrives as JSON blobs on one
+ * row. They are money records, so every row is bounded: an amount must be a
+ * finite non-negative number, a date must look like a date, text is stripped of
+ * markup, and the whole collection is capped. Rows without a usable id are
+ * dropped rather than silently merged into the previous one.
+ *
+ * Harvest entries are deliberately *not* sanitised here — their approval
+ * workflow is enforced in `push.ts` and stored separately.
+ */
+export function sanitizeIgpLedger(
+  bucket: 'expenses' | 'sales',
+  rows: unknown,
+  defaults: { produce?: string; recordedBy?: string } = {}
+): Array<Record<string, unknown>> | null {
+  const amountKey = IGP_AMOUNT_KEYS[bucket];
+  if (!amountKey) return null;
+  if (!Array.isArray(rows)) return [];
+
+  const clean: Array<Record<string, unknown>> = [];
+  for (const entry of rows) {
+    if (clean.length >= MAX_IGP_ROWS) break;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const row = entry as Record<string, unknown>;
+    if (typeof row.id !== 'string' || !row.id.trim()) continue;
+
+    const base: Record<string, unknown> = {
+      id: row.id.trim().slice(0, 100),
+      produce: cleanText(row.produce, 100) || cleanText(defaults.produce, 100) || bucket,
+      date: cleanDateString(row.date, 50) || '',
+      [amountKey]: cleanNumber(row[amountKey]),
+      recordedBy: cleanText(row.recordedBy, 200) || cleanText(defaults.recordedBy, 200) || 'Officer'
+    };
+
+    if (bucket === 'expenses') {
+      clean.push({
+        ...base,
+        category: cleanText(row.category, 100) || 'Other',
+        quantity: cleanNumber(row.quantity, 1_000_000),
+        description: cleanText(row.description, 2000) || '',
+        hogStage: cleanText(row.hogStage, 50) || undefined,
+        fundSource: cleanText(row.fundSource, 200) || undefined
+      });
+      continue;
+    }
+
+    clean.push({
+      ...base,
+      hogsCount: cleanNumber(row.hogsCount, 1_000_000),
+      produceCount: cleanNumber(row.produceCount, 1_000_000),
+      notes: cleanText(row.notes, 2000) || undefined,
+      hogStage: cleanText(row.hogStage, 50) || undefined,
+      fundSource: cleanText(row.fundSource, 200) || undefined
+    });
+  }
+  return clean;
+}
+
+/** Sanitises the IGP `groups` roster: member names, schedules and labels. */
+export function sanitizeIgpGroups(rows: unknown): Array<Record<string, unknown>> | null {
+  if (!Array.isArray(rows)) return [];
+  const clean: Array<Record<string, unknown>> = [];
+  for (const [index, entry] of rows.entries()) {
+    if (clean.length >= 500) break;
+    const group = cleanIgpGroup(entry, index);
+    if (group) clean.push(group);
+  }
+  return clean;
+}
+
+export function sanitizeIgpProduces(rows: unknown): string[] {
+  if (!Array.isArray(rows)) return [];
+  const clean: string[] = [];
+  for (const entry of rows) {
+    const name = cleanText(entry, 100)?.trim();
+    if (name && !clean.includes(name)) clean.push(name);
+    if (clean.length >= 50) break;
+  }
+  return clean;
+}
+
 const FORGED_USER_FIELDS = [
   'password',
   'passwordHash',
