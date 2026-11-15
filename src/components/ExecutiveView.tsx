@@ -12,8 +12,9 @@ import { generateInitialPassword } from '../utils/passwordPolicy';
 import PrintMinutesModal from './PrintMinutesModal';
 import { useLanguage } from '../i18n/LanguageContext';
 import {
-  Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis
+  Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, LabelList
 } from 'recharts';
+import { ChevronDown } from 'lucide-react';
 
 interface ExecutiveViewProps {
   members: Member[];
@@ -104,6 +105,9 @@ export default function ExecutiveView({
   const adminTasksCloseRef = React.useRef<HTMLButtonElement>(null);
   const adminPasswordInputRef = React.useRef<HTMLInputElement>(null);
   const adminTasksWasOpenRef = React.useRef(false);
+  const [fundSourcesOpen, setFundSourcesOpen] = useState(false);
+  const [livestockOpen, setLivestockOpen] = useState(false);
+
 
   useEffect(() => {
     if (showAdminTasksModal) {
@@ -533,8 +537,8 @@ export default function ExecutiveView({
             <ShieldCheck className="w-6 h-6 text-[#D8F3DC] shrink-0" />
             <span className="break-words">
               {currentRole === 'President'
-                ? 'President\'s Suite'
-                : 'Vice President\'s Desk'}
+                ? 'President Dashboard'
+                : 'Vice President Dashboard'}
             </span>
           </h2>
         </div>
@@ -571,81 +575,113 @@ export default function ExecutiveView({
       </div>
 
       {/* OVERVIEW SCOREBOARD */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Members */}
-        <div className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left">
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Total Members</span>
-            <Users className="w-5 h-5 text-[#1B4332]" />
-          </div>
-          <div className="text-3xl font-black font-display text-[#1B4332]">{totalMembers}</div>
-        </div>
+{(() => {
+  // Shared card style: same height/padding/layout for every box
+  const card =
+    "bg-white border border-[#E9E4D9] p-4 rounded-2xl shadow-sm text-left h-32 flex flex-col justify-between min-w-0";
+  const clickable =
+    " cursor-pointer transition-all group select-none hover:bg-[#FAF9F5]";
+  const label =
+    "text-[11px] font-bold uppercase tracking-wider leading-tight line-clamp-2";
+  const value = "text-2xl font-black font-display truncate";
 
-        {/* Association Funds */}
-        <div className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left">
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">All Registered Fund Balances</span>
-            <Coins className="w-5 h-5 text-[#E65100]" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black font-display text-[#1B4332] tracking-tight">
-            PHP {totalRegisteredFundBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-          </div>
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Total Members */}
+      <div className={card}>
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={label}>Total Members</span>
+          <Users className="w-5 h-5 shrink-0 text-[#1B4332]" />
         </div>
+        <div className={`${value} text-[#1B4332]`}>{totalMembers}</div>
+      </div>
 
-        {/* Assemblies */}
-        <div
-          onClick={() => setShowMeetingsModal(true)}
-          className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-[#1B4332] hover:bg-[#FAF9F5] transition-all group select-none"
-        >
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider group-hover:text-[#1B4332]">General Assembly</span>
-            <BookOpen className="w-5 h-5 text-[#0D47A1] group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="text-3xl font-black font-display text-[#1B4332] flex items-baseline gap-2">
-            <span>{meetings.length}</span>
-            <span className="text-[10px] font-bold text-[#0D47A1] hover:underline">View / Print</span>
-          </div>
+      {/* Association Funds */}
+{(() => {
+  const fundNumber = totalRegisteredFundBalance.toLocaleString('en-US', {
+    maximumFractionDigits: 0,
+  });
+
+  // Shrink the font as the number gets longer so it never gets cut off
+  const fundSize =
+    fundNumber.length <= 7 ? "text-2xl" :
+    fundNumber.length <= 9 ? "text-xl" :
+    fundNumber.length <= 11 ? "text-lg" :
+    "text-base";
+
+  return (
+    <div className={card} title={`PHP ${fundNumber}`}>
+      <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+        <span className="text-[10px] font-bold uppercase tracking-wider leading-tight line-clamp-2">
+          Fund Balances
+        </span>
+        <Coins className="w-5 h-5 shrink-0 text-[#E65100]" />
+      </div>
+      <div className="flex items-baseline gap-1 whitespace-nowrap text-[#1B4332]">
+        <span className="text-xs font-bold text-[#5D6B54]">PHP</span>
+        <span className={`${fundSize} font-black font-display tracking-tight tabular-nums`}>
+          {fundNumber}
+        </span>
+      </div>
+    </div>
+  );
+})()}
+
+      {/* Assemblies */}
+      <div
+        onClick={() => setShowMeetingsModal(true)}
+        className={`${card}${clickable} hover:border-[#1B4332]`}
+      >
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={`${label} group-hover:text-[#1B4332]`}>General Assembly</span>
+          <BookOpen className="w-5 h-5 shrink-0 text-[#0D47A1] group-hover:scale-110 transition-transform" />
         </div>
-
-        {/* Pending Approvals */}
-        <div className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left">
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Aprobahan (Resolutions)</span>
-            <FileCheck className="w-5 h-5 text-[#E65100]" />
-          </div>
-          <div className="text-3xl font-black font-display text-[#E65100]">{pendingResolutions.length}</div>
-        </div>
-
-        {/* Minutes of Meeting Awaiting President Approval (Secretary drafts → President approves) */}
-        <div
-          onClick={() => setShowMeetingsModal(true)}
-          className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-[#1B4332] hover:bg-[#FAF9F5] transition-all group select-none"
-        >
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider group-hover:text-[#1B4332]">Minutes for Approval</span>
-            <BookOpen className="w-5 h-5 text-purple-700 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="text-3xl font-black font-display text-purple-700">{pendingMinutesMeetings.length}</div>
-        </div>
-
-        {/* Audited Financial Records Awaiting President Approval (Auditor → President) */}
-        <div
-          onClick={() => setShowFinancialApprovalsModal(true)}
-          className="bg-white border border-[#E9E4D9] p-5 rounded-2xl shadow-sm text-left cursor-pointer hover:border-emerald-700 hover:bg-[#FAF9F5] transition-all group select-none"
-        >
-          <div className="flex justify-between items-center text-[#5D6B54] mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider group-hover:text-emerald-700">Financial Approvals</span>
-            <Coins className="w-5 h-5 text-emerald-700 group-hover:scale-110 transition-transform" />
-          </div>
-          <div className="text-3xl font-black font-display text-emerald-700">{auditedPendingTx.length}</div>
+        <div className={`${value} text-[#1B4332] flex items-baseline gap-2`}>
+          <span>{meetings.length}</span>
+          <span className="text-[10px] font-bold text-[#0D47A1] hover:underline">View / Print</span>
         </div>
       </div>
+
+      {/* Resolutions */}
+      <div className={card}>
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={label}>Resolutions</span>
+          <FileCheck className="w-5 h-5 shrink-0 text-[#E65100]" />
+        </div>
+        <div className={`${value} text-[#E65100]`}>{pendingResolutions.length}</div>
+      </div>
+
+      {/* Minutes for Approval (Secretary drafts → President approves) */}
+      <div
+        onClick={() => setShowMeetingsModal(true)}
+        className={`${card}${clickable} hover:border-[#1B4332]`}
+      >
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={`${label} group-hover:text-[#1B4332]`}>Minutes for Approval</span>
+          <BookOpen className="w-5 h-5 shrink-0 text-purple-700 group-hover:scale-110 transition-transform" />
+        </div>
+        <div className={`${value} text-purple-700`}>{pendingMinutesMeetings.length}</div>
+      </div>
+
+      {/* Financial Approvals (Auditor → President) */}
+      <div
+        onClick={() => setShowFinancialApprovalsModal(true)}
+        className={`${card}${clickable} hover:border-emerald-700`}
+      >
+        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+          <span className={`${label} group-hover:text-emerald-700`}>Financial Approvals</span>
+          <Coins className="w-5 h-5 shrink-0 text-emerald-700 group-hover:scale-110 transition-transform" />
+        </div>
+        <div className={`${value} text-emerald-700`}>{auditedPendingTx.length}</div>
+      </div>
+    </div>
+  );
+})()}
 
       <section className="space-y-4 text-left" aria-labelledby="executive-analytics-title">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
           <div>
             <h3 id="executive-analytics-title" className="text-lg font-black text-[#1B4332]">Financial Analytics</h3>
-            <p className="text-xs font-semibold text-[#5D6B54]">Association ledger and livestock IGP · {analyticsYear}</p>
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -682,85 +718,288 @@ export default function ExecutiveView({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <div className="bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
-            <h4 className="text-sm font-extrabold text-[#1B4332] mb-1">Expenses linked to events</h4>
-            <p className="text-[11px] text-[#5D6B54] mb-3">Association expenses assigned to an activity in the current year.</p>
-            {eventExpenseData.length ? (
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={eventExpenseData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#5D6B54', fontSize: 10 }} tickFormatter={(value: number) => `₱${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`} />
-                    <YAxis type="category" dataKey="name" width={140} tick={{ fill: '#5D6B54', fontSize: 10 }} />
-                    <Tooltip formatter={(value) => `PHP ${Number(value).toLocaleString('en-US')}`} />
-                    <Bar dataKey="expenses" name="Event expenses" fill="#D97706" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="py-12 text-center text-xs font-semibold text-[#85947E]">No event-linked expenses recorded for {analyticsYear}.</p>
-            )}
-          </div>
+{(() => {
+  const compact = (v: number) =>
+    new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+  const peso = (v: number) => `PHP ${Number(v).toLocaleString('en-US')}`;
+  const truncate = (s: string, max = 22) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+  const rowHeight = 36;
+  const chartHeight = (n: number) => Math.max(180, n * rowHeight + 40);
 
-          <div className="bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
-            <h4 className="text-sm font-extrabold text-[#1B4332] mb-1">Livestock expenses</h4>
-            <p className="text-[11px] text-[#5D6B54] mb-3">IGP spending by livestock project and expense category · {analyticsYear}</p>
-            {livestockExpenseData.length ? (
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={livestockExpenseData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#5D6B54', fontSize: 10 }} tickFormatter={(value: number) => `₱${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`} />
-                    <YAxis type="category" dataKey="name" width={165} tick={{ fill: '#5D6B54', fontSize: 9 }} />
-                    <Tooltip formatter={(value) => `PHP ${Number(value).toLocaleString('en-US')}`} />
-                    <Bar dataKey="expenses" name="Livestock expenses" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="py-12 text-center text-xs font-semibold text-[#85947E]">No livestock expenses recorded for {analyticsYear}.</p>
-            )}
-          </div>
-        </div>
+  // Y-axis label: truncated text, full name on hover
+const CategoryTick = ({ x, y, payload }: any) => (
+  <g transform={`translate(${x},${y})`}>
+    <title>{payload.value}</title>
+    <text
+      x={0}
+      y={0}
+      dy={10}
+      textAnchor="end"
+      transform="rotate(-35)"
+      fill="#5D6B54"
+      fontSize={10}
+    >
+      {truncate(String(payload.value), 16)}
+    </text>
+  </g>
+);
 
-        <div className="bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
-          <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
-            <div>
-              <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
-              <p className="text-[11px] text-[#5D6B54]">Balances for all registered funds, with recorded income and expenses by source.</p>
-            </div>
-            <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
-              {funds.length} registered · {fundSourceAnalytics.length} sources tracked
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      {/* Expenses linked to events */}
+      <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
+        <h4 className="text-sm font-extrabold text-[#1B4332] mb-3">Expenses linked to events</h4>
+        {eventExpenseData.length ? (
+          <div className="w-full" style={{ height: chartHeight(eventExpenseData.length) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={eventExpenseData}
+                layout="vertical"
+                margin={{ top: 4, right: 56, left: 4, bottom: 4 }}
+                barCategoryGap="25%"
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" horizontal={false} />
+                <XAxis
+                  type="number"
+                  domain={[0, 'dataMax']}
+                  tick={{ fill: '#5D6B54', fontSize: 10 }}
+                  tickFormatter={(v: number) => `₱${compact(v)}`}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={130}
+                  tick={<CategoryTick />}
+                  interval={0}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: '#FAF9F5' }}
+                  formatter={(v) => [peso(Number(v)), 'Event expenses']}
+                  contentStyle={{ borderRadius: 12, border: '1px solid #E9E4D9', fontSize: 12 }}
+                />
+                <Bar dataKey="expenses" name="Event expenses" fill="#D97706" radius={[0, 4, 4, 0]} barSize={18}>
+                  <LabelList
+                    dataKey="expenses"
+                    position="right"
+                    formatter={(v: unknown) => `₱${compact(Number(v) || 0)}`}
+                    style={{ fill: '#1B4332', fontSize: 10, fontWeight: 700 }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
+            No event-linked expenses recorded for {analyticsYear}.
+          </p>
+        )}
+      </div>
+      
+{/* Livestock expenses */}
+{(() => {
+  const PREVIEW_COUNT = 2;
+  const sorted = [...livestockExpenseData].sort((a, b) => b.expenses - a.expenses);
+  const total = sorted.reduce((sum, d) => sum + d.expenses, 0);
+  const max = sorted[0]?.expenses || 1;
+  const fmt = (v: number) => Number(v).toLocaleString('en-US');
+
+  const preview = sorted.slice(0, PREVIEW_COUNT);
+  const rest = sorted.slice(PREVIEW_COUNT);
+
+  const renderRow = (item: (typeof sorted)[number]) => {
+    const share = total ? (item.expenses / total) * 100 : 0;
+    return (
+      <li key={item.name} title={`${item.name}: PHP ${fmt(item.expenses)}`}>
+        <div className="flex items-baseline justify-between gap-3 mb-1">
+          <span className="text-xs font-bold text-[#1B4332] truncate">{item.name}</span>
+          <span className="text-xs font-bold text-[#5D6B54] tabular-nums shrink-0">
+            PHP {fmt(item.expenses)}
+            <span className="ml-1 text-[10px] font-semibold text-[#85947E]">
+              {share.toFixed(1)}%
             </span>
-          </div>
-          {fundSourceAnalytics.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {fundSourceAnalytics.map(source => (
-                <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
-                  <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
-                  {source.registered ? (
-                    <>
-                      <div className="text-lg font-black font-mono text-[#1B4332]">PHP {(source.balance || 0).toLocaleString('en-US')}</div>
-                      <p className="text-[10px] text-[#5D6B54]">Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}</p>
-                    </>
-                  ) : (
-                    <div className="text-sm font-black font-mono text-[#5D6B54]">
-                      Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
-                    <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
-                    <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
-                  </div>
-                </div>
-              ))}
+          </span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-[#F1EDE3] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-[#8B5CF6]"
+            style={{ width: `${(item.expenses / max) * 100}%` }}
+          />
+        </div>
+      </li>
+    );
+  };
+
+  return (
+    <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
+      <button
+        type="button"
+        onClick={() => rest.length && setLivestockOpen(o => !o)}
+        aria-expanded={livestockOpen}
+        aria-controls="livestock-expenses-panel"
+        disabled={!rest.length}
+        className="w-full flex items-start justify-between gap-3 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        <div className="min-w-0">
+          <h4 className="text-sm font-extrabold text-[#1B4332]">Livestock expenses</h4>
+          <p className="text-[11px] font-semibold text-[#85947E]">
+            {analyticsYear} · {sorted.length} {sorted.length === 1 ? 'category' : 'categories'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-right">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#5D6B54]">Total</div>
+            <div className="text-lg font-black font-display text-[#1B4332] tabular-nums">
+              PHP {fmt(total)}
             </div>
-          ) : (
-            <p className="py-8 text-center text-xs font-semibold text-[#85947E]">No registered fund sources or attributed transactions yet.</p>
+          </div>
+          {rest.length > 0 && (
+            <ChevronDown
+              size={16}
+              className={`text-[#1B4332] transition-transform duration-300 ${livestockOpen ? 'rotate-180' : ''}`}
+            />
           )}
         </div>
-      </section>
+      </button>
+
+      <div id="livestock-expenses-panel" className="px-4 sm:px-5 pb-4 sm:pb-5">
+        {sorted.length ? (
+          <>
+            <ul className="space-y-3">{preview.map(renderRow)}</ul>
+
+            {rest.length > 0 && (
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                  livestockOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <ul className="space-y-3 pt-3 max-h-[320px] overflow-y-auto pr-1">
+                    {rest.map(renderRow)}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {rest.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setLivestockOpen(o => !o)}
+                className="mt-3 text-[11px] font-bold text-[#5D6B54] hover:text-[#1B4332] transition-colors"
+              >
+                {livestockOpen ? 'Show less' : `Show ${rest.length} more`}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
+            No livestock expenses recorded for {analyticsYear}.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+})()}
+    </div>
+  );
+})()}
+
+{/* Registered fund sources */}
+{(() => {
+  const PREVIEW_COUNT = 2;
+  const preview = fundSourceAnalytics.slice(0, PREVIEW_COUNT);
+  const rest = fundSourceAnalytics.slice(PREVIEW_COUNT);
+
+  const renderSource = (source: (typeof fundSourceAnalytics)[number]) => (
+    <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
+      <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
+      {source.registered ? (
+        <>
+          <div className="text-lg font-black font-mono text-[#1B4332]">
+            PHP {(source.balance || 0).toLocaleString('en-US')}
+          </div>
+          <p className="text-[10px] text-[#5D6B54]">
+            Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}
+          </p>
+        </>
+      ) : (
+        <div className="text-sm font-black font-mono text-[#5D6B54]">
+          Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+        <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
+        <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
+      </div>
+    </div>
+  );
+
+  const gridClass = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3';
+
+  return (
+    <div className="bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
+      <button
+        type="button"
+        onClick={() => rest.length && setFundSourcesOpen(o => !o)}
+        aria-expanded={fundSourcesOpen}
+        aria-controls="fund-sources-panel"
+        disabled={!rest.length}
+        className="w-full flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
+            {funds.length} registered · {fundSourceAnalytics.length} sources tracked
+          </span>
+          {rest.length > 0 && (
+            <ChevronDown
+              size={16}
+              className={`text-[#1B4332] transition-transform duration-300 ${fundSourcesOpen ? 'rotate-180' : ''}`}
+            />
+          )}
+        </div>
+      </button>
+
+      <div id="fund-sources-panel" className="px-4 sm:px-5 pb-4 sm:pb-5">
+        {fundSourceAnalytics.length ? (
+          <>
+            <div className={gridClass}>{preview.map(renderSource)}</div>
+
+            {rest.length > 0 && (
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                  fundSourcesOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <div className={`${gridClass} pt-3`}>{rest.map(renderSource)}</div>
+                </div>
+              </div>
+            )}
+
+            {rest.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setFundSourcesOpen(o => !o)}
+                className="mt-3 text-[11px] font-bold text-[#5D6B54] hover:text-[#1B4332] transition-colors"
+              >
+                {fundSourcesOpen ? 'Show less' : `Show ${rest.length} more`}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="py-8 text-center text-xs font-semibold text-[#85947E]">
+            No registered fund sources or attributed transactions yet.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+})()}
+</section>
 
       {showAdminTasksModal && (
         <div
@@ -780,7 +1019,6 @@ export default function ExecutiveView({
                   <ShieldAlert className="w-5 h-5 text-[#D8F3DC] shrink-0" />
                   <span>Admin Tasks</span>
                 </h3>
-                <p className="text-xs text-[#D8F3DC]/80 mt-1">Officer governance, security operations, and system backups</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {isAdminUnlocked && currentRole === 'President' && onDownloadBackup && (
@@ -837,7 +1075,7 @@ export default function ExecutiveView({
             <div>
               <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
                 <ShieldAlert className="w-5.5 h-5.5 text-[#1B4332]" />
-                <span>Executive Admin Desk — Officer Governance & Security Operations</span>
+                <span>Admin Desk</span>
               </h3>
             </div>
             <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
@@ -867,10 +1105,6 @@ export default function ExecutiveView({
                   {showAddOfficerForm ? 'Cancel' : '+ Add Officer Account'}
                 </button>
               )}
-              <div className="inline-flex items-center gap-1.5 bg-[#EAF4EC] border border-[#2D6A4F]/30 text-[#1B4332] px-3 py-1 rounded-full text-xs font-bold shrink-0">
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Auto-Sync Active</span>
-              </div>
             </div>
           </div>
 
@@ -1699,26 +1933,34 @@ export default function ExecutiveView({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+        {/* Horizontal log rows */}
+        <div className="flex flex-col gap-1.5 max-h-[360px] overflow-y-auto pr-1">
           {filteredLogs.length > 0 ? (
             filteredLogs.map((log) => (
               <div
                 key={log.id}
-                className="text-xs bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-2 text-left space-y-0.5 transition-all hover:border-[#85947E]"
+                title={log.details}
+                className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-1.5 text-left transition-all hover:border-[#85947E] flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-0.5"
               >
-                <div className="flex justify-between items-center gap-2 text-[9px] text-[#85947E] font-semibold">
-                  <span className="flex items-center gap-1 font-mono">
-                    <Clock className="w-2.5 h-2.5" />
-                    {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  <span className="bg-[#EAF4EC] text-[#1B4332] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0">
-                    {log.role.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="text-[11px] font-extrabold text-[#2D3A22] truncate">
+                {/* Timestamp */}
+                <span className="flex items-center gap-1 font-mono text-[9px] text-[#85947E] font-semibold shrink-0 sm:w-[135px]">
+                  <Clock className="w-2.5 h-2.5 shrink-0" />
+                  {new Date(log.timestamp).toLocaleDateString()}{' '}
+                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+
+                {/* Role badge */}
+                <span className="bg-[#EAF4EC] text-[#1B4332] text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0 sm:w-[84px] sm:text-center truncate">
+                  {log.role.replace('_', ' ')}
+                </span>
+
+                {/* User • action */}
+                <span className="text-[11px] font-extrabold text-[#2D3A22] truncate min-w-0 sm:w-[190px] sm:shrink-0">
                   {log.user} • <span className="text-[#2E7D32]">{log.action}</span>
-                </div>
-                <p className="text-[#5D6B54] leading-snug text-[10px] font-sans line-clamp-2 break-words">
+                </span>
+
+                {/* Details */}
+                <p className="text-[#5D6B54] text-[10px] font-sans leading-snug break-words w-full sm:w-auto sm:flex-1 sm:min-w-0 line-clamp-2 sm:line-clamp-1">
                   {log.details}
                 </p>
               </div>
@@ -1959,7 +2201,7 @@ export default function ExecutiveView({
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5.5 h-5.5 text-[#D8F3DC]" />
                 <div>
-                  <h3 className="font-extrabold text-white text-sm">Mga Agi sa Asembliya ug Miting</h3>
+                  <h3 className="font-extrabold text-white text-sm">Assemblies and Meetings</h3>
                 </div>
               </div>
               <button 

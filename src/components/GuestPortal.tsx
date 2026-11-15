@@ -184,24 +184,24 @@ export default function GuestPortal({
   const activeMembersCount = members.filter(m => m.status === 'Active').length;
   const boardMemberNames = resolveBoardMemberNames(users);
   const tabs: { id: 'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'; label: string; icon: typeof Sparkles }[] = [
-    { id: 'home', label: t('Kinatibuk-ang Tan-aw', 'Overview'), icon: Sparkles },
-    { id: 'announcements', label: t('Mga Pahibalo', 'Announcements'), icon: Megaphone },
-    { id: 'activities', label: t('Mga Kalihokan', 'Activities'), icon: Calendar },
-    { id: 'products', label: t('Mga Produkto', 'Products'), icon: Coffee },
-    { id: 'achievements', label: t('Mga Kalampusan', 'Achievements'), icon: Trophy },
+    { id: 'home', label: t('Overview', 'Overview'), icon: Sparkles },
+    { id: 'announcements', label: t('Pahibalo', 'Announcements'), icon: Megaphone },
+    { id: 'activities', label: t('Kalihokan', 'Activities'), icon: Calendar },
+    { id: 'products', label: t('Produkto', 'Products'), icon: Coffee },
+    { id: 'achievements', label: t('Kalampusan', 'Achievements'), icon: Trophy },
     { id: 'history', label: t('Kasaysayan', 'History'), icon: BookOpen }
   ];
   const priorityLabel = (priority: string) => {
-    if (priority === 'High') return t('Taas', 'High');
-    if (priority === 'Medium') return t('Kasagaran', 'Medium');
-    return t('Ubos', 'Low');
+    if (priority === 'High') return t('High', 'High');
+    if (priority === 'Medium') return t('Medium', 'Medium');
+    return t('Low', 'Low');
   };
   const activityStatusLabel = (status: string) => {
-    if (status === 'Completed') return t('Nahuman', 'Completed');
-    if (status === 'In Progress') return t('Nagpadayon', 'In progress');
-    if (status === 'Postponed') return t('Gibalhin sa petsa', 'Postponed');
-    if (status === 'Cancelled') return t('Gikansela', 'Cancelled');
-    return t('Naka-iskedyul', 'Scheduled');
+    if (status === 'Completed') return t('Completed', 'Completed');
+    if (status === 'In Progress') return t('In Progress', 'In progress');
+    if (status === 'Postponed') return t('Postponed', 'Postponed');
+    if (status === 'Cancelled') return t('Cancelled', 'Cancelled');
+    return t('Scheduled', 'Scheduled');
   };
 
   // Theme styling tailored for senior citizens (high contrast, warm, large readable text)
@@ -211,6 +211,7 @@ export default function GuestPortal({
     headerText: 'text-bafa-700 font-black',
     accentText: 'text-bafa-coral-600 font-black',
     accentBg: 'bg-bafa-gold-200 text-bafa-coral-600',
+  
     primaryBtn: 'bg-bafa-700 hover:bg-bafa-800 text-white shadow-lg text-sm sm:text-base font-black px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl cursor-pointer'
   };
 
@@ -346,13 +347,13 @@ export default function GuestPortal({
                 <div className="flex items-center justify-between border-b border-[#D5CFC1] pb-2.5">
                   <h4 className="font-black text-[#1B4332] text-sm sm:text-base flex items-center gap-2">
                     <Megaphone className="w-4 h-4 sm:w-5 sm:h-5 text-[#BF360C]" />
-                    <span>{t('Mga Pahibalo', 'Announcements')}</span>
+                    <span>{t('Pahibalo', 'Announcements')}</span>
                   </h4>
                   <button
                     onClick={() => setActiveTab('announcements')}
                     className="text-xs font-black text-[#BF360C] hover:underline cursor-pointer flex items-center gap-1"
                   >
-                    <span>{t('Tan-awa ang tanan', 'View all')}</span>
+                    <span>{t('View all', 'View all')}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -366,7 +367,7 @@ export default function GuestPortal({
                           ann.priority === 'Medium' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                           'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         }`}>
-                          {priorityLabel(ann.priority)} {t('prayoridad', 'priority')}
+                          {priorityLabel(ann.priority)} {t('priority', 'priority')}
                         </span>
                         <span className="text-slate-500 font-semibold">{ann.datePosted}</span>
                       </div>
@@ -385,13 +386,13 @@ export default function GuestPortal({
                 <div className="flex items-center justify-between border-b border-[#D5CFC1] pb-2.5">
                   <h4 className="font-black text-[#1B4332] text-sm sm:text-base flex items-center gap-2">
                     <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" />
-                    <span>{t('Mga Kalihokan', 'Activities')}</span>
+                    <span>{t('Kalihokan', 'Activities')}</span>
                   </h4>
                   <button
                     onClick={() => setActiveTab('activities')}
                     className="text-xs font-black text-emerald-800 hover:underline cursor-pointer flex items-center gap-1"
                   >
-                    <span>{t('Tan-awa ang tanan', 'View all')}</span>
+                    <span>{t('View all', 'View all')}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -482,11 +483,11 @@ export default function GuestPortal({
                         ann.priority === 'Medium' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
                         'bg-emerald-100 text-emerald-900 border border-emerald-300'
                       }`}>
-                        {priorityLabel(ann.priority)} {t('prayoridad', 'priority')}
+                        {priorityLabel(ann.priority)} {t('priority', 'priority')}
                       </span>
                       <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
-                        {t('Gipatik:', 'Posted:')} {ann.datePosted}
+                        {t('Posted:', 'Posted:')} {ann.datePosted}
                       </span>
                     </div>
 
@@ -499,7 +500,7 @@ export default function GuestPortal({
                       <Tag className="w-3.5 h-3.5 text-emerald-700" />
                       {ann.category}
                     </span>
-                    <span>{t('Gipatik ni:', 'Posted by:')} {ann.postedBy}</span>
+                    <span>{t('Posted by:', 'Posted by:')} {ann.postedBy}</span>
                   </div>
                 </div>
               ))}
@@ -519,7 +520,7 @@ export default function GuestPortal({
               <div className="border-b-2 border-[#F0EBE1] pb-3.5 sm:pb-4 flex items-center gap-2.5 flex-wrap">
                 <Calendar className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-700 shrink-0" />
                 <h3 className="text-lg sm:text-xl md:text-2xl font-black text-[#1B4332] font-display break-words">
-                  {t('Mga Kalihokan sa Komunidad', 'Community Activities')}
+                  {t('Kalihokan sa Komunidad', 'Community Activities')}
                 </h3>
               </div>
             </div>
@@ -653,7 +654,7 @@ export default function GuestPortal({
                 <div className="bg-[#EAF4EC] border-2 border-[#1B4332]/30 p-4 sm:p-6 rounded-2xl space-y-3.5 text-left min-w-0">
                   <h4 className="font-black text-[#1B4332] text-xs sm:text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-emerald-950/15 pb-2 font-display break-words">
                     <Users className="w-4 h-4 sm:w-5 sm:h-5 text-[#1B4332] shrink-0" />
-                    <span>{t('Mga Opisyales sa AFA (2026)', 'AFA Officers (2026)')}</span>
+                    <span>{t('Opisyales sa AFA (2026)', 'AFA Officers (2026)')}</span>
                   </h4>
                   <div className="space-y-2 text-xs text-slate-700 font-medium min-w-0">
                     {resolveOfficerRoster(users).map((officer, i) => (
@@ -727,7 +728,7 @@ export default function GuestPortal({
               })}
               {displayAchievements.length === 0 && (
                 <div className="bg-white border-2 border-dashed border-[#D5CFC1] rounded-2xl p-6 text-sm text-slate-600">
-                  {t('Wala pay gipatik nga mga kalampusan ang asosasyon.', 'The association has not published any achievements yet.')}
+                  {t('The association has not published any achievements yet.', 'The association has not published any achievements yet.')}
                 </div>
               )}
             </div>
@@ -762,9 +763,6 @@ export default function GuestPortal({
                     aria-label={`${t('Tan-awa ang detalye sa', 'View details for')} ${prod.name}`}
                     className="w-full min-h-24 text-left bg-white border-2 border-[#D5CFC1] hover:border-[#1B4332] hover:shadow-lg transition-all duration-200 rounded-2xl p-4 flex items-start gap-3 min-w-0 cursor-pointer group"
                   >
-                    <div aria-hidden="true" className={`p-2.5 rounded-xl ${cardColor} border shadow-inner shrink-0`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
                     <div className="min-w-0 flex-1 space-y-1">
                       <h4 className="text-sm font-black text-[#1B4332] font-display leading-snug break-words group-hover:text-emerald-800 transition-colors">
                         {prod.name}
@@ -804,17 +802,6 @@ export default function GuestPortal({
                 </p>
               )}
             </div>
-
-
-            {/* Buying Note Card */}
-            <div className="bg-[#EAF4EC] rounded-2xl p-4 sm:p-5 text-center space-y-1.5 max-w-3xl mx-auto min-w-0">
-              <h4 className="text-base sm:text-lg font-black text-[#1B4332] font-display break-words">{t('Gusto ba mo-order o mo-abang?', 'Would you like to order or rent?')}</h4>
-              <p className="text-sm sm:text-base text-slate-800 font-semibold leading-relaxed break-words">
-                {en
-                  ? `Contact or visit President ${resolveOfficerName(users, 'President')} or any AFA officer to place an order or book a rental.`
-                  : `Kontaka o bisitaha si Presidente ${resolveOfficerName(users, 'President')} o bisan kinsa nga Opisyales sa AFA aron mo-order o mo-book og abang.`}
-              </p>
-            </div>
           </div>
         )}
 
@@ -830,9 +817,9 @@ export default function GuestPortal({
           <div className="flex flex-col items-center md:items-end gap-1.5 shrink-0">
             <span className="flex items-center gap-1.5 bg-[#143326] px-3.5 py-1.5 rounded-xl border border-emerald-600/30">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="font-black text-sm tracking-wider uppercase">{t('Rehistradong Portal sa LGU ug DA', 'LGU & DA Registered Portal')}</span>
+              <span className="font-black text-sm tracking-wider uppercase">{t('LGU & DA Registered Portal', 'LGU & DA Registered Portal')}</span>
             </span>
-            <a href="/privacy" className="inline-flex min-h-11 items-center text-sm font-bold text-[#D8F3DC] hover:text-white hover:underline">{t('Palisiya sa Pribasiya', 'Privacy Policy')}</a>
+            <a href="/privacy" className="inline-flex min-h-11 items-center text-sm font-bold text-[#D8F3DC] hover:text-white hover:underline">{t('Privacy Policy', 'Privacy Policy')}</a>
           </div>
         </div>
       </footer>
@@ -865,9 +852,6 @@ export default function GuestPortal({
               </button>
 
               <div className="flex items-start gap-3 sm:gap-4 pr-10 min-w-0">
-                <div className="p-2.5 sm:p-3 rounded-2xl bg-white/15 text-white shrink-0">
-                  {selectedProductModal.category?.includes('Rental') ? <Boxes className="w-6 h-6" /> : <Coffee className="w-6 h-6" />}
-                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                     <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-100 border border-emerald-300/30">
@@ -878,9 +862,6 @@ export default function GuestPortal({
                     </span>
                   </div>
                   <h3 id="product-dialog-title" className="text-lg sm:text-xl font-black leading-tight break-words">{selectedProductModal.name}</h3>
-                  {selectedProductModal.cebName && (
-                    <p className="text-xs sm:text-sm text-emerald-100/80 mt-0.5 break-words">{selectedProductModal.cebName}</p>
-                  )}
                 </div>
               </div>
             </div>
@@ -892,7 +873,7 @@ export default function GuestPortal({
               <div className="grid grid-cols-2 gap-3 items-stretch">
                 <div className="rounded-2xl border-2 border-[#F0D5B4] bg-[#FFF7EC] px-4 py-3 flex flex-col justify-between">
                   <span className="block text-[10px] font-black uppercase tracking-wider text-[#8A5A1E]">
-                    {t('Presyo / abang', 'Price / rental rate')}
+                    {t('Presyo', 'Price')}
                   </span>
                   <span className="block text-xl sm:text-2xl font-black font-mono text-[#BF360C] mt-1 break-words leading-tight">
                     {typeof selectedProductModal.price === 'number'
@@ -963,15 +944,6 @@ export default function GuestPortal({
                     </a>
                   )}
                 </div>
-              </div>
-
-              {/* HOW TO ORDER */}
-              <div className="rounded-2xl bg-[#EAF4EC] border-2 border-[#B7E3C4] px-4 py-3 flex items-start gap-2.5">
-                <Check className="w-4 h-4 text-[#1B4332] shrink-0 mt-0.5" />
-                <p className="text-sm font-bold text-[#1B4332] leading-relaxed">
-                  {t('Pakigkita sa opisyal sa AFA o sa Alegria Farmers Center aron mo-order o moabang.',
-                     'Contact an AFA officer or visit the Alegria Farmers Center to order or rent.')}
-                </p>
               </div>
             </div>
 

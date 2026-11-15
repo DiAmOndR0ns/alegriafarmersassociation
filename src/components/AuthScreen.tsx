@@ -346,7 +346,7 @@ export default function AuthScreen({
               </div>
               <div>
                 <h1 className="text-2xl sm:text-[2rem] font-black font-display tracking-tight text-white uppercase leading-none">AFA</h1>
-                <p className="text-[10px] text-[#D9F5E3] font-bold tracking-[0.18em] uppercase mt-1">Alegria, Tuburan, Cebu</p>
+                <p className="text-[10px] text-[#D9F5E3] font-bold tracking-[0.18em] uppercase mt-1">Alegria Farmers Association</p>
               </div>
             </div>
 
@@ -357,9 +357,6 @@ export default function AuthScreen({
 
               <div className="space-y-3 pt-2 text-sm text-white">
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
-                  <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                  </div>
                   <span>
                     <strong className="font-extrabold text-white">{en ? 'Quick sign in:' : 'Dali nga pagsulod:'}</strong>{' '}
                     {en
@@ -368,9 +365,6 @@ export default function AuthScreen({
                   </span>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
-                  <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                  </div>
                   <span>
                     <strong className="font-extrabold text-white">{en ? 'Membership verification:' : 'Pagpamatuod sa pagkamiyembro:'}</strong>{' '}
                     {en
@@ -379,9 +373,6 @@ export default function AuthScreen({
                   </span>
                 </div>
                 <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
-                  <div className="bg-bafa-600 p-1.5 rounded-full mt-0.5 text-white shrink-0">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                  </div>
                   <span>
                     <strong className="font-extrabold text-white">{en ? 'Member access:' : 'Pag-access sa miyembro:'}</strong>{' '}
                     {en
