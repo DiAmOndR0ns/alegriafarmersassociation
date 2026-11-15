@@ -1,281 +1,5 @@
 // src/api/db.ts
 import pg from "pg";
-
-// src/utils/fundBalance.ts
-function getInitialFund(fund) {
-  const initial = Number(fund.initialFund);
-  if (Number.isFinite(initial)) return initial;
-  const legacy = Number(fund.allocatedAmount);
-  return Number.isFinite(legacy) ? legacy : 0;
-}
-
-// src/api/sanitize.ts
-var MAX_TEXT_LENGTH = 2e4;
-var MARKUP_CHARS = /[<>]/g;
-var HANDLER_NAME = /(?:onerror|onload|onclick|onmouseover|onfocus|onstart|onbegin|javascript|vbscript)/gi;
-function cleanText(value, maxLength = MAX_TEXT_LENGTH) {
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  if (typeof value !== "string") return null;
-  const limit = Math.min(Math.max(1, maxLength), MAX_TEXT_LENGTH);
-  return value.slice(0, MAX_TEXT_LENGTH).replace(MARKUP_CHARS, "").replace(/(?:java|vb)script\s*:/gi, "").replace(HANDLER_NAME, "").slice(0, limit);
-}
-function cleanTextList(value, maxItemLength = 80, maxItems = 30) {
-  if (!Array.isArray(value)) return [];
-  const cleaned = [];
-  for (const entry of value) {
-    const text = cleanText(entry, maxItemLength)?.trim();
-    if (text && !cleaned.includes(text)) cleaned.push(text);
-  }
-  return cleaned.slice(0, maxItems);
-}
-function safeImageUrl(value, maxLength = 4e5) {
-  if (typeof value !== "string") return null;
-  const url = value.trim().slice(0, maxLength);
-  if (!url) return null;
-  if (/^https?:\/\/[^\s<>"]+$/i.test(url)) return url;
-  if (/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(url)) return url;
-  return null;
-}
-function cleanDateString(value, maxLength = 50) {
-  if (typeof value !== "string" && typeof value !== "number") return null;
-  const text = String(value).trim().slice(0, maxLength);
-  if (!text) return null;
-  if (/^\d{4}$/.test(text)) return text;
-  if (/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(text)) return text;
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(text)) return text;
-  return null;
-}
-function cleanNumber(value, max = 1e9) {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.min(Math.max(parsed, 0), max);
-}
-var IGP_AMOUNT_KEYS = {
-  expenses: "amount",
-  sales: "revenue"
-};
-var MAX_IGP_ROWS = 5e3;
-function cleanIgpGroup(entry, index) {
-  if (!entry || typeof entry !== "object") return null;
-  const row = entry;
-  const members = Array.isArray(row.members) ? row.members.map((m) => cleanText(m, 200)?.trim()).filter((m) => Boolean(m)).slice(0, 500) : [];
-  const scheduleDays = Array.isArray(row.scheduleDays) ? row.scheduleDays.map((d) => cleanText(d, 20)?.trim()).filter((d) => Boolean(d)).slice(0, 7) : [];
-  return {
-    id: typeof row.id === "string" && row.id ? row.id : `group-${index}`,
-    name: cleanText(row.name, 200) || `Group ${index + 1}`,
-    members,
-    scheduleDays
-  };
-}
-function sanitizeIgpLedger(bucket, rows, defaults = {}) {
-  const amountKey = IGP_AMOUNT_KEYS[bucket];
-  if (!amountKey) return null;
-  if (!Array.isArray(rows)) return [];
-  const clean = [];
-  for (const entry of rows) {
-    if (clean.length >= MAX_IGP_ROWS) break;
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-    const row = entry;
-    if (typeof row.id !== "string" || !row.id.trim()) continue;
-    const base = {
-      id: row.id.trim().slice(0, 100),
-      produce: cleanText(row.produce, 100) || cleanText(defaults.produce, 100) || bucket,
-      date: cleanDateString(row.date, 50) || "",
-      [amountKey]: cleanNumber(row[amountKey]),
-      recordedBy: cleanText(row.recordedBy, 200) || cleanText(defaults.recordedBy, 200) || "Officer"
-    };
-    if (bucket === "expenses") {
-      clean.push({
-        ...base,
-        category: cleanText(row.category, 100) || "Other",
-        quantity: cleanNumber(row.quantity, 1e6),
-        description: cleanText(row.description, 2e3) || "",
-        hogStage: cleanText(row.hogStage, 50) || void 0,
-        fundSource: cleanText(row.fundSource, 200) || void 0
-      });
-      continue;
-    }
-    clean.push({
-      ...base,
-      hogsCount: cleanNumber(row.hogsCount, 1e6),
-      produceCount: cleanNumber(row.produceCount, 1e6),
-      notes: cleanText(row.notes, 2e3) || void 0,
-      hogStage: cleanText(row.hogStage, 50) || void 0,
-      fundSource: cleanText(row.fundSource, 200) || void 0
-    });
-  }
-  return clean;
-}
-function sanitizeIgpGroups(rows) {
-  if (!Array.isArray(rows)) return [];
-  const clean = [];
-  for (const [index, entry] of rows.entries()) {
-    if (clean.length >= 500) break;
-    const group = cleanIgpGroup(entry, index);
-    if (group) clean.push(group);
-  }
-  return clean;
-}
-function sanitizeIgpProduces(rows) {
-  if (!Array.isArray(rows)) return [];
-  const clean = [];
-  for (const entry of rows) {
-    const name = cleanText(entry, 100)?.trim();
-    if (name && !clean.includes(name)) clean.push(name);
-    if (clean.length >= 50) break;
-  }
-  return clean;
-}
-var FORGED_USER_FIELDS = [
-  "password",
-  "passwordHash",
-  "password_history",
-  "passwordHistory",
-  "mfaEnabled",
-  "mfa_enabled",
-  "totpSecret",
-  "pendingTotpSecret",
-  "isApproved",
-  "failedLoginAttempts",
-  "lockedUntil",
-  "resetRequested"
-];
-function sanitizeUserRows(rows, options = {}) {
-  const safeRows = [];
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    const clean = { ...row };
-    for (const key of FORGED_USER_FIELDS) delete clean[key];
-    if (options.roleAuthorized) {
-      clean.roleAuthorized = true;
-    } else {
-      if (clean.role !== void 0 && clean.role !== "Member") {
-        clean.role = "Member";
-      }
-      delete clean.roleAuthorized;
-    }
-    safeRows.push(clean);
-  }
-  return safeRows;
-}
-
-// src/api/validation.ts
-var LABEL = /^[\p{L}\p{N} .,'&()/#+:°_\-\u2013\u2014]{1,200}$/u;
-var QUANTITY_LABEL = /^\d{1,6}(?:\.\d{1,3})?(?:\s?[A-Za-z]{1,12})?(?:\s?\/\s?[A-Za-z]{1,12})?$/;
-function matchText(value, pattern, maxLength) {
-  const cleaned = cleanText(value, maxLength)?.trim();
-  if (!cleaned) return null;
-  const safePattern = pattern.global ? new RegExp(pattern.source, pattern.flags.replace("g", "")) : pattern;
-  return safePattern.test(cleaned) ? cleaned : null;
-}
-function cleanLabel(value, maxLength = 200) {
-  return matchText(value, LABEL, maxLength);
-}
-function cleanQuantityLabel(value) {
-  return matchText(value, QUANTITY_LABEL, 100);
-}
-var DECIMAL_WITH_SEPARATORS = /^-?(?:0|[1-9]\d{0,2}(?:,\d{3})*|[1-9]\d{0,14})(?:\.\d{1,4})?$/;
-var INTEGER = /^-?(?:0|[1-9]\d{0,11})$/;
-function parseNumeric(value, pattern) {
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return null;
-    return pattern.test(String(value)) ? value : null;
-  }
-  if (typeof value !== "string") return null;
-  const text = value.trim().replace(/[\u20B1\u20AC$]/g, "").trim();
-  if (!text || !pattern.test(text)) return null;
-  const parsed = Number(text.replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-function parseMoney(value, max = 1e9) {
-  const parsed = parseNumeric(value, DECIMAL_WITH_SEPARATORS);
-  if (parsed === null || parsed < 0 || parsed > max) return null;
-  return Math.round(parsed * 100) / 100;
-}
-function parseCount(value, max = 1e6) {
-  const parsed = parseNumeric(value, INTEGER);
-  if (parsed === null || parsed < 0 || parsed > max) return null;
-  return parsed;
-}
-function isRealCalendarDate(text) {
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
-  const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
-  let year;
-  let month;
-  let day;
-  if (iso) {
-    [, year, month, day] = iso.map((part) => Number(part));
-  } else if (dmy) {
-    [, month, day, year] = dmy.map((part) => Number(part));
-  } else {
-    return true;
-  }
-  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
-  const probe = new Date(Date.UTC(year, month - 1, day));
-  return probe.getUTCFullYear() === year && probe.getUTCMonth() === month - 1 && probe.getUTCDate() === day;
-}
-function parseDate(value, maxLength = 50) {
-  const text = cleanDateString(value, maxLength);
-  if (!text) return null;
-  return isRealCalendarDate(text) ? text : null;
-}
-var CLOCK_24 = /^([01]?\d|2[0-3]):([0-5]\d)$/;
-var CLOCK_12 = /^(0?[1-9]|1[0-2]):([0-5]\d)\s*([AaPp][Mm])$/;
-function normalizeClockTime(value) {
-  if (typeof value !== "string") return null;
-  const text = value.trim();
-  const clock24 = CLOCK_24.exec(text);
-  if (clock24) return `${clock24[1].padStart(2, "0")}:${clock24[2]}`;
-  const clock12 = CLOCK_12.exec(text);
-  if (clock12) {
-    const hour = Number(clock12[1]) % 12 + (/pm/i.test(clock12[3]) ? 12 : 0);
-    return `${String(hour).padStart(2, "0")}:${clock12[2]}`;
-  }
-  return null;
-}
-var PH_MOBILE = /^(?:\+?63|0)9\d{9}$/;
-var PH_LANDLINE = /^(?:\+?63|0)\d{1,2}\d{7}$/;
-function normalizePhone(value) {
-  if (value === null || value === void 0) return null;
-  if (typeof value !== "string" && typeof value !== "number") return null;
-  const digits = String(value).replace(/[\s\-().]/g, "");
-  if (!/^\+?\d{9,15}$/.test(digits)) return null;
-  const national = PH_MOBILE.test(digits) || PH_LANDLINE.test(digits);
-  if (!national) return null;
-  const trimmed = digits.replace(/^\+?63/, "").replace(/^0/, "");
-  if (digits.includes("9") && /^9\d{9}$/.test(trimmed)) return `+63${trimmed}`;
-  return `+63${trimmed}`;
-}
-var MEMBER_ID = /^[A-Za-z0-9](?:[A-Za-z0-9-]{2,30})[A-Za-z0-9]$/;
-function normalizeMemberId(value) {
-  const text = matchText(value, MEMBER_ID, 100);
-  return text ? text.toUpperCase() : null;
-}
-var RSBSA = /^\d{2,14}(?:-\d{2,6}){0,3}(?:-[A-Za-z]{1,3})?$/;
-function normalizeRsbsa(value) {
-  return matchText(value, RSBSA, 100);
-}
-var USERNAME = /^[a-z0-9](?:[a-z0-9._-]{1,98})[a-z0-9]$/;
-function normalizeUsername(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim().toLowerCase();
-  if (trimmed.includes("..")) return null;
-  return USERNAME.test(trimmed) ? trimmed : null;
-}
-
-// src/api/db.ts
-var AUDITED_STATUSES = ["Unaudited", "Audited", "Flagged"];
-var ASSIGNABLE_ROLE_VALUES = [
-  "Vice_President",
-  "Secretary",
-  "Assistant_Secretary",
-  "Board_Member",
-  "Treasurer",
-  "Assistant_Treasurer",
-  "Auditor",
-  "PIO",
-  "Member"
-];
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
 var poolInstance = null;
 var lastUsedConnectionString = null;
@@ -296,7 +20,6 @@ function scheduleIdleEviction(connectionString) {
   if (typeof timer?.unref === "function") timer.unref();
   poolIdleTimers.set(connectionString, timer);
 }
-var DATABASE_URL_ERROR = "DATABASE_URL must point at the hosted Supabase PostgreSQL project.";
 function isLoopbackDatabaseUrl(rawUrl) {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
   try {
@@ -333,10 +56,10 @@ function cleanDatabaseUrl(rawUrl) {
 function getPool() {
   const rawDbUrl = process.env.DATABASE_URL;
   if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
-    throw new Error(DATABASE_URL_ERROR);
+    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
   }
   if (!rawDbUrl || !isDatabaseConfigured()) {
-    throw new Error(DATABASE_URL_ERROR);
+    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
   }
   const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
   const cached = poolCache.get(connectionString);
@@ -401,94 +124,19 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
-    // The herd breakdown is stored as JSONB but its keys are declared by the
-    // application (fattening, gestation, lactating, dispersal, cattleFattening,
-    // cattleDispersal, rtlCount). Keep the default in step with the writer; the
-    // column is added first so this ALTER cannot reference a missing column.
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
-    `ALTER TABLE afa_igp ALTER COLUMN herd_breakdown SET DEFAULT '{"fattening":0,"gestation":0,"lactating":0,"dispersal":0,"cattleFattening":0,"cattleDispersal":0,"rtlCount":0}'::jsonb;`,
-    // IGP ledger. Each record is its own row with typed columns so the books can
-    // be queried, summed and audited in SQL. `expense_data` is kept only as the
-    // original snapshot for rollback; the columns are the source of truth.
     `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT NOT NULL,
       date VARCHAR(50),
-      category VARCHAR(100),
-      quantity NUMERIC DEFAULT 0,
-      description TEXT,
-      amount NUMERIC NOT NULL DEFAULT 0,
-      recorded_by TEXT,
-      fund_source TEXT,
-      hog_stage VARCHAR(50),
-      expense_data JSONB
+      expense_data JSONB NOT NULL
     );`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS category VARCHAR(100);`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 0;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS description TEXT;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS amount NUMERIC NOT NULL DEFAULT 0;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS recorded_by TEXT;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS hog_stage VARCHAR(50);`,
-    `ALTER TABLE afa_igp_expenses ALTER COLUMN expense_data DROP NOT NULL;`,
     `CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);`,
-    `CREATE INDEX IF NOT EXISTS afa_igp_expenses_date_idx ON afa_igp_expenses (date);`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_sales (
-      id VARCHAR(100) PRIMARY KEY,
-      produce TEXT NOT NULL,
-      date VARCHAR(50),
-      hog_stage VARCHAR(50),
-      hogs_count INTEGER NOT NULL DEFAULT 0,
-      produce_count INTEGER NOT NULL DEFAULT 0,
-      revenue NUMERIC NOT NULL DEFAULT 0,
-      recorded_by TEXT,
-      fund_source TEXT,
-      notes TEXT
-    );`,
-    `CREATE INDEX IF NOT EXISTS afa_igp_sales_produce_idx ON afa_igp_sales (produce);`,
-    `CREATE INDEX IF NOT EXISTS afa_igp_sales_date_idx ON afa_igp_sales (date);`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_harvests (
-      id VARCHAR(100) PRIMARY KEY,
-      produce TEXT,
-      date VARCHAR(50),
-      time VARCHAR(50),
-      collected_by TEXT NOT NULL,
-      egg_count INTEGER NOT NULL DEFAULT 0,
-      notes TEXT,
-      status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
-      audited_by TEXT,
-      audited_date VARCHAR(50),
-      audit_remarks TEXT,
-      signed_by TEXT,
-      signed_date VARCHAR(50),
-      signature_remarks TEXT
-    );`,
-    `CREATE INDEX IF NOT EXISTS afa_igp_harvests_status_idx ON afa_igp_harvests (status);`,
-    `CREATE INDEX IF NOT EXISTS afa_igp_harvests_collected_idx ON afa_igp_harvests (collected_by);`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_groups (
-      id VARCHAR(100) PRIMARY KEY,
-      name TEXT NOT NULL,
-      schedule_days TEXT[],
-      sort_order INTEGER NOT NULL DEFAULT 0
-    );`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_group_members (
-      group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id) ON DELETE CASCADE,
-      member_name TEXT NOT NULL,
-      position INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (group_id, member_name)
-    );`,
-    // --- Backfill from the legacy JSONB arrays (idempotent). ---
-    `INSERT INTO afa_igp_expenses (id, produce, date, category, quantity, description, amount, recorded_by, fund_source, hog_stage, expense_data)
+    `INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
       SELECT expense->>'id',
         COALESCE(NULLIF(expense->>'produce', ''), 'Swine Raising (Baboyan)'),
-        NULLIF(expense->>'date', ''),
-        NULLIF(expense->>'category', ''),
-        COALESCE(NULLIF(expense->>'quantity', ''), '0')::numeric,
-        expense->>'description',
-        COALESCE(NULLIF(expense->>'amount', ''), '0')::numeric,
-        NULLIF(expense->>'recordedBy', ''),
-        NULLIF(expense->>'fundSource', ''),
-        NULLIF(expense->>'hogStage', ''),
+        expense->>'date',
         expense
       FROM afa_igp AS igp
       CROSS JOIN LATERAL jsonb_array_elements(
@@ -496,68 +144,6 @@ async function runSchemaMigrations(client) {
       ) AS item(expense)
       WHERE NULLIF(expense->>'id', '') IS NOT NULL
       ON CONFLICT (id) DO NOTHING;`,
-    `INSERT INTO afa_igp_sales (id, produce, date, hog_stage, hogs_count, produce_count, revenue, recorded_by, fund_source, notes)
-      SELECT sale->>'id',
-        COALESCE(NULLIF(sale->>'produce', ''), 'Swine Raising (Baboyan)'),
-        NULLIF(sale->>'date', ''),
-        NULLIF(sale->>'hogStage', ''),
-        COALESCE(NULLIF(sale->>'hogsCount', ''), '0')::integer,
-        COALESCE(NULLIF(sale->>'produceCount', ''), '0')::integer,
-        COALESCE(NULLIF(sale->>'revenue', ''), '0')::numeric,
-        NULLIF(sale->>'recordedBy', ''),
-        NULLIF(sale->>'fundSource', ''),
-        NULLIF(sale->>'notes', '')
-      FROM afa_igp AS igp
-      CROSS JOIN LATERAL jsonb_array_elements(
-        CASE WHEN jsonb_typeof(igp.sales) = 'array' THEN igp.sales ELSE '[]'::jsonb END
-      ) AS item(sale)
-      WHERE NULLIF(sale->>'id', '') IS NOT NULL
-      ON CONFLICT (id) DO NOTHING;`,
-    `INSERT INTO afa_igp_harvests (id, produce, date, time, collected_by, egg_count, notes, status, audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks)
-      SELECT harvest->>'id',
-        NULLIF(harvest->>'produce', ''),
-        NULLIF(harvest->>'date', ''),
-        NULLIF(harvest->>'time', ''),
-        COALESCE(NULLIF(harvest->>'collectedBy', ''), 'Unknown'),
-        COALESCE(NULLIF(harvest->>'eggCount', ''), '0')::integer,
-        NULLIF(harvest->>'notes', ''),
-        COALESCE(NULLIF(harvest->>'status', ''), 'Pending Audit'),
-        NULLIF(harvest->>'auditedBy', ''),
-        NULLIF(harvest->>'auditedDate', ''),
-        NULLIF(harvest->>'auditRemarks', ''),
-        NULLIF(harvest->>'signedBy', ''),
-        NULLIF(harvest->>'signedDate', ''),
-        NULLIF(harvest->>'signatureRemarks', '')
-      FROM afa_igp AS igp
-      CROSS JOIN LATERAL jsonb_array_elements(
-        CASE WHEN jsonb_typeof(igp.chore_logs) = 'array' THEN igp.chore_logs ELSE '[]'::jsonb END
-      ) AS item(harvest)
-      WHERE NULLIF(harvest->>'id', '') IS NOT NULL
-      ON CONFLICT (id) DO NOTHING;`,
-    `INSERT INTO afa_igp_groups (id, name, schedule_days, sort_order)
-      SELECT grp->>'id',
-        COALESCE(NULLIF(grp->>'name', ''), 'Group'),
-        CASE WHEN jsonb_typeof(grp->'scheduleDays') = 'array'
-          THEN ARRAY(SELECT jsonb_array_elements_text(grp->'scheduleDays'))
-          ELSE ARRAY[]::text[] END,
-        row_number() OVER ()
-      FROM afa_igp AS igp
-      CROSS JOIN LATERAL jsonb_array_elements(
-        CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
-      ) AS item(grp)
-      WHERE NULLIF(grp->>'id', '') IS NOT NULL
-      ON CONFLICT (id) DO NOTHING;`,
-    `INSERT INTO afa_igp_group_members (group_id, member_name, position)
-      SELECT grp->>'id', member, position - 1
-      FROM afa_igp AS igp
-      CROSS JOIN LATERAL jsonb_array_elements(
-        CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
-      ) AS item(grp)
-      CROSS JOIN LATERAL jsonb_array_elements_text(
-        CASE WHEN jsonb_typeof(grp->'members') = 'array' THEN grp->'members' ELSE '[]'::jsonb END
-      ) WITH ORDINALITY AS m(member, position)
-      WHERE NULLIF(grp->>'id', '') IS NOT NULL
-      ON CONFLICT (group_id, member_name) DO NOTHING;`,
     `DROP TABLE IF EXISTS hog_raising;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
@@ -588,7 +174,7 @@ async function runSchemaMigrations(client) {
       id VARCHAR(100) PRIMARY KEY,
       name TEXT NOT NULL,
       code VARCHAR(50) NOT NULL,
-      allocated_amount NUMERIC DEFAULT 0,
+      initial_fund NUMERIC DEFAULT 0,
       current_balance NUMERIC DEFAULT 0,
       description TEXT,
       custodian TEXT,
@@ -597,16 +183,6 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
-    // Legacy databases still carry allocated_amount; newer ones only have initial_fund.
-    // Guard the backfill so a missing legacy column cannot fail the whole migration.
-    `DO $$
-     BEGIN
-       IF EXISTS (SELECT 1 FROM information_schema.columns
-                   WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
-         UPDATE organization_funds SET initial_fund = allocated_amount
-          WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
-       END IF;
-     END $$;`,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
@@ -811,69 +387,10 @@ async function initDatabaseSchema(pool) {
         id VARCHAR(100) PRIMARY KEY,
         produce TEXT NOT NULL,
         date VARCHAR(50),
-        category VARCHAR(100),
-        quantity NUMERIC DEFAULT 0,
-        description TEXT,
-        amount NUMERIC NOT NULL DEFAULT 0,
-        recorded_by TEXT,
-        fund_source TEXT,
-        hog_stage VARCHAR(50),
-        expense_data JSONB
+        expense_data JSONB NOT NULL
       );
     `);
     await client.query("CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);");
-    await client.query("CREATE INDEX IF NOT EXISTS afa_igp_expenses_date_idx ON afa_igp_expenses (date);");
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_sales (
-        id VARCHAR(100) PRIMARY KEY,
-        produce TEXT NOT NULL,
-        date VARCHAR(50),
-        hog_stage VARCHAR(50),
-        hogs_count INTEGER NOT NULL DEFAULT 0,
-        produce_count INTEGER NOT NULL DEFAULT 0,
-        revenue NUMERIC NOT NULL DEFAULT 0,
-        recorded_by TEXT,
-        fund_source TEXT,
-        notes TEXT
-      );
-    `);
-    await client.query("CREATE INDEX IF NOT EXISTS afa_igp_sales_produce_idx ON afa_igp_sales (produce);");
-    await client.query("CREATE INDEX IF NOT EXISTS afa_igp_sales_date_idx ON afa_igp_sales (date);");
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_harvests (
-        id VARCHAR(100) PRIMARY KEY,
-        produce TEXT,
-        date VARCHAR(50),
-        time VARCHAR(50),
-        collected_by TEXT NOT NULL,
-        egg_count INTEGER NOT NULL DEFAULT 0,
-        notes TEXT,
-        status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
-        audited_by TEXT,
-        audited_date VARCHAR(50),
-        audit_remarks TEXT,
-        signed_by TEXT,
-        signed_date VARCHAR(50),
-        signature_remarks TEXT
-      );
-    `);
-    await client.query("CREATE INDEX IF NOT EXISTS afa_igp_harvests_status_idx ON afa_igp_harvests (status);");
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_groups (
-        id VARCHAR(100) PRIMARY KEY,
-        name TEXT NOT NULL,
-        schedule_days TEXT[],
-        sort_order INTEGER NOT NULL DEFAULT 0
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_group_members (
-        group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id) ON DELETE CASCADE,
-        member_name TEXT NOT NULL,
-        position INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (group_id, member_name)
-      );
-    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(100) PRIMARY KEY,
@@ -944,16 +461,6 @@ async function initDatabaseSchema(pool) {
         ADD COLUMN IF NOT EXISTS category TEXT,
         ADD COLUMN IF NOT EXISTS source_origin TEXT,
         ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
-    `);
-    await client.query(`
-      DO $$
-      BEGIN
-        IF EXISTS (SELECT 1 FROM information_schema.columns
-                    WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
-          UPDATE organization_funds SET initial_fund = allocated_amount
-           WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
-        END IF;
-      END $$;
     `);
     await client.query(`
       ALTER TABLE organization_funds
@@ -1104,154 +611,28 @@ async function saveEntity(client, rows, mapping) {
     await client.query(query, values);
   }
 }
-var IGP_HARVEST_STATUSES = ["Pending Audit", "Audited", "Signed", "Returned"];
-async function pruneIgpTable(client, table, ids) {
-  if (ids.length === 0) return;
-  await client.query(`DELETE FROM ${table} WHERE NOT (id = ANY($1::varchar[]))`, [ids]);
-}
-async function saveIgpExpenseRows(client, expenses, defaultProduce) {
+async function saveIgpExpenseSegments(client, expenses, defaultProduce) {
   const ids = [];
   for (const expense of expenses) {
     if (typeof expense?.id !== "string" || !expense.id.trim()) {
       throw new Error("Cannot sync IGP expense without a valid id");
     }
     const produce = typeof expense.produce === "string" && expense.produce.trim() ? expense.produce : defaultProduce || "Swine Raising (Baboyan)";
-    const amount = parseMoney(expense.amount);
-    const expenseDate = parseDate(expense.date, 50);
-    if (amount === null || !expenseDate) {
-      console.warn("[cloud db push] rejected igp expense with invalid amount or date:", expense.id);
-      continue;
-    }
+    const segmentedExpense = { ...expense, produce };
     ids.push(expense.id);
     await client.query(`
-      INSERT INTO afa_igp_expenses
-        (id, produce, date, category, quantity, description, amount, recorded_by, fund_source, hog_stage, expense_data)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (id) DO UPDATE SET
-        produce = EXCLUDED.produce, date = EXCLUDED.date, category = EXCLUDED.category,
-        quantity = EXCLUDED.quantity, description = EXCLUDED.description, amount = EXCLUDED.amount,
-        recorded_by = EXCLUDED.recorded_by, fund_source = EXCLUDED.fund_source,
-        hog_stage = EXCLUDED.hog_stage, expense_data = EXCLUDED.expense_data;
-    `, [
-      expense.id,
-      produce,
-      expenseDate,
-      expense.category || null,
-      parseCount(expense.quantity, 1e6) ?? 0,
-      expense.description || null,
-      amount,
-      expense.recordedBy || null,
-      expense.fundSource || null,
-      expense.hogStage || null,
-      JSON.stringify({ ...expense, produce })
-    ]);
-  }
-  await pruneIgpTable(client, "afa_igp_expenses", ids);
-}
-async function saveIgpSaleRows(client, sales, defaultProduce) {
-  const ids = [];
-  for (const sale of sales) {
-    if (typeof sale?.id !== "string" || !sale.id.trim()) {
-      throw new Error("Cannot sync IGP sale without a valid id");
-    }
-    const produce = typeof sale.produce === "string" && sale.produce.trim() ? sale.produce : defaultProduce || "Swine Raising (Baboyan)";
-    const revenue = parseMoney(sale.revenue);
-    const saleDate = parseDate(sale.date, 50);
-    if (revenue === null || !saleDate) {
-      console.warn("[cloud db push] rejected igp sale with invalid revenue or date:", sale.id);
-      continue;
-    }
-    ids.push(sale.id);
-    await client.query(`
-      INSERT INTO afa_igp_sales
-        (id, produce, date, hog_stage, hogs_count, produce_count, revenue, recorded_by, fund_source, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (id) DO UPDATE SET
-        produce = EXCLUDED.produce, date = EXCLUDED.date, hog_stage = EXCLUDED.hog_stage,
-        hogs_count = EXCLUDED.hogs_count, produce_count = EXCLUDED.produce_count,
-        revenue = EXCLUDED.revenue, recorded_by = EXCLUDED.recorded_by,
-        fund_source = EXCLUDED.fund_source, notes = EXCLUDED.notes;
-    `, [
-      sale.id,
-      produce,
-      saleDate,
-      sale.hogStage || null,
-      parseCount(sale.hogsCount, 1e6) ?? 0,
-      parseCount(sale.produceCount, 1e6) ?? 0,
-      revenue,
-      sale.recordedBy || null,
-      sale.fundSource || null,
-      sale.notes || null
-    ]);
-  }
-  await pruneIgpTable(client, "afa_igp_sales", ids);
-}
-async function saveIgpHarvestRows(client, harvests) {
-  const ids = [];
-  for (const harvest of harvests) {
-    if (typeof harvest?.id !== "string" || !harvest.id.trim()) continue;
-    if (!harvest.collectedBy) continue;
-    const eggCount = parseCount(harvest.eggCount, 1e6);
-    const harvestDate = parseDate(harvest.date, 50);
-    const harvestTime = normalizeClockTime(harvest.time);
-    if (eggCount === null || !harvestDate || !harvestTime) {
-      console.warn("[Cloud DB Push] Rejected IGP harvest with invalid count, date or time:", harvest.id);
-      continue;
-    }
-    const status = IGP_HARVEST_STATUSES.includes(harvest.status) ? harvest.status : "Pending Audit";
-    ids.push(harvest.id);
-    await client.query(`
-      INSERT INTO afa_igp_harvests
-        (id, produce, date, time, collected_by, egg_count, notes, status, audited_by,
-         audited_date, audit_remarks, signed_by, signed_date, signature_remarks)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      ON CONFLICT (id) DO UPDATE SET
-        produce = EXCLUDED.produce, date = EXCLUDED.date, time = EXCLUDED.time,
-        collected_by = EXCLUDED.collected_by, egg_count = EXCLUDED.egg_count, notes = EXCLUDED.notes,
-        status = EXCLUDED.status, audited_by = EXCLUDED.audited_by, audited_date = EXCLUDED.audited_date,
-        audit_remarks = EXCLUDED.audit_remarks, signed_by = EXCLUDED.signed_by,
-        signed_date = EXCLUDED.signed_date, signature_remarks = EXCLUDED.signature_remarks;
-    `, [
-      harvest.id,
-      harvest.produce || null,
-      harvestDate,
-      harvestTime,
-      harvest.collectedBy,
-      eggCount,
-      harvest.notes || null,
-      status,
-      harvest.auditedBy || null,
-      harvest.auditedDate || null,
-      harvest.auditRemarks || null,
-      harvest.signedBy || null,
-      harvest.signedDate || null,
-      harvest.signatureRemarks || null
-    ]);
-  }
-  await pruneIgpTable(client, "afa_igp_harvests", ids);
-}
-async function saveIgpGroupRows(client, groups) {
-  const ids = [];
-  for (const [index, group] of groups.entries()) {
-    if (typeof group?.id !== "string" || !group.id.trim()) continue;
-    const members = Array.isArray(group.members) ? group.members.map((m) => cleanLabel(m, 200)).filter((m) => Boolean(m)) : [];
-    const scheduleDays = Array.isArray(group.scheduleDays) ? group.scheduleDays.map((d) => cleanLabel(d, 20)).filter((d) => Boolean(d)) : [];
-    ids.push(group.id);
-    await client.query(`
-      INSERT INTO afa_igp_groups (id, name, schedule_days, sort_order)
+      INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (id) DO UPDATE SET
-        name = EXCLUDED.name, schedule_days = EXCLUDED.schedule_days, sort_order = EXCLUDED.sort_order;
-    `, [group.id, group.name || "Group", scheduleDays, index]);
-    await client.query("DELETE FROM afa_igp_group_members WHERE group_id = $1", [group.id]);
-    for (const [position, member] of members.entries()) {
-      await client.query(
-        "INSERT INTO afa_igp_group_members (group_id, member_name, position) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-        [group.id, member, position]
-      );
-    }
+        produce = EXCLUDED.produce,
+        date = EXCLUDED.date,
+        expense_data = EXCLUDED.expense_data;
+    `, [expense.id, produce, expense.date || null, JSON.stringify(segmentedExpense)]);
   }
-  await pruneIgpTable(client, "afa_igp_groups", ids);
+  await client.query(
+    "DELETE FROM afa_igp_expenses WHERE NOT (id = ANY($1::varchar[]))",
+    [ids]
+  );
 }
 async function saveFullStateToPostgres(pool, state) {
   console.log("[DB DEBUG] saveFullStateToPostgres called");
@@ -1360,34 +741,22 @@ async function saveFullStateToPostgres(pool, state) {
       const activeUsers = state.users.filter((u) => !deletedUserIds.has(u.id));
       console.log("[DB DEBUG] Saving", activeUsers.length, "users...");
       for (const u of activeUsers) {
-        if (!u || typeof u.username !== "string" || !u.username.trim()) continue;
-        const cleanUsername = normalizeUsername(u.username);
-        if (!cleanUsername) {
-          console.warn("[Cloud DB Push] Skipping user row with an invalid username.");
-          continue;
-        }
+        if (!u || !u.username) continue;
+        const cleanUsername = String(u.username).trim().toLowerCase();
         const existingRow = await client.query("SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1", [cleanUsername]);
+        const targetId = existingRow.rows[0]?.id || u.id;
         const existingRole = existingRow.rows[0]?.role;
-        const targetId = existingRow.rows[0]?.id || void 0;
-        const isNewAccount = !targetId;
-        const incomingRole = ASSIGNABLE_ROLE_VALUES.includes(String(u.role)) ? String(u.role) : "Member";
+        const incomingRole = u.role || "Member";
         const isCurrentPresident = existingRole && existingRole.toLowerCase() === "president";
         const targetRole = isCurrentPresident && incomingRole.toLowerCase() !== "president" ? existingRole : incomingRole;
-        const isApproved = isNewAccount ? false : Boolean(u.isApproved);
-        const cleanName = cleanText(u.name, 200) || cleanUsername;
-        const rowId = typeof u.id === "string" && u.id ? u.id : void 0;
-        let resolvedId = targetId || rowId;
-        if (!resolvedId) {
-          console.warn("[Cloud DB Push] Skipping user row without a resolvable account id:", cleanUsername);
-          continue;
-        }
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           ON CONFLICT (id) DO UPDATE SET
             username = EXCLUDED.username,
+            password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
             name = EXCLUDED.name,
-            role = CASE WHEN $17::boolean THEN EXCLUDED.role ELSE users.role END,
+            role = CASE WHEN users.role = 'President' AND EXCLUDED.role != 'President' THEN users.role ELSE EXCLUDED.role END,
             is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
@@ -1400,24 +769,22 @@ async function saveFullStateToPostgres(pool, state) {
             is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
             mfa_enabled = COALESCE(users.mfa_enabled, EXCLUDED.mfa_enabled);
         `, [
-          resolvedId,
+          targetId,
           cleanUsername,
-          "",
-          cleanName,
+          u.passwordHash || u.password || "",
+          u.name,
           targetRole,
-          isApproved,
-          parseDate(u.joinedDate, 50),
-          cleanText(u.farmLocation, 200),
-          cleanTextList(u.primaryCrops),
-          normalizePhone(u.contactNumber),
-          u.status === "Inactive" ? "Inactive" : "Active",
-          safeImageUrl(u.avatarUrl),
-          normalizeMemberId(u.memberIdNumber),
-          normalizeRsbsa(u.rsbsaNumber),
+          Boolean(u.isApproved),
+          u.joinedDate || null,
+          u.farmLocation || null,
+          u.primaryCrops || [],
+          u.contactNumber || null,
+          u.status || "Active",
+          u.avatarUrl || null,
+          u.memberIdNumber || null,
+          u.rsbsaNumber || null,
           Boolean(u.isRsbsaRegistered),
-          // MFA is enabled by enrollment only (auth endpoints), never by a sync row.
-          false,
-          !isNewAccount && u.roleAuthorized === true
+          Boolean(u.mfaEnabled || targetRole && targetRole.toLowerCase() === "president")
         ]);
       }
       console.log("[DB DEBUG] Users saved");
@@ -1426,9 +793,6 @@ async function saveFullStateToPostgres(pool, state) {
       const activeMembers = state.members.filter((m) => !deletedMemberIds.has(m.id));
       console.log("[DB DEBUG] Saving", activeMembers.length, "members...");
       for (const m of activeMembers) {
-        if (!m || typeof m.id !== "string" || !m.id) continue;
-        const memberName = cleanText(m.name, 200);
-        if (!memberName) continue;
         await client.query(`
           INSERT INTO members (id, name, farm_location, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -1447,19 +811,18 @@ async function saveFullStateToPostgres(pool, state) {
             birth_date = EXCLUDED.birth_date;
         `, [
           m.id,
-          memberName,
-          cleanText(m.farmLocation, 200),
-          cleanTextList(m.primaryCrops),
-          normalizePhone(m.contactNumber),
-          m.status === "Inactive" ? "Inactive" : "Active",
-          parseDate(m.joinedDate, 50),
-          normalizeMemberId(m.memberIdNumber),
-          normalizeRsbsa(m.rsbsaNumber),
-          // A number that does not validate means "not RSBSA-registered", not "whatever was typed".
-          Boolean(m.isRsbsaRegistered) && normalizeRsbsa(m.rsbsaNumber) !== null,
-          safeImageUrl(m.avatarUrl),
-          cleanText(m.gender, 20),
-          parseDate(m.birthDate, 50)
+          m.name,
+          m.farmLocation || null,
+          m.primaryCrops || [],
+          m.contactNumber || null,
+          m.status || "Active",
+          m.joinedDate || null,
+          m.memberIdNumber || null,
+          m.rsbsaNumber || null,
+          Boolean(m.isRsbsaRegistered),
+          m.avatarUrl || null,
+          m.gender || null,
+          m.birthDate || null
         ]);
       }
       console.log("[DB DEBUG] Members saved");
@@ -1507,15 +870,6 @@ async function saveFullStateToPostgres(pool, state) {
       const txList = rawTxList.filter((tx) => !deletedTxIds.has(tx.id));
       console.log("[DB DEBUG] Saving", txList.length, "transactions...");
       for (const tx of txList) {
-        if (!tx || typeof tx.id !== "string" || !tx.id) continue;
-        const txType = String(tx.type || "").trim().toLowerCase();
-        if (txType !== "income" && txType !== "expense") continue;
-        const txAmount = parseMoney(tx.amount);
-        const txDate = parseDate(tx.date, 50);
-        if (txAmount === null || !txDate) {
-          console.warn("[Cloud DB Push] Rejected financial row with invalid amount or date:", tx.id);
-          continue;
-        }
         await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, audited_status, audited_by, audited_date, audit_notes)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -1534,18 +888,18 @@ async function saveFullStateToPostgres(pool, state) {
             audit_notes = EXCLUDED.audit_notes;
         `, [
           tx.id,
-          txType,
-          cleanText(tx.category, 100) || "Uncategorized",
-          txAmount,
-          txDate,
-          cleanText(tx.description, 2e3),
-          cleanText(tx.recordedBy, 200),
-          cleanText(tx.activityId, 100),
-          cleanText(tx.fundSource, 200),
-          AUDITED_STATUSES.includes(String(tx.auditedStatus)) ? String(tx.auditedStatus) : "Unaudited",
-          cleanText(tx.auditedBy, 200),
-          cleanDateString(tx.auditedDate, 50),
-          cleanText(tx.auditNotes, 2e3)
+          tx.type,
+          tx.category,
+          tx.amount,
+          tx.date,
+          tx.description,
+          tx.recordedBy,
+          tx.activityId || null,
+          tx.fundSource || null,
+          tx.auditedStatus || "Unaudited",
+          tx.auditedBy || null,
+          tx.auditedDate || null,
+          tx.auditNotes || null
         ]);
       }
       console.log("[DB DEBUG] Transactions saved");
@@ -1554,9 +908,6 @@ async function saveFullStateToPostgres(pool, state) {
       const activeMeetings = state.meetings.filter((mt) => !deletedMeetingIds.has(mt.id));
       console.log("[DB DEBUG] Saving", activeMeetings.length, "meetings...");
       for (const mt of activeMeetings) {
-        if (!mt || typeof mt.id !== "string" || !mt.id) continue;
-        const meetingTitle = cleanText(mt.title, 300);
-        if (!meetingTitle) continue;
         await client.query(`
           INSERT INTO meetings (id, title, date, location, attendance_count, agenda, minutes, officer_in_charge, attendance_record)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -1571,14 +922,14 @@ async function saveFullStateToPostgres(pool, state) {
             attendance_record = EXCLUDED.attendance_record;
         `, [
           mt.id,
-          meetingTitle,
-          cleanDateString(mt.date, 50),
-          cleanText(mt.location, 200),
-          Math.min(Math.max(0, Math.floor(Number(mt.attendanceCount) || 0)), 1e5),
-          cleanText(mt.agenda, 2e4) || "",
-          cleanText(mt.minutes, 2e4) || "",
-          cleanText(mt.officerInCharge, 200) || "",
-          JSON.stringify(mt.attendanceRecord && typeof mt.attendanceRecord === "object" ? mt.attendanceRecord : {})
+          mt.title,
+          mt.date,
+          mt.location,
+          mt.attendanceCount || 0,
+          mt.agenda || "",
+          mt.minutes || "",
+          mt.officerInCharge || "",
+          JSON.stringify(mt.attendanceRecord || {})
         ]);
       }
       console.log("[DB DEBUG] Meetings saved");
@@ -1594,53 +945,55 @@ async function saveFullStateToPostgres(pool, state) {
         cattleDispersal: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.cattleDispersal) || 0)),
         rtlCount: Math.max(0, Math.floor(Number(state.hogRaising.herdBreakdown?.rtlCount) || 0))
       };
-      const produces = sanitizeIgpProduces(state.hogRaising.produces);
-      const defaults = {
-        produce: produces[0],
-        recordedBy: Array.isArray(state.hogRaising.expenses) && state.hogRaising.expenses[0]?.recordedBy
-      };
-      const expenses = sanitizeIgpLedger("expenses", state.hogRaising.expenses, defaults) ?? [];
-      const sales = sanitizeIgpLedger("sales", state.hogRaising.sales, defaults) ?? [];
-      const groups = sanitizeIgpGroups(state.hogRaising.groups) ?? [];
-      const closedYears = Array.isArray(state.hogRaising.closedYears) ? state.hogRaising.closedYears.map((year) => Math.floor(Number(year))).filter((year) => Number.isFinite(year) && year >= 1900 && year <= 2999).slice(0, 200) : [];
-      const harvests = Array.isArray(state.hogRaising.eggHarvests) ? state.hogRaising.eggHarvests : void 0;
-      if (Array.isArray(state.hogRaising.expenses) && expenses.length !== state.hogRaising.expenses.length) {
-        console.warn("[Cloud DB Push] Dropped IGP expense rows that had no valid id or shape.");
-      }
       await client.query(`
-        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, closed_years)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, expenses, sales, groups, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (id) DO UPDATE SET
           opening_hog_count = EXCLUDED.opening_hog_count,
           herd_breakdown = EXCLUDED.herd_breakdown,
           produces = EXCLUDED.produces,
+          expenses = EXCLUDED.expenses,
+          sales = EXCLUDED.sales,
+          groups = EXCLUDED.groups,
+          chore_logs = EXCLUDED.chore_logs,
           closed_years = EXCLUDED.closed_years;
       `, [
         "main_state",
         Math.max(0, Math.floor(Number(state.hogRaising.openingHogCount) || 0)),
         JSON.stringify(safeBreakdown),
-        produces,
-        closedYears
+        state.hogRaising.produces || [],
+        JSON.stringify(state.hogRaising.expenses || []),
+        JSON.stringify(state.hogRaising.sales || []),
+        JSON.stringify(state.hogRaising.groups || []),
+        JSON.stringify(state.hogRaising.eggHarvests || state.hogRaising.choreLogs || []),
+        state.hogRaising.closedYears || []
       ]);
       await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
-      await saveIgpExpenseRows(client, expenses, produces[0]);
-      await saveIgpSaleRows(client, sales, produces[0]);
-      await saveIgpGroupRows(client, groups);
-      if (harvests !== void 0) await saveIgpHarvestRows(client, harvests.slice(0, 5e3));
-      console.log("[DB DEBUG] AFA IGP state saved (header + ledger tables)");
+      await saveIgpExpenseSegments(
+        client,
+        state.hogRaising.expenses || [],
+        state.hogRaising.produces?.[0]
+      );
+      console.log("[DB DEBUG] AFA IGP state saved");
     }
     if (Array.isArray(state.eggHarvests) && !state.hogRaising) {
       let eggHarvests = state.eggHarvests;
       if (state.appendEggHarvests) {
         const existing = await client.query(
-          "SELECT id FROM afa_igp_harvests"
+          "SELECT chore_logs FROM afa_igp WHERE id = 'main_state' FOR UPDATE"
         );
-        const existingIds = new Set(existing.rows.map((row) => row.id));
-        eggHarvests = eggHarvests.filter((harvest) => !existingIds.has(harvest?.id));
-        await saveIgpHarvestRows(client, eggHarvests.slice(0, 5e3));
-      } else {
-        await saveIgpHarvestRows(client, eggHarvests.slice(0, 5e3));
+        const existingEggHarvests = Array.isArray(existing.rows[0]?.chore_logs) ? existing.rows[0].chore_logs : [];
+        const existingIds = new Set(existingEggHarvests.map((harvest) => harvest?.id));
+        eggHarvests = [
+          ...eggHarvests.filter((harvest) => !existingIds.has(harvest?.id)),
+          ...existingEggHarvests
+        ];
       }
+      await client.query(`
+        INSERT INTO afa_igp (id, chore_logs)
+        VALUES ('main_state', $1)
+        ON CONFLICT (id) DO UPDATE SET chore_logs = EXCLUDED.chore_logs
+      `, [JSON.stringify(eggHarvests)]);
     }
     const logList = state.systemLogs || state.logs;
     if (logList && Array.isArray(logList)) {
@@ -1660,14 +1013,14 @@ async function saveFullStateToPostgres(pool, state) {
             previous_hash = EXCLUDED.previous_hash;
         `, [
           lg.id,
-          cleanDateString(lg.timestamp, 100),
-          cleanText(lg.user || lg.userName, 200) || "Officer",
-          cleanText(lg.role, 50),
-          cleanText(lg.action, 300),
-          cleanText(lg.details, 4e3),
-          lg.syncStatus === "pending" ? "pending" : "synced",
-          /^[a-f0-9]{64}$/i.test(String(lg.hash || "")) ? String(lg.hash) : null,
-          /^[a-f0-9]{1,64}$/i.test(String(lg.previousHash || "")) ? String(lg.previousHash) : null
+          lg.timestamp,
+          lg.user || lg.userName || "Officer",
+          lg.role,
+          lg.action,
+          lg.details,
+          lg.syncStatus || "synced",
+          lg.hash || null,
+          lg.previousHash || null
         ]);
       }
       console.log("[DB DEBUG] System logs saved");
@@ -1676,7 +1029,6 @@ async function saveFullStateToPostgres(pool, state) {
       const activeProducts = state.products.filter((p) => !deletedProductIds.has(p.id));
       console.log("[DB DEBUG] Saving", activeProducts.length, "products...");
       for (const p of activeProducts) {
-        if (!p || typeof p.id !== "string" || !p.id || !cleanText(p.name, 300)) continue;
         await client.query(`
           INSERT INTO products (id, name, ceb_name, category, description, unit, price, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
@@ -1700,23 +1052,23 @@ async function saveFullStateToPostgres(pool, state) {
             date_updated = EXCLUDED.date_updated;
         `, [
           p.id,
-          cleanText(p.name, 300) || "Unnamed product",
-          cleanText(p.cebName, 300),
-          cleanText(p.category, 100),
-          cleanText(p.description, 5e3),
-          cleanText(p.unit, 50),
-          parseMoney(p.price),
-          cleanQuantityLabel(p.quantityAvailable),
-          cleanText(p.stockStatus, 50),
-          cleanText(p.farmerName, 200),
-          cleanText(p.farmerSitio, 200),
-          normalizePhone(p.farmerPhone),
-          cleanText(p.contactPerson, 200),
-          safeImageUrl(p.imageUrl),
-          p.isPublished !== false,
-          cleanText(p.updatedBy, 200),
-          cleanText(p.managedBy, 200),
-          cleanDateString(p.dateUpdated, 50)
+          p.name,
+          p.cebName || null,
+          p.category,
+          p.description,
+          p.unit,
+          p.price,
+          p.quantityAvailable || null,
+          p.stockStatus,
+          p.farmerName || null,
+          p.farmerSitio || null,
+          p.farmerPhone || null,
+          p.contactPerson || null,
+          p.imageUrl || null,
+          p.isPublished ?? true,
+          p.updatedBy || null,
+          p.managedBy || null,
+          p.dateUpdated || null
         ]);
       }
       console.log("[DB DEBUG] Products saved");
@@ -1725,8 +1077,6 @@ async function saveFullStateToPostgres(pool, state) {
       const activeResolutions = state.resolutions.filter((r) => !deletedResolutionIds.has(r.id));
       console.log("[DB DEBUG] Saving", activeResolutions.length, "resolutions...");
       for (const r of activeResolutions) {
-        if (!r || typeof r.id !== "string" || !r.id) continue;
-        if (!cleanText(r.resolutionNumber, 100) || !cleanText(r.title, 300)) continue;
         await client.query(`
           INSERT INTO resolutions (id, resolution_number, title, description, date_agreed, moved_by, seconded_by, vote_in_favor, vote_against, vote_abstain, status)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -1743,16 +1093,16 @@ async function saveFullStateToPostgres(pool, state) {
             status = EXCLUDED.status;
         `, [
           r.id,
-          cleanText(r.resolutionNumber, 100),
-          cleanText(r.title, 300),
-          cleanText(r.description, 2e4),
-          cleanDateString(r.dateAgreed, 50),
-          cleanText(r.movedBy, 200),
-          cleanText(r.secondedBy, 200),
-          Math.floor(cleanNumber(r.voteInFavor, 1e5)),
-          Math.floor(cleanNumber(r.voteAgainst, 1e5)),
-          Math.floor(cleanNumber(r.voteAbstain, 1e5)),
-          cleanText(r.status, 50)
+          r.resolutionNumber,
+          r.title,
+          r.description,
+          r.dateAgreed,
+          r.movedBy,
+          r.secondedBy,
+          r.voteInFavor,
+          r.voteAgainst,
+          r.voteAbstain,
+          r.status
         ]);
       }
       console.log("[DB DEBUG] Resolutions saved");
@@ -1761,9 +1111,6 @@ async function saveFullStateToPostgres(pool, state) {
       const activeAnnouncements = state.announcements.filter((a) => !deletedAnnouncementIds.has(a.id));
       console.log("[DB DEBUG] Saving", activeAnnouncements.length, "announcements...");
       for (const a of activeAnnouncements) {
-        if (!a || typeof a.id !== "string" || !a.id) continue;
-        const announcementTitle = cleanText(a.title, 300);
-        if (!announcementTitle) continue;
         await client.query(`
           INSERT INTO announcements (id, title, category, content, date_posted, priority, posted_by)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -1774,15 +1121,7 @@ async function saveFullStateToPostgres(pool, state) {
             date_posted = EXCLUDED.date_posted,
             priority = EXCLUDED.priority,
             posted_by = EXCLUDED.posted_by;
-        `, [
-          a.id,
-          announcementTitle,
-          cleanText(a.category, 100),
-          cleanText(a.content, 2e4),
-          cleanDateString(a.datePosted, 50),
-          cleanText(a.priority, 50),
-          cleanText(a.postedBy, 200)
-        ]);
+        `, [a.id, a.title, a.category, a.content, a.datePosted, a.priority, a.postedBy]);
       }
       console.log("[DB DEBUG] Announcements saved");
     }
@@ -1790,9 +1129,6 @@ async function saveFullStateToPostgres(pool, state) {
       const activeActivities = state.activities.filter((act) => !deletedActivityIds.has(act.id));
       console.log("[DB DEBUG] Saving", activeActivities.length, "activities...");
       for (const act of activeActivities) {
-        if (!act || typeof act.id !== "string" || !act.id) continue;
-        const activityTitle = cleanText(act.title, 300);
-        if (!activityTitle) continue;
         await client.query(`
           INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, status_reason, documented_notes, attendees_count, target_audience, image_url)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
@@ -1815,22 +1151,22 @@ async function saveFullStateToPostgres(pool, state) {
             image_url = EXCLUDED.image_url;
         `, [
           act.id,
-          activityTitle,
-          cleanText(act.cebTitle, 300),
-          cleanText(act.category, 100),
-          cleanDateString(act.scheduledDate || act.dateScheduled, 50),
-          cleanDateString(act.dateScheduled || act.scheduledDate, 50),
-          cleanText(act.scheduledTime || act.timeScheduled, 100),
-          cleanText(act.timeScheduled || act.scheduledTime, 100),
-          cleanText(act.location, 200),
-          cleanText(act.description, 2e4),
-          cleanText(act.organizer, 200),
-          cleanText(act.status, 50),
-          cleanText(act.statusReason, 1e3),
-          cleanText(act.documentedNotes, 2e4),
-          Math.min(Math.max(0, Math.floor(Number(act.attendeesCount) || 0)), 1e5),
-          cleanText(act.targetAudience, 300),
-          safeImageUrl(act.imageUrl)
+          act.title,
+          act.cebTitle || null,
+          act.category,
+          act.scheduledDate || act.dateScheduled || null,
+          act.dateScheduled || act.scheduledDate || null,
+          act.scheduledTime || act.timeScheduled || null,
+          act.timeScheduled || act.scheduledTime || null,
+          act.location,
+          act.description,
+          act.organizer,
+          act.status,
+          act.statusReason || null,
+          act.documentedNotes || null,
+          act.attendeesCount || 0,
+          act.targetAudience || null,
+          act.imageUrl || null
         ]);
       }
       console.log("[DB DEBUG] Activities saved");
@@ -1840,10 +1176,6 @@ async function saveFullStateToPostgres(pool, state) {
       const fundList = rawFundList.filter((f) => !deletedFundIds.has(f.id));
       console.log("[DB DEBUG] Saving", fundList.length, "organization funds...");
       for (const f of fundList) {
-        if (!f || typeof f.id !== "string" || !f.id) continue;
-        const fundName = cleanText(f.name, 200);
-        if (!fundName) continue;
-        const fundCode = (cleanText(f.code, 50) || fundName).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 50) || "FUND";
         await client.query(`
           INSERT INTO organization_funds (id, name, code, initial_fund, current_balance, description, custodian, last_updated, category, source_origin)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -1859,15 +1191,15 @@ async function saveFullStateToPostgres(pool, state) {
             source_origin = EXCLUDED.source_origin;
         `, [
           f.id,
-          fundName,
-          fundCode,
-          cleanNumber(getInitialFund(f)),
-          cleanNumber(f.currentBalance),
-          cleanText(f.description, 2e3) || "",
-          cleanText(f.custodian, 200) || "",
-          cleanDateString(f.lastUpdated, 50) || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-          cleanText(f.category, 100),
-          cleanText(f.source, 200)
+          f.name,
+          f.code,
+          Number.isFinite(Number(f.initialFund)) ? Number(f.initialFund) : Number(f.allocatedAmount) || 0,
+          f.currentBalance || 0,
+          f.description || "",
+          f.custodian || "",
+          f.lastUpdated || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+          f.category || null,
+          f.source || null
         ]);
       }
       console.log("[DB DEBUG] Organization funds saved");
@@ -1893,18 +1225,18 @@ async function saveFullStateToPostgres(pool, state) {
             date_certified = EXCLUDED.date_certified;
         `, [
           ar.id,
-          cleanText(ar.reportPeriod, 100) || "Unscheduled",
-          cleanText(ar.reportType, 50) || "General",
-          cleanNumber(ar.totalIncome),
-          cleanNumber(ar.totalExpenses),
-          cleanNumber(ar.netSurplus),
-          cleanText(ar.findings, 2e4) || "",
-          cleanText(ar.recommendations, 2e4) || "",
-          cleanText(ar.preparedBy, 200) || "Auditor",
-          cleanText(ar.certifiedBy, 200),
-          cleanText(ar.status, 50) || "Submitted",
-          cleanDateString(ar.dateSubmitted, 50),
-          cleanDateString(ar.dateCertified, 50)
+          ar.reportPeriod,
+          ar.reportType,
+          ar.totalIncome || 0,
+          ar.totalExpenses || 0,
+          ar.netSurplus || 0,
+          ar.findings || "",
+          ar.recommendations || "",
+          ar.preparedBy,
+          ar.certifiedBy || null,
+          ar.status || "Submitted",
+          ar.dateSubmitted,
+          ar.dateCertified || null
         ]);
       }
       console.log("[DB DEBUG] Auditor reports saved");
@@ -1927,15 +1259,15 @@ async function saveFullStateToPostgres(pool, state) {
             remarks = EXCLUDED.remarks;
         `, [
           dr.id,
-          cleanText(dr.requestedBy, 200) || "Officer",
-          cleanText(dr.reason, 2e3) || "Delegation",
-          cleanDateString(dr.requestedDate, 50),
-          cleanDateString(dr.effectiveStart, 50),
-          cleanDateString(dr.effectiveEnd, 50),
-          cleanText(dr.status, 50) || "Pending",
-          cleanText(dr.reviewedBy, 200),
-          cleanDateString(dr.reviewedDate, 50),
-          cleanText(dr.remarks, 2e3)
+          dr.requestedBy,
+          dr.reason,
+          dr.requestedDate,
+          dr.effectiveStart || null,
+          dr.effectiveEnd || null,
+          dr.status || "Pending",
+          dr.reviewedBy || null,
+          dr.reviewedDate || null,
+          dr.remarks || null
         ]);
       }
       console.log("[DB DEBUG] Delegation requests saved");
@@ -2055,7 +1387,7 @@ async function saveFullStateToPostgres(pool, state) {
       { table: "organization_funds", deletedIds: deletedFundIds, fields: [
         ["name", "name", (r) => r.name],
         ["code", "code", (r) => r.code],
-        ["initial_fund", "initialFund", (r) => getInitialFund(r)],
+        ["initial_fund", "initialFund", (r) => Number.isFinite(Number(r.initialFund)) ? Number(r.initialFund) : Number(r.allocatedAmount) || 0],
         ["current_balance", "currentBalance", (r) => r.currentBalance || 0],
         ["description", "description", (r) => r.description || ""],
         ["custodian", "custodian", (r) => r.custodian || ""],
@@ -2159,10 +1491,6 @@ import bcrypt2 from "bcryptjs";
 function sendResponse(res, statusCode, data) {
   try {
     if (res.headersSent) return;
-    if (typeof res.setHeader === "function") {
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("Cache-Control", "no-store");
-    }
     if (typeof res.status === "function" && typeof res.json === "function") {
       return res.status(statusCode).json(data);
     }
@@ -2242,20 +1570,11 @@ var LOCKOUT_DURATION_MS = 15 * 60 * 1e3;
 var SESSION_COOKIE = "fams_session";
 var SESSION_SECONDS = 8 * 60 * 60;
 var CHALLENGE_SECONDS = 15 * 60;
-var ephemeralFallbackSecret = null;
-var TOKEN_AUDIENCE = "fams-auth-v2";
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
-    const deploymentSeed = process.env.FAMS_SESSION_SEED;
-    if (deploymentSeed && deploymentSeed.length >= 32) {
-      return createHash("sha256").update(deploymentSeed).digest();
-    }
-    if (!ephemeralFallbackSecret) {
-      console.warn("[Auth] SESSION_SECRET is missing or weak; using a per-process key. Sessions end on redeploy.");
-      ephemeralFallbackSecret = createHash("sha256").update(randomBytes(32)).digest();
-    }
-    return ephemeralFallbackSecret;
+    const seed = process.env.DATABASE_URL || "afa-farmers-association-session-secret-seed-key-tuburan-cebu";
+    return createHash("sha256").update(seed).digest();
   }
   return Buffer.from(value, "utf8");
 }
@@ -2268,7 +1587,6 @@ function verifyToken(token) {
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (!claims.sub || !Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1e3)) return null;
-    if (claims.aud !== TOKEN_AUDIENCE) return null;
     return claims;
   } catch {
     return null;
@@ -2306,10 +1624,6 @@ function rejectCrossOriginMutation(req) {
   }
 }
 async function getAuthenticatedUser(req) {
-  const user = await readAuthenticatedUser(req);
-  return user && user.isApproved ? user : null;
-}
-async function readAuthenticatedUser(req) {
   const token = getCookie(req, SESSION_COOKIE);
   if (!token) return null;
   const claims = verifyToken(token);
@@ -2366,7 +1680,6 @@ async function requireAuthenticated(req, res) {
 }
 
 // src/api/push.ts
-var MAX_EGG_COUNT = 1e5;
 var ASSIGNABLE_ROLES = [
   "Vice_President",
   "Secretary",
@@ -2460,24 +1773,11 @@ function separateEggHarvestsFromFinancialState(state, role, name) {
   }
   if (isMember) {
     safeState.eggHarvests = eggHarvests.filter(
-      (entry) => entry && typeof entry === "object" && entry.status === "Pending Audit" && typeof name === "string" && entry.collectedBy === name && Number.isInteger(entry.eggCount) && entry.eggCount >= 0 && entry.eggCount <= MAX_EGG_COUNT && typeof entry.date === "string" && typeof entry.time === "string"
-    ).map((entry) => ({
-      ...typeof entry.id === "string" ? { id: entry.id } : {},
-      collectedBy: entry.collectedBy,
-      eggCount: entry.eggCount,
-      date: entry.date.slice(0, 50),
-      time: entry.time.slice(0, 50),
-      status: "Pending Audit",
-      notes: typeof entry.notes === "string" ? entry.notes.slice(0, 1e3) : void 0
-    }));
+      (entry) => entry && typeof entry === "object" && entry.status === "Pending Audit" && typeof name === "string" && entry.collectedBy === name && Number.isInteger(entry.eggCount) && entry.eggCount >= 0 && typeof entry.date === "string" && typeof entry.time === "string"
+    );
     safeState.appendEggHarvests = true;
   } else if (mayUpdateEggWorkflow) {
-    safeState.eggHarvests = eggHarvests.filter(
-      (entry) => entry && typeof entry === "object" && typeof entry.id === "string" && Number.isInteger(entry.eggCount) && entry.eggCount >= 0 && entry.eggCount <= MAX_EGG_COUNT
-    ).map((entry) => ({
-      ...entry,
-      status: IGP_HARVEST_STATUSES.includes(entry?.status) ? entry.status : "Pending Audit"
-    }));
+    safeState.eggHarvests = eggHarvests;
     delete safeState.appendEggHarvests;
   } else {
     delete safeState.eggHarvests;
@@ -2531,10 +1831,6 @@ async function handler(req, res) {
         delete safeState.users;
       }
     }
-    const roleAuthorized = state.roleUpdate !== void 0;
-    if (Array.isArray(safeState.users)) {
-      safeState.users = sanitizeUserRows(safeState.users, { roleAuthorized });
-    }
     if (!isPresidentRole(user.role) && user.role.trim().toLowerCase() !== "pio") {
       delete safeState.achievements;
       if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
@@ -2584,7 +1880,5 @@ async function handler(req, res) {
 }
 export {
   handler as default,
-  extractAuditorReview,
-  extractPresidentFinancialApproval,
   separateEggHarvestsFromFinancialState
 };
