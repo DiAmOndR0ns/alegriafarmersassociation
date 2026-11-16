@@ -1703,14 +1703,27 @@ function resolveAuthPath(req) {
   const candidates = [req?.headers?.["x-vercel-rewrite"], req?.headers?.["x-original-url"], req?.url];
   for (const candidate of candidates) {
     if (typeof candidate !== "string" || !candidate) continue;
-    let pathname;
+    let parsed;
     try {
-      pathname = new URL(candidate, "http://localhost").pathname;
+      parsed = new URL(candidate, "http://localhost");
     } catch {
       continue;
     }
-    const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-    if (normalized.startsWith("/api/auth")) return normalized;
+    const pathname = parsed.pathname.length > 1 ? parsed.pathname.replace(/\/+$/, "") : parsed.pathname;
+    if (!pathname.startsWith("/api/auth")) continue;
+    if (pathname === "/api/auth" || pathname === "/api/auth/") {
+      const params = parsed.searchParams;
+      const positional = [...params.entries()].filter(([key]) => /^\d+$/.test(key)).sort((a, b) => Number(a[0]) - Number(b[0])).map(([, value]) => value);
+      if (positional.length > 0) {
+        return `/api/auth/${positional.join("/")}`.replace(/\/+$/, "");
+      }
+      const segments = params.get("path") ?? params.get("path*");
+      if (segments) {
+        const rebuilt = `/api/auth/${String(segments).split("/").filter(Boolean).join("/")}`;
+        return rebuilt.replace(/\/+$/, "");
+      }
+    }
+    return pathname;
   }
   return null;
 }
@@ -1720,8 +1733,8 @@ async function authHandler(req, res) {
   if (!route) {
     return errorResponse(res, 404, "Not found.");
   }
-  const method = String(req?.method || "GET").toUpperCase();
-  if (method !== route[0]) {
+  const method = typeof req?.method === "string" ? req.method.trim().toUpperCase() : "";
+  if (method && method !== route[0]) {
     if (typeof res?.setHeader === "function") res.setHeader("Allow", route[0]);
     return errorResponse(res, 405, "Method not allowed.");
   }

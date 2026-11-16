@@ -871,14 +871,39 @@ export function resolveAuthPath(req: any): string | null {
   const candidates = [req?.headers?.['x-vercel-rewrite'], req?.headers?.['x-original-url'], req?.url];
   for (const candidate of candidates) {
     if (typeof candidate !== 'string' || !candidate) continue;
-    let pathname: string;
+    let parsed: URL;
     try {
-      pathname = new URL(candidate, 'http://localhost').pathname;
+      parsed = new URL(candidate, 'http://localhost');
     } catch {
       continue;
     }
-    const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-    if (normalized.startsWith('/api/auth')) return normalized;
+    const pathname = parsed.pathname.length > 1 ? parsed.pathname.replace(/\/+$/, '') : parsed.pathname;
+    if (!pathname.startsWith('/api/auth')) continue;
+    // Vercel's `:path*` rewrite can move the captured segments into the query
+    // string instead of leaving them on the path (its docs rewrite
+    // `/resize/100/50` to `/api/sharp?width=100&height=50`). When the request
+    // lands on the bare `/api/auth` endpoint, rebuild the original path from
+    // those segments so the table lookup still finds the endpoint.
+    if (pathname === '/api/auth' || pathname === '/api/auth/') {
+      const params = parsed.searchParams;
+      // Some rewrites surface each unnamed segment positionally (?0=password&1=reset),
+      // so collect those FIRST: reading only `?0` would lose the rest of the path.
+      const positional = [...params.entries()]
+        .filter(([key]) => /^\d+$/.test(key))
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+        .map(([, value]) => value);
+      if (positional.length > 0) {
+        return `/api/auth/${positional.join('/')}`.replace(/\/+$/, '');
+      }
+      // A named capture (`/:path*`) arrives as a single `?path=a/b` parameter.
+      const segments = params.get('path') ?? params.get('path*');
+      if (segments) {
+        const rebuilt = `/api/auth/${String(segments).split('/').filter(Boolean).join('/')}`;
+        return rebuilt.replace(/\/+$/, '');
+      }
+    }
+    // An original path carried through untouched is already the answer.
+    return pathname;
   }
   return null;
 }
@@ -891,8 +916,15 @@ export default async function authHandler(req: any, res: any) {
     // Never disclose which auth endpoints exist to an unauthenticated caller.
     return errorResponse(res, 404, 'Not found.');
   }
-  const method = String(req?.method || 'GET').toUpperCase();
-  if (method !== route[0]) {
+  // Only reject a method the request actually stated. Before this tree was
+  // collapsed into one function each handler was its own endpoint and every
+  // handler re-checks the body it needs anyway; this gate must never be the
+  // thing that blocks a valid sign-in. A missing/blank `method` is a runtime
+  // shape problem, not a client error, so it is passed through instead of being
+  // coerced to 'GET' (which answered every POST with a 405 that the UI then
+  // reported as "401 Invalid credentials").
+  const method = typeof req?.method === 'string' ? req.method.trim().toUpperCase() : '';
+  if (method && method !== route[0]) {
     if (typeof res?.setHeader === 'function') res.setHeader('Allow', route[0]);
     return errorResponse(res, 405, 'Method not allowed.');
   }

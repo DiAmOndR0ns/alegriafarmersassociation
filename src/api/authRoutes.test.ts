@@ -39,6 +39,34 @@ describe('auth route dispatcher', () => {
     expect(resolveAuthPath(makeReq('POST', '/api/auth'))).toBe('/api/auth');
   });
 
+  it('rebuilds the original path when the rewrite moved it into the query string', () => {
+    // Vercel documents `/resize/100/50` -> `/api/sharp?width=100&height=50`.
+    expect(resolveAuthPath(makeReq('POST', '/api/auth?path=login'))).toBe('/api/auth/login');
+    expect(resolveAuthPath(makeReq('POST', '/api/auth?path=mfa/enroll'))).toBe('/api/auth/mfa/enroll');
+    expect(resolveAuthPath(makeReq('POST', '/api/auth?0=password&1=reset'))).toBe('/api/auth/password/reset');
+  });
+
+  it('does not invent a method when the runtime omits one', async () => {
+    // Regression: `String(req.method || 'GET')` turned a missing method into GET,
+    // so every POST endpoint answered 405 - which the UI reported as a failed
+    // login for ALL accounts.
+    for (const method of [undefined, null, '']) {
+      const res = makeRes();
+      await authRoutes(
+        { url: '/api/auth/logout', body: {}, headers: { origin: 'http://localhost', host: 'localhost', 'sec-fetch-site': 'same-origin' }, method },
+        res
+      );
+      expect(res.statusCode, String(method)).toBe(200);
+    }
+  });
+
+  it('still rejects an explicitly wrong method', async () => {
+    const res = makeRes();
+    await authRoutes(makeReq('get', '/api/auth/login'), res);
+    expect(res.statusCode).toBe(405);
+    expect(res.headers.Allow).toBe('POST');
+  });
+
   it('rejects unknown paths with 404 before any handler runs', async () => {
     const res = makeRes();
     await authRoutes(makeReq('POST', '/api/auth/nope'), res);
