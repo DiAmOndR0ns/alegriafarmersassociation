@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
-import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, HogRaisingState, OrganizationFund } from '../types';
+import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, HogRaisingState, OrganizationFund, PasswordResetResult } from '../types';
 import {
   ShieldCheck, Users, Coins, BookOpen, FileCheck, Activity, Check, X,
   KeyRound, Trash2, Clock, Smartphone, AlertTriangle, Printer, Calendar,
@@ -30,7 +30,7 @@ interface ExecutiveViewProps {
   onAddOfficer?: (officerData: { name: string; username: string; password: string; role: OfficerRole }) => boolean;
   onDeleteUser?: (id: string) => void;
   onUpdateUserRole?: (id: string, newRole: OfficerRole | 'Member') => Promise<void>;
-  onResetPassword?: (id: string, newPass: string, currentPassword?: string) => boolean | void | Promise<boolean | void>;
+  onResetPassword?: (id: string, newPass: string, currentPassword?: string) => PasswordResetResult | void | Promise<PasswordResetResult | void>;
   /**
    * Clears an account's authenticator. The officer must re-enrol at their next
    * sign-in; the old secret is destroyed, never recovered or displayed here.
@@ -416,9 +416,11 @@ export default function ExecutiveView({
     }
     const trimmedNewPassword = newPassword.trim();
     if (onResetPassword) {
-      const didSucceed = await onResetPassword(userId, trimmedNewPassword, stepUpPassword);
-      if (didSucceed === false) {
-        setStepUpError('The password reset was rejected. Verify your password and try again.');
+      const outcome = await onResetPassword(userId, trimmedNewPassword, stepUpPassword);
+      // Show the server's own reason for the rejection. The generic hint is only
+      // a fallback for a caller that reports failure without a message.
+      if (outcome && outcome.success === false) {
+        setStepUpError(outcome.message || 'The password reset was rejected. Verify your password and try again.');
         return;
       }
     }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Member, Meeting, Resolution, User, MemberAffiliation, OfficerRole } from '../types';
+import { Member, Meeting, Resolution, User, MemberAffiliation, OfficerRole, PasswordResetResult } from '../types';
 import {
   Users, BookOpen, FileText, Plus, Search,
   MapPin, CheckCircle, FilePlus, Calendar,
@@ -27,7 +27,7 @@ interface SecretaryViewProps {
   onUpdateMemberStatus: (id: string, status: 'Active' | 'Inactive') => void;
   onDeleteMember: (id: string) => void;
   onManageMemberLogin?: (memberId: string, username: string, initialPassword: string) => void;
-  onResetMemberPassword?: (userId: string, newPass: string, currentPassword?: string) => void | Promise<boolean | void>;
+  onResetMemberPassword?: (userId: string, newPass: string, currentPassword?: string) => void | Promise<PasswordResetResult | boolean | void>;
 
   meetings: Meeting[];
   onAddMeeting: (meeting: Omit<Meeting, 'id'>) => void;

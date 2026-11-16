@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   OfficerRole, Member, Meeting, Resolution, 
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState, HogHerdBreakdown,
-  IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem
+  IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem,
+  PasswordResetResult
 } from './types';
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
@@ -70,6 +71,94 @@ interface StoredDeletedIds {
   achievements?: string[];
   funds?: string[];
   inventory?: string[];
+}
+
+/** Entities a push may carry, keyed by the override field that supplies them. */
+const SYNC_ENTITY_KEYS = [
+  ['users', 'users'],
+  ['members', 'members'],
+  ['meetings', 'meetings'],
+  ['resolutions', 'resolutions'],
+  ['announcements', 'announcements'],
+  ['products', 'products'],
+  ['activities', 'activities'],
+  ['achievements', 'achievements'],
+  ['inventory', 'inventory'],
+] as const;
+
+/**
+ * Decides what `/api/sync/push` actually receives.
+ *
+ * Two rules matter, and both were silently violating production:
+ *
+ * 1. A change that names an entity sends ONLY that entity. Filling the rest of
+ *    the payload from the app snapshot made a Secretary's member save ship
+ *    `financialTransactions`, `funds` and `hogRaising` as well. The server
+ *    answers 403 for financial fields from a non-Treasurer and discards the
+ *    whole request, so the member, announcement or activity was never stored.
+ *
+ * 2. Financial entities only travel for the Treasurer / Assistant Treasurer.
+ *    That applies to the full snapshot too, which is what every auto-sync path
+ *    sends - otherwise a Secretary could never complete ANY sync.
+ *
+ * Pure on purpose: the payload contract is the thing that broke, so it is
+ * covered directly by tests rather than through a rendered App.
+ */
+export function buildSyncPayload(params: {
+  overrides?: Record<string, any>;
+  options?: { scope?: 'eggHarvests' | 'roleUpdate' | 'presidentApproval' | 'auditorReview' };
+  snapshot: { hogRaising: any; transactions: unknown; funds: unknown } & Record<string, any>;
+  deletedIds: StoredDeletedIds | Record<string, unknown>;
+  canWriteFinancials: boolean;
+}): Record<string, unknown> {
+  const { overrides, options, snapshot, deletedIds, canWriteFinancials } = params;
+  const scope = options?.scope;
+
+  if (scope === 'eggHarvests') {
+    return { eggHarvests: overrides?.eggHarvests || snapshot.hogRaising.eggHarvests || [] };
+  }
+  if (scope === 'roleUpdate') {
+    return { roleUpdate: overrides?.roleUpdate };
+  }
+  if (scope === 'presidentApproval') {
+    // Send ONLY the sign-off. A full snapshot here would carry `funds` and the
+    // server would strip them, wiping the ledger on every approval.
+    return { financialTransactions: overrides?.financialTransactions || [], presidentApprovalOnly: true };
+  }
+  if (scope === 'auditorReview') {
+    // Same reasoning for the Auditor step: send only the reviewed record.
+    return { financialTransactions: overrides?.financialTransactions || [], auditorReviewOnly: true };
+  }
+
+  const hasOverride = overrides !== undefined && Object.keys(overrides).length > 0;
+
+  if (hasOverride) {
+    const payload: Record<string, unknown> = {};
+    for (const [overrideKey, payloadKey] of SYNC_ENTITY_KEYS) {
+      if (overrides![overrideKey] !== undefined) payload[payloadKey] = overrides![overrideKey];
+    }
+    if (canWriteFinancials && overrides!.financialTransactions !== undefined) {
+      payload.financialTransactions = overrides!.financialTransactions;
+    }
+    if (canWriteFinancials && overrides!.funds !== undefined) payload.funds = overrides!.funds;
+    if (canWriteFinancials && overrides!.hogRaising !== undefined) payload.hogRaising = overrides!.hogRaising;
+    if (overrides!.systemLogs !== undefined) payload.systemLogs = overrides!.systemLogs;
+    payload.deletedIds = deletedIds;
+    return payload;
+  }
+
+  const snapshotPayload: Record<string, unknown> = {};
+  for (const [key] of SYNC_ENTITY_KEYS) {
+    snapshotPayload[key] = snapshot[key];
+  }
+  snapshotPayload.systemLogs = snapshot.logs;
+  if (canWriteFinancials) {
+    snapshotPayload.financialTransactions = snapshot.transactions;
+    snapshotPayload.funds = snapshot.funds;
+    snapshotPayload.hogRaising = snapshot.hogRaising;
+  }
+  snapshotPayload.deletedIds = deletedIds;
+  return snapshotPayload;
 }
 
 export default function App() {
@@ -786,7 +875,27 @@ export default function App() {
     },
     options?: { silent?: boolean; source?: string; scope?: 'eggHarvests' | 'roleUpdate' | 'presidentApproval' | 'auditorReview' }
   ): Promise<boolean> => {
-    const tracksFullSnapshot = options?.scope !== 'eggHarvests' && options?.scope !== 'roleUpdate' && options?.scope !== 'presidentApproval' && options?.scope !== 'auditorReview';
+    const scopedWrite = options?.scope === 'eggHarvests' || options?.scope === 'roleUpdate' || options?.scope === 'presidentApproval' || options?.scope === 'auditorReview';
+    // A push that carries an explicit entity override is a PARTIAL write and must
+    // stay that way. Filling the untouched entities from the app snapshot made a
+    // Secretary's member save ship `financialTransactions`/`funds`/`hogRaising`
+    // too, and `/api/sync/push` rejects a non-Treasurer for those fields with a
+    // 403 that discards the whole request - the member was never stored. See
+    // `buildSyncPayload`, which owns that decision.
+    const partialWrite = !scopedWrite && overrides !== undefined && Object.keys(overrides).length > 0;
+    // PRECONDITION: `overrides` must never be captured loosely. Every push that
+    // piggybacks an action ("Auto-Sync while pushing", the sync-queue flush) runs
+    // AFTER this function returned, so a retry re-reads the caller's `overrides`
+    // closure and would repeat a stale write (e.g. re-insert a deleted member).
+    const tracksFullSnapshot = !scopedWrite;
+    // Snapshot of the override taken at dispatch time; isTransient re-reads the
+    // caller's variable, so only trust it when it still matches this snapshot.
+    const overridesAtDispatch = overrides;
+    const isTransient = () => overrides !== overridesAtDispatch;
+    // Mirrors the server guard in `src/api/push.ts`: only these roles own the
+    // ledger, so only they may put financial entities in a payload.
+    const senderRole = String(currentUser?.role || '').trim().toLowerCase().replace(/\s+/g, '_');
+    const canWriteFinancials = senderRole === 'treasurer' || senderRole === 'assistant_treasurer';
     const markFullSyncPending = async () => {
       if (!tracksFullSnapshot) return;
       setHasPendingCloudSync(true);
@@ -819,35 +928,46 @@ export default function App() {
 
     try {
       await markFullSyncPending();
+      // A retried transient action (see `overridesAtDispatch`) already wrote its
+      // entity through the full-sync path this retry waits on; re-sending the
+      // captured override would clobber anything saved in the meantime.
+      if (isTransient()) {
+        console.log('[Auto-Sync]: Retried action already covered by the full sync; skipping the repeat write.');
+        return true;
+      }
       const currentDeletedIds = overrides?.deletedIds || getStoredDeletedIds();
-      const snap = appDataRef.current;
-      const payload = options?.scope === 'eggHarvests'
-        ? { eggHarvests: overrides?.eggHarvests || snap.hogRaising.eggHarvests || [] }
-        : options?.scope === 'roleUpdate'
-          ? { roleUpdate: overrides?.roleUpdate }
-        : options?.scope === 'presidentApproval'
-          // Send ONLY the sign-off. A full snapshot here would carry `funds` and
-          // the server would strip them, wiping the ledger on every approval.
-          ? { financialTransactions: overrides?.financialTransactions || [], presidentApprovalOnly: true }
-        : options?.scope === 'auditorReview'
-          // Same reasoning for the Auditor step: send only the reviewed record.
-          ? { financialTransactions: overrides?.financialTransactions || [], auditorReviewOnly: true }
-        : {
-            users: overrides?.users || snap.users,
-            members: overrides?.members || snap.members,
-            meetings: overrides?.meetings || snap.meetings,
-            resolutions: overrides?.resolutions || snap.resolutions,
-            financialTransactions: overrides?.financialTransactions || snap.transactions,
-            announcements: overrides?.announcements || snap.announcements,
-            products: overrides?.products || snap.products,
-            activities: overrides?.activities || snap.activities,
-            achievements: overrides?.achievements || snap.achievements,
-            hogRaising: overrides?.hogRaising || snap.hogRaising,
-            funds: overrides?.funds || snap.funds,
-            inventory: overrides?.inventory || snap.inventory,
-            systemLogs: overrides?.systemLogs || snap.logs,
-            deletedIds: currentDeletedIds
-          };
+      // `appDataRef` is only refreshed by a `useEffect`, i.e. after a render. A
+      // push issued in the same tick as `setMembers(saveMembers(...))` sees the
+      // PREVIOUS arrays there, so a full snapshot would omit the record that was
+      // just created. When the caller supplies overrides, build the payload from
+      // THOSE - they are the live values - and use the ref only as a fallback.
+      const overrideHasEntries = overrides !== undefined
+        && Object.keys(overrides).some(key => (overrides as Record<string, unknown>)[key] !== undefined);
+      const snap = overrideHasEntries
+        ? {
+            ...appDataRef.current,
+            users: overrides?.users ?? appDataRef.current.users,
+            members: overrides?.members ?? appDataRef.current.members,
+            meetings: overrides?.meetings ?? appDataRef.current.meetings,
+            resolutions: overrides?.resolutions ?? appDataRef.current.resolutions,
+            transactions: overrides?.financialTransactions ?? appDataRef.current.transactions,
+            announcements: overrides?.announcements ?? appDataRef.current.announcements,
+            products: overrides?.products ?? appDataRef.current.products,
+            activities: overrides?.activities ?? appDataRef.current.activities,
+            achievements: overrides?.achievements ?? appDataRef.current.achievements,
+            hogRaising: overrides?.hogRaising ?? appDataRef.current.hogRaising,
+            funds: overrides?.funds ?? appDataRef.current.funds,
+            inventory: overrides?.inventory ?? appDataRef.current.inventory,
+            logs: overrides?.systemLogs ?? appDataRef.current.logs
+          }
+        : appDataRef.current;
+      const payload = buildSyncPayload({
+        overrides,
+        options,
+        snapshot: snap,
+        deletedIds: currentDeletedIds,
+        canWriteFinancials
+      });
 
       const res = await fetch('/api/sync/push', {
         method: 'POST',
@@ -862,7 +982,31 @@ export default function App() {
       }
       const result = await res.json();
       if (res.ok && result?.success && !result?.offlineMode) {
-        if (tracksFullSnapshot) {
+        if (!tracksFullSnapshot) {
+          // Scoped pushes (auditorReview / presidentApproval / eggHarvests / roleUpdate)
+          // still represent a completed write. Recompute the pending flag from the
+          // real sources instead of leaving it stuck at `true` forever.
+          const stillPending = syncQueueRef.current.length > 0 || hasPendingDeletions();
+          setHasPendingCloudSync(stillPending);
+          await updateStorage('bafa_pending_cloud_sync', stillPending);
+        } else if (partialWrite) {
+          // A partial write only covered its own entities. The queue and the
+          // pending-deletion list are unknown to this request, so treat them as
+          // flushed ONLY when the delete list went along with it - otherwise the
+          // leftover deletions stay queued and the caller's snapshot stays
+          // `pending`, which is what re-triggers the full sync that clears them.
+          const sentDeletions = Object.values(currentDeletedIds).some(ids => Array.isArray(ids) && ids.length > 0);
+          const remainingQueue = sentDeletions
+            ? syncQueueRef.current.filter(item => !queuedIdsAtStart.has(item.id))
+            : syncQueueRef.current;
+          syncQueueRef.current = remainingQueue;
+          setSyncQueue(remainingQueue);
+          void updateStorage('bafa_sync_queue', remainingQueue);
+          if (sentDeletions) clearStoredDeletedIds(currentDeletedIds);
+          const pending = remainingQueue.length > 0 || hasPendingDeletions();
+          setHasPendingCloudSync(pending);
+          await updateStorage('bafa_pending_cloud_sync', pending);
+        } else {
           const remainingQueue = syncQueueRef.current.filter(item => !queuedIdsAtStart.has(item.id));
           syncQueueRef.current = remainingQueue;
           setSyncQueue(remainingQueue);
@@ -881,13 +1025,6 @@ export default function App() {
           const pending = remainingQueue.length > 0;
           setHasPendingCloudSync(pending);
           await updateStorage('bafa_pending_cloud_sync', pending);
-        } else {
-          // Scoped pushes (auditorReview / presidentApproval / eggHarvests / roleUpdate)
-          // still represent a completed write. Recompute the pending flag from the
-          // real sources instead of leaving it stuck at `true` forever.
-          const stillPending = syncQueueRef.current.length > 0 || hasPendingDeletions();
-          setHasPendingCloudSync(stillPending);
-          await updateStorage('bafa_pending_cloud_sync', stillPending);
         }
 
         // Refresh database row stats and status
@@ -2545,9 +2682,9 @@ export default function App() {
     return { success: true };
   };
 
-  const handleResetPassword = async (userId: string, newPass: string, currentPassword = ''): Promise<boolean> => {
+  const handleResetPassword = async (userId: string, newPass: string, currentPassword = ''): Promise<PasswordResetResult> => {
     const targetUser = users.find(u => u.id === userId);
-    if (!targetUser) return false;
+    if (!targetUser) return { success: false, message: 'That account could not be found.' };
 
     // The President may reset officer credentials; the Secretary may reset member credentials.
     // but the President's own account can never be reset from this desk.
@@ -2558,46 +2695,51 @@ export default function App() {
       );
     if (!canResetPasswords) {
       showToastMessage('Only the President may reset officer credentials; the Secretary may reset member credentials.', 'error');
-      return false;
+      return { success: false, message: 'Only the President may reset officer credentials; the Secretary may reset member credentials.' };
     }
     if (targetUser.role === 'President') {
       showToastMessage('Dili ma-reset ang password sa Presidente. (The President\'s password cannot be reset.)', 'error');
-      return false;
+      return { success: false, message: 'The President\'s password cannot be reset.' };
     }
 
     if (import.meta.env.PROD || dbStatus.configured) {
       try {
+        // `credentials` must match the sign-in call: without it the session
+        // cookie is dropped, the server sees an anonymous caller and answers
+        // 401 "Authentication required.".
         const response = await fetch('/api/auth/password/reset', {
           method: 'POST',
+          credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, targetUserId: userId, newPassword: newPass, currentPassword })
         });
-        const result = await response.json();
+        const result = await response.json().catch(() => null);
         if (!response.ok || !result?.success) {
-          showToastMessage(result?.message || 'Password reset was rejected.', 'error');
-          return false;
+          const reason = result?.message || 'Password reset was rejected.';
+          showToastMessage(reason, 'error');
+          return { success: false, message: reason };
         }
         const updatedTarget = { ...targetUser, mustChangePassword: true, resetRequested: false, failedLoginAttempts: 0, lockedUntil: undefined };
         setUsers(previous => previous.map(user => user.id === userId ? updatedTarget : user));
         updateStorage('bafa_users', users.map(user => user.id === userId ? updatedTarget : user));
         showToastMessage(`A temporary password was created for ${targetUser.name}; it must be changed at next sign-in.`, 'success');
-        return true;
+        return { success: true };
       } catch {
         showToastMessage('Password reset could not be completed because the server could not be reached.', 'error');
-        return false;
+        return { success: false, message: 'The server could not be reached. Check your connection and try again.' };
       }
     }
 
     if (!currentUser || !verifyPassword(currentPassword, currentUser.passwordHash, currentUser.password)) {
       showToastMessage('Your current password is incorrect.', 'error');
-      return false;
+      return { success: false, message: 'Your current password is incorrect.' };
     }
 
     const safeHistory = Array.isArray(targetUser.passwordHistory) ? targetUser.passwordHistory : [];
     const policyError = validatePasswordPolicy(newPass, targetUser.username, targetUser.role, safeHistory);
     if (policyError) {
       showToastMessage(policyError, 'error');
-      return false;
+      return { success: false, message: policyError };
     }
     const resetChangedAt = new Date().toISOString();
     const resetHash = hashPolicyPassword(newPass);
@@ -2630,7 +2772,7 @@ export default function App() {
       addToSyncQueue('update', 'user', { id: userId, resetRequested: false });
     }
     showToastMessage(`Malampusong na-reset ang password ni ${targetUser.name}!`, 'success');
-    return true;
+    return { success: true };
   };
 
   const handleDeleteUser = (id: string) => {

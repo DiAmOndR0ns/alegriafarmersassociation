@@ -202,6 +202,19 @@ export function isTreasurerRole(role: string): boolean {
   return normalized === 'treasurer' || normalized === 'assistant_treasurer';
 }
 
+/**
+ * The plain Member role, normalised like every other role check.
+ *
+ * Accounts are created with `role: 'Member'`, but the column is free text and
+ * officer rows elsewhere are stored underscored (`Board_Member`). Comparing the
+ * raw value against the lowercase literal rejected valid members - and with it
+ * every Secretary-initiated password or MFA reset - so the guard normalises
+ * whitespace and casing exactly as the other role helpers do.
+ */
+export function isMemberRole(role: unknown): boolean {
+  return String(role ?? '').trim().toLowerCase().replace(/\s+/g, '_') === 'member';
+}
+
 function newChallenge(
   kind: 'mfa-login' | 'mfa-setup',
   userId: string,
@@ -517,7 +530,7 @@ export async function mfaResetHandler(req: any, res: any) {
       return errorResponse(res, 403, 'The President resets their own two-factor authentication.');
     }
     if (!isSelf && managesMembers) {
-      if (!managesOfficers && String(target.role).trim().toLowerCase() !== 'member') {
+      if (!managesOfficers && !isMemberRole(target.role)) {
         return errorResponse(res, 403, 'Secretary access can reset Member accounts only.');
       }
     }
@@ -778,7 +791,7 @@ export async function passwordResetHandler(req: any, res: any) {
         await client.query('ROLLBACK');
         return errorResponse(res, 403, 'President accounts cannot be reset through this endpoint.');
       }
-      if (isSecretaryRole(actorRow.role) && target.role.trim().toLowerCase() !== 'member') {
+      if (isSecretaryRole(actorRow.role) && !isMemberRole(target.role)) {
         await client.query('ROLLBACK');
         return errorResponse(res, 403, 'Secretary access can reset Member accounts only.');
       }

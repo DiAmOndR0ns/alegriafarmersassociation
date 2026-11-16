@@ -1136,6 +1136,9 @@ function isSecretaryRole(role) {
   const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
   return normalized === "secretary" || normalized === "assistant_secretary";
 }
+function isMemberRole(role) {
+  return String(role ?? "").trim().toLowerCase().replace(/\s+/g, "_") === "member";
+}
 function newChallenge(kind, userId, options = {}) {
   return signToken({
     kind,
@@ -1395,7 +1398,7 @@ async function mfaResetHandler(req, res) {
       return errorResponse(res, 403, "The President resets their own two-factor authentication.");
     }
     if (!isSelf && managesMembers) {
-      if (!managesOfficers && String(target.role).trim().toLowerCase() !== "member") {
+      if (!managesOfficers && !isMemberRole(target.role)) {
         return errorResponse(res, 403, "Secretary access can reset Member accounts only.");
       }
     }
@@ -1652,7 +1655,7 @@ async function passwordResetHandler(req, res) {
         await client.query("ROLLBACK");
         return errorResponse(res, 403, "President accounts cannot be reset through this endpoint.");
       }
-      if (isSecretaryRole(actorRow.role) && target.role.trim().toLowerCase() !== "member") {
+      if (isSecretaryRole(actorRow.role) && !isMemberRole(target.role)) {
         await client.query("ROLLBACK");
         return errorResponse(res, 403, "Secretary access can reset Member accounts only.");
       }

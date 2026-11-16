@@ -17,6 +17,15 @@ export interface MemberAffiliation {
   type?: 'Senior Citizen' | 'PWD' | '4Ps / DSWD' | 'Cooperative' | 'Farmers Association' | 'Government Agency' | 'Other' | string;
 }
 
+/**
+ * Outcome of a credential reset. `message` carries the server's own reason so
+ * the officer sees why it failed instead of a generic guess.
+ */
+export interface PasswordResetResult {
+  success: boolean;
+  message?: string;
+}
+
 export interface User {
   /** Id of the linked member profile; allows a President sync to carry role changes. */
   memberId?: string;
