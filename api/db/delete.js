@@ -20,6 +20,7 @@ function scheduleIdleEviction(connectionString) {
   if (typeof timer?.unref === "function") timer.unref();
   poolIdleTimers.set(connectionString, timer);
 }
+var DATABASE_URL_ERROR = "DATABASE_URL must point at the hosted Supabase PostgreSQL project.";
 function isLoopbackDatabaseUrl(rawUrl) {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
   try {
@@ -56,10 +57,10 @@ function cleanDatabaseUrl(rawUrl) {
 function getPool() {
   const rawDbUrl = process.env.DATABASE_URL;
   if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
-    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+    throw new Error(DATABASE_URL_ERROR);
   }
   if (!rawDbUrl || !isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+    throw new Error(DATABASE_URL_ERROR);
   }
   const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
   const cached = poolCache.get(connectionString);
@@ -118,6 +119,10 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audit_notes TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_by TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
@@ -166,6 +171,30 @@ async function runSchemaMigrations(client) {
       description TEXT NOT NULL,
       icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
     );`,
+    `CREATE TABLE IF NOT EXISTS organization_funds (
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      code VARCHAR(50) NOT NULL,
+      allocated_amount NUMERIC DEFAULT 0,
+      current_balance NUMERIC DEFAULT 0,
+      description TEXT,
+      custodian TEXT,
+      last_updated VARCHAR(50)
+    );`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
+    // Legacy databases still carry allocated_amount; newer ones only have initial_fund.
+    // Guard the backfill so a missing legacy column cannot fail the whole migration.
+    `DO $$
+     BEGIN
+       IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+         UPDATE organization_funds SET initial_fund = allocated_amount
+          WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+       END IF;
+     END $$;`,
+    `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
       id VARCHAR(100) PRIMARY KEY,
@@ -321,6 +350,13 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      ALTER TABLE financial_transactions
+        ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approved_by TEXT,
+        ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS announcements (
         id VARCHAR(100) PRIMARY KEY,
         title TEXT NOT NULL,
@@ -436,6 +472,20 @@ async function initDatabaseSchema(pool) {
         ADD COLUMN IF NOT EXISTS category TEXT,
         ADD COLUMN IF NOT EXISTS source_origin TEXT,
         ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
+    `);
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+          UPDATE organization_funds SET initial_fund = allocated_amount
+           WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+        END IF;
+      END $$;
+    `);
+    await client.query(`
+      ALTER TABLE organization_funds
+        DROP CONSTRAINT IF EXISTS organization_funds_code_key;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS auditor_reports (
@@ -595,6 +645,10 @@ import bcrypt2 from "bcryptjs";
 function sendResponse(res, statusCode, data) {
   try {
     if (res.headersSent) return;
+    if (typeof res.setHeader === "function") {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "no-store");
+    }
     if (typeof res.status === "function" && typeof res.json === "function") {
       return res.status(statusCode).json(data);
     }
@@ -674,11 +728,20 @@ var LOCKOUT_DURATION_MS = 15 * 60 * 1e3;
 var SESSION_COOKIE = "fams_session";
 var SESSION_SECONDS = 8 * 60 * 60;
 var CHALLENGE_SECONDS = 15 * 60;
+var ephemeralFallbackSecret = null;
+var TOKEN_AUDIENCE = "fams-auth-v2";
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
-    const seed = process.env.DATABASE_URL || "afa-farmers-association-session-secret-seed-key-tuburan-cebu";
-    return createHash("sha256").update(seed).digest();
+    const deploymentSeed = process.env.FAMS_SESSION_SEED;
+    if (deploymentSeed && deploymentSeed.length >= 32) {
+      return createHash("sha256").update(deploymentSeed).digest();
+    }
+    if (!ephemeralFallbackSecret) {
+      console.warn("[Auth] SESSION_SECRET is missing or weak; using a per-process key. Sessions end on redeploy.");
+      ephemeralFallbackSecret = createHash("sha256").update(randomBytes(32)).digest();
+    }
+    return ephemeralFallbackSecret;
   }
   return Buffer.from(value, "utf8");
 }
@@ -691,6 +754,7 @@ function verifyToken(token) {
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (!claims.sub || !Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1e3)) return null;
+    if (claims.aud !== TOKEN_AUDIENCE) return null;
     return claims;
   } catch {
     return null;
@@ -728,6 +792,10 @@ function rejectCrossOriginMutation(req) {
   }
 }
 async function getAuthenticatedUser(req) {
+  const user = await readAuthenticatedUser(req);
+  return user && user.isApproved ? user : null;
+}
+async function readAuthenticatedUser(req) {
   const token = getCookie(req, SESSION_COOKIE);
   if (!token) return null;
   const claims = verifyToken(token);

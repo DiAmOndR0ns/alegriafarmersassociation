@@ -2,6 +2,168 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import bcrypt2 from "bcryptjs";
 
+// src/utils/totp.ts
+var BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+var STEP_SECONDS = 30;
+function decodeBase32(str) {
+  if (typeof str !== "string") return new Uint8Array(0);
+  const clean = str.toUpperCase().replace(/[\s=-]/g, "");
+  let bits = 0;
+  let value = 0;
+  const bytes = [];
+  for (let i = 0; i < clean.length; i++) {
+    const idx = BASE32_ALPHABET.indexOf(clean[i]);
+    if (idx === -1) continue;
+    value = value << 5 | idx;
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push(value >>> bits - 8 & 255);
+      bits -= 8;
+      value &= (1 << bits) - 1;
+    }
+  }
+  return new Uint8Array(bytes);
+}
+function sha1Fallback(bytes) {
+  let h0 = 1732584193, h1 = 4023233417, h2 = 2562383102, h3 = 271733878, h4 = 3285377520;
+  const bitLen = bytes.length * 8;
+  const newLen = (bytes.length + 8 >> 6 << 6) + 64;
+  const buf = new Uint8Array(newLen);
+  buf.set(bytes);
+  buf[bytes.length] = 128;
+  const view = new DataView(buf.buffer);
+  view.setBigUint64(newLen - 8, BigInt(bitLen), false);
+  const w = new Uint32Array(80);
+  for (let i = 0; i < newLen; i += 64) {
+    for (let j = 0; j < 16; j++) {
+      w[j] = view.getUint32(i + j * 4, false);
+    }
+    for (let j = 16; j < 80; j++) {
+      const v = w[j - 3] ^ w[j - 8] ^ w[j - 14] ^ w[j - 16];
+      w[j] = v << 1 | v >>> 31;
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4;
+    for (let j = 0; j < 80; j++) {
+      let f, k;
+      if (j < 20) {
+        f = b & c | ~b & d;
+        k = 1518500249;
+      } else if (j < 40) {
+        f = b ^ c ^ d;
+        k = 1859775393;
+      } else if (j < 60) {
+        f = b & c | b & d | c & d;
+        k = 2400959708;
+      } else {
+        f = b ^ c ^ d;
+        k = 3395469782;
+      }
+      const temp = (a << 5 | a >>> 27) + f + e + k + w[j] >>> 0;
+      e = d;
+      d = c;
+      c = (b << 30 | b >>> 2) >>> 0;
+      b = a;
+      a = temp;
+    }
+    h0 = h0 + a >>> 0;
+    h1 = h1 + b >>> 0;
+    h2 = h2 + c >>> 0;
+    h3 = h3 + d >>> 0;
+    h4 = h4 + e >>> 0;
+  }
+  const out = new Uint8Array(20);
+  const outView = new DataView(out.buffer);
+  outView.setUint32(0, h0, false);
+  outView.setUint32(4, h1, false);
+  outView.setUint32(8, h2, false);
+  outView.setUint32(12, h3, false);
+  outView.setUint32(16, h4, false);
+  return out;
+}
+function hmacSha1Fallback(key, message) {
+  let k = key;
+  if (k.length > 64) k = sha1Fallback(k);
+  const kPad = new Uint8Array(64);
+  kPad.set(k);
+  const ipad = new Uint8Array(64);
+  const opad = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) {
+    ipad[i] = kPad[i] ^ 54;
+    opad[i] = kPad[i] ^ 92;
+  }
+  const innerMsg = new Uint8Array(64 + message.length);
+  innerMsg.set(ipad);
+  innerMsg.set(message, 64);
+  const innerHash = sha1Fallback(innerMsg);
+  const outerMsg = new Uint8Array(64 + 20);
+  outerMsg.set(opad);
+  outerMsg.set(innerHash, 64);
+  return sha1Fallback(outerMsg);
+}
+async function hmacSha1(keyBytes, message) {
+  const cryptoObj = typeof globalThis !== "undefined" ? globalThis.crypto : void 0;
+  if (cryptoObj?.subtle) {
+    try {
+      const key = await cryptoObj.subtle.importKey(
+        "raw",
+        keyBytes,
+        { name: "HMAC", hash: "SHA-1" },
+        false,
+        ["sign"]
+      );
+      const signature = await cryptoObj.subtle.sign("HMAC", key, message);
+      return new Uint8Array(signature);
+    } catch {
+      return hmacSha1Fallback(keyBytes, message);
+    }
+  }
+  return hmacSha1Fallback(keyBytes, message);
+}
+async function generateTotpCode(secret, timestampMs = Date.now()) {
+  if (typeof secret !== "string" || !secret.trim()) {
+    throw new Error("Secret must be a non-empty string.");
+  }
+  const step = Math.floor(timestampMs / 1e3 / STEP_SECONDS);
+  if (step < 0) {
+    throw new Error("Timestamp must be non-negative.");
+  }
+  const counterBuffer = new Uint8Array(8);
+  let tempStep = BigInt(step);
+  for (let i = 7; i >= 0; i--) {
+    counterBuffer[i] = Number(tempStep & 0xffn);
+    tempStep >>= 8n;
+  }
+  const keyBytes = decodeBase32(secret);
+  if (keyBytes.length === 0) {
+    throw new Error("Invalid Base32 secret.");
+  }
+  const digest = await hmacSha1(keyBytes, counterBuffer);
+  const offset = digest[digest.length - 1] & 15;
+  const binary = (digest[offset] & 127) << 24 | (digest[offset + 1] & 255) << 16 | (digest[offset + 2] & 255) << 8 | digest[offset + 3] & 255;
+  const code = (binary % 1e6).toString().padStart(6, "0");
+  return code;
+}
+function safeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function verifyTotpCode(secret, code, timestampMs = Date.now()) {
+  if (typeof secret !== "string" || !secret.trim() || typeof code !== "string") return false;
+  const cleanCode = code.trim();
+  if (!/^\d{6}$/.test(cleanCode)) return false;
+  for (const delta of [0, -STEP_SECONDS * 1e3, STEP_SECONDS * 1e3]) {
+    try {
+      const expected = await generateTotpCode(secret, timestampMs + delta);
+      if (safeEqual(expected, cleanCode)) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 // src/api/db.ts
 import pg from "pg";
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
@@ -24,6 +186,7 @@ function scheduleIdleEviction(connectionString) {
   if (typeof timer?.unref === "function") timer.unref();
   poolIdleTimers.set(connectionString, timer);
 }
+var DATABASE_URL_ERROR = "DATABASE_URL must point at the hosted Supabase PostgreSQL project.";
 function isLoopbackDatabaseUrl(rawUrl) {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
   try {
@@ -60,10 +223,10 @@ function cleanDatabaseUrl(rawUrl) {
 function getPool() {
   const rawDbUrl = process.env.DATABASE_URL;
   if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
-    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+    throw new Error(DATABASE_URL_ERROR);
   }
   if (!rawDbUrl || !isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+    throw new Error(DATABASE_URL_ERROR);
   }
   const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
   const cached = poolCache.get(connectionString);
@@ -122,6 +285,10 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audit_notes TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_by TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
@@ -170,6 +337,30 @@ async function runSchemaMigrations(client) {
       description TEXT NOT NULL,
       icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
     );`,
+    `CREATE TABLE IF NOT EXISTS organization_funds (
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      code VARCHAR(50) NOT NULL,
+      allocated_amount NUMERIC DEFAULT 0,
+      current_balance NUMERIC DEFAULT 0,
+      description TEXT,
+      custodian TEXT,
+      last_updated VARCHAR(50)
+    );`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
+    // Legacy databases still carry allocated_amount; newer ones only have initial_fund.
+    // Guard the backfill so a missing legacy column cannot fail the whole migration.
+    `DO $$
+     BEGIN
+       IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+         UPDATE organization_funds SET initial_fund = allocated_amount
+          WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+       END IF;
+     END $$;`,
+    `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
       id VARCHAR(100) PRIMARY KEY,
@@ -325,6 +516,13 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      ALTER TABLE financial_transactions
+        ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approved_by TEXT,
+        ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS announcements (
         id VARCHAR(100) PRIMARY KEY,
         title TEXT NOT NULL,
@@ -442,6 +640,20 @@ async function initDatabaseSchema(pool) {
         ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
     `);
     await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+          UPDATE organization_funds SET initial_fund = allocated_amount
+           WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+        END IF;
+      END $$;
+    `);
+    await client.query(`
+      ALTER TABLE organization_funds
+        DROP CONSTRAINT IF EXISTS organization_funds_code_key;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS auditor_reports (
         id VARCHAR(100) PRIMARY KEY,
         report_period VARCHAR(100) NOT NULL,
@@ -525,6 +737,10 @@ async function ensureDatabaseSchema(pool) {
 function sendResponse(res, statusCode, data) {
   try {
     if (res.headersSent) return;
+    if (typeof res.setHeader === "function") {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "no-store");
+    }
     if (typeof res.status === "function" && typeof res.json === "function") {
       return res.status(statusCode).json(data);
     }
@@ -761,9 +977,17 @@ function validatePasswordPolicy(password, username, role, history = []) {
     return "Use uppercase and lowercase letters, a number, and a special character.";
   }
   const lowered = password.toLowerCase();
-  const prohibited = [username, role, "password"].filter((part) => part.trim().length > 0);
+  const prohibited = [username, role, "password", "farmers", "association", "alegria", "bafa"].filter(
+    (part) => part.trim().length > 0
+  );
   if (prohibited.some((part) => lowered.includes(part.toLowerCase()))) {
-    return 'Password cannot contain your username, role, or the word "password".';
+    return 'Password cannot contain your username, role, association name, or the word "password".';
+  }
+  if (/(?:january|february|march|april|may|june|july|august|september|october|november|december|christmas|welcome|admin|letmein|iloveyou|fams)/i.test(password)) {
+    return "Password cannot contain a common word, season, or month name.";
+  }
+  if (/(.)\1{5,}/.test(password) || /^(.{1,6})\1+$/.test(password)) {
+    return "Password cannot be a repeated or padded pattern.";
   }
   if (/(?:01234|12345|23456|34567|45678|56789|67890|09876|98765|87654|76543|65432|54321|43210|qwerty|asdfgh|zxcvbn)/i.test(
     password
@@ -787,13 +1011,28 @@ function createLegacySha256(password) {
 var SESSION_COOKIE = "fams_session";
 var SESSION_SECONDS = 8 * 60 * 60;
 var CHALLENGE_SECONDS = 15 * 60;
+var TOTP_STEP_SECONDS = 30;
+var ephemeralFallbackSecret = null;
+var TOKEN_AUDIENCE = "fams-auth-v2";
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
-    const seed = process.env.DATABASE_URL || "afa-farmers-association-session-secret-seed-key-tuburan-cebu";
-    return createHash("sha256").update(seed).digest();
+    const deploymentSeed = process.env.FAMS_SESSION_SEED;
+    if (deploymentSeed && deploymentSeed.length >= 32) {
+      return createHash("sha256").update(deploymentSeed).digest();
+    }
+    if (!ephemeralFallbackSecret) {
+      console.warn("[Auth] SESSION_SECRET is missing or weak; using a per-process key. Sessions end on redeploy.");
+      ephemeralFallbackSecret = createHash("sha256").update(randomBytes(32)).digest();
+    }
+    return ephemeralFallbackSecret;
   }
   return Buffer.from(value, "utf8");
+}
+function signToken(claims) {
+  const payload = Buffer.from(JSON.stringify({ ...claims, aud: TOKEN_AUDIENCE })).toString("base64url");
+  const signature = createHmac("sha256", signingSecret()).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
 }
 function verifyToken(token) {
   try {
@@ -804,6 +1043,7 @@ function verifyToken(token) {
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (!claims.sub || !Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1e3)) return null;
+    if (claims.aud !== TOKEN_AUDIENCE) return null;
     return claims;
   } catch {
     return null;
@@ -824,6 +1064,12 @@ function getCookie(req, name) {
   }
   return void 0;
 }
+function setSessionCookie(req, res, token) {
+  const forwardedProto = String(req.headers?.["x-forwarded-proto"] || "").split(",")[0].trim();
+  const secure = process.env.NODE_ENV === "production" || forwardedProto === "https";
+  const value = token ? `${SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${SESSION_SECONDS}; Path=/; HttpOnly; SameSite=Strict${secure ? "; Secure" : ""}` : `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict${secure ? "; Secure" : ""}`;
+  res.setHeader("Set-Cookie", value);
+}
 function rejectCrossOriginMutation(req) {
   const fetchSite = String(req.headers?.["sec-fetch-site"] || "").toLowerCase();
   if (fetchSite === "cross-site") return true;
@@ -841,6 +1087,10 @@ function rejectCrossOriginMutation(req) {
   }
 }
 async function getAuthenticatedUser(req) {
+  const user = await readAuthenticatedUser(req);
+  return user && user.isApproved ? user : null;
+}
+async function readAuthenticatedUser(req) {
   const token = getCookie(req, SESSION_COOKIE);
   if (!token) return null;
   const claims = verifyToken(token);
@@ -871,6 +1121,14 @@ function safeUser(row) {
     mfaEnabled: Boolean(row.mfa_enabled)
   };
 }
+var MFA_ENFORCED_ROLES = [
+  "president",
+  "vice_president",
+  "treasurer",
+  "assistant_treasurer",
+  "secretary",
+  "auditor"
+];
 function isPresidentRole(role) {
   return role.trim().toLowerCase().replace(/\s+/g, "_") === "president";
 }
@@ -878,11 +1136,98 @@ function isSecretaryRole(role) {
   const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
   return normalized === "secretary" || normalized === "assistant_secretary";
 }
+function newChallenge(kind, userId, options = {}) {
+  return signToken({
+    kind,
+    sub: userId,
+    exp: Math.floor(Date.now() / 1e3) + CHALLENGE_SECONDS,
+    nonce: randomBytes(12).toString("base64url"),
+    ...options.passwordVerified ? { passwordVerified: true } : {},
+    ...options.bootstrap ? { bootstrap: true } : {}
+  });
+}
+function encodeBase32(bytes) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = 0;
+  let value = 0;
+  let output = "";
+  for (const byte of bytes) {
+    value = value << 8 | byte;
+    bits += 8;
+    while (bits >= 5) {
+      output += alphabet[value >>> bits - 5 & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) output += alphabet[value << 5 - bits & 31];
+  return output;
+}
+function decodeBase322(value) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = 0;
+  let accumulator = 0;
+  const output = [];
+  for (const char of value.toUpperCase().replace(/=+$/g, "")) {
+    const index = alphabet.indexOf(char);
+    if (index < 0) throw new Error("Invalid TOTP secret.");
+    accumulator = accumulator << 5 | index;
+    bits += 5;
+    if (bits >= 8) {
+      output.push(accumulator >>> bits - 8 & 255);
+      bits -= 8;
+    }
+  }
+  return Buffer.from(output);
+}
+function totpForStep(secret, step) {
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(step));
+  const digest = createHmac("sha1", decodeBase322(secret)).update(counter).digest();
+  const offset = digest[digest.length - 1] & 15;
+  const binary = (digest[offset] & 127) << 24 | (digest[offset + 1] & 255) << 16 | (digest[offset + 2] & 255) << 8 | digest[offset + 3] & 255;
+  return String(binary % 1e6).padStart(6, "0");
+}
+function verifyTotp(secret, supplied, nowMs = Date.now(), lastStep) {
+  if (!/^\d{6}$/.test(supplied)) return null;
+  const currentStep = Math.floor(nowMs / 1e3 / TOTP_STEP_SECONDS);
+  for (let step = currentStep - 2; step <= currentStep + 2; step++) {
+    if (step < 0) continue;
+    const expected = totpForStep(secret, step);
+    const a = Buffer.from(expected);
+    const b = Buffer.from(supplied);
+    if (a.length === b.length && timingSafeEqual(a, b) && (lastStep === null || lastStep === void 0 || step > Number(lastStep))) {
+      return step;
+    }
+  }
+  return null;
+}
+function enrollmentPayload(user, secret, challengeToken) {
+  const issuer = "FAMS";
+  const label = encodeURIComponent(`${issuer}:${user.username}`);
+  const otpauthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+  return { success: true, mfaSetupRequired: true, challengeToken, secret, otpauthUrl };
+}
+async function clearEnrollment(pool, userId) {
+  const secret = encodeBase32(randomBytes(20));
+  await pool.query(
+    `UPDATE users SET totp_secret = NULL, pending_totp_secret = $2, mfa_enabled = FALSE,
+       totp_last_used_step = NULL, failed_login_attempts = 0, locked_until = NULL
+     WHERE id = $1`,
+    [userId, secret]
+  );
+  return secret;
+}
 function passwordPolicyError(password, username, role, oldHash, history) {
   const error = validatePasswordPolicy(password, username, role, Array.isArray(history) ? history : []);
   if (error) return error;
   if (oldHash && bcrypt2.compareSync(password, oldHash)) return "New password must differ from the current password.";
   return null;
+}
+async function recordMfaFailure(pool, userId) {
+  await pool.query(`UPDATE users SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
+    total_failed_logins = COALESCE(total_failed_logins, 0) + 1,
+    locked_until = CASE WHEN COALESCE(failed_login_attempts, 0) + 1 >= 5 THEN NOW() + INTERVAL '15 minutes' ELSE locked_until END
+    WHERE id = $1`, [userId]);
 }
 async function initialize(pool) {
   await ensureDatabaseSchema(pool);
@@ -896,6 +1241,378 @@ async function readBody(req) {
 }
 function errorResponse(res, status, message) {
   return sendResponse(res, status, { success: false, message });
+}
+async function loginHandler(req, res) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  let pool;
+  try {
+    signingSecret();
+    pool = getPool();
+    await initialize(pool);
+  } catch (error) {
+    console.error("[Auth login setup failure]", error?.message || error);
+    return errorResponse(res, 503, "Authentication service is unavailable.");
+  }
+  const body = await readBody(req);
+  if (!body || typeof body.username !== "string" || typeof body.password !== "string") {
+    return errorResponse(res, 400, "Username and password are required.");
+  }
+  if (body.username.length > 100 || body.password.length > 200) {
+    return errorResponse(res, 401, "Invalid username or password.");
+  }
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE lower(username) = lower($1) LIMIT 1", [body.username.trim()]);
+    const user = result.rows[0];
+    if (!user) return errorResponse(res, 401, "Invalid username or password.");
+    if (!user.is_approved) return errorResponse(res, 401, "Invalid username or password.");
+    if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) {
+      return errorResponse(res, 423, "Account temporarily locked. Try again later.");
+    }
+    const lockExpired = Boolean(user.locked_until);
+    if (lockExpired) {
+      await pool.query(`UPDATE users SET failed_login_attempts = 0 WHERE id = $1 AND locked_until IS NOT NULL`, [user.id]);
+    }
+    const valid = typeof user.password === "string" && user.password.startsWith("$2") ? await bcrypt2.compare(body.password, user.password).catch(() => false) : false;
+    if (!valid) {
+      await pool.query(`UPDATE users SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
+        total_failed_logins = COALESCE(total_failed_logins, 0) + 1,
+        locked_until = CASE WHEN COALESCE(failed_login_attempts, 0) + 1 >= 5 THEN NOW() + INTERVAL '15 minutes' ELSE locked_until END
+        WHERE id = $1`, [user.id]);
+      return errorResponse(res, 401, "Invalid username or password.");
+    }
+    if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) {
+      return errorResponse(res, 423, "Account temporarily locked. Try again later.");
+    }
+    await pool.query("UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1", [user.id]);
+    const isMfaEnforced = MFA_ENFORCED_ROLES.includes(user.role.trim().toLowerCase().replace(/\s+/g, "_")) || Boolean(user.mfa_enabled);
+    if (isMfaEnforced) {
+      const activeSecret = user.totp_secret || user.pending_totp_secret || encodeBase32(randomBytes(20));
+      if (!user.totp_secret) {
+        if (user.pending_totp_secret !== activeSecret) {
+          await pool.query("UPDATE users SET pending_totp_secret = $1 WHERE id = $2", [activeSecret, user.id]);
+          user.pending_totp_secret = activeSecret;
+        }
+        return sendResponse(res, 200, {
+          success: true,
+          mfaSetupRequired: true,
+          challengeToken: newChallenge("mfa-setup", user.id, { passwordVerified: true })
+        });
+      }
+      if (typeof body.totpCode !== "string") {
+        return sendResponse(res, 200, {
+          success: true,
+          mfaRequired: true,
+          challengeToken: newChallenge("mfa-login", user.id, { passwordVerified: true })
+        });
+      }
+      const step = verifyTotp(activeSecret, body.totpCode, Date.now(), user.totp_last_used_step);
+      if (step === null) {
+        await recordMfaFailure(pool, user.id);
+        return errorResponse(res, 401, "Invalid authentication code.");
+      }
+      const consumed = await pool.query(`UPDATE users SET totp_last_used_step = $1, mfa_enabled = TRUE
+        WHERE id = $2 AND (totp_last_used_step IS NULL OR totp_last_used_step < $1) RETURNING id`, [step, user.id]);
+      if (!consumed.rowCount) return errorResponse(res, 401, "Authentication code already used.");
+    }
+    const token = signToken({ kind: "session", sub: user.id, exp: Math.floor(Date.now() / 1e3) + SESSION_SECONDS });
+    setSessionCookie(req, res, token);
+    return sendResponse(res, 200, { success: true, user: safeUser(user) });
+  } catch (error) {
+    console.error("[Auth login failure]", error);
+    return errorResponse(res, 500, "Unable to complete login.");
+  }
+}
+async function mfaEnrollHandler(req, res) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  try {
+    signingSecret();
+    const body = await readBody(req);
+    const claims = body?.challengeToken ? verifyToken(String(body.challengeToken)) : null;
+    if (!claims || claims.kind !== "mfa-setup") {
+      return errorResponse(res, 401, "Invalid or expired MFA challenge.");
+    }
+    if (!claims.bootstrap && !claims.passwordVerified) {
+      return errorResponse(res, 401, "Invalid or expired MFA challenge.");
+    }
+    const pool = getPool();
+    await initialize(pool);
+    const result = await pool.query("SELECT * FROM users WHERE id = $1", [claims.sub]);
+    const user = result.rows[0];
+    if (!user || !user.is_approved) {
+      return errorResponse(res, 401, "Invalid or expired MFA challenge.");
+    }
+    if (user.totp_secret) {
+      return errorResponse(res, 409, "An authenticator is already enrolled for this account.");
+    }
+    const secret = user.pending_totp_secret || encodeBase32(randomBytes(20));
+    if (!user.pending_totp_secret) {
+      await pool.query("UPDATE users SET pending_totp_secret = $1 WHERE id = $2", [secret, user.id]);
+    }
+    return sendResponse(res, 200, {
+      success: true,
+      mfaSetupRequired: true,
+      secret,
+      otpauthUrl: `otpauth://totp/${encodeURIComponent(`FAMS:${user.username}`)}?secret=${secret}&issuer=FAMS&algorithm=SHA1&digits=6&period=30`
+    });
+  } catch (error) {
+    console.error("[Auth MFA enroll failure]", error);
+    return errorResponse(res, 500, "Unable to start authenticator setup.");
+  }
+}
+async function mfaResetHandler(req, res) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  let actor;
+  let pool;
+  try {
+    actor = await getAuthenticatedUser(req);
+    pool = getPool();
+    await initialize(pool);
+  } catch {
+    return errorResponse(res, 503, "Authentication is not configured or unavailable.");
+  }
+  if (!actor) return errorResponse(res, 401, "Authentication required.");
+  const body = await readBody(req);
+  if (!body || typeof body.targetUserId !== "string" || typeof body.currentPassword !== "string") {
+    return errorResponse(res, 400, "Target account and your current password are required.");
+  }
+  const managesOfficers = isPresidentRole(actor.role);
+  const managesMembers = isSecretaryRole(actor.role);
+  const canEnrolSelf = MFA_ENFORCED_ROLES.includes(
+    actor.role.trim().toLowerCase().replace(/\s+/g, "_")
+  );
+  const isSelf = body.targetUserId === actor.id && canEnrolSelf;
+  if (!managesOfficers && !managesMembers && !isSelf) {
+    return errorResponse(res, 403, "President or Secretary access is required.");
+  }
+  try {
+    const actorRow = (await pool.query("SELECT * FROM users WHERE id = $1", [actor.id])).rows[0];
+    if (!actorRow || !await bcrypt2.compare(body.currentPassword, actorRow.password)) {
+      return errorResponse(res, 401, "Current password is incorrect.");
+    }
+    const target = (await pool.query("SELECT * FROM users WHERE id = $1", [body.targetUserId])).rows[0];
+    if (!target) return errorResponse(res, 404, "Target account was not found.");
+    if (isPresidentRole(target.role) && !isSelf) {
+      return errorResponse(res, 403, "The President resets their own two-factor authentication.");
+    }
+    if (!isSelf && managesMembers) {
+      if (!managesOfficers && String(target.role).trim().toLowerCase() !== "member") {
+        return errorResponse(res, 403, "Secretary access can reset Member accounts only.");
+      }
+    }
+    const secret = await clearEnrollment(pool, target.id);
+    return sendResponse(res, 200, {
+      success: true,
+      message: "Two-factor authentication was reset. The account must enrol an authenticator at its next sign-in.",
+      // Only the account's own console sees the fresh key; an officer resetting a
+      // colleague never learns their secret.
+      ...isSelf ? { secret } : {}
+    });
+  } catch (error) {
+    console.error("[Auth MFA reset failure]", error);
+    return errorResponse(res, 500, "Unable to reset two-factor authentication.");
+  }
+}
+async function mfaConfirmHandler(req, res) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  try {
+    signingSecret();
+    const body = await readBody(req);
+    const claims = body?.challengeToken ? verifyToken(String(body.challengeToken)) : null;
+    if (!claims || !["mfa-login", "mfa-setup"].includes(claims.kind) || typeof body.totpCode !== "string") {
+      return errorResponse(res, 401, "Invalid or expired MFA challenge.");
+    }
+    const pool = getPool();
+    await initialize(pool);
+    const client = await pool.connect();
+    let user;
+    try {
+      await client.query("BEGIN");
+      const result = await client.query("SELECT * FROM users WHERE id = $1 FOR UPDATE", [claims.sub]);
+      user = result.rows[0];
+      if (!user) {
+        await client.query("ROLLBACK");
+        return errorResponse(res, 401, "Invalid or expired MFA challenge.");
+      }
+      if (claims.kind === "mfa-setup") {
+        if (!claims.bootstrap && !claims.passwordVerified) {
+          await client.query("ROLLBACK");
+          return errorResponse(res, 401, "Invalid or expired MFA challenge.");
+        }
+        const secret = user.pending_totp_secret || user.totp_secret;
+        const step = secret ? verifyTotp(secret, body.totpCode) : null;
+        if (step === null) {
+          await recordMfaFailure(client, user.id);
+          await client.query("COMMIT");
+          return errorResponse(res, 401, "Invalid authentication code.");
+        }
+        if (secret && !await verifyTotpCode(secret, body.totpCode)) {
+          await recordMfaFailure(client, user.id);
+          await client.query("COMMIT");
+          return errorResponse(res, 401, "Invalid authentication code.");
+        }
+        await client.query(`UPDATE users SET totp_secret = $1, pending_totp_secret = NULL,
+          mfa_enabled = TRUE, totp_last_used_step = $2, failed_login_attempts = 0,
+          locked_until = NULL WHERE id = $3`, [secret, step, user.id]);
+        user.totp_secret = secret;
+        user.pending_totp_secret = null;
+        user.mfa_enabled = true;
+      } else {
+        const secret = user.totp_secret || user.pending_totp_secret;
+        if (!secret) {
+          await client.query("ROLLBACK");
+          return errorResponse(res, 401, "Invalid or expired MFA challenge.");
+        }
+        const step = verifyTotp(secret, body.totpCode, Date.now(), user.totp_last_used_step);
+        if (step === null) {
+          await recordMfaFailure(client, user.id);
+          await client.query("COMMIT");
+          return errorResponse(res, 401, "Invalid authentication code.");
+        }
+        await client.query(`UPDATE users SET totp_last_used_step = $1, totp_secret = COALESCE(totp_secret, $2), mfa_enabled = TRUE
+          WHERE id = $3 AND (totp_last_used_step IS NULL OR totp_last_used_step < $1)`, [step, secret, user.id]);
+        user.mfa_enabled = true;
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+    const token = signToken({ kind: "session", sub: user.id, exp: Math.floor(Date.now() / 1e3) + SESSION_SECONDS });
+    setSessionCookie(req, res, token);
+    return sendResponse(res, 200, { success: true, user: safeUser(user) });
+  } catch (error) {
+    console.error("[Auth MFA confirm failure]", error);
+    return errorResponse(res, 500, "Unable to complete MFA verification.");
+  }
+}
+async function bootstrapHandler(req, res) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  const bootstrapSecret = process.env.FAMS_BOOTSTRAP_SECRET || process.env.BOOTSTRAP_SECRET || "";
+  if (!bootstrapSecret || bootstrapSecret.length < 32) return errorResponse(res, 503, "Bootstrap is not configured.");
+  let pool;
+  try {
+    signingSecret();
+    pool = getPool();
+    await initialize(pool);
+  } catch (error) {
+    console.error("[Auth bootstrap setup failure]", error?.message || error);
+    return errorResponse(res, 503, "Authentication service is unavailable.");
+  }
+  const body = await readBody(req);
+  if (!body || typeof body.bootstrapSecret !== "string" || typeof body.name !== "string" || typeof body.username !== "string" || typeof body.password !== "string") {
+    return errorResponse(res, 400, "Bootstrap details are required.");
+  }
+  const supplied = Buffer.from(body.bootstrapSecret);
+  const expected = Buffer.from(bootstrapSecret);
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+    return errorResponse(res, 401, "Invalid bootstrap credentials.");
+  }
+  const username = body.username.trim().toLowerCase();
+  const policyError = validatePasswordPolicy(body.password, username, "President", []);
+  if (!body.name.trim() || !/^[a-z0-9._-]{3,100}$/.test(username) || policyError) {
+    return errorResponse(res, 400, policyError || "Name or username is invalid.");
+  }
+  const hash = await bcrypt2.hash(body.password, BCRYPT_COST);
+  const secret = encodeBase32(randomBytes(20));
+  const client = await pool.connect();
+  let row;
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('fams:first-president-bootstrap'))");
+    const existing = await client.query(`SELECT id FROM users
+      WHERE lower(replace(role, ' ', '_')) = 'president' OR lower(username) = lower($1) LIMIT 1 FOR UPDATE`, [username]);
+    if (existing.rows.length) {
+      await client.query("ROLLBACK");
+      return errorResponse(res, 409, "The first President account has already been initialized.");
+    }
+    const inserted = await client.query(`INSERT INTO users
+      (id, username, password, name, role, is_approved, password_history, password_changed_at, must_change_password,
+       failed_login_attempts, locked_until, reset_requested, pending_totp_secret, mfa_enabled, joined_date)
+      VALUES ($1, $2, $3, $4, 'President', TRUE, '[]'::jsonb, NOW(), FALSE, 0, NULL, FALSE, $5, FALSE, NOW()::text)
+      RETURNING *`, [randomBytes(16).toString("hex"), username, hash, body.name.trim(), secret]);
+    row = inserted.rows[0];
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {
+    });
+    if (error?.code === "23505") return errorResponse(res, 409, "A unique President seat or username is already present.");
+    console.error("[Auth bootstrap failure]", error);
+    return errorResponse(res, 500, "Unable to initialize the first President account.");
+  } finally {
+    client.release();
+  }
+  const challengeToken = newChallenge("mfa-setup", row.id, { bootstrap: true });
+  return sendResponse(res, 200, enrollmentPayload(row, secret, challengeToken));
+}
+async function sessionHandler(req, res) {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (user) {
+      const token = signToken({
+        kind: "session",
+        sub: user.id,
+        exp: Math.floor(Date.now() / 1e3) + SESSION_SECONDS
+      });
+      setSessionCookie(req, res, token);
+    }
+    return sendResponse(res, 200, {
+      authenticated: Boolean(user),
+      user: user || null,
+      configured: isDatabaseConfigured()
+    });
+  } catch {
+    return errorResponse(res, 503, "Authentication is not configured or unavailable.");
+  }
+}
+async function logoutHandler(req, res) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  try {
+    signingSecret();
+  } catch {
+    return errorResponse(res, 503, "Authentication is not configured.");
+  }
+  setSessionCookie(req, res);
+  return sendResponse(res, 200, { success: true });
+}
+async function passwordChangeHandler(req, res) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  let user;
+  let pool;
+  try {
+    user = await getAuthenticatedUser(req);
+    pool = getPool();
+    await initialize(pool);
+  } catch {
+    return errorResponse(res, 503, "Authentication is not configured or unavailable.");
+  }
+  if (!user) return errorResponse(res, 401, "Authentication required.");
+  const body = await readBody(req);
+  if (!body || typeof body.newPassword !== "string") return errorResponse(res, 400, "New password is required.");
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE id = $1", [user.id]);
+    const row = result.rows[0];
+    if (!row) return errorResponse(res, 401, "Authentication required.");
+    if (!(row.must_change_password && body.currentPassword === void 0)) {
+      if (typeof body.currentPassword !== "string" || !await bcrypt2.compare(body.currentPassword, row.password)) {
+        return errorResponse(res, 401, "Current password is incorrect.");
+      }
+    }
+    const history = Array.isArray(row.password_history) ? row.password_history : [];
+    const policyError = passwordPolicyError(body.newPassword, row.username, row.role, row.password, history);
+    if (policyError) return errorResponse(res, 400, policyError);
+    const newHash = await bcrypt2.hash(body.newPassword, BCRYPT_COST);
+    const nextHistory = [...history, { hash: row.password, changedAt: (/* @__PURE__ */ new Date()).toISOString() }].slice(-PASSWORD_HISTORY_LIMIT);
+    const updated = await pool.query(`UPDATE users SET password = $1, password_history = $2::jsonb,
+      password_changed_at = NOW(), must_change_password = FALSE, failed_login_attempts = 0, locked_until = NULL
+      WHERE id = $3 RETURNING *`, [newHash, JSON.stringify(nextHistory), row.id]);
+    return sendResponse(res, 200, { success: true, user: safeUser(updated.rows[0]) });
+  } catch (error) {
+    console.error("[Auth password change failure]", error);
+    return errorResponse(res, 500, "Unable to change password.");
+  }
 }
 async function passwordResetHandler(req, res) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
@@ -968,6 +1685,51 @@ async function passwordResetHandler(req, res) {
     return errorResponse(res, 500, "Unable to reset password.");
   }
 }
+var AUTH_ROUTES = [
+  ["POST", "/api/auth/login", loginHandler],
+  ["POST", "/api/auth/logout", logoutHandler],
+  ["GET", "/api/auth/session", sessionHandler],
+  ["POST", "/api/auth/bootstrap", bootstrapHandler],
+  ["POST", "/api/auth/mfa/enroll", mfaEnrollHandler],
+  ["POST", "/api/auth/mfa/confirm", mfaConfirmHandler],
+  ["POST", "/api/auth/mfa/reset", mfaResetHandler],
+  ["POST", "/api/auth/password/change", passwordChangeHandler],
+  ["POST", "/api/auth/password/reset", passwordResetHandler]
+];
+function resolveAuthPath(req) {
+  const candidates = [req?.headers?.["x-vercel-rewrite"], req?.headers?.["x-original-url"], req?.url];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string" || !candidate) continue;
+    let pathname;
+    try {
+      pathname = new URL(candidate, "http://localhost").pathname;
+    } catch {
+      continue;
+    }
+    const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+    if (normalized.startsWith("/api/auth")) return normalized;
+  }
+  return null;
+}
+async function authHandler(req, res) {
+  const pathname = resolveAuthPath(req);
+  const route = AUTH_ROUTES.find(([, routePath]) => routePath === pathname);
+  if (!route) {
+    return errorResponse(res, 404, "Not found.");
+  }
+  const method = String(req?.method || "GET").toUpperCase();
+  if (method !== route[0]) {
+    if (typeof res?.setHeader === "function") res.setHeader("Allow", route[0]);
+    return errorResponse(res, 405, "Method not allowed.");
+  }
+  try {
+    return await route[2](req, res);
+  } catch (error) {
+    console.error("[Auth route failure]", error);
+    return errorResponse(res, 500, "The request could not be completed.");
+  }
+}
 export {
-  passwordResetHandler as default
+  authHandler as default,
+  resolveAuthPath
 };

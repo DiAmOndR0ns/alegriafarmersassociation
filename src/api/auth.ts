@@ -819,3 +819,74 @@ export async function requireAuthenticated(req: any, res: any): Promise<SafeUser
     return null;
   }
 }
+
+/**
+ * Path → handler table for the single `api/auth` function.
+ *
+ * Vercel bills one Serverless Function per file under `api/`, and the auth tree
+ * alone used to be nine one-line shim files. They are collapsed here instead so
+ * the deployment ships one auth function; `vercel.json` rewrites every
+ * `/api/auth/*` URL onto it and the table below restores the original routing.
+ *
+ * Every handler still receives the untouched `req`/`res`, so each keeps its own
+ * method check, cross-origin guard, body parsing and response writing.
+ */
+const AUTH_ROUTES: ReadonlyArray<readonly [method: string, path: string, handler: (req: any, res: any) => unknown]> = [
+  ['POST', '/api/auth/login', loginHandler],
+  ['POST', '/api/auth/logout', logoutHandler],
+  ['GET', '/api/auth/session', sessionHandler],
+  ['POST', '/api/auth/bootstrap', bootstrapHandler],
+  ['POST', '/api/auth/mfa/enroll', mfaEnrollHandler],
+  ['POST', '/api/auth/mfa/confirm', mfaConfirmHandler],
+  ['POST', '/api/auth/mfa/reset', mfaResetHandler],
+  ['POST', '/api/auth/password/change', passwordChangeHandler],
+  ['POST', '/api/auth/password/reset', passwordResetHandler],
+];
+
+/**
+ * Resolves the endpoint path for a request that may have been rewritten.
+ *
+ * On Vercel a rewritten request keeps its original URL, and a route that was
+ * forwarded from another function can still carry a stale `req.url`, so the
+ * routing headers are consulted first. Only pathnames under `/api/auth` are
+ * honoured there to stop a caller spoofing them to reach an endpoint.
+ *
+ * Accepts both the deployed shape (`/api/auth/login`) and the local Express
+ * shape (`/api/auth/login`, mounted directly).
+ */
+export function resolveAuthPath(req: any): string | null {
+  const candidates = [req?.headers?.['x-vercel-rewrite'], req?.headers?.['x-original-url'], req?.url];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || !candidate) continue;
+    let pathname: string;
+    try {
+      pathname = new URL(candidate, 'http://localhost').pathname;
+    } catch {
+      continue;
+    }
+    const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+    if (normalized.startsWith('/api/auth')) return normalized;
+  }
+  return null;
+}
+
+/** Entry point for every `/api/auth/*` request; one Serverless Function serves them all. */
+export default async function authHandler(req: any, res: any) {
+  const pathname = resolveAuthPath(req);
+  const route = AUTH_ROUTES.find(([, routePath]) => routePath === pathname);
+  if (!route) {
+    // Never disclose which auth endpoints exist to an unauthenticated caller.
+    return errorResponse(res, 404, 'Not found.');
+  }
+  const method = String(req?.method || 'GET').toUpperCase();
+  if (method !== route[0]) {
+    if (typeof res?.setHeader === 'function') res.setHeader('Allow', route[0]);
+    return errorResponse(res, 405, 'Method not allowed.');
+  }
+  try {
+    return await route[2](req, res);
+  } catch (error) {
+    console.error('[Auth route failure]', error);
+    return errorResponse(res, 500, 'The request could not be completed.');
+  }
+}

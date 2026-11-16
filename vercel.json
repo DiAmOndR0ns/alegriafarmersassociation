@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth"
+    },
+    {
       "source": "/api/sync/delete",
       "destination": "/api/db/delete"
     },

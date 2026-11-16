@@ -20,6 +20,7 @@ function scheduleIdleEviction(connectionString) {
   if (typeof timer?.unref === "function") timer.unref();
   poolIdleTimers.set(connectionString, timer);
 }
+var DATABASE_URL_ERROR = "DATABASE_URL must point at the hosted Supabase PostgreSQL project.";
 function isLoopbackDatabaseUrl(rawUrl) {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
   try {
@@ -56,10 +57,10 @@ function cleanDatabaseUrl(rawUrl) {
 function getPool() {
   const rawDbUrl = process.env.DATABASE_URL;
   if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
-    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+    throw new Error(DATABASE_URL_ERROR);
   }
   if (!rawDbUrl || !isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+    throw new Error(DATABASE_URL_ERROR);
   }
   const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
   const cached = poolCache.get(connectionString);
@@ -118,6 +119,10 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audit_notes TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_by TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
@@ -166,6 +171,30 @@ async function runSchemaMigrations(client) {
       description TEXT NOT NULL,
       icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
     );`,
+    `CREATE TABLE IF NOT EXISTS organization_funds (
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      code VARCHAR(50) NOT NULL,
+      allocated_amount NUMERIC DEFAULT 0,
+      current_balance NUMERIC DEFAULT 0,
+      description TEXT,
+      custodian TEXT,
+      last_updated VARCHAR(50)
+    );`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
+    // Legacy databases still carry allocated_amount; newer ones only have initial_fund.
+    // Guard the backfill so a missing legacy column cannot fail the whole migration.
+    `DO $$
+     BEGIN
+       IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+         UPDATE organization_funds SET initial_fund = allocated_amount
+          WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+       END IF;
+     END $$;`,
+    `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
       id VARCHAR(100) PRIMARY KEY,
@@ -321,6 +350,13 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      ALTER TABLE financial_transactions
+        ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approved_by TEXT,
+        ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS announcements (
         id VARCHAR(100) PRIMARY KEY,
         title TEXT NOT NULL,
@@ -438,6 +474,20 @@ async function initDatabaseSchema(pool) {
         ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
     `);
     await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+          UPDATE organization_funds SET initial_fund = allocated_amount
+           WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+        END IF;
+      END $$;
+    `);
+    await client.query(`
+      ALTER TABLE organization_funds
+        DROP CONSTRAINT IF EXISTS organization_funds_code_key;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS auditor_reports (
         id VARCHAR(100) PRIMARY KEY,
         report_period VARCHAR(100) NOT NULL,
@@ -521,6 +571,10 @@ async function ensureDatabaseSchema(pool) {
 function sendResponse(res, statusCode, data) {
   try {
     if (res.headersSent) return;
+    if (typeof res.setHeader === "function") {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "no-store");
+    }
     if (typeof res.status === "function" && typeof res.json === "function") {
       return res.status(statusCode).json(data);
     }

@@ -1,5 +1,101 @@
 // src/api/db.ts
 import pg from "pg";
+
+// src/utils/fundBalance.ts
+function getInitialFund(fund) {
+  const initial = Number(fund.initialFund);
+  if (Number.isFinite(initial)) return initial;
+  const legacy = Number(fund.allocatedAmount);
+  return Number.isFinite(legacy) ? legacy : 0;
+}
+
+// src/api/sanitize.ts
+var MAX_TEXT_LENGTH = 2e4;
+var MARKUP_CHARS = /[<>]/g;
+var HANDLER_NAME = /(?:onerror|onload|onclick|onmouseover|onfocus|onstart|onbegin|javascript|vbscript)/gi;
+function cleanText(value, maxLength = MAX_TEXT_LENGTH) {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value !== "string") return null;
+  const limit = Math.min(Math.max(1, maxLength), MAX_TEXT_LENGTH);
+  return value.slice(0, MAX_TEXT_LENGTH).replace(MARKUP_CHARS, "").replace(/(?:java|vb)script\s*:/gi, "").replace(HANDLER_NAME, "").slice(0, limit);
+}
+function cleanTextList(value, maxItemLength = 80, maxItems = 30) {
+  if (!Array.isArray(value)) return [];
+  const cleaned = [];
+  for (const entry of value) {
+    const text = cleanText(entry, maxItemLength)?.trim();
+    if (text && !cleaned.includes(text)) cleaned.push(text);
+  }
+  return cleaned.slice(0, maxItems);
+}
+function safeImageUrl(value, maxLength = 4e5) {
+  if (typeof value !== "string") return null;
+  const url = value.trim().slice(0, maxLength);
+  if (!url) return null;
+  if (/^https?:\/\/[^\s<>"]+$/i.test(url)) return url;
+  if (/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(url)) return url;
+  return null;
+}
+function cleanDateString(value, maxLength = 50) {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const text = String(value).trim().slice(0, maxLength);
+  if (!text) return null;
+  if (/^\d{4}$/.test(text)) return text;
+  if (/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(text)) return text;
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(text)) return text;
+  return null;
+}
+function cleanNumber(value, max = 1e9) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(Math.max(parsed, 0), max);
+}
+var FORGED_USER_FIELDS = [
+  "password",
+  "passwordHash",
+  "password_history",
+  "passwordHistory",
+  "mfaEnabled",
+  "mfa_enabled",
+  "totpSecret",
+  "pendingTotpSecret",
+  "isApproved",
+  "failedLoginAttempts",
+  "lockedUntil",
+  "resetRequested"
+];
+function sanitizeUserRows(rows, options = {}) {
+  const safeRows = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const clean = { ...row };
+    for (const key of FORGED_USER_FIELDS) delete clean[key];
+    if (options.roleAuthorized) {
+      clean.roleAuthorized = true;
+    } else {
+      if (clean.role !== void 0 && clean.role !== "Member") {
+        clean.role = "Member";
+      }
+      delete clean.roleAuthorized;
+    }
+    safeRows.push(clean);
+  }
+  return safeRows;
+}
+
+// src/api/db.ts
+var AUDITED_STATUSES = ["Unaudited", "Audited", "Flagged"];
+var ASSIGNABLE_ROLE_VALUES = [
+  "Vice_President",
+  "Secretary",
+  "Assistant_Secretary",
+  "Board_Member",
+  "Treasurer",
+  "Assistant_Treasurer",
+  "Auditor",
+  "PIO",
+  "Member"
+];
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
 var poolInstance = null;
 var lastUsedConnectionString = null;
@@ -20,6 +116,7 @@ function scheduleIdleEviction(connectionString) {
   if (typeof timer?.unref === "function") timer.unref();
   poolIdleTimers.set(connectionString, timer);
 }
+var DATABASE_URL_ERROR = "DATABASE_URL must point at the hosted Supabase PostgreSQL project.";
 function isLoopbackDatabaseUrl(rawUrl) {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
   try {
@@ -56,10 +153,10 @@ function cleanDatabaseUrl(rawUrl) {
 function getPool() {
   const rawDbUrl = process.env.DATABASE_URL;
   if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
-    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+    throw new Error(DATABASE_URL_ERROR);
   }
   if (!rawDbUrl || !isDatabaseConfigured()) {
-    throw new Error("DATABASE_URL must point at the hosted Supabase PostgreSQL project.");
+    throw new Error(DATABASE_URL_ERROR);
   }
   const { connectionString, isSsl } = cleanDatabaseUrl(rawDbUrl);
   const cached = poolCache.get(connectionString);
@@ -174,7 +271,7 @@ async function runSchemaMigrations(client) {
       id VARCHAR(100) PRIMARY KEY,
       name TEXT NOT NULL,
       code VARCHAR(50) NOT NULL,
-      initial_fund NUMERIC DEFAULT 0,
+      allocated_amount NUMERIC DEFAULT 0,
       current_balance NUMERIC DEFAULT 0,
       description TEXT,
       custodian TEXT,
@@ -183,6 +280,16 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
     `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
+    // Legacy databases still carry allocated_amount; newer ones only have initial_fund.
+    // Guard the backfill so a missing legacy column cannot fail the whole migration.
+    `DO $$
+     BEGIN
+       IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+         UPDATE organization_funds SET initial_fund = allocated_amount
+          WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+       END IF;
+     END $$;`,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
     // Formal Auditor Reports (Proposal Requirement)
     `CREATE TABLE IF NOT EXISTS auditor_reports (
@@ -463,6 +570,16 @@ async function initDatabaseSchema(pool) {
         ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
     `);
     await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
+          UPDATE organization_funds SET initial_fund = allocated_amount
+           WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+        END IF;
+      END $$;
+    `);
+    await client.query(`
       ALTER TABLE organization_funds
         DROP CONSTRAINT IF EXISTS organization_funds_code_key;
     `);
@@ -741,22 +858,30 @@ async function saveFullStateToPostgres(pool, state) {
       const activeUsers = state.users.filter((u) => !deletedUserIds.has(u.id));
       console.log("[DB DEBUG] Saving", activeUsers.length, "users...");
       for (const u of activeUsers) {
-        if (!u || !u.username) continue;
-        const cleanUsername = String(u.username).trim().toLowerCase();
+        if (!u || typeof u.username !== "string" || !u.username.trim()) continue;
+        const cleanUsername = String(u.username).trim().toLowerCase().slice(0, 100);
         const existingRow = await client.query("SELECT id, role FROM users WHERE lower(username) = lower($1) LIMIT 1", [cleanUsername]);
-        const targetId = existingRow.rows[0]?.id || u.id;
         const existingRole = existingRow.rows[0]?.role;
-        const incomingRole = u.role || "Member";
+        const targetId = existingRow.rows[0]?.id || void 0;
+        const isNewAccount = !targetId;
+        const incomingRole = ASSIGNABLE_ROLE_VALUES.includes(String(u.role)) ? String(u.role) : "Member";
         const isCurrentPresident = existingRole && existingRole.toLowerCase() === "president";
         const targetRole = isCurrentPresident && incomingRole.toLowerCase() !== "president" ? existingRole : incomingRole;
+        const isApproved = isNewAccount ? false : Boolean(u.isApproved);
+        const cleanName = cleanText(u.name, 200) || cleanUsername;
+        const rowId = typeof u.id === "string" && u.id ? u.id : void 0;
+        let resolvedId = targetId || rowId;
+        if (!resolvedId) {
+          console.warn("[Cloud DB Push] Skipping user row without a resolvable account id:", cleanUsername);
+          continue;
+        }
         await client.query(`
           INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           ON CONFLICT (id) DO UPDATE SET
             username = EXCLUDED.username,
-            password = COALESCE(NULLIF(EXCLUDED.password, ''), users.password),
             name = EXCLUDED.name,
-            role = CASE WHEN users.role = 'President' AND EXCLUDED.role != 'President' THEN users.role ELSE EXCLUDED.role END,
+            role = CASE WHEN $17::boolean THEN EXCLUDED.role ELSE users.role END,
             is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
@@ -769,22 +894,24 @@ async function saveFullStateToPostgres(pool, state) {
             is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
             mfa_enabled = COALESCE(users.mfa_enabled, EXCLUDED.mfa_enabled);
         `, [
-          targetId,
+          resolvedId,
           cleanUsername,
-          u.passwordHash || u.password || "",
-          u.name,
+          "",
+          cleanName,
           targetRole,
-          Boolean(u.isApproved),
-          u.joinedDate || null,
-          u.farmLocation || null,
-          u.primaryCrops || [],
-          u.contactNumber || null,
-          u.status || "Active",
-          u.avatarUrl || null,
-          u.memberIdNumber || null,
-          u.rsbsaNumber || null,
+          isApproved,
+          cleanDateString(u.joinedDate, 50),
+          cleanText(u.farmLocation, 200),
+          cleanTextList(u.primaryCrops),
+          cleanText(u.contactNumber, 50),
+          u.status === "Inactive" ? "Inactive" : "Active",
+          safeImageUrl(u.avatarUrl),
+          cleanText(u.memberIdNumber, 100),
+          cleanText(u.rsbsaNumber, 100),
           Boolean(u.isRsbsaRegistered),
-          Boolean(u.mfaEnabled || targetRole && targetRole.toLowerCase() === "president")
+          // MFA is enabled by enrollment only (auth endpoints), never by a sync row.
+          false,
+          !isNewAccount && u.roleAuthorized === true
         ]);
       }
       console.log("[DB DEBUG] Users saved");
@@ -793,6 +920,9 @@ async function saveFullStateToPostgres(pool, state) {
       const activeMembers = state.members.filter((m) => !deletedMemberIds.has(m.id));
       console.log("[DB DEBUG] Saving", activeMembers.length, "members...");
       for (const m of activeMembers) {
+        if (!m || typeof m.id !== "string" || !m.id) continue;
+        const memberName = cleanText(m.name, 200);
+        if (!memberName) continue;
         await client.query(`
           INSERT INTO members (id, name, farm_location, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -811,18 +941,18 @@ async function saveFullStateToPostgres(pool, state) {
             birth_date = EXCLUDED.birth_date;
         `, [
           m.id,
-          m.name,
-          m.farmLocation || null,
-          m.primaryCrops || [],
-          m.contactNumber || null,
-          m.status || "Active",
-          m.joinedDate || null,
-          m.memberIdNumber || null,
-          m.rsbsaNumber || null,
+          memberName,
+          cleanText(m.farmLocation, 200),
+          cleanTextList(m.primaryCrops),
+          cleanText(m.contactNumber, 50),
+          m.status === "Inactive" ? "Inactive" : "Active",
+          cleanDateString(m.joinedDate, 50),
+          cleanText(m.memberIdNumber, 100),
+          cleanText(m.rsbsaNumber, 100),
           Boolean(m.isRsbsaRegistered),
-          m.avatarUrl || null,
-          m.gender || null,
-          m.birthDate || null
+          safeImageUrl(m.avatarUrl),
+          cleanText(m.gender, 20),
+          cleanDateString(m.birthDate, 50)
         ]);
       }
       console.log("[DB DEBUG] Members saved");
@@ -870,6 +1000,11 @@ async function saveFullStateToPostgres(pool, state) {
       const txList = rawTxList.filter((tx) => !deletedTxIds.has(tx.id));
       console.log("[DB DEBUG] Saving", txList.length, "transactions...");
       for (const tx of txList) {
+        if (!tx || typeof tx.id !== "string" || !tx.id) continue;
+        const txType = String(tx.type || "").toLowerCase();
+        if (txType !== "income" && txType !== "expense") continue;
+        const txAmount = Number(tx.amount);
+        if (!Number.isFinite(txAmount) || txAmount < 0) continue;
         await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, audited_status, audited_by, audited_date, audit_notes)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -888,18 +1023,18 @@ async function saveFullStateToPostgres(pool, state) {
             audit_notes = EXCLUDED.audit_notes;
         `, [
           tx.id,
-          tx.type,
-          tx.category,
-          tx.amount,
-          tx.date,
-          tx.description,
-          tx.recordedBy,
-          tx.activityId || null,
-          tx.fundSource || null,
-          tx.auditedStatus || "Unaudited",
-          tx.auditedBy || null,
-          tx.auditedDate || null,
-          tx.auditNotes || null
+          txType === "income" ? "income" : "expense",
+          cleanText(tx.category, 100) || "Uncategorized",
+          cleanNumber(txAmount),
+          cleanDateString(tx.date, 50),
+          cleanText(tx.description, 2e3),
+          cleanText(tx.recordedBy, 200),
+          cleanText(tx.activityId, 100),
+          cleanText(tx.fundSource, 200),
+          AUDITED_STATUSES.includes(String(tx.auditedStatus)) ? String(tx.auditedStatus) : "Unaudited",
+          cleanText(tx.auditedBy, 200),
+          cleanDateString(tx.auditedDate, 50),
+          cleanText(tx.auditNotes, 2e3)
         ]);
       }
       console.log("[DB DEBUG] Transactions saved");
@@ -908,6 +1043,9 @@ async function saveFullStateToPostgres(pool, state) {
       const activeMeetings = state.meetings.filter((mt) => !deletedMeetingIds.has(mt.id));
       console.log("[DB DEBUG] Saving", activeMeetings.length, "meetings...");
       for (const mt of activeMeetings) {
+        if (!mt || typeof mt.id !== "string" || !mt.id) continue;
+        const meetingTitle = cleanText(mt.title, 300);
+        if (!meetingTitle) continue;
         await client.query(`
           INSERT INTO meetings (id, title, date, location, attendance_count, agenda, minutes, officer_in_charge, attendance_record)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -922,14 +1060,14 @@ async function saveFullStateToPostgres(pool, state) {
             attendance_record = EXCLUDED.attendance_record;
         `, [
           mt.id,
-          mt.title,
-          mt.date,
-          mt.location,
-          mt.attendanceCount || 0,
-          mt.agenda || "",
-          mt.minutes || "",
-          mt.officerInCharge || "",
-          JSON.stringify(mt.attendanceRecord || {})
+          meetingTitle,
+          cleanDateString(mt.date, 50),
+          cleanText(mt.location, 200),
+          Math.min(Math.max(0, Math.floor(Number(mt.attendanceCount) || 0)), 1e5),
+          cleanText(mt.agenda, 2e4) || "",
+          cleanText(mt.minutes, 2e4) || "",
+          cleanText(mt.officerInCharge, 200) || "",
+          JSON.stringify(mt.attendanceRecord && typeof mt.attendanceRecord === "object" ? mt.attendanceRecord : {})
         ]);
       }
       console.log("[DB DEBUG] Meetings saved");
@@ -1013,14 +1151,14 @@ async function saveFullStateToPostgres(pool, state) {
             previous_hash = EXCLUDED.previous_hash;
         `, [
           lg.id,
-          lg.timestamp,
-          lg.user || lg.userName || "Officer",
-          lg.role,
-          lg.action,
-          lg.details,
-          lg.syncStatus || "synced",
-          lg.hash || null,
-          lg.previousHash || null
+          cleanDateString(lg.timestamp, 100),
+          cleanText(lg.user || lg.userName, 200) || "Officer",
+          cleanText(lg.role, 50),
+          cleanText(lg.action, 300),
+          cleanText(lg.details, 4e3),
+          lg.syncStatus === "pending" ? "pending" : "synced",
+          /^[a-f0-9]{64}$/i.test(String(lg.hash || "")) ? String(lg.hash) : null,
+          /^[a-f0-9]{1,64}$/i.test(String(lg.previousHash || "")) ? String(lg.previousHash) : null
         ]);
       }
       console.log("[DB DEBUG] System logs saved");
@@ -1029,6 +1167,7 @@ async function saveFullStateToPostgres(pool, state) {
       const activeProducts = state.products.filter((p) => !deletedProductIds.has(p.id));
       console.log("[DB DEBUG] Saving", activeProducts.length, "products...");
       for (const p of activeProducts) {
+        if (!p || typeof p.id !== "string" || !p.id || !cleanText(p.name, 300)) continue;
         await client.query(`
           INSERT INTO products (id, name, ceb_name, category, description, unit, price, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
@@ -1052,23 +1191,23 @@ async function saveFullStateToPostgres(pool, state) {
             date_updated = EXCLUDED.date_updated;
         `, [
           p.id,
-          p.name,
-          p.cebName || null,
-          p.category,
-          p.description,
-          p.unit,
-          p.price,
-          p.quantityAvailable || null,
-          p.stockStatus,
-          p.farmerName || null,
-          p.farmerSitio || null,
-          p.farmerPhone || null,
-          p.contactPerson || null,
-          p.imageUrl || null,
-          p.isPublished ?? true,
-          p.updatedBy || null,
-          p.managedBy || null,
-          p.dateUpdated || null
+          cleanText(p.name, 300) || "Unnamed product",
+          cleanText(p.cebName, 300),
+          cleanText(p.category, 100),
+          cleanText(p.description, 5e3),
+          cleanText(p.unit, 50),
+          cleanNumber(p.price),
+          cleanText(p.quantityAvailable, 100),
+          cleanText(p.stockStatus, 50),
+          cleanText(p.farmerName, 200),
+          cleanText(p.farmerSitio, 200),
+          cleanText(p.farmerPhone, 50),
+          cleanText(p.contactPerson, 200),
+          safeImageUrl(p.imageUrl),
+          p.isPublished !== false,
+          cleanText(p.updatedBy, 200),
+          cleanText(p.managedBy, 200),
+          cleanDateString(p.dateUpdated, 50)
         ]);
       }
       console.log("[DB DEBUG] Products saved");
@@ -1077,6 +1216,8 @@ async function saveFullStateToPostgres(pool, state) {
       const activeResolutions = state.resolutions.filter((r) => !deletedResolutionIds.has(r.id));
       console.log("[DB DEBUG] Saving", activeResolutions.length, "resolutions...");
       for (const r of activeResolutions) {
+        if (!r || typeof r.id !== "string" || !r.id) continue;
+        if (!cleanText(r.resolutionNumber, 100) || !cleanText(r.title, 300)) continue;
         await client.query(`
           INSERT INTO resolutions (id, resolution_number, title, description, date_agreed, moved_by, seconded_by, vote_in_favor, vote_against, vote_abstain, status)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -1093,16 +1234,16 @@ async function saveFullStateToPostgres(pool, state) {
             status = EXCLUDED.status;
         `, [
           r.id,
-          r.resolutionNumber,
-          r.title,
-          r.description,
-          r.dateAgreed,
-          r.movedBy,
-          r.secondedBy,
-          r.voteInFavor,
-          r.voteAgainst,
-          r.voteAbstain,
-          r.status
+          cleanText(r.resolutionNumber, 100),
+          cleanText(r.title, 300),
+          cleanText(r.description, 2e4),
+          cleanDateString(r.dateAgreed, 50),
+          cleanText(r.movedBy, 200),
+          cleanText(r.secondedBy, 200),
+          Math.floor(cleanNumber(r.voteInFavor, 1e5)),
+          Math.floor(cleanNumber(r.voteAgainst, 1e5)),
+          Math.floor(cleanNumber(r.voteAbstain, 1e5)),
+          cleanText(r.status, 50)
         ]);
       }
       console.log("[DB DEBUG] Resolutions saved");
@@ -1111,6 +1252,9 @@ async function saveFullStateToPostgres(pool, state) {
       const activeAnnouncements = state.announcements.filter((a) => !deletedAnnouncementIds.has(a.id));
       console.log("[DB DEBUG] Saving", activeAnnouncements.length, "announcements...");
       for (const a of activeAnnouncements) {
+        if (!a || typeof a.id !== "string" || !a.id) continue;
+        const announcementTitle = cleanText(a.title, 300);
+        if (!announcementTitle) continue;
         await client.query(`
           INSERT INTO announcements (id, title, category, content, date_posted, priority, posted_by)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -1121,7 +1265,15 @@ async function saveFullStateToPostgres(pool, state) {
             date_posted = EXCLUDED.date_posted,
             priority = EXCLUDED.priority,
             posted_by = EXCLUDED.posted_by;
-        `, [a.id, a.title, a.category, a.content, a.datePosted, a.priority, a.postedBy]);
+        `, [
+          a.id,
+          announcementTitle,
+          cleanText(a.category, 100),
+          cleanText(a.content, 2e4),
+          cleanDateString(a.datePosted, 50),
+          cleanText(a.priority, 50),
+          cleanText(a.postedBy, 200)
+        ]);
       }
       console.log("[DB DEBUG] Announcements saved");
     }
@@ -1129,6 +1281,9 @@ async function saveFullStateToPostgres(pool, state) {
       const activeActivities = state.activities.filter((act) => !deletedActivityIds.has(act.id));
       console.log("[DB DEBUG] Saving", activeActivities.length, "activities...");
       for (const act of activeActivities) {
+        if (!act || typeof act.id !== "string" || !act.id) continue;
+        const activityTitle = cleanText(act.title, 300);
+        if (!activityTitle) continue;
         await client.query(`
           INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, status_reason, documented_notes, attendees_count, target_audience, image_url)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
@@ -1151,22 +1306,22 @@ async function saveFullStateToPostgres(pool, state) {
             image_url = EXCLUDED.image_url;
         `, [
           act.id,
-          act.title,
-          act.cebTitle || null,
-          act.category,
-          act.scheduledDate || act.dateScheduled || null,
-          act.dateScheduled || act.scheduledDate || null,
-          act.scheduledTime || act.timeScheduled || null,
-          act.timeScheduled || act.scheduledTime || null,
-          act.location,
-          act.description,
-          act.organizer,
-          act.status,
-          act.statusReason || null,
-          act.documentedNotes || null,
-          act.attendeesCount || 0,
-          act.targetAudience || null,
-          act.imageUrl || null
+          activityTitle,
+          cleanText(act.cebTitle, 300),
+          cleanText(act.category, 100),
+          cleanDateString(act.scheduledDate || act.dateScheduled, 50),
+          cleanDateString(act.dateScheduled || act.scheduledDate, 50),
+          cleanText(act.scheduledTime || act.timeScheduled, 100),
+          cleanText(act.timeScheduled || act.scheduledTime, 100),
+          cleanText(act.location, 200),
+          cleanText(act.description, 2e4),
+          cleanText(act.organizer, 200),
+          cleanText(act.status, 50),
+          cleanText(act.statusReason, 1e3),
+          cleanText(act.documentedNotes, 2e4),
+          Math.min(Math.max(0, Math.floor(Number(act.attendeesCount) || 0)), 1e5),
+          cleanText(act.targetAudience, 300),
+          safeImageUrl(act.imageUrl)
         ]);
       }
       console.log("[DB DEBUG] Activities saved");
@@ -1176,6 +1331,10 @@ async function saveFullStateToPostgres(pool, state) {
       const fundList = rawFundList.filter((f) => !deletedFundIds.has(f.id));
       console.log("[DB DEBUG] Saving", fundList.length, "organization funds...");
       for (const f of fundList) {
+        if (!f || typeof f.id !== "string" || !f.id) continue;
+        const fundName = cleanText(f.name, 200);
+        if (!fundName) continue;
+        const fundCode = (cleanText(f.code, 50) || fundName).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 50) || "FUND";
         await client.query(`
           INSERT INTO organization_funds (id, name, code, initial_fund, current_balance, description, custodian, last_updated, category, source_origin)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -1191,15 +1350,15 @@ async function saveFullStateToPostgres(pool, state) {
             source_origin = EXCLUDED.source_origin;
         `, [
           f.id,
-          f.name,
-          f.code,
-          Number.isFinite(Number(f.initialFund)) ? Number(f.initialFund) : Number(f.allocatedAmount) || 0,
-          f.currentBalance || 0,
-          f.description || "",
-          f.custodian || "",
-          f.lastUpdated || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-          f.category || null,
-          f.source || null
+          fundName,
+          fundCode,
+          cleanNumber(getInitialFund(f)),
+          cleanNumber(f.currentBalance),
+          cleanText(f.description, 2e3) || "",
+          cleanText(f.custodian, 200) || "",
+          cleanDateString(f.lastUpdated, 50) || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+          cleanText(f.category, 100),
+          cleanText(f.source, 200)
         ]);
       }
       console.log("[DB DEBUG] Organization funds saved");
@@ -1225,18 +1384,18 @@ async function saveFullStateToPostgres(pool, state) {
             date_certified = EXCLUDED.date_certified;
         `, [
           ar.id,
-          ar.reportPeriod,
-          ar.reportType,
-          ar.totalIncome || 0,
-          ar.totalExpenses || 0,
-          ar.netSurplus || 0,
-          ar.findings || "",
-          ar.recommendations || "",
-          ar.preparedBy,
-          ar.certifiedBy || null,
-          ar.status || "Submitted",
-          ar.dateSubmitted,
-          ar.dateCertified || null
+          cleanText(ar.reportPeriod, 100) || "Unscheduled",
+          cleanText(ar.reportType, 50) || "General",
+          cleanNumber(ar.totalIncome),
+          cleanNumber(ar.totalExpenses),
+          cleanNumber(ar.netSurplus),
+          cleanText(ar.findings, 2e4) || "",
+          cleanText(ar.recommendations, 2e4) || "",
+          cleanText(ar.preparedBy, 200) || "Auditor",
+          cleanText(ar.certifiedBy, 200),
+          cleanText(ar.status, 50) || "Submitted",
+          cleanDateString(ar.dateSubmitted, 50),
+          cleanDateString(ar.dateCertified, 50)
         ]);
       }
       console.log("[DB DEBUG] Auditor reports saved");
@@ -1259,15 +1418,15 @@ async function saveFullStateToPostgres(pool, state) {
             remarks = EXCLUDED.remarks;
         `, [
           dr.id,
-          dr.requestedBy,
-          dr.reason,
-          dr.requestedDate,
-          dr.effectiveStart || null,
-          dr.effectiveEnd || null,
-          dr.status || "Pending",
-          dr.reviewedBy || null,
-          dr.reviewedDate || null,
-          dr.remarks || null
+          cleanText(dr.requestedBy, 200) || "Officer",
+          cleanText(dr.reason, 2e3) || "Delegation",
+          cleanDateString(dr.requestedDate, 50),
+          cleanDateString(dr.effectiveStart, 50),
+          cleanDateString(dr.effectiveEnd, 50),
+          cleanText(dr.status, 50) || "Pending",
+          cleanText(dr.reviewedBy, 200),
+          cleanDateString(dr.reviewedDate, 50),
+          cleanText(dr.remarks, 2e3)
         ]);
       }
       console.log("[DB DEBUG] Delegation requests saved");
@@ -1387,7 +1546,7 @@ async function saveFullStateToPostgres(pool, state) {
       { table: "organization_funds", deletedIds: deletedFundIds, fields: [
         ["name", "name", (r) => r.name],
         ["code", "code", (r) => r.code],
-        ["initial_fund", "initialFund", (r) => Number.isFinite(Number(r.initialFund)) ? Number(r.initialFund) : Number(r.allocatedAmount) || 0],
+        ["initial_fund", "initialFund", (r) => getInitialFund(r)],
         ["current_balance", "currentBalance", (r) => r.currentBalance || 0],
         ["description", "description", (r) => r.description || ""],
         ["custodian", "custodian", (r) => r.custodian || ""],
@@ -1491,6 +1650,10 @@ import bcrypt2 from "bcryptjs";
 function sendResponse(res, statusCode, data) {
   try {
     if (res.headersSent) return;
+    if (typeof res.setHeader === "function") {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "no-store");
+    }
     if (typeof res.status === "function" && typeof res.json === "function") {
       return res.status(statusCode).json(data);
     }
@@ -1570,11 +1733,20 @@ var LOCKOUT_DURATION_MS = 15 * 60 * 1e3;
 var SESSION_COOKIE = "fams_session";
 var SESSION_SECONDS = 8 * 60 * 60;
 var CHALLENGE_SECONDS = 15 * 60;
+var ephemeralFallbackSecret = null;
+var TOKEN_AUDIENCE = "fams-auth-v2";
 function signingSecret() {
   const value = process.env.SESSION_SECRET || "";
   if (value.length < 32 || new Set(value).size < 16 || /^(change.?me|secret|password)/i.test(value)) {
-    const seed = process.env.DATABASE_URL || "afa-farmers-association-session-secret-seed-key-tuburan-cebu";
-    return createHash("sha256").update(seed).digest();
+    const deploymentSeed = process.env.FAMS_SESSION_SEED;
+    if (deploymentSeed && deploymentSeed.length >= 32) {
+      return createHash("sha256").update(deploymentSeed).digest();
+    }
+    if (!ephemeralFallbackSecret) {
+      console.warn("[Auth] SESSION_SECRET is missing or weak; using a per-process key. Sessions end on redeploy.");
+      ephemeralFallbackSecret = createHash("sha256").update(randomBytes(32)).digest();
+    }
+    return ephemeralFallbackSecret;
   }
   return Buffer.from(value, "utf8");
 }
@@ -1587,6 +1759,7 @@ function verifyToken(token) {
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (!claims.sub || !Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1e3)) return null;
+    if (claims.aud !== TOKEN_AUDIENCE) return null;
     return claims;
   } catch {
     return null;
@@ -1624,6 +1797,10 @@ function rejectCrossOriginMutation(req) {
   }
 }
 async function getAuthenticatedUser(req) {
+  const user = await readAuthenticatedUser(req);
+  return user && user.isApproved ? user : null;
+}
+async function readAuthenticatedUser(req) {
   const token = getCookie(req, SESSION_COOKIE);
   if (!token) return null;
   const claims = verifyToken(token);
@@ -1680,6 +1857,7 @@ async function requireAuthenticated(req, res) {
 }
 
 // src/api/push.ts
+var MAX_EGG_COUNT = 1e5;
 var ASSIGNABLE_ROLES = [
   "Vice_President",
   "Secretary",
@@ -1773,8 +1951,16 @@ function separateEggHarvestsFromFinancialState(state, role, name) {
   }
   if (isMember) {
     safeState.eggHarvests = eggHarvests.filter(
-      (entry) => entry && typeof entry === "object" && entry.status === "Pending Audit" && typeof name === "string" && entry.collectedBy === name && Number.isInteger(entry.eggCount) && entry.eggCount >= 0 && typeof entry.date === "string" && typeof entry.time === "string"
-    );
+      (entry) => entry && typeof entry === "object" && entry.status === "Pending Audit" && typeof name === "string" && entry.collectedBy === name && Number.isInteger(entry.eggCount) && entry.eggCount >= 0 && entry.eggCount <= MAX_EGG_COUNT && typeof entry.date === "string" && typeof entry.time === "string"
+    ).map((entry) => ({
+      ...typeof entry.id === "string" ? { id: entry.id } : {},
+      collectedBy: entry.collectedBy,
+      eggCount: entry.eggCount,
+      date: entry.date.slice(0, 50),
+      time: entry.time.slice(0, 50),
+      status: "Pending Audit",
+      notes: typeof entry.notes === "string" ? entry.notes.slice(0, 1e3) : void 0
+    }));
     safeState.appendEggHarvests = true;
   } else if (mayUpdateEggWorkflow) {
     safeState.eggHarvests = eggHarvests;
@@ -1831,6 +2017,10 @@ async function handler(req, res) {
         delete safeState.users;
       }
     }
+    const roleAuthorized = state.roleUpdate !== void 0;
+    if (Array.isArray(safeState.users)) {
+      safeState.users = sanitizeUserRows(safeState.users, { roleAuthorized });
+    }
     if (!isPresidentRole(user.role) && user.role.trim().toLowerCase() !== "pio") {
       delete safeState.achievements;
       if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
@@ -1880,5 +2070,7 @@ async function handler(req, res) {
 }
 export {
   handler as default,
+  extractAuditorReview,
+  extractPresidentFinancialApproval,
   separateEggHarvestsFromFinancialState
 };
