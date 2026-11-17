@@ -523,7 +523,31 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       );
     `);
 
-    // 10. Activities
+    // 10. Association inventory
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS inventory (
+        id VARCHAR(100) PRIMARY KEY,
+        name TEXT NOT NULL,
+        category VARCHAR(100),
+        quantity INTEGER DEFAULT 0,
+        damaged_quantity INTEGER DEFAULT 0,
+        unit VARCHAR(50),
+        item_condition VARCHAR(50),
+        location TEXT,
+        notes TEXT,
+        catalog_product_id VARCHAR(100),
+        recorded_by TEXT,
+        date_recorded VARCHAR(50),
+        last_updated VARCHAR(50)
+      );
+    `);
+    await client.query(`
+      ALTER TABLE inventory
+        ADD COLUMN IF NOT EXISTS damaged_quantity INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100);
+    `);
+
+    // 11. Activities
     await client.query(`
       CREATE TABLE IF NOT EXISTS activities (
         id VARCHAR(100) PRIMARY KEY,
@@ -557,7 +581,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       );
     `);
 
-    // 11. Organization Funds
+    // 12. Organization Funds
     await client.query(`
       CREATE TABLE IF NOT EXISTS organization_funds (
         id VARCHAR(100) PRIMARY KEY,
@@ -595,7 +619,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         DROP CONSTRAINT IF EXISTS organization_funds_code_key;
     `);
 
-    // 12. Auditor Reports
+    // 13. Auditor Reports
     await client.query(`
       CREATE TABLE IF NOT EXISTS auditor_reports (
         id VARCHAR(100) PRIMARY KEY,
@@ -614,7 +638,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       );
     `);
 
-    // 13. Delegation Requests
+    // 14. Delegation Requests
     await client.query(`
       CREATE TABLE IF NOT EXISTS delegation_requests (
         id VARCHAR(100) PRIMARY KEY,
@@ -717,6 +741,7 @@ export const ENTITY_TABLE_MAP: Readonly<Record<string, string>> = {
   financial_transaction: 'financial_transactions', financial_transactions: 'financial_transactions',
   announcement: 'announcements', announcements: 'announcements',
   product: 'products', products: 'products', activity: 'activities', activities: 'activities',
+  inventory: 'inventory', inventories: 'inventory',
   achievement: 'achievements', achievements: 'achievements',
   fund: 'organization_funds', funds: 'organization_funds',
   organizationfund: 'organization_funds', organizationfunds: 'organization_funds',
@@ -833,6 +858,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query('SELECT * FROM afa_igp LIMIT 1');
     const igpExpenseRows = await client.query('SELECT id, expense_data FROM afa_igp_expenses ORDER BY date DESC, id ASC');
     const productsRes = await client.query('SELECT * FROM products ORDER BY name ASC');
+    const inventoryRes = await client.query('SELECT * FROM inventory ORDER BY name ASC');
     const activitiesRes = await client.query('SELECT * FROM activities ORDER BY scheduled_date DESC');
     const achievementsRes = await client.query('SELECT * FROM achievements ORDER BY year DESC, title ASC');
     const fundsRes = await client.query('SELECT * FROM organization_funds ORDER BY name ASC');
@@ -1054,6 +1080,22 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       dateUpdated: r.date_updated
     }));
 
+    const inventory = inventoryRes.rows.map(r => ({
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      quantity: Number(r.quantity || 0),
+      damagedQuantity: r.damaged_quantity == null ? undefined : Number(r.damaged_quantity),
+      unit: r.unit,
+      condition: r.item_condition,
+      location: r.location || undefined,
+      notes: r.notes || undefined,
+      catalogProductId: r.catalog_product_id || undefined,
+      recordedBy: r.recorded_by || '',
+      dateRecorded: r.date_recorded || '',
+      lastUpdated: r.last_updated || ''
+    }));
+
     const activities = activitiesRes.rows.map(r => ({
       id: r.id,
       title: r.title,
@@ -1108,6 +1150,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       systemLogs: logs,
       hogRaising: hogState,
       products,
+      inventory,
       activities,
       achievements,
       funds,
@@ -1200,6 +1243,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     const deletedTxIds = new Set<string>();
     const deletedAnnouncementIds = new Set<string>();
     const deletedProductIds = new Set<string>();
+    const deletedInventoryIds = new Set<string>();
     const deletedActivityIds = new Set<string>();
     const deletedAchievementIds = new Set<string>();
     const deletedFundIds = new Set<string>();
@@ -1245,6 +1289,11 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query('DELETE FROM products WHERE id = ANY($1)', [d.products]);
         console.log('[DB DELETE] Batch deleted products:', d.products);
       }
+      if (Array.isArray(d.inventory) && d.inventory.length > 0) {
+        d.inventory.forEach((id: string) => deletedInventoryIds.add(id));
+        await client.query('DELETE FROM inventory WHERE id = ANY($1)', [d.inventory]);
+        console.log('[DB DELETE] Batch deleted inventory records:', d.inventory);
+      }
       if (Array.isArray(d.activities) && d.activities.length > 0) {
         d.activities.forEach((id: string) => deletedActivityIds.add(id));
         await client.query('DELETE FROM activities WHERE id = ANY($1)', [d.activities]);
@@ -1284,6 +1333,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         if (tbl === 'financial_transactions') deletedTxIds.add(state.deleteItem.id);
         if (tbl === 'announcements') deletedAnnouncementIds.add(state.deleteItem.id);
         if (tbl === 'products') deletedProductIds.add(state.deleteItem.id);
+        if (tbl === 'inventory') deletedInventoryIds.add(state.deleteItem.id);
         if (tbl === 'activities') deletedActivityIds.add(state.deleteItem.id);
         if (tbl === 'achievements') deletedAchievementIds.add(state.deleteItem.id);
         if (tbl === 'organization_funds') deletedFundIds.add(state.deleteItem.id);
@@ -1860,6 +1910,23 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['farmer_phone', 'farmerPhone', (r) => r.farmerPhone || null], ['contact_person', 'contactPerson', (r) => r.contactPerson || null],
         ['image_url', 'imageUrl', (r) => r.imageUrl || null], ['is_published', 'isPublished', (r) => r.isPublished ?? true],
         ['updated_by', 'updatedBy', (r) => r.updatedBy || null], ['managed_by', 'managedBy', (r) => r.managedBy || null], ['date_updated', 'dateUpdated', (r) => r.dateUpdated || null]
+      ] },
+      { table: 'inventory', deletedIds: deletedInventoryIds, fields: [
+        ['name', 'name', (r) => cleanText(r.name, 300) || 'Unnamed inventory item'],
+        ['category', 'category', (r) => cleanText(r.category, 100) || 'Other'],
+        ['quantity', 'quantity', (r) => Math.floor(cleanNumber(r.quantity))],
+        ['damaged_quantity', 'damagedQuantity', (r) => Math.min(
+          Math.floor(cleanNumber(r.quantity)),
+          Math.floor(cleanNumber(r.damagedQuantity))
+        )],
+        ['unit', 'unit', (r) => cleanText(r.unit, 50) || 'units'],
+        ['item_condition', 'condition', (r) => cleanText(r.condition, 50) || 'Good'],
+        ['location', 'location', (r) => cleanText(r.location, 500)],
+        ['notes', 'notes', (r) => cleanText(r.notes, 5000)],
+        ['catalog_product_id', 'catalogProductId', (r) => cleanText(r.catalogProductId, 100)],
+        ['recorded_by', 'recordedBy', (r) => cleanText(r.recordedBy, 200) || 'Auditor'],
+        ['date_recorded', 'dateRecorded', (r) => cleanDateString(r.dateRecorded, 50)],
+        ['last_updated', 'lastUpdated', (r) => cleanDateString(r.lastUpdated, 50)]
       ] },
       { table: 'resolutions', deletedIds: deletedResolutionIds, fields: [
         ['resolution_number', 'resolutionNumber', (r) => r.resolutionNumber], ['title', 'title', (r) => r.title], ['description', 'description', (r) => r.description],

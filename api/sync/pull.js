@@ -425,6 +425,28 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS inventory (
+        id VARCHAR(100) PRIMARY KEY,
+        name TEXT NOT NULL,
+        category VARCHAR(100),
+        quantity INTEGER DEFAULT 0,
+        damaged_quantity INTEGER DEFAULT 0,
+        unit VARCHAR(50),
+        item_condition VARCHAR(50),
+        location TEXT,
+        notes TEXT,
+        catalog_product_id VARCHAR(100),
+        recorded_by TEXT,
+        date_recorded VARCHAR(50),
+        last_updated VARCHAR(50)
+      );
+    `);
+    await client.query(`
+      ALTER TABLE inventory
+        ADD COLUMN IF NOT EXISTS damaged_quantity INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100);
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS activities (
         id VARCHAR(100) PRIMARY KEY,
         title TEXT NOT NULL,
@@ -594,6 +616,7 @@ async function fetchAllDataFromPostgres(pool) {
     const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query("SELECT * FROM afa_igp LIMIT 1");
     const igpExpenseRows = await client.query("SELECT id, expense_data FROM afa_igp_expenses ORDER BY date DESC, id ASC");
     const productsRes = await client.query("SELECT * FROM products ORDER BY name ASC");
+    const inventoryRes = await client.query("SELECT * FROM inventory ORDER BY name ASC");
     const activitiesRes = await client.query("SELECT * FROM activities ORDER BY scheduled_date DESC");
     const achievementsRes = await client.query("SELECT * FROM achievements ORDER BY year DESC, title ASC");
     const fundsRes = await client.query("SELECT * FROM organization_funds ORDER BY name ASC");
@@ -786,6 +809,21 @@ async function fetchAllDataFromPostgres(pool) {
       managedBy: r.managed_by,
       dateUpdated: r.date_updated
     }));
+    const inventory = inventoryRes.rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      quantity: Number(r.quantity || 0),
+      damagedQuantity: r.damaged_quantity == null ? void 0 : Number(r.damaged_quantity),
+      unit: r.unit,
+      condition: r.item_condition,
+      location: r.location || void 0,
+      notes: r.notes || void 0,
+      catalogProductId: r.catalog_product_id || void 0,
+      recordedBy: r.recorded_by || "",
+      dateRecorded: r.date_recorded || "",
+      lastUpdated: r.last_updated || ""
+    }));
     const activities = activitiesRes.rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -837,6 +875,7 @@ async function fetchAllDataFromPostgres(pool) {
       systemLogs: logs,
       hogRaising: hogState,
       products,
+      inventory,
       activities,
       achievements,
       funds,

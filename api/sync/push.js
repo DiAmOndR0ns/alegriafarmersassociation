@@ -521,6 +521,28 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS inventory (
+        id VARCHAR(100) PRIMARY KEY,
+        name TEXT NOT NULL,
+        category VARCHAR(100),
+        quantity INTEGER DEFAULT 0,
+        damaged_quantity INTEGER DEFAULT 0,
+        unit VARCHAR(50),
+        item_condition VARCHAR(50),
+        location TEXT,
+        notes TEXT,
+        catalog_product_id VARCHAR(100),
+        recorded_by TEXT,
+        date_recorded VARCHAR(50),
+        last_updated VARCHAR(50)
+      );
+    `);
+    await client.query(`
+      ALTER TABLE inventory
+        ADD COLUMN IF NOT EXISTS damaged_quantity INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100);
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS activities (
         id VARCHAR(100) PRIMARY KEY,
         title TEXT NOT NULL,
@@ -658,6 +680,8 @@ var ENTITY_TABLE_MAP = {
   products: "products",
   activity: "activities",
   activities: "activities",
+  inventory: "inventory",
+  inventories: "inventory",
   achievement: "achievements",
   achievements: "achievements",
   fund: "organization_funds",
@@ -766,6 +790,7 @@ async function saveFullStateToPostgres(pool, state) {
     const deletedTxIds = /* @__PURE__ */ new Set();
     const deletedAnnouncementIds = /* @__PURE__ */ new Set();
     const deletedProductIds = /* @__PURE__ */ new Set();
+    const deletedInventoryIds = /* @__PURE__ */ new Set();
     const deletedActivityIds = /* @__PURE__ */ new Set();
     const deletedAchievementIds = /* @__PURE__ */ new Set();
     const deletedFundIds = /* @__PURE__ */ new Set();
@@ -809,6 +834,11 @@ async function saveFullStateToPostgres(pool, state) {
         await client.query("DELETE FROM products WHERE id = ANY($1)", [d.products]);
         console.log("[DB DELETE] Batch deleted products:", d.products);
       }
+      if (Array.isArray(d.inventory) && d.inventory.length > 0) {
+        d.inventory.forEach((id) => deletedInventoryIds.add(id));
+        await client.query("DELETE FROM inventory WHERE id = ANY($1)", [d.inventory]);
+        console.log("[DB DELETE] Batch deleted inventory records:", d.inventory);
+      }
       if (Array.isArray(d.activities) && d.activities.length > 0) {
         d.activities.forEach((id) => deletedActivityIds.add(id));
         await client.query("DELETE FROM activities WHERE id = ANY($1)", [d.activities]);
@@ -846,6 +876,7 @@ async function saveFullStateToPostgres(pool, state) {
         if (tbl === "financial_transactions") deletedTxIds.add(state.deleteItem.id);
         if (tbl === "announcements") deletedAnnouncementIds.add(state.deleteItem.id);
         if (tbl === "products") deletedProductIds.add(state.deleteItem.id);
+        if (tbl === "inventory") deletedInventoryIds.add(state.deleteItem.id);
         if (tbl === "activities") deletedActivityIds.add(state.deleteItem.id);
         if (tbl === "achievements") deletedAchievementIds.add(state.deleteItem.id);
         if (tbl === "organization_funds") deletedFundIds.add(state.deleteItem.id);
@@ -1496,6 +1527,23 @@ async function saveFullStateToPostgres(pool, state) {
         ["updated_by", "updatedBy", (r) => r.updatedBy || null],
         ["managed_by", "managedBy", (r) => r.managedBy || null],
         ["date_updated", "dateUpdated", (r) => r.dateUpdated || null]
+      ] },
+      { table: "inventory", deletedIds: deletedInventoryIds, fields: [
+        ["name", "name", (r) => cleanText(r.name, 300) || "Unnamed inventory item"],
+        ["category", "category", (r) => cleanText(r.category, 100) || "Other"],
+        ["quantity", "quantity", (r) => Math.floor(cleanNumber(r.quantity))],
+        ["damaged_quantity", "damagedQuantity", (r) => Math.min(
+          Math.floor(cleanNumber(r.quantity)),
+          Math.floor(cleanNumber(r.damagedQuantity))
+        )],
+        ["unit", "unit", (r) => cleanText(r.unit, 50) || "units"],
+        ["item_condition", "condition", (r) => cleanText(r.condition, 50) || "Good"],
+        ["location", "location", (r) => cleanText(r.location, 500)],
+        ["notes", "notes", (r) => cleanText(r.notes, 5e3)],
+        ["catalog_product_id", "catalogProductId", (r) => cleanText(r.catalogProductId, 100)],
+        ["recorded_by", "recordedBy", (r) => cleanText(r.recordedBy, 200) || "Auditor"],
+        ["date_recorded", "dateRecorded", (r) => cleanDateString(r.dateRecorded, 50)],
+        ["last_updated", "lastUpdated", (r) => cleanDateString(r.lastUpdated, 50)]
       ] },
       { table: "resolutions", deletedIds: deletedResolutionIds, fields: [
         ["resolution_number", "resolutionNumber", (r) => r.resolutionNumber],

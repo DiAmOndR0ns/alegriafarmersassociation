@@ -370,10 +370,12 @@ export interface InventoryItem {
   name: string; // e.g. "IGP Plastic Chairs", "Harvest Sacks", "Sprayer"
   category: 'IGP Equipment' | 'Farm Tools' | 'Office Supplies' | 'Rental Assets' | 'Livestock' | 'Other' | string;
   quantity: number;
+  damagedQuantity?: number;
   unit: string; // e.g. "pieces", "sacks", "units"
   condition: 'Good' | 'Needs Repair' | 'Damaged' | 'Lost' | string;
   location?: string; // e.g. "Barangay Alegria Covered Court Storage"
   notes?: string; // Auditor's custody / inventory notes
+  catalogProductId?: string;
   recordedBy: string; // Auditor
   dateRecorded: string;
   lastUpdated: string;

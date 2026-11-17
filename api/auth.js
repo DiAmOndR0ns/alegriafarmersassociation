@@ -591,6 +591,28 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS inventory (
+        id VARCHAR(100) PRIMARY KEY,
+        name TEXT NOT NULL,
+        category VARCHAR(100),
+        quantity INTEGER DEFAULT 0,
+        damaged_quantity INTEGER DEFAULT 0,
+        unit VARCHAR(50),
+        item_condition VARCHAR(50),
+        location TEXT,
+        notes TEXT,
+        catalog_product_id VARCHAR(100),
+        recorded_by TEXT,
+        date_recorded VARCHAR(50),
+        last_updated VARCHAR(50)
+      );
+    `);
+    await client.query(`
+      ALTER TABLE inventory
+        ADD COLUMN IF NOT EXISTS damaged_quantity INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100);
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS activities (
         id VARCHAR(100) PRIMARY KEY,
         title TEXT NOT NULL,

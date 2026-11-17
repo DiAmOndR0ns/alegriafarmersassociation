@@ -41,6 +41,7 @@ import { LanguageToggle } from './i18n/LanguageContext';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
 import { runNightlyBackupCheck } from './utils/backupSystem';
 import { computeFundBalances, getInitialFund } from './utils/fundBalance';
+import { getAvailableInventoryQuantity, getRentalStockStatus } from './utils/inventory';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
@@ -1999,8 +2000,15 @@ export default function App() {
   const handleDeleteProduct = (id: string) => {
     const target = products.find(p => p.id === id);
     const updated = products.filter(p => p.id !== id);
+    const updatedInventory = inventory.map(item =>
+      item.catalogProductId === id ? { ...item, catalogProductId: undefined } : item
+    );
     setProducts(updated);
     updateStorage('bafa_products', updated);
+    if (updatedInventory.some((item, index) => item.catalogProductId !== inventory[index]?.catalogProductId)) {
+      setInventory(updatedInventory);
+      updateStorage('bafa_inventory', updatedInventory);
+    }
     storeDeletedId('products', id);
 
     // Direct and permanent removal from PostgreSQL Cloud Database
@@ -2009,9 +2017,16 @@ export default function App() {
     if (isOnline) {
       logAction('Deleted Product', `Removed product: "${target?.name || id}"`);
       showToastMessage('Gipapas ang produkto!', 'info');
-      pushAllDataToCloud({ products: updated }, { silent: true, source: 'Product Deletion' });
+      pushAllDataToCloud({
+        products: updated,
+        ...(updatedInventory.some((item, index) => item.catalogProductId !== inventory[index]?.catalogProductId)
+          ? { inventory: updatedInventory }
+          : {})
+      }, { silent: true, source: 'Product Deletion' });
     } else {
       addToSyncQueue('delete', 'product', { id });
+      updatedInventory.filter((item, index) => item.catalogProductId !== inventory[index]?.catalogProductId)
+        .forEach(item => addToSyncQueue('update', 'inventory', item));
     }
   };
 
@@ -2129,24 +2144,73 @@ export default function App() {
   };
 
   const handleUpdateInventoryItem = (updatedItem: InventoryItem) => {
-    const updated = inventory.map(i => i.id === updatedItem.id ? updatedItem : i);
+    const linkedProduct = updatedItem.catalogProductId
+      ? products.find(product => product.id === updatedItem.catalogProductId)
+      : undefined;
+    const shouldUnlinkRentalProduct = Boolean(linkedProduct && updatedItem.category !== 'Rental Assets');
+    const inventoryItem = shouldUnlinkRentalProduct
+      ? { ...updatedItem, catalogProductId: undefined }
+      : updatedItem;
+    const updated = inventory.map(i => i.id === inventoryItem.id ? inventoryItem : i);
+    const updatedProducts = linkedProduct
+      ? products.map(product => product.id === linkedProduct.id
+        ? shouldUnlinkRentalProduct
+          ? {
+              ...product,
+              isPublished: false,
+              quantityAvailable: '0 available',
+              stockStatus: 'Out of Stock' as const
+            }
+          : {
+              ...product,
+              name: updatedItem.name,
+              specs: updatedItem.notes || undefined,
+              quantityAvailable: `${getAvailableInventoryQuantity(updatedItem)} ${updatedItem.unit} available`,
+              stockStatus: getRentalStockStatus(updatedItem),
+              dateUpdated: new Date().toISOString().split('T')[0]
+            }
+        : product)
+      : products;
     setInventory(updated);
     updateStorage('bafa_inventory', updated);
+    if (linkedProduct) {
+      setProducts(updatedProducts);
+      updateStorage('bafa_products', updatedProducts);
+    }
 
     if (isOnline) {
       logAction('Updated Inventory Item', `Auditor updated inventory record for "${updatedItem.name}" (${updatedItem.condition})`);
       showToastMessage(`Inventory item "${updatedItem.name}" updated!`, 'success');
-      pushAllDataToCloud({ inventory: updated }, { silent: true, source: 'Inventory Updated' });
+      pushAllDataToCloud({
+        inventory: updated,
+        ...(linkedProduct ? { products: updatedProducts } : {})
+      }, { silent: true, source: 'Inventory Updated' });
     } else {
-      addToSyncQueue('update', 'inventory', updatedItem);
+      addToSyncQueue('update', 'inventory', inventoryItem);
+      if (linkedProduct) {
+        const updatedProduct = updatedProducts.find(product => product.id === linkedProduct.id);
+        if (updatedProduct) addToSyncQueue('update', 'product', updatedProduct);
+      }
     }
   };
 
   const handleDeleteInventoryItem = (id: string) => {
     const target = inventory.find(i => i.id === id);
     const updated = inventory.filter(i => i.id !== id);
+    const linkedProduct = target?.catalogProductId
+      ? products.find(product => product.id === target.catalogProductId)
+      : undefined;
+    const updatedProducts = linkedProduct
+      ? products.map(product => product.id === linkedProduct.id
+        ? { ...product, isPublished: false, quantityAvailable: '0 available', stockStatus: 'Out of Stock' as const }
+        : product)
+      : products;
     setInventory(updated);
     updateStorage('bafa_inventory', updated);
+    if (linkedProduct) {
+      setProducts(updatedProducts);
+      updateStorage('bafa_products', updatedProducts);
+    }
     storeDeletedId('inventory', id);
 
     // Direct and permanent removal from PostgreSQL Cloud Database
@@ -2155,9 +2219,61 @@ export default function App() {
     if (isOnline) {
       logAction('Deleted Inventory Item', `Removed inventory record: "${target?.name || id}"`);
       showToastMessage('Inventory item removed!', 'info');
-      pushAllDataToCloud({ inventory: updated }, { silent: true, source: 'Inventory Deletion' });
+      pushAllDataToCloud({
+        inventory: updated,
+        ...(linkedProduct ? { products: updatedProducts } : {})
+      }, { silent: true, source: 'Inventory Deletion' });
     } else {
       addToSyncQueue('delete', 'inventory', { id });
+      if (linkedProduct) {
+        const updatedProduct = updatedProducts.find(product => product.id === linkedProduct.id);
+        if (updatedProduct) addToSyncQueue('update', 'product', updatedProduct);
+      }
+    }
+  };
+
+  const handlePublishRentalProduct = (
+    item: InventoryItem,
+    listing: { price: number; unit: string; description: string }
+  ) => {
+    const availableQuantity = getAvailableInventoryQuantity(item);
+    const today = new Date().toISOString().split('T')[0];
+    const product: Product = {
+      id: `rental-${Date.now()}`,
+      name: item.name,
+      category: 'Rental Assets',
+      price: listing.price,
+      unit: listing.unit,
+      quantityAvailable: `${availableQuantity} ${item.unit} available`,
+      description: listing.description,
+      specs: item.notes || undefined,
+      stockStatus: getRentalStockStatus(item),
+      farmerName: 'Alegria Farmers Association',
+      farmerSitio: item.location || '',
+      contactPerson: 'Contact an AFA officer to arrange a rental.',
+      isPublished: true,
+      updatedBy: `Auditor (${getOfficerName('Auditor')})`,
+      managedBy: `Auditor (${getOfficerName('Auditor')})`,
+      dateUpdated: today
+    };
+    const linkedItem: InventoryItem = { ...item, catalogProductId: product.id, lastUpdated: today };
+    const updatedInventory = inventory.map(record => record.id === item.id ? linkedItem : record);
+    const updatedProducts = [product, ...products];
+    setInventory(updatedInventory);
+    setProducts(updatedProducts);
+    updateStorage('bafa_inventory', updatedInventory);
+    updateStorage('bafa_products', updatedProducts);
+
+    if (isOnline) {
+      logAction('Published Rental Asset', `Published "${product.name}" in the product catalog.`);
+      showToastMessage(`"${product.name}" is now in the product catalog.`, 'success');
+      pushAllDataToCloud(
+        { inventory: updatedInventory, products: updatedProducts },
+        { silent: true, source: 'Rental Asset Published' }
+      );
+    } else {
+      addToSyncQueue('create', 'product', product);
+      addToSyncQueue('update', 'inventory', linkedItem);
     }
   };
 
@@ -4038,9 +4154,11 @@ export default function App() {
                 onAuditTransaction={handleAuditTransaction}
                 onOpenReportModal={() => setShowReportModal(true)}
                 inventory={inventory}
+                products={products}
                 onAddInventory={handleAddInventoryItem}
                 onUpdateInventory={handleUpdateInventoryItem}
                 onDeleteInventory={handleDeleteInventoryItem}
+                onPublishRentalProduct={handlePublishRentalProduct}
                 auditorName={`Auditor (${getOfficerName('Auditor')})`}
               />
             )}

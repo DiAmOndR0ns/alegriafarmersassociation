@@ -94,7 +94,7 @@ export default function ProductManagementModal({
     setName(p.name);
     setCebName(p.cebName || '');
     setCategory(p.category);
-    setOtherCategory(!['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops'].includes(p.category) ? p.category : '');
+    setOtherCategory(!['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops', 'Rental Assets'].includes(p.category) ? p.category : '');
     setPrice(p.price);
     setUnit(p.unit);
     setQuantityAvailable(p.quantityAvailable || 'Available in harvest stock');
@@ -223,6 +223,7 @@ export default function ProductManagementModal({
               <option value="Processed Goods">{en ? 'Processed Goods' : 'Processed Goods'}</option>
               <option value="Seeds & Fertilizer">{en ? 'Seeds & Fertilizer' : 'Seeds & Fertilizer'}</option>
               <option value="Coffee & Crops">{en ? 'Coffee & Crops' : 'Coffee & Crops'}</option>
+              <option value="Rental Assets">{en ? 'Rental Assets' : 'Rental Assets'}</option>
               <option value="Other">{en ? 'Other' : 'Other (Iba pa)'}</option>
             </select>
           </div>
@@ -431,7 +432,7 @@ export default function ProductManagementModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[#4A5F57] font-bold mb-1">Kategoriya (Category):</label>
-                  {category === 'Other' || !['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops'].includes(category) ? (
+                  {category === 'Other' || !['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops', 'Rental Assets'].includes(category) ? (
                     <input
                       type="text"
                       value={otherCategory}
@@ -453,6 +454,7 @@ export default function ProductManagementModal({
                     <option value="Processed Goods">Processed Goods</option>
                     <option value="Seeds & Fertilizer">Seeds & Fertilizer</option>
                     <option value="Coffee & Crops">Coffee & Crops</option>
+                    <option value="Rental Assets">Rental Assets</option>
                     <option value="Other">Other (Iba pa — type your own)</option>
                   </select>
                   )}
