@@ -150,6 +150,15 @@ function cleanDatabaseUrl(rawUrl) {
     return { connectionString: cleaned, isSsl: true, hostInfo };
   }
 }
+function getDatabaseSslOptions() {
+  const encodedCa = process.env.SUPABASE_CA_CERT_BASE64?.trim();
+  if (!encodedCa) return { rejectUnauthorized: false };
+  const ca = Buffer.from(encodedCa, "base64").toString("utf8");
+  if (!ca.includes("-----BEGIN CERTIFICATE-----")) {
+    throw new Error("SUPABASE_CA_CERT_BASE64 must contain a base64-encoded PEM certificate.");
+  }
+  return { rejectUnauthorized: true, ca };
+}
 function getPool() {
   const rawDbUrl = process.env.DATABASE_URL;
   if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
@@ -168,7 +177,7 @@ function getPool() {
   }
   const pool = new PgPool({
     connectionString,
-    ssl: { rejectUnauthorized: true },
+    ssl: getDatabaseSslOptions(),
     connectionTimeoutMillis: 7e3,
     idleTimeoutMillis: 1e4,
     max: 6

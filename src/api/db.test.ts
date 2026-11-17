@@ -10,10 +10,13 @@ import {
 } from './db';
 
 const originalUrl = process.env.DATABASE_URL;
+const originalCa = process.env.SUPABASE_CA_CERT_BASE64;
 
 afterEach(() => {
   if (originalUrl === undefined) delete process.env.DATABASE_URL;
   else process.env.DATABASE_URL = originalUrl;
+  if (originalCa === undefined) delete process.env.SUPABASE_CA_CERT_BASE64;
+  else process.env.SUPABASE_CA_CERT_BASE64 = originalCa;
 });
 
 describe('isLoopbackDatabaseUrl', () => {
@@ -59,9 +62,25 @@ describe('Supabase-only configuration', () => {
     expect(() => getPool()).toThrow(/Supabase/);
   });
 
-  it('verifies the database server TLS certificate', () => {
+  it('allows the Supabase pooler self-signed certificate when no CA is configured', () => {
+    delete process.env.SUPABASE_CA_CERT_BASE64;
     process.env.DATABASE_URL = 'postgresql://u:p@aws-0-ap.pooler.supabase.com:6543/postgres';
-    expect((getPool() as any).options.ssl.rejectUnauthorized).toBe(true);
+    expect((getPool() as any).options.ssl).toEqual({ rejectUnauthorized: false });
+  });
+
+  it('verifies TLS against the configured Supabase CA certificate', () => {
+    const ca = '-----BEGIN CERTIFICATE-----\nexample\n-----END CERTIFICATE-----\n';
+    process.env.SUPABASE_CA_CERT_BASE64 = Buffer.from(ca).toString('base64');
+    process.env.DATABASE_URL = 'postgresql://u:p@aws-1-ap.pooler.supabase.com:6543/postgres';
+
+    expect((getPool() as any).options.ssl).toEqual({ rejectUnauthorized: true, ca });
+  });
+
+  it('rejects a configured value that is not a PEM certificate', () => {
+    process.env.SUPABASE_CA_CERT_BASE64 = Buffer.from('not a certificate').toString('base64');
+    process.env.DATABASE_URL = 'postgresql://u:p@aws-2-ap.pooler.supabase.com:6543/postgres';
+
+    expect(() => getPool()).toThrow(/base64-encoded PEM certificate/);
   });
 });
 

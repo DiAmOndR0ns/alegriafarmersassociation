@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { sendResponse } from './helper';
-import { cleanDatabaseUrl, isLoopbackDatabaseUrl } from './db';
+import { cleanDatabaseUrl, getDatabaseSslOptions, isLoopbackDatabaseUrl } from './db';
 // Public health check endpoint
 
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
@@ -20,10 +20,11 @@ function getStatusPool(): pg.Pool {
     if (poolInstance) {
       poolInstance.end().catch(() => {});
     }
-    // TLS is always on for the hosted Supabase database.
+    // Supabase's pooler may present a self-signed chain; keep this scoped to
+    // the database connection rather than changing Node's global TLS settings.
     poolInstance = new PgPool({
       connectionString,
-      ssl: { rejectUnauthorized: true },
+      ssl: getDatabaseSslOptions(),
       connectionTimeoutMillis: 5000,
       max: 5,
     });

@@ -106,6 +106,18 @@ export function cleanDatabaseUrl(rawUrl: string): { connectionString: string; is
   }
 }
 
+export function getDatabaseSslOptions() {
+  const encodedCa = process.env.SUPABASE_CA_CERT_BASE64?.trim();
+  if (!encodedCa) return { rejectUnauthorized: false };
+
+  const ca = Buffer.from(encodedCa, 'base64').toString('utf8');
+  if (!ca.includes('-----BEGIN CERTIFICATE-----')) {
+    throw new Error('SUPABASE_CA_CERT_BASE64 must contain a base64-encoded PEM certificate.');
+  }
+
+  return { rejectUnauthorized: true, ca };
+}
+
 export function getPool(): pg.Pool {
   const rawDbUrl = process.env.DATABASE_URL;
   if (rawDbUrl && isLoopbackDatabaseUrl(rawDbUrl)) {
@@ -127,11 +139,11 @@ export function getPool(): pg.Pool {
     return cached;
   }
 
-  // Verify the Supabase server certificate; TLS without peer verification is
-  // vulnerable to interception.
+  // Supabase's pooler may present a self-signed certificate chain. Keep TLS
+  // enabled for this connection without globally changing Node's TLS settings.
   const pool = new PgPool({
     connectionString,
-    ssl: { rejectUnauthorized: true },
+    ssl: getDatabaseSslOptions(),
     connectionTimeoutMillis: 7000,
     idleTimeoutMillis: 10000,
     max: 6,

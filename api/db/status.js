@@ -52,6 +52,15 @@ function cleanDatabaseUrl(rawUrl) {
     return { connectionString: cleaned, isSsl: true, hostInfo };
   }
 }
+function getDatabaseSslOptions() {
+  const encodedCa = process.env.SUPABASE_CA_CERT_BASE64?.trim();
+  if (!encodedCa) return { rejectUnauthorized: false };
+  const ca = Buffer.from(encodedCa, "base64").toString("utf8");
+  if (!ca.includes("-----BEGIN CERTIFICATE-----")) {
+    throw new Error("SUPABASE_CA_CERT_BASE64 must contain a base64-encoded PEM certificate.");
+  }
+  return { rejectUnauthorized: true, ca };
+}
 
 // src/api/status.ts
 var PgPool2 = pg2?.Pool || pg2?.default?.Pool || pg2?.default || pg2;
@@ -71,7 +80,7 @@ function getStatusPool() {
     }
     poolInstance = new PgPool2({
       connectionString,
-      ssl: { rejectUnauthorized: true },
+      ssl: getDatabaseSslOptions(),
       connectionTimeoutMillis: 5e3,
       max: 5
     });
