@@ -168,7 +168,7 @@ function getPool() {
   }
   const pool = new PgPool({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: true },
     connectionTimeoutMillis: 7e3,
     idleTimeoutMillis: 1e4,
     max: 6
@@ -219,7 +219,13 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS purpose TEXT;`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS liquidation_deadline VARCHAR(50);`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS attendance_record JSONB;`,
+    `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS minutes_approval_status VARCHAR(50);`,
+    `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_by TEXT;`,
+    `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_date VARCHAR(50);`,
+    `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approval_remarks TEXT;`,
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
@@ -259,6 +265,41 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS status_reason TEXT;`,
+    `UPDATE financial_transactions AS tx
+      SET activity_id = NULL
+      WHERE tx.activity_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM activities AS activity WHERE activity.id = tx.activity_id);`,
+    `UPDATE inventory AS item
+      SET catalog_product_id = NULL
+      WHERE item.catalog_product_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM products AS product WHERE product.id = item.catalog_product_id);`,
+    `DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'financial_transactions_activity_id_fkey'
+            AND conrelid = 'financial_transactions'::regclass
+        ) THEN
+          ALTER TABLE financial_transactions
+            ADD CONSTRAINT financial_transactions_activity_id_fkey
+            FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'inventory_catalog_product_id_fkey'
+            AND conrelid = 'inventory'::regclass
+        ) THEN
+          ALTER TABLE inventory
+            ADD CONSTRAINT inventory_catalog_product_id_fkey
+            FOREIGN KEY (catalog_product_id) REFERENCES products(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
+      END $$;`,
+    `ALTER TABLE financial_transactions VALIDATE CONSTRAINT financial_transactions_activity_id_fkey;`,
+    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_catalog_product_id_fkey;`,
+    `CREATE INDEX IF NOT EXISTS financial_transactions_activity_id_idx ON financial_transactions (activity_id);`,
+    `CREATE INDEX IF NOT EXISTS inventory_catalog_product_id_idx ON inventory (catalog_product_id);`,
     `CREATE TABLE IF NOT EXISTS achievements (
       id VARCHAR(100) PRIMARY KEY,
       year VARCHAR(20) NOT NULL,
@@ -410,7 +451,11 @@ async function initDatabaseSchema(pool) {
         agenda TEXT,
         minutes TEXT,
         officer_in_charge TEXT,
-        attendance_record JSONB
+        attendance_record JSONB,
+        minutes_approval_status VARCHAR(50),
+        approved_by TEXT,
+        approved_date VARCHAR(50),
+        approval_remarks TEXT
       );
     `);
     await client.query(`
@@ -439,6 +484,8 @@ async function initDatabaseSchema(pool) {
         recorded_by TEXT,
         activity_id VARCHAR(100),
         fund_source TEXT,
+        purpose TEXT,
+        liquidation_deadline VARCHAR(50),
         audited_status VARCHAR(50) DEFAULT 'Unaudited',
         audited_by TEXT,
         audited_date VARCHAR(50),
@@ -713,17 +760,14 @@ function lookupEntityTable(entity) {
 }
 async function ensureDatabaseSchema(pool) {
   if (schemaInitialized) return;
-  const client = await pool.connect();
   try {
-    console.log("[DB DEBUG] ensureDatabaseSchema: Checking tables...");
-    const check = await client.query(`SELECT to_regclass('public.members') as members_table`);
-    console.log("[DB DEBUG] members table exists:", check.rows[0]?.members_table);
-    if (!check.rows[0]?.members_table) {
-      console.log("[DB DEBUG] Creating database schema...");
-      await initDatabaseSchema(pool);
-    } else {
-      console.log("[DB DEBUG] Running schema migrations...");
+    console.log("[DB DEBUG] Ensuring all database tables exist...");
+    await initDatabaseSchema(pool);
+    const client = await pool.connect();
+    try {
       await runSchemaMigrations(client);
+    } finally {
+      client.release();
     }
     schemaInitialized = true;
   } catch (err) {
@@ -734,8 +778,6 @@ async function ensureDatabaseSchema(pool) {
       hint: err?.hint
     });
     throw err;
-  } finally {
-    client.release();
   }
 }
 async function saveEntity(client, rows, mapping) {
@@ -1028,6 +1070,12 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] President financial approvals saved");
     } else if (rawTxList && Array.isArray(rawTxList)) {
       const txList = rawTxList.filter((tx) => !deletedTxIds.has(tx.id));
+      const pendingActivityIds = new Set(
+        (Array.isArray(state.activities) ? state.activities : []).filter(
+          (activity) => activity?.id && !deletedActivityIds.has(activity.id) && cleanText(activity.title, 300)
+        ).map((activity) => activity.id)
+      );
+      let existingActivityIds = null;
       console.log("[DB DEBUG] Saving", txList.length, "transactions...");
       for (const tx of txList) {
         if (!tx || typeof tx.id !== "string" || !tx.id) continue;
@@ -1035,9 +1083,17 @@ async function saveFullStateToPostgres(pool, state) {
         if (txType !== "income" && txType !== "expense") continue;
         const txAmount = Number(tx.amount);
         if (!Number.isFinite(txAmount) || txAmount < 0) continue;
+        let activityId = cleanText(tx.activityId, 100);
+        if (activityId && !pendingActivityIds.has(activityId)) {
+          if (!existingActivityIds) {
+            const existingActivities = await client.query("SELECT id FROM activities");
+            existingActivityIds = new Set(existingActivities.rows.map((row) => String(row.id)));
+          }
+          if (!existingActivityIds.has(activityId)) activityId = null;
+        }
         await client.query(`
-          INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, audited_status, audited_by, audited_date, audit_notes)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, purpose, liquidation_deadline, audited_status, audited_by, audited_date, audit_notes)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           ON CONFLICT (id) DO UPDATE SET
             type = EXCLUDED.type,
             category = EXCLUDED.category,
@@ -1047,6 +1103,8 @@ async function saveFullStateToPostgres(pool, state) {
             recorded_by = EXCLUDED.recorded_by,
             activity_id = EXCLUDED.activity_id,
             fund_source = EXCLUDED.fund_source,
+            purpose = COALESCE(EXCLUDED.purpose, financial_transactions.purpose),
+            liquidation_deadline = COALESCE(EXCLUDED.liquidation_deadline, financial_transactions.liquidation_deadline),
             audited_status = EXCLUDED.audited_status,
             audited_by = EXCLUDED.audited_by,
             audited_date = EXCLUDED.audited_date,
@@ -1059,8 +1117,10 @@ async function saveFullStateToPostgres(pool, state) {
           cleanDateString(tx.date, 50),
           cleanText(tx.description, 2e3),
           cleanText(tx.recordedBy, 200),
-          cleanText(tx.activityId, 100),
+          activityId,
           cleanText(tx.fundSource, 200),
+          cleanText(tx.purpose, 2e3),
+          cleanDateString(tx.liquidationDeadline, 50),
           AUDITED_STATUSES.includes(String(tx.auditedStatus)) ? String(tx.auditedStatus) : "Unaudited",
           cleanText(tx.auditedBy, 200),
           cleanDateString(tx.auditedDate, 50),
@@ -1077,8 +1137,8 @@ async function saveFullStateToPostgres(pool, state) {
         const meetingTitle = cleanText(mt.title, 300);
         if (!meetingTitle) continue;
         await client.query(`
-          INSERT INTO meetings (id, title, date, location, attendance_count, agenda, minutes, officer_in_charge, attendance_record)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          INSERT INTO meetings (id, title, date, location, attendance_count, agenda, minutes, officer_in_charge, attendance_record, minutes_approval_status, approved_by, approved_date, approval_remarks)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
             date = EXCLUDED.date,
@@ -1087,7 +1147,11 @@ async function saveFullStateToPostgres(pool, state) {
             agenda = EXCLUDED.agenda,
             minutes = EXCLUDED.minutes,
             officer_in_charge = EXCLUDED.officer_in_charge,
-            attendance_record = EXCLUDED.attendance_record;
+            attendance_record = EXCLUDED.attendance_record,
+            minutes_approval_status = COALESCE(EXCLUDED.minutes_approval_status, meetings.minutes_approval_status),
+            approved_by = COALESCE(EXCLUDED.approved_by, meetings.approved_by),
+            approved_date = COALESCE(EXCLUDED.approved_date, meetings.approved_date),
+            approval_remarks = COALESCE(EXCLUDED.approval_remarks, meetings.approval_remarks);
         `, [
           mt.id,
           meetingTitle,
@@ -1097,7 +1161,11 @@ async function saveFullStateToPostgres(pool, state) {
           cleanText(mt.agenda, 2e4) || "",
           cleanText(mt.minutes, 2e4) || "",
           cleanText(mt.officerInCharge, 200) || "",
-          JSON.stringify(mt.attendanceRecord && typeof mt.attendanceRecord === "object" ? mt.attendanceRecord : {})
+          JSON.stringify(mt.attendanceRecord && typeof mt.attendanceRecord === "object" ? mt.attendanceRecord : {}),
+          cleanText(mt.minutesApprovalStatus, 50),
+          cleanText(mt.approvedBy, 200),
+          cleanDateString(mt.approvedDate, 50),
+          cleanText(mt.approvalRemarks, 2e3)
         ]);
       }
       console.log("[DB DEBUG] Meetings saved");

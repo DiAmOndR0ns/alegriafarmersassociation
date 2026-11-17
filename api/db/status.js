@@ -71,7 +71,7 @@ function getStatusPool() {
     }
     poolInstance = new PgPool2({
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: true },
       connectionTimeoutMillis: 5e3,
       max: 5
     });
@@ -93,10 +93,13 @@ var APP_TABLES = [
   "afa_igp",
   "afa_igp_expenses",
   "products",
+  "inventory",
   "activities",
+  "achievements",
   "organization_funds",
   "auditor_reports",
-  "delegation_requests"
+  "delegation_requests",
+  "sync_queue"
 ];
 async function getLiveTableStats(pool) {
   const client = await pool.connect();
