@@ -1313,8 +1313,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         const incomingRole = ASSIGNABLE_ROLE_VALUES.includes(String(u.role)) ? String(u.role) : 'Member';
         const isCurrentPresident = existingRole && existingRole.toLowerCase() === 'president';
         const targetRole = isCurrentPresident && incomingRole.toLowerCase() !== 'president' ? existingRole : incomingRole;
-        // Brand-new synced accounts start unapproved until an officer approves them.
-        const isApproved = isNewAccount ? false : Boolean(u.isApproved);
+        // Sync cannot change approval; new accounts start unapproved and conflicts preserve the database value.
+        const isApproved = false;
         const cleanName = cleanText(u.name, 200) || cleanUsername;
         const rowId = typeof u.id === 'string' && u.id ? u.id : undefined;
         let resolvedId = targetId || rowId;
@@ -1333,7 +1333,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             username = EXCLUDED.username,
             name = EXCLUDED.name,
             role = CASE WHEN $17::boolean THEN EXCLUDED.role ELSE users.role END,
-            is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
             primary_crops = EXCLUDED.primary_crops,

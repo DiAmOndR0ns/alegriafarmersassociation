@@ -867,7 +867,7 @@ async function saveFullStateToPostgres(pool, state) {
         const incomingRole = ASSIGNABLE_ROLE_VALUES.includes(String(u.role)) ? String(u.role) : "Member";
         const isCurrentPresident = existingRole && existingRole.toLowerCase() === "president";
         const targetRole = isCurrentPresident && incomingRole.toLowerCase() !== "president" ? existingRole : incomingRole;
-        const isApproved = isNewAccount ? false : Boolean(u.isApproved);
+        const isApproved = false;
         const cleanName = cleanText(u.name, 200) || cleanUsername;
         const rowId = typeof u.id === "string" && u.id ? u.id : void 0;
         let resolvedId = targetId || rowId;
@@ -882,7 +882,6 @@ async function saveFullStateToPostgres(pool, state) {
             username = EXCLUDED.username,
             name = EXCLUDED.name,
             role = CASE WHEN $17::boolean THEN EXCLUDED.role ELSE users.role END,
-            is_approved = EXCLUDED.is_approved,
             joined_date = EXCLUDED.joined_date,
             farm_location = EXCLUDED.farm_location,
             primary_crops = EXCLUDED.primary_crops,
