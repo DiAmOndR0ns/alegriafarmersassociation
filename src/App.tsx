@@ -2616,6 +2616,111 @@ export default function App() {
   };
 
   // USER AUTHENTICATION & MANAGEMENT ACTIONS
+  const refreshCloudDataAfterLogin = async () => {
+    try {
+      const response = await fetch('/api/sync/pull', { credentials: 'same-origin' });
+      const text = await response.text();
+      let result: { success?: boolean; message?: string; data?: Record<string, unknown> };
+      try {
+        result = JSON.parse(text) as typeof result;
+      } catch {
+        throw new Error('The database returned an unreadable response.');
+      }
+
+      if (!response.ok || !result?.success || !result.data) {
+        const reason = result?.message || `Request failed with status ${response.status}.`;
+        console.warn('[Cloud DB Pull After Login]:', reason);
+        showToastMessage('Could not refresh database records after login. Showing locally saved data.', 'warning');
+        return;
+      }
+
+      const data = result.data;
+      const local = appDataRef.current;
+      const pendingDeletes = deletedIdsRef.current;
+      const hasPendingLocalChanges =
+        hasPendingCloudSync ||
+        syncQueueRef.current.length > 0 ||
+        Object.values(pendingDeletes).some(ids => Array.isArray(ids) && ids.length > 0);
+      const reconcile = <T extends { id: string }>(
+        remoteRows: unknown,
+        localRows: T[],
+        deletedIds: string[] = []
+      ): T[] => {
+        if (!Array.isArray(remoteRows)) return localRows;
+        return hasPendingLocalChanges
+          ? mergeSyncRecordsById(remoteRows as T[], localRows, deletedIds)
+          : remoteRows as T[];
+      };
+
+      const usersFromPull = reconcile(data.users, local.users, pendingDeletes.users);
+      const nextUsers = Array.isArray(data.users)
+        ? usersFromPull.map(user => ({
+          ...user,
+          mfaEnabled: user.role?.toLowerCase() === 'president' || Boolean(user.mfaEnabled),
+          passwordHistory: Array.isArray(user.passwordHistory) ? user.passwordHistory : [],
+          mustChangePassword: false
+        }))
+        : usersFromPull;
+      const nextMembers = reconcile(data.members, local.members, pendingDeletes.members);
+      const nextMeetings = reconcile(data.meetings, local.meetings, pendingDeletes.meetings);
+      const nextResolutions = reconcile(data.resolutions, local.resolutions, pendingDeletes.resolutions);
+      const nextTransactions = reconcile(
+        data.financialTransactions ?? data.transactions,
+        local.transactions,
+        [...(pendingDeletes.financialTransactions || []), ...(pendingDeletes.transactions || [])]
+      );
+      const nextAnnouncements = reconcile(data.announcements, local.announcements, pendingDeletes.announcements);
+      const nextProducts = reconcile(data.products, local.products, pendingDeletes.products);
+      const nextActivities = reconcile(data.activities, local.activities, pendingDeletes.activities);
+      const nextAchievements = reconcile(data.achievements, local.achievements, pendingDeletes.achievements);
+      const nextFunds = reconcile(data.funds, local.funds, pendingDeletes.funds);
+      const nextInventory = reconcile(data.inventory, local.inventory, pendingDeletes.inventory);
+      const nextLogs = reconcile(data.logs ?? data.systemLogs, local.logs);
+      const nextHogRaising = hasPendingLocalChanges || !data.hogRaising
+        ? local.hogRaising
+        : data.hogRaising as HogRaisingState;
+
+      setUsers(nextUsers);
+      updateStorage('bafa_users', nextUsers);
+      setMembers(nextMembers);
+      updateStorage('bafa_members', nextMembers);
+      setMeetings(nextMeetings);
+      updateStorage('bafa_meetings', nextMeetings);
+      setResolutions(nextResolutions);
+      updateStorage('bafa_resolutions', nextResolutions);
+      setTransactions(nextTransactions);
+      updateStorage('bafa_transactions', nextTransactions);
+      setAnnouncements(nextAnnouncements);
+      updateStorage('bafa_announcements', nextAnnouncements);
+      setProducts(nextProducts);
+      updateStorage('bafa_products', nextProducts);
+      setActivities(nextActivities);
+      updateStorage('bafa_activities', nextActivities);
+      setAchievements(nextAchievements);
+      updateStorage('bafa_achievements', nextAchievements);
+      setFunds(nextFunds);
+      updateStorage('bafa_funds', nextFunds);
+      setInventory(nextInventory);
+      updateStorage('bafa_inventory', nextInventory);
+      setLogs(nextLogs);
+      updateStorage('bafa_logs', nextLogs);
+      if (data.hogRaising) {
+        setHogRaising(nextHogRaising);
+        updateStorage('bafa_afa_igp', nextHogRaising);
+      }
+      setDbStatus(previous => ({
+        ...previous,
+        connected: true,
+        configured: true,
+        checking: false
+      }));
+      console.log('[Cloud DB] Refreshed database records after login.');
+    } catch (error) {
+      console.warn('[Cloud DB Pull After Login]:', error);
+      showToastMessage('Could not refresh database records after login. Showing locally saved data.', 'warning');
+    }
+  };
+
   const handleLogin = (user: User, password: string, serverAuthenticated = false) => {
     if (import.meta.env.PROD || serverAuthenticated || dbStatus.configured) {
       void password;
@@ -2629,6 +2734,7 @@ export default function App() {
         setCurrentRole(cleanUser.role as OfficerRole);
       }
       showToastMessage(`Maayong adlaw, ${cleanUser.name}! Successful login.`, 'success');
+      if (isOnline) void refreshCloudDataAfterLogin();
       return;
     }
 

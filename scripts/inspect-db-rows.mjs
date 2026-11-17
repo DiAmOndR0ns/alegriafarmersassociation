@@ -29,5 +29,5 @@ try {
   await show('activities', "SELECT id, title, category, scheduled_date, status FROM activities ORDER BY scheduled_date DESC");
   await show('announcements', "SELECT id, title, category, date_posted, priority FROM announcements ORDER BY date_posted DESC");
 } finally {
-  await client.end().catch(() => {});
+  await client.end().catch(() => { });
 }
