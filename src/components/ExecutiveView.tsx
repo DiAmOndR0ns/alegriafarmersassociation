@@ -27,7 +27,7 @@ interface ExecutiveViewProps {
   currentUserId?: string;
   onUpdateLogs?: (newLogs: SystemLog[]) => void;
   users?: User[];
-  onAddOfficer?: (officerData: { name: string; username: string; password: string; role: OfficerRole }) => boolean;
+  onAddOfficer?: (officerData: { name: string; username: string; password: string; role: OfficerRole }) => boolean | Promise<boolean>;
   onDeleteUser?: (id: string) => void;
   onUpdateUserRole?: (id: string, newRole: OfficerRole | 'Member') => Promise<void>;
   onResetPassword?: (id: string, newPass: string, currentPassword?: string) => PasswordResetResult | void | Promise<PasswordResetResult | void>;
@@ -263,10 +263,10 @@ export default function ExecutiveView({
     setAppointingMemberId(null);
   };
 
-  const handleCreateOfficerSubmit = (e: React.FormEvent) => {
+  const handleCreateOfficerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!onAddOfficer) return;
-    const ok = onAddOfficer({
+    const ok = await onAddOfficer({
       name: newOfficerName,
       username: newOfficerUsername,
       password: newOfficerPassword,

@@ -215,6 +215,26 @@ export function isMemberRole(role: unknown): boolean {
   return String(role ?? '').trim().toLowerCase().replace(/\s+/g, '_') === 'member';
 }
 
+const PROVISIONABLE_OFFICER_ROLES = [
+  'Vice_President',
+  'Secretary',
+  'Assistant_Secretary',
+  'Board_Member',
+  'Treasurer',
+  'Assistant_Treasurer',
+  'Auditor',
+  'PIO',
+];
+
+export function canProvisionAccountRole(actorRole: string, targetRole: string): boolean {
+  if (isPresidentRole(actorRole)) {
+    return isMemberRole(targetRole) || PROVISIONABLE_OFFICER_ROLES.some(
+      role => role.toLowerCase() === targetRole.trim().toLowerCase().replace(/\s+/g, '_')
+    );
+  }
+  return isSecretaryRole(actorRole) && isMemberRole(targetRole);
+}
+
 function newChallenge(
   kind: 'mfa-login' | 'mfa-setup',
   userId: string,
@@ -802,10 +822,14 @@ export async function passwordResetHandler(req: any, res: any) {
         return errorResponse(res, 400, policyError);
       }
       const newHash = await bcrypt.hash(body.newPassword, BCRYPT_COST);
-      const nextHistory = [...history, { hash: target.password, changedAt: new Date().toISOString() }].slice(-PASSWORD_HISTORY_LIMIT);
+      const nextHistory = typeof target.password === 'string' && target.password.startsWith('$2')
+        ? [...history, { hash: target.password, changedAt: new Date().toISOString() }].slice(-PASSWORD_HISTORY_LIMIT)
+        : history.slice(-PASSWORD_HISTORY_LIMIT);
       const updated = await client.query(`UPDATE users SET password = $1, password_history = $2::jsonb,
         password_changed_at = NOW(), must_change_password = TRUE, failed_login_attempts = 0,
-        locked_until = NULL, reset_requested = FALSE WHERE id = $3 RETURNING *`,
+        locked_until = NULL, reset_requested = FALSE,
+        is_approved = CASE WHEN password IS NULL OR password = '' OR password NOT LIKE '$2%' THEN TRUE ELSE is_approved END
+        WHERE id = $3 RETURNING *`,
       [newHash, JSON.stringify(nextHistory), target.id]);
       target = updated.rows[0];
       await client.query('COMMIT');
@@ -820,6 +844,124 @@ export async function passwordResetHandler(req: any, res: any) {
     console.error('[Auth password reset failure]', error);
     return errorResponse(res, 500, 'Unable to reset password.');
   }
+}
+
+export async function accountProvisionHandler(req: any, res: any) {
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  let actor: SafeUser | null;
+  let pool: Pool;
+  try {
+    actor = await getAuthenticatedUser(req);
+    pool = getPool();
+    await initialize(pool);
+  } catch {
+    return errorResponse(res, 503, 'Authentication is not configured or unavailable.');
+  }
+  if (!actor) return errorResponse(res, 401, 'Authentication required.');
+  if (!isPresidentRole(actor.role) && !isSecretaryRole(actor.role)) {
+    return errorResponse(res, 403, 'President or Secretary access is required.');
+  }
+
+  const body = await readBody(req);
+  if (!body || typeof body.id !== 'string' || typeof body.username !== 'string'
+    || typeof body.password !== 'string' || typeof body.name !== 'string'
+    || typeof body.role !== 'string') {
+    return errorResponse(res, 400, 'Account ID, name, username, role, and password are required.');
+  }
+
+  const id = body.id.trim();
+  const username = body.username.trim().toLowerCase();
+  const name = body.name.trim();
+  const requestedRole = body.role.trim();
+  const normalizedRole = requestedRole.toLowerCase().replace(/\s+/g, '_');
+  const role = isMemberRole(requestedRole)
+    ? 'Member'
+    : PROVISIONABLE_OFFICER_ROLES.find(candidate => candidate.toLowerCase() === normalizedRole);
+  if (!/^[a-zA-Z0-9._:-]{1,100}$/.test(id)
+    || !/^[a-z0-9._-]{3,100}$/.test(username)
+    || !name
+    || name.length > 200
+    || body.password.length > 200) {
+    return errorResponse(res, 400, 'Account details are invalid.');
+  }
+  if (!role) return errorResponse(res, 403, 'You are not allowed to create this account role.');
+  if (!canProvisionAccountRole(actor.role, role)) {
+    return errorResponse(res, 403, 'You are not allowed to create this account role.');
+  }
+
+  const client = await pool.connect();
+  let row: any;
+  try {
+    await client.query('BEGIN');
+    const targetResult = await client.query('SELECT * FROM users WHERE id = $1 FOR UPDATE', [id]);
+    const target = targetResult.rows[0];
+    if (target) {
+      if (isPresidentRole(target.role) || !canProvisionAccountRole(actor.role, target.role)) {
+        await client.query('ROLLBACK');
+        return errorResponse(res, 403, 'You are not allowed to manage this account.');
+      }
+      if (target.role.trim().toLowerCase().replace(/\s+/g, '_') !== role.toLowerCase().replace(/\s+/g, '_')) {
+        await client.query('ROLLBACK');
+        return errorResponse(res, 403, 'Account roles cannot be changed through credential setup.');
+      }
+      const usernameInUse = await client.query(
+        'SELECT id FROM users WHERE lower(username) = lower($1) AND id <> $2 LIMIT 1',
+        [username, id]
+      );
+      if (usernameInUse.rows.length) {
+        await client.query('ROLLBACK');
+        return errorResponse(res, 409, 'That username is already in use.');
+      }
+      const history = Array.isArray(target.password_history) ? target.password_history : [];
+      const policyError = passwordPolicyError(body.password, username, target.role, target.password, history);
+      if (policyError) {
+        await client.query('ROLLBACK');
+        return errorResponse(res, 400, policyError);
+      }
+      const passwordHash = await bcrypt.hash(body.password, BCRYPT_COST);
+      const nextHistory = typeof target.password === 'string' && target.password.startsWith('$2')
+        ? [...history, { hash: target.password, changedAt: new Date().toISOString() }].slice(-PASSWORD_HISTORY_LIMIT)
+        : history.slice(-PASSWORD_HISTORY_LIMIT);
+      const updated = await client.query(`UPDATE users SET username = $1, password = $2, name = $3,
+        password_history = $4::jsonb, password_changed_at = NOW(), must_change_password = FALSE,
+        failed_login_attempts = 0, locked_until = NULL, reset_requested = FALSE,
+        is_approved = CASE WHEN password IS NULL OR password = '' OR password NOT LIKE '$2%' THEN TRUE ELSE is_approved END
+        WHERE id = $5 RETURNING *`,
+      [username, passwordHash, name, JSON.stringify(nextHistory), id]);
+      row = updated.rows[0];
+    } else {
+      const usernameInUse = await client.query(
+        'SELECT id FROM users WHERE lower(username) = lower($1) LIMIT 1',
+        [username]
+      );
+      if (usernameInUse.rows.length) {
+        await client.query('ROLLBACK');
+        return errorResponse(res, 409, 'That username is already in use.');
+      }
+      const policyError = validatePasswordPolicy(body.password, username, role, []);
+      if (policyError) {
+        await client.query('ROLLBACK');
+        return errorResponse(res, 400, policyError);
+      }
+      const passwordHash = await bcrypt.hash(body.password, BCRYPT_COST);
+      const inserted = await client.query(`INSERT INTO users
+        (id, username, password, name, role, is_approved, joined_date, password_history,
+         password_changed_at, must_change_password, failed_login_attempts, locked_until, reset_requested)
+        VALUES ($1, $2, $3, $4, $5, TRUE, NOW()::text, '[]'::jsonb, NOW(), FALSE, 0, NULL, FALSE)
+        RETURNING *`,
+      [id, username, passwordHash, name, role]);
+      row = inserted.rows[0];
+    }
+    await client.query('COMMIT');
+  } catch (error: any) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error?.code === '23505') return errorResponse(res, 409, 'That account ID, username, or role is already in use.');
+    console.error('[Auth account provisioning failure]', error);
+    return errorResponse(res, 500, 'Unable to create or update the account.');
+  } finally {
+    client.release();
+  }
+  return sendResponse(res, 200, { success: true, user: safeUser(row) });
 }
 
 export async function requireAuthenticated(req: any, res: any): Promise<SafeUser | null> {
@@ -854,6 +996,7 @@ const AUTH_ROUTES: ReadonlyArray<readonly [method: string, path: string, handler
   ['POST', '/api/auth/mfa/reset', mfaResetHandler],
   ['POST', '/api/auth/password/change', passwordChangeHandler],
   ['POST', '/api/auth/password/reset', passwordResetHandler],
+  ['POST', '/api/auth/accounts/provision', accountProvisionHandler],
 ];
 
 /**

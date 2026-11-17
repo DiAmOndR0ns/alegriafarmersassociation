@@ -1221,15 +1221,45 @@ export default function App() {
   }, [currentUser?.id, isOnline, dbStatus.configured]);
 
   // SECRETARY ACTION HANDLERS
-  const handleAddMember = (
+  const provisionServerAccount = async (account: {
+    id: string;
+    username: string;
+    password: string;
+    name: string;
+    role: string;
+  }) => {
+    if (!import.meta.env.PROD && !dbStatus.configured) return { status: 'local' as const };
+    if (!isOnline) return { status: 'unavailable' as const, message: 'The server is offline.' };
+
+    try {
+      const response = await fetch('/api/auth/accounts/provision', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(account)
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        const message = result?.message || 'Account provisioning was rejected.';
+        return response.status >= 500
+          ? { status: 'unavailable' as const, message }
+          : { status: 'rejected' as const, message };
+      }
+      return { status: 'created' as const, user: result.user };
+    } catch {
+      return { status: 'unavailable' as const, message: 'The server could not be reached.' };
+    }
+  };
+
+  const handleAddMember = async (
     memberData: Omit<Member, 'id' | 'joinedDate'>,
     loginCredentials?: { username: string; initialPassword?: string }
-  ) => {
+  ): Promise<{ saved: boolean; accountCreated: boolean }> => {
     if (loginCredentials?.username.trim() && loginCredentials.initialPassword) {
       const policyError = validatePasswordPolicy(loginCredentials.initialPassword, loginCredentials.username, 'Member');
       if (policyError) {
         showToastMessage(policyError, 'error');
-        return;
+        return { saved: false, accountCreated: false };
       }
     }
     const newId = `member-${Date.now()}`;
@@ -1238,45 +1268,64 @@ export default function App() {
       id: newId,
       joinedDate: new Date().toISOString().split('T')[0]
     };
-    const updated = [newMember, ...members];
-    setMembers(updated);
-    updateStorage('bafa_members', updated);
-
     let updatedUsers = users;
     let accountCreated = false;
+    let profileOnlyReason = '';
 
     // If login credentials provided by the Secretary, create authenticated User account
     if (loginCredentials && loginCredentials.username.trim()) {
       const cleanUsername = loginCredentials.username.trim().toLowerCase();
       const initialPassword = loginCredentials.initialPassword?.trim() || generateInitialPassword(cleanUsername, 'Member');
-      const memberCredentialHash = hashPolicyPassword(initialPassword);
-      const credentialChangedAt = new Date().toISOString();
-      const newMemberUser: User = {
+      const provision = await provisionServerAccount({
         id: newId,
         username: cleanUsername,
-        passwordHash: memberCredentialHash,
-        passwordHistory: [],
-        passwordChangedAt: credentialChangedAt,
-        mustChangePassword: false,
+        password: initialPassword,
         name: newMember.name,
-        role: 'Member',
-        isApproved: true,
-        memberIdNumber: newMember.memberIdNumber,
-        rsbsaNumber: newMember.rsbsaNumber,
-        isRsbsaRegistered: newMember.isRsbsaRegistered,
-        farmLocation: newMember.farmLocation,
-        primaryCrops: newMember.primaryCrops,
-        contactNumber: newMember.contactNumber,
-        joinedDate: newMember.joinedDate,
-        status: newMember.status,
-        affiliations: newMember.affiliations
-      };
+        role: 'Member'
+      });
+      if (provision.status === 'rejected') {
+        showToastMessage(provision.message, 'error');
+        return { saved: false, accountCreated: false };
+      }
+      accountCreated = provision.status === 'created' || provision.status === 'local';
+      if (provision.status === 'unavailable') {
+        profileOnlyReason = provision.message;
+      }
+      if (accountCreated) {
+        const memberCredentialHash = hashPolicyPassword(initialPassword);
+        const credentialChangedAt = new Date().toISOString();
+        const newMemberUser: User = {
+          id: newId,
+          username: cleanUsername,
+          passwordHash: memberCredentialHash,
+          passwordHistory: [],
+          passwordChangedAt: credentialChangedAt,
+          mustChangePassword: false,
+          name: newMember.name,
+          role: 'Member',
+          isApproved: true,
+          memberIdNumber: newMember.memberIdNumber,
+          rsbsaNumber: newMember.rsbsaNumber,
+          isRsbsaRegistered: newMember.isRsbsaRegistered,
+          farmLocation: newMember.farmLocation,
+          primaryCrops: newMember.primaryCrops,
+          contactNumber: newMember.contactNumber,
+          joinedDate: newMember.joinedDate,
+          status: newMember.status,
+          affiliations: newMember.affiliations
+        };
 
-      updatedUsers = [newMemberUser, ...users.filter(u => u.username.toLowerCase() !== cleanUsername && u.id !== newId)];
+        updatedUsers = [newMemberUser, ...users.filter(u => u.username.toLowerCase() !== cleanUsername && u.id !== newId)];
+        logAction('Created Member Portal Login', `Secretary enrolled ${newMember.name} and issued portal login: ${cleanUsername}`);
+      }
+    }
+
+    const updated = [newMember, ...members];
+    setMembers(updated);
+    updateStorage('bafa_members', updated);
+    if (accountCreated) {
       setUsers(updatedUsers);
       updateStorage('bafa_users', updatedUsers);
-      accountCreated = true;
-      logAction('Created Member Portal Login', `Secretary enrolled ${newMember.name} and issued portal login: ${cleanUsername}`);
     }
 
     if (isOnline) {
@@ -1284,16 +1333,22 @@ export default function App() {
       showToastMessage(
         accountCreated
           ? `Registered ${newMember.name} & created portal login (${loginCredentials?.username})!`
-          : `Registered ${newMember.name} successfully!`
+          : loginCredentials
+            ? `Registered ${newMember.name} without portal login. Set up credentials when the server is available.${profileOnlyReason ? ` ${profileOnlyReason}` : ''}`
+            : `Registered ${newMember.name} successfully!`,
+        loginCredentials && !accountCreated ? 'warning' : 'success'
       );
       pushAllDataToCloud({ members: updated, users: updatedUsers }, { silent: true });
     } else {
       addToSyncQueue('create', 'member', newMember);
-      if (accountCreated && updatedUsers[0]) {
-        addToSyncQueue('create', 'user', updatedUsers[0]);
-      }
-      showToastMessage(`Registered ${newMember.name} offline. Ready to sync when connected.`);
+      showToastMessage(
+        loginCredentials
+          ? `Registered ${newMember.name} offline without portal login. Set up credentials when connected.`
+          : `Registered ${newMember.name} offline. Ready to sync when connected.`,
+        'warning'
+      );
     }
+    return { saved: true, accountCreated };
   };
 
   const handleUpdateMember = (updatedMember: Member) => {
@@ -1333,19 +1388,40 @@ export default function App() {
   };
 
   // Secretary sets or resets portal credentials for an enrolled member
-  const handleManageMemberLogin = (memberId: string, username: string, initialPassword: string) => {
+  const handleManageMemberLogin = async (memberId: string, username: string, initialPassword: string): Promise<boolean> => {
     const member = members.find(m => m.id === memberId);
-    if (!member) return;
+    if (!member) return false;
     const policyError = validatePasswordPolicy(initialPassword, username, 'Member');
     if (policyError) {
       showToastMessage(policyError, 'error');
-      return;
+      return false;
     }
 
     const cleanUsername = username.trim().toLowerCase();
     const cleanPassword = initialPassword.trim();
 
     const existingIndex = users.findIndex(u => u.id === memberId || u.memberIdNumber === member.memberIdNumber);
+    const existingUser = existingIndex >= 0 ? users[existingIndex] : undefined;
+    if (users.some(user => user.id !== existingUser?.id && user.username.toLowerCase() === cleanUsername)) {
+      showToastMessage('That username is already in use.', 'error');
+      return false;
+    }
+    const accountId = existingUser?.id || member.id;
+    const provision = await provisionServerAccount({
+      id: accountId,
+      username: cleanUsername,
+      password: cleanPassword,
+      name: member.name,
+      role: 'Member'
+    });
+    if (provision.status === 'rejected') {
+      showToastMessage(provision.message, 'error');
+      return false;
+    }
+    if (provision.status === 'unavailable') {
+      showToastMessage('Portal credentials were not changed. Connect to the server and try again.', 'warning');
+      return false;
+    }
 
     let updatedUsers: User[];
     if (existingIndex >= 0) {
@@ -1360,6 +1436,9 @@ export default function App() {
             passwordChangedAt: new Date().toISOString(),
             mustChangePassword: false,
             name: member.name,
+            isApproved: provision.status === 'created'
+              ? Boolean(provision.user?.isApproved)
+              : u.isApproved,
             resetRequested: false
           };
         }
@@ -1367,7 +1446,7 @@ export default function App() {
       });
     } else {
       const newMemberUser: User = {
-        id: member.id,
+        id: accountId,
         username: cleanUsername,
         passwordHash: hashPolicyPassword(cleanPassword),
         passwordHistory: [],
@@ -1375,7 +1454,7 @@ export default function App() {
         mustChangePassword: false,
         name: member.name,
         role: 'Member',
-        isApproved: true,
+        isApproved: provision.status === 'created' ? Boolean(provision.user?.isApproved) : true,
         memberIdNumber: member.memberIdNumber,
         rsbsaNumber: member.rsbsaNumber,
         isRsbsaRegistered: member.isRsbsaRegistered,
@@ -1395,6 +1474,7 @@ export default function App() {
     if (isOnline) {
       pushAllDataToCloud({ users: updatedUsers }, { silent: true });
     }
+    return true;
   };
 
   const handleUpdateMemberStatus = (id: string, status: 'Active' | 'Inactive') => {
@@ -2906,7 +2986,7 @@ export default function App() {
     }
   };
 
-  const handleAddOfficer = (officerData: { name: string; username: string; password: string; role: OfficerRole }) => {
+  const handleAddOfficer = async (officerData: { name: string; username: string; password: string; role: OfficerRole }): Promise<boolean> => {
     if (!currentUser || currentUser.role !== 'President') {
       showToastMessage('Wala kay katungod sa pagdugang og opisyal. Ang Presidente/Admin lamang ang makahimo niini.', 'error');
       return false;
@@ -2944,10 +3024,23 @@ export default function App() {
     }
 
     const nowIso = new Date().toISOString();
-    const newOfficer: User = {
-      id: `user-${Date.now()}`,
+    const officerId = `user-${Date.now()}`;
+    const provision = await provisionServerAccount({
+      id: officerId,
       username: cleanUsername,
-      passwordHash: hashPolicyPassword(rawPassword),
+      password: rawPassword,
+      name: cleanName,
+      role: officerData.role
+    });
+    if (provision.status === 'rejected') {
+      showToastMessage(provision.message, 'error');
+      return false;
+    }
+    const accountCreated = provision.status === 'created' || provision.status === 'local';
+    const newOfficer: User = {
+      id: officerId,
+      username: cleanUsername,
+      passwordHash: accountCreated ? hashPolicyPassword(rawPassword) : '',
       passwordHistory: [],
       passwordChangedAt: nowIso,
       mustChangePassword: false,
@@ -2967,11 +3060,16 @@ export default function App() {
     logAction('Added Officer Account', `Created ${roleName} account for ${cleanName} (@${cleanUsername}).`);
 
     if (isOnline) {
-      showToastMessage(`Malampusong nadugang si ${cleanName} isip ${roleName}! Auto-syncing to database...`, 'success');
+      showToastMessage(
+        accountCreated
+          ? `Malampusong nadugang si ${cleanName} isip ${roleName}! Auto-syncing to database...`
+          : `Added ${cleanName} as ${roleName}, but not the login. Set up credentials when the server is available.`,
+        accountCreated ? 'success' : 'warning'
+      );
       pushAllDataToCloud({ users: updatedUsers }, { silent: true, source: 'Officer Created' });
     } else {
       addToSyncQueue('create', 'officer', { id: newOfficer.id, name: cleanName, role: officerData.role });
-      showToastMessage(`Officer ${cleanName} added offline. Will sync to database when online.`, 'warning');
+      showToastMessage(`Officer ${cleanName} added offline without login credentials. Set up credentials when connected.`, 'warning');
     }
     return true;
   };
@@ -3891,12 +3989,12 @@ export default function App() {
                 users={users}
                 currentUser={currentUser!}
                 currentRole={currentRole}
-            onAddMember={(memberData, loginCredentials) => {
+            onAddMember={async (memberData, loginCredentials) => {
                   if (loginCredentials && users.some((user) => user.username.toLowerCase() === loginCredentials.username.toLowerCase())) {
                     showToastMessage('That username is already in use.', 'error');
-                    return;
+                    return { saved: false, accountCreated: false };
                   }
-                  handleAddMember(memberData, loginCredentials);
+                  return handleAddMember(memberData, loginCredentials);
                 }}
                 onUpdateMember={handleUpdateMember}
                 onUpdateMemberStatus={handleUpdateMemberStatus}

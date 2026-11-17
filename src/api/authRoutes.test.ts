@@ -91,6 +91,7 @@ describe('auth route dispatcher', () => {
       '/api/auth/mfa/reset',
       '/api/auth/password/change',
       '/api/auth/password/reset',
+      '/api/auth/accounts/provision',
     ];
     for (const url of posts) {
       const res = makeRes();

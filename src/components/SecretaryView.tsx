@@ -22,11 +22,14 @@ interface SecretaryViewProps {
   users?: User[];
   currentUser?: User;
   currentRole?: OfficerRole;
-  onAddMember: (member: Omit<Member, 'id' | 'joinedDate'>, loginCredentials?: { username: string; initialPassword?: string }) => void;
+  onAddMember: (
+    member: Omit<Member, 'id' | 'joinedDate'>,
+    loginCredentials?: { username: string; initialPassword?: string }
+  ) => { saved: boolean; accountCreated: boolean } | Promise<{ saved: boolean; accountCreated: boolean }> | void;
   onUpdateMember?: (member: Member) => void;
   onUpdateMemberStatus: (id: string, status: 'Active' | 'Inactive') => void;
   onDeleteMember: (id: string) => void;
-  onManageMemberLogin?: (memberId: string, username: string, initialPassword: string) => void;
+  onManageMemberLogin?: (memberId: string, username: string, initialPassword: string) => boolean | void | Promise<boolean | void>;
   onResetMemberPassword?: (userId: string, newPass: string, currentPassword?: string) => void | Promise<PasswordResetResult | boolean | void>;
 
   meetings: Meeting[];
@@ -231,7 +234,7 @@ export default function SecretaryView({
     }
   };
 
-  const handleMemberSubmit = (e: React.FormEvent) => {
+  const handleMemberSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const assembledName = buildFullName(memberFirstName, memberMiddleName, memberSurname);
     if (!assembledName || !memberSurname.trim()) return;
@@ -253,7 +256,7 @@ export default function SecretaryView({
     }
     setLoginPasswordError('');
 
-    onAddMember({
+    const result = await onAddMember({
       name: assembledName,
       memberIdNumber: finalMemberId,
       rsbsaNumber: memberRsbsa || undefined,
@@ -270,7 +273,8 @@ export default function SecretaryView({
       initialPassword: cleanPassword
     } : undefined);
 
-    if (createLoginAccount) {
+    if (result && !result.saved) return;
+    if (createLoginAccount && (!result || result.accountCreated)) {
       setCreatedCredentials({
         name: assembledName,
         memberId: finalMemberId,
@@ -1906,7 +1910,7 @@ export default function SecretaryView({
             </div>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 if (!manageUsername.trim() || !managePassword.trim()) return;
                 const error = validatePasswordPolicy(managePassword, manageUsername, 'Member', users.find((user) => user.id === loginManageMember.id)?.passwordHistory || []);
@@ -1916,7 +1920,8 @@ export default function SecretaryView({
                 }
                 setManagePasswordError('');
                 if (onManageMemberLogin) {
-                  onManageMemberLogin(loginManageMember.id, manageUsername.trim(), managePassword.trim());
+                  const saved = await onManageMemberLogin(loginManageMember.id, manageUsername.trim(), managePassword.trim());
+                  if (saved === false) return;
                 }
                 setLoginManageMember(null);
               }}
