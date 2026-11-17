@@ -205,27 +205,32 @@ function isDatabaseConfigured() {
 function cleanDatabaseUrl(rawUrl) {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
   let hostInfo = "Supabase";
+  const dropTlsParams = (url) => {
+    for (const key of ["sslmode", "ssl", "sslrootcert", "sslcert", "sslkey"]) {
+      url.searchParams.delete(key);
+    }
+  };
   try {
     const parsed = new URL(urlStr);
     hostInfo = `${parsed.hostname}${parsed.port ? ":" + parsed.port : ""}${parsed.pathname}`;
-    parsed.searchParams.delete("sslmode");
-    parsed.searchParams.delete("ssl");
+    dropTlsParams(parsed);
     return {
       connectionString: parsed.toString(),
       isSsl: true,
       hostInfo
     };
   } catch {
-    const cleaned = urlStr.replace(/[\?&]sslmode=[^&]*/g, "").replace(/[\?&]ssl=[^&]*/g, "").replace(/\?$/, "");
+    const cleaned = urlStr.replace(/[?&](?:sslmode|ssl|sslrootcert|sslcert|sslkey)=[^&]*/g, "").replace(/\?$/, "");
     return { connectionString: cleaned, isSsl: true, hostInfo };
   }
 }
 function getDatabaseSslOptions() {
   const encodedCa = process.env.SUPABASE_CA_CERT_BASE64?.trim();
   if (!encodedCa) return { rejectUnauthorized: false };
-  const ca = Buffer.from(encodedCa, "base64").toString("utf8");
+  const ca = Buffer.from(encodedCa, "base64").toString("utf8").trim();
   if (!ca.includes("-----BEGIN CERTIFICATE-----")) {
-    throw new Error("SUPABASE_CA_CERT_BASE64 must contain a base64-encoded PEM certificate.");
+    console.warn("[DB TLS] SUPABASE_CA_CERT_BASE64 is not a PEM certificate; ignoring it.");
+    return { rejectUnauthorized: false };
   }
   return { rejectUnauthorized: true, ca };
 }
@@ -1163,6 +1168,19 @@ async function getAuthenticatedUser(req) {
   const user = await readAuthenticatedUser(req);
   return user && user.isApproved ? user : null;
 }
+async function hasPresidentAccount() {
+  if (!isDatabaseConfigured()) return null;
+  try {
+    const pool = getPool();
+    await ensureDatabaseSchema(pool);
+    const result = await pool.query(
+      "SELECT 1 FROM users WHERE lower(replace(role, ' ', '_')) = 'president' LIMIT 1"
+    );
+    return result.rows.length > 0;
+  } catch {
+    return null;
+  }
+}
 async function readAuthenticatedUser(req) {
   const token = getCookie(req, SESSION_COOKIE);
   if (!token) return null;
@@ -1655,7 +1673,11 @@ async function sessionHandler(req, res) {
     return sendResponse(res, 200, {
       authenticated: Boolean(user),
       user: user || null,
-      configured: isDatabaseConfigured()
+      configured: isDatabaseConfigured(),
+      // Paired with `configured` so the login screen only offers the one-time
+      // President/Admin setup when the database really has no President yet.
+      // Null (not false) when it cannot be determined.
+      hasPresident: await hasPresidentAccount()
     });
   } catch {
     return errorResponse(res, 503, "Authentication is not configured or unavailable.");

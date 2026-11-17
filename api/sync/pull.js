@@ -39,27 +39,32 @@ function isDatabaseConfigured() {
 function cleanDatabaseUrl(rawUrl) {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, "");
   let hostInfo = "Supabase";
+  const dropTlsParams = (url) => {
+    for (const key of ["sslmode", "ssl", "sslrootcert", "sslcert", "sslkey"]) {
+      url.searchParams.delete(key);
+    }
+  };
   try {
     const parsed = new URL(urlStr);
     hostInfo = `${parsed.hostname}${parsed.port ? ":" + parsed.port : ""}${parsed.pathname}`;
-    parsed.searchParams.delete("sslmode");
-    parsed.searchParams.delete("ssl");
+    dropTlsParams(parsed);
     return {
       connectionString: parsed.toString(),
       isSsl: true,
       hostInfo
     };
   } catch {
-    const cleaned = urlStr.replace(/[\?&]sslmode=[^&]*/g, "").replace(/[\?&]ssl=[^&]*/g, "").replace(/\?$/, "");
+    const cleaned = urlStr.replace(/[?&](?:sslmode|ssl|sslrootcert|sslcert|sslkey)=[^&]*/g, "").replace(/\?$/, "");
     return { connectionString: cleaned, isSsl: true, hostInfo };
   }
 }
 function getDatabaseSslOptions() {
   const encodedCa = process.env.SUPABASE_CA_CERT_BASE64?.trim();
   if (!encodedCa) return { rejectUnauthorized: false };
-  const ca = Buffer.from(encodedCa, "base64").toString("utf8");
+  const ca = Buffer.from(encodedCa, "base64").toString("utf8").trim();
   if (!ca.includes("-----BEGIN CERTIFICATE-----")) {
-    throw new Error("SUPABASE_CA_CERT_BASE64 must contain a base64-encoded PEM certificate.");
+    console.warn("[DB TLS] SUPABASE_CA_CERT_BASE64 is not a PEM certificate; ignoring it.");
+    return { rejectUnauthorized: false };
   }
   return { rejectUnauthorized: true, ca };
 }

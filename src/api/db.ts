@@ -82,16 +82,33 @@ export function isDatabaseConfigured(): boolean {
  * Normalizes the Supabase connection string. TLS is always required for the
  * hosted database, so any `sslmode`/`ssl` query parameter is stripped here and
  * the `ssl` option is set explicitly on the pool instead.
+ *
+ * This is not cosmetic. `pg-connection-string` turns a URL parameter
+ * `sslmode=verify-ca` / `sslmode=verify-full` into an `ssl` object of its own,
+ * and `pg` merges that into the explicit `ssl` option — `connectionString` is
+ * applied *after* the top-level config. A leftover
+ * `?sslmode=verify-full&sslrootcert=` therefore replaced our
+ * `{ rejectUnauthorized: false }` with `{ ca: '', rejectUnauthorized: true }`,
+ * and the driver then resolved that empty `ca` to Node's bundled root store.
+ * Supabase's pooler presents a self-signed chain, so every connection died with
+ * "self-signed certificate in certificate chain" — login, sync, status, and the
+ * public achievements/products endpoints alike. Strip every TLS-related key so
+ * the explicit `ssl` option is the only source of truth.
  */
 export function cleanDatabaseUrl(rawUrl: string): { connectionString: string; isSsl: boolean; hostInfo: string } {
   const urlStr = rawUrl.trim().replace(/^["']|["']$/g, '');
   let hostInfo = 'Supabase';
+  // TLS is decided by getDatabaseSslOptions(), never by the URL.
+  const dropTlsParams = (url: URL) => {
+    for (const key of ['sslmode', 'ssl', 'sslrootcert', 'sslcert', 'sslkey']) {
+      url.searchParams.delete(key);
+    }
+  };
 
   try {
     const parsed = new URL(urlStr);
     hostInfo = `${parsed.hostname}${parsed.port ? ':' + parsed.port : ''}${parsed.pathname}`;
-    parsed.searchParams.delete('sslmode');
-    parsed.searchParams.delete('ssl');
+    dropTlsParams(parsed);
     return {
       connectionString: parsed.toString(),
       isSsl: true,
@@ -99,8 +116,7 @@ export function cleanDatabaseUrl(rawUrl: string): { connectionString: string; is
     };
   } catch {
     const cleaned = urlStr
-      .replace(/[\?&]sslmode=[^&]*/g, '')
-      .replace(/[\?&]ssl=[^&]*/g, '')
+      .replace(/[?&](?:sslmode|ssl|sslrootcert|sslcert|sslkey)=[^&]*/g, '')
       .replace(/\?$/, '');
     return { connectionString: cleaned, isSsl: true, hostInfo };
   }
@@ -110,9 +126,13 @@ export function getDatabaseSslOptions() {
   const encodedCa = process.env.SUPABASE_CA_CERT_BASE64?.trim();
   if (!encodedCa) return { rejectUnauthorized: false };
 
-  const ca = Buffer.from(encodedCa, 'base64').toString('utf8');
+  const ca = Buffer.from(encodedCa, 'base64').toString('utf8').trim();
   if (!ca.includes('-----BEGIN CERTIFICATE-----')) {
-    throw new Error('SUPABASE_CA_CERT_BASE64 must contain a base64-encoded PEM certificate.');
+    // A malformed/empty blob must not downgrade us into strict verification
+    // with no trust anchors - that fails every connection with an opaque TLS
+    // error. Fall back to the same behaviour as an unset variable.
+    console.warn('[DB TLS] SUPABASE_CA_CERT_BASE64 is not a PEM certificate; ignoring it.');
+    return { rejectUnauthorized: false };
   }
 
   return { rejectUnauthorized: true, ca };

@@ -189,9 +189,15 @@ export default async function handler(req: any, res: any) {
       helpfulTip = ' If your Supabase project was paused due to inactivity, open your Supabase dashboard and click "Restore project". Also ensure you use the Transaction Pooler (port 6543).';
     }
 
+    // `configured` means "the cloud database can actually be used", not "a URL
+    // string exists". Reporting true for an unreachable database makes the
+    // client demand a server-side login while its data lives in local device
+    // storage: the session check fails, so visitors get the sign-in form
+    // instead of the public portal. Report false and let the client fall back
+    // to its offline/local flow until the connection is restored.
     return sendResponse(res, 200, {
       connected: false,
-      configured: true,
+      configured: false,
       storageMode: 'local',
       provider: 'Local',
       message: `Failed to reach Supabase because ${reason}, so the app is running on local device storage until the connection is restored.${helpfulTip}`,

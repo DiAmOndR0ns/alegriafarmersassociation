@@ -44,6 +44,18 @@ describe('cleanDatabaseUrl', () => {
     expect(result.connectionString).toContain('pgbouncer=true');
     expect(result.hostInfo).toContain('pooler.supabase.com:6543');
   });
+
+  it('strips every TLS query parameter so the explicit ssl option wins', () => {
+    // Supabase's "Connect" dialog hands out URLs ending in
+    // ?sslmode=verify-full&sslrootcert=. Left in place, pg-connection-string
+    // turns that into its own ssl object (ca: '') ahead of our { rejectUnauthorized: false }.
+    const result = cleanDatabaseUrl(
+      'postgresql://u:p@aws-1-ap.pooler.supabase.com:6543/postgres?sslmode=verify-full&sslrootcert=&sslcert=&sslkey=&ssl=true'
+    );
+    for (const param of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'ssl=']) {
+      expect(result.connectionString).not.toContain(param);
+    }
+  });
 });
 
 describe('Supabase-only configuration', () => {
@@ -73,14 +85,17 @@ describe('Supabase-only configuration', () => {
     process.env.SUPABASE_CA_CERT_BASE64 = Buffer.from(ca).toString('base64');
     process.env.DATABASE_URL = 'postgresql://u:p@aws-1-ap.pooler.supabase.com:6543/postgres';
 
-    expect((getPool() as any).options.ssl).toEqual({ rejectUnauthorized: true, ca });
+    // The PEM is trimmed: base64 blobs built by tooling often carry a trailing newline.
+    expect((getPool() as any).options.ssl).toEqual({ rejectUnauthorized: true, ca: ca.trim() });
   });
 
-  it('rejects a configured value that is not a PEM certificate', () => {
+  it('falls back to accepting the self-signed chain when the CA blob is not PEM', () => {
+    // Previously this threw, which turned every request into a 503. A broken CA
+    // variable must not be able to take the whole app down.
     process.env.SUPABASE_CA_CERT_BASE64 = Buffer.from('not a certificate').toString('base64');
     process.env.DATABASE_URL = 'postgresql://u:p@aws-2-ap.pooler.supabase.com:6543/postgres';
 
-    expect(() => getPool()).toThrow(/base64-encoded PEM certificate/);
+    expect((getPool() as any).options.ssl).toEqual({ rejectUnauthorized: false });
   });
 });
 

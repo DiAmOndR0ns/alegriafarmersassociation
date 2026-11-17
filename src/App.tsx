@@ -390,10 +390,20 @@ export default function App() {
             if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
             setGuestMode(false);
             setUsers(previous => [safeUser, ...previous.filter(user => user.id !== safeUser.id)]);
+            if (typeof result.hasPresident === 'boolean') {
+              setDbStatus(prev => ({ ...prev, hasPresident: result.hasPresident }));
+            }
           } else if (!result?.authenticated && (import.meta.env.PROD || result?.configured) && !cancelled) {
+            // No server session: the visitor is not signed in. Stay on the guest
+            // portal (guestMode defaults to true) instead of forcing the login
+            // form. `dbStatus.hasPresident` is only populated after a live status
+            // check, so never leave a stale `false` standing here, or the login
+            // screen offers "First-Time Setup" even though a President exists.
             setCurrentUser(null);
-            removeSecureItem('bafa_current_user');
-            setGuestMode(false);
+            void removeSecureItem('bafa_current_user');
+            setDbStatus(prev => (typeof result.hasPresident === 'boolean'
+              ? { ...prev, hasPresident: result.hasPresident }
+              : (prev.hasPresident ? prev : { ...prev, hasPresident: undefined })));
           }
         }
       } catch {
@@ -628,6 +638,10 @@ export default function App() {
         ...previous,
         configured,
         connected: Boolean(status.connected),
+        // `hasPresident` is only known from a live database query; an offline or
+        // degraded response must not overwrite it, or the login screen starts
+        // offering "First-Time Setup" again.
+        hasPresident: typeof status.hasPresident === 'boolean' ? status.hasPresident : previous.hasPresident,
         storageMode: status.storageMode,
         provider: status.provider,
         message: status.message,

@@ -143,6 +143,26 @@ export async function getAuthenticatedUser(req: any): Promise<SafeUser | null> {
   return user && user.isApproved ? user : null;
 }
 
+/**
+ * Whether the database already holds a President account. Used to gate the
+ * one-time "Create Admin / President" setup on the public login screen.
+ * Returns null when it cannot be determined (no database / unreachable), so
+ * callers never mistake "unknown" for "no President".
+ */
+async function hasPresidentAccount(): Promise<boolean | null> {
+  if (!isDatabaseConfigured()) return null;
+  try {
+    const pool = getPool();
+    await ensureDatabaseSchema(pool);
+    const result = await pool.query(
+      "SELECT 1 FROM users WHERE lower(replace(role, ' ', '_')) = 'president' LIMIT 1"
+    );
+    return result.rows.length > 0;
+  } catch {
+    return null;
+  }
+}
+
 async function readAuthenticatedUser(req: any): Promise<SafeUser | null> {
   // Check session cookie first
   const token = getCookie(req, SESSION_COOKIE);
@@ -720,7 +740,11 @@ export async function sessionHandler(req: any, res: any) {
     return sendResponse(res, 200, {
       authenticated: Boolean(user),
       user: user || null,
-      configured: isDatabaseConfigured()
+      configured: isDatabaseConfigured(),
+      // Paired with `configured` so the login screen only offers the one-time
+      // President/Admin setup when the database really has no President yet.
+      // Null (not false) when it cannot be determined.
+      hasPresident: await hasPresidentAccount()
     });
   } catch {
     return errorResponse(res, 503, 'Authentication is not configured or unavailable.');
