@@ -12,6 +12,7 @@ import {
 import pullHandler from "./src/api/pull";
 import pushHandler from "./src/api/push";
 import achievementsHandler from "./src/api/achievements";
+import publicSummaryHandler from "./src/api/publicSummary";
 import deleteHandler from "./src/api/delete";
 import {
   bootstrapHandler,
@@ -170,6 +171,8 @@ export async function createApp() {
 
   app.get("/api/sync/pull", pullHandler);
   app.get("/api/achievements", achievementsHandler);
+  // Public aggregate/officer summary for the guest portal (no authentication).
+  app.get("/api/public/summary", publicSummaryHandler);
   app.post("/api/sync/push", pushHandler);
   app.post(["/api/db/delete", "/api/sync/delete"], deleteHandler);
   app.delete("/api/db/:entity/:id", deleteHandler);

@@ -10,6 +10,17 @@ import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } fro
 import { getAvailableEggCount, isEggCatalogProduct } from '../utils/eggInventory';
 import { useLanguage, LanguageToggle } from '../i18n/LanguageContext';
 
+/** Shape returned by GET /api/public/summary (aggregates + officer names only). */
+export interface PublicSummary {
+  success: boolean;
+  totalMembers: number;
+  activeMembers: number;
+  officers: { role: string; name: string }[];
+  boardMembers: string[];
+  announcements: Announcement[];
+  activities: AssociationActivity[];
+}
+
 interface GuestPortalProps {
   onEnterLogin: () => void;
   members: Member[];
@@ -84,6 +95,13 @@ export default function GuestPortal({
   const [activeTab, setActiveTab] = useState<'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'>('home');
   const [displayAchievements, setDisplayAchievements] = useState(achievements);
   const [displayProducts, setDisplayProducts] = useState(() => getPublishedProducts(products, hogRaising));
+  // Association-wide figures come from the public endpoint so a visitor sees the
+  // real roster instead of whatever this browser happens to have cached.
+  const [summary, setSummary] = useState<PublicSummary | null>(null);
+  // Public feeds. Like the achievements list, the DB copy replaces the props
+  // once it arrives; the props keep the portal populated when offline.
+  const [displayAnnouncements, setDisplayAnnouncements] = useState(announcements);
+  const [displayActivities, setDisplayActivities] = useState(activities);
   const [selectedProductModal, setSelectedProductModal] = useState<any | null>(null);
   const productDialogRef = useRef<HTMLDivElement>(null);
   const productDialogCloseRef = useRef<HTMLButtonElement>(null);
@@ -91,6 +109,16 @@ export default function GuestPortal({
   useEffect(() => {
     setDisplayAchievements(achievements);
   }, [achievements]);
+
+  // Keep the props authoritative for offline/local mode: only fall back to them
+  // when nothing was loaded from the database.
+  useEffect(() => {
+    setDisplayAnnouncements(previous => (previous.length === 0 ? announcements : previous));
+  }, [announcements]);
+
+  useEffect(() => {
+    setDisplayActivities(previous => (previous.length === 0 ? activities : previous));
+  }, [activities]);
 
   useEffect(() => {
     setDisplayProducts(getPublishedProducts(products, hogRaising));
@@ -141,6 +169,29 @@ export default function GuestPortal({
   }, []);
 
   useEffect(() => {
+    let active = true;
+    fetch('/api/public/summary')
+      .then(async response => {
+        if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+        return response.json();
+      })
+      .then(result => {
+        if (active && result?.success) {
+          setSummary(result as PublicSummary);
+          if (Array.isArray(result.announcements)) setDisplayAnnouncements(result.announcements);
+          if (Array.isArray(result.activities)) setDisplayActivities(result.activities);
+        }
+      })
+      .catch(error => {
+        if (active) console.warn('[Guest Summary] Unable to load the association summary.', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!selectedProductModal) return;
 
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -179,10 +230,16 @@ export default function GuestPortal({
     };
   }, [selectedProductModal]);
 
-  // Dynamically calculate stats to accurately reflect the registered roster
-  const registeredMembersCount = members.length;
-  const activeMembersCount = members.filter(m => m.status === 'Active').length;
-  const boardMemberNames = resolveBoardMemberNames(users);
+  // Dynamically calculate stats to accurately reflect the registered roster.
+  // The public summary wins when available; the props are only a fallback for
+  // offline use, where the count comes from this device's cached members.
+  const registeredMembersCount = summary ? summary.totalMembers : members.length;
+  const boardMemberNames = summary && summary.boardMembers.length > 0
+    ? summary.boardMembers
+    : resolveBoardMemberNames(users);
+  const officerRoster: { title: string; name: string }[] = summary && summary.officers.length > 0
+    ? summary.officers.map(officer => ({ title: officer.role, name: officer.name }))
+    : resolveOfficerRoster(users);
   const tabs: { id: 'home' | 'announcements' | 'activities' | 'products' | 'history' | 'achievements'; label: string; icon: typeof Sparkles }[] = [
     { id: 'home', label: t('Overview', 'Overview'), icon: Sparkles },
     { id: 'announcements', label: t('Pahibalo', 'Announcements'), icon: Megaphone },
@@ -359,7 +416,7 @@ export default function GuestPortal({
                 </div>
 
                 <div className="space-y-2.5">
-                  {announcements.slice(0, 3).map((ann) => (
+                  {displayAnnouncements.slice(0, 3).map((ann) => (
                     <div key={ann.id} className="p-3 bg-[#FAF8F5] rounded-2xl space-y-1.5">
                       <div className="flex items-center justify-between gap-2 flex-wrap text-[11px]">
                         <span className={`px-2 py-0.5 rounded font-black uppercase text-[10px] ${
@@ -375,7 +432,7 @@ export default function GuestPortal({
                       <p className="text-sm text-slate-700 line-clamp-2">{ann.content}</p>
                     </div>
                   ))}
-                  {announcements.length === 0 && (
+                  {displayAnnouncements.length === 0 && (
                     <p className="text-sm text-slate-600 italic text-center py-4">{t('Walay bag-ong pahibalo karon.', 'There are no new announcements right now.')}</p>
                   )}
                 </div>
@@ -398,7 +455,7 @@ export default function GuestPortal({
                 </div>
 
                 <div className="space-y-2.5">
-                  {activities.slice(0, 3).map((act) => (
+                  {displayActivities.slice(0, 3).map((act) => (
                     <div key={act.id} className="p-3 bg-[#FAF8F5] rounded-2xl space-y-1.5">
                       <div className="flex items-center justify-between gap-2 flex-wrap text-[11px]">
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -434,7 +491,7 @@ export default function GuestPortal({
                       </div>
                     </div>
                   ))}
-                  {activities.length === 0 && (
+                  {displayActivities.length === 0 && (
                     <p className="text-sm text-slate-600 italic text-center py-4">{t('Walay naka-eskedyul nga kalihokan karon.', 'There are no scheduled activities right now.')}</p>
                   )}
                 </div>
@@ -474,7 +531,7 @@ export default function GuestPortal({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
-              {announcements.map((ann) => (
+              {displayAnnouncements.map((ann) => (
                 <div key={ann.id} className="bg-white border-2 border-[#D5CFC1] hover:border-[#1B4332] hover:shadow-lg transition-all rounded-3xl p-5 sm:p-6 space-y-3 flex flex-col justify-between">
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -504,7 +561,7 @@ export default function GuestPortal({
                   </div>
                 </div>
               ))}
-              {announcements.length === 0 && (
+              {displayAnnouncements.length === 0 && (
                 <div className="col-span-full bg-white p-8 rounded-3xl border-2 border-[#D5CFC1] text-center text-slate-500 font-bold text-sm">
                   {t('Walay opisyal nga pahibalo sa pagkakaron.', 'There are no official announcements right now.')}
                 </div>
@@ -526,7 +583,7 @@ export default function GuestPortal({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
-              {activities.map((act) => (
+              {displayActivities.map((act) => (
                 <div key={act.id} className="bg-white border-2 border-[#D5CFC1] hover:border-emerald-700 hover:shadow-lg transition-all rounded-3xl p-5 sm:p-6 space-y-3 flex flex-col justify-between">
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -571,7 +628,7 @@ export default function GuestPortal({
                   </div>
                 </div>
               ))}
-              {activities.length === 0 && (
+              {displayActivities.length === 0 && (
                 <div className="col-span-full bg-white p-8 rounded-3xl border-2 border-[#D5CFC1] text-center text-slate-500 font-bold text-sm">
                   {t('Walay natala nga kalihokan sa pagkakaron.', 'There are no activities listed right now.')}
                 </div>
@@ -657,7 +714,7 @@ export default function GuestPortal({
                     <span>{t('Opisyales sa AFA (2026)', 'AFA Officers (2026)')}</span>
                   </h4>
                   <div className="space-y-2 text-xs text-slate-700 font-medium min-w-0">
-                    {resolveOfficerRoster(users).map((officer, i) => (
+                    {officerRoster.map((officer, i) => (
                       <div key={i} className="flex items-center justify-between border-b border-emerald-950/10 pb-1.5 gap-2 min-w-0">
                         <span className="font-extrabold text-[#1B4332] text-[11px] sm:text-xs shrink-0">{officer.title}:</span>
                         <span className="font-bold text-slate-800 text-[11px] sm:text-xs text-right break-words min-w-0">{officer.name}</span>
