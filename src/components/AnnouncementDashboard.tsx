@@ -164,8 +164,8 @@ export default function AnnouncementDashboard({
           
           <div class="meta-grid">
             <div>
-              <div class="meta-item"><strong>Category (Kategorya):</strong> ${catLabel.en} (${catLabel.ceb})</div>
-              <div class="meta-item"><strong>Priority (Lebel):</strong> <span class="badge ${ann.priority.toLowerCase()}">${ann.priority} Priority</span></div>
+              <div class="meta-item"><strong>Category:</strong> ${catLabel.en} (${catLabel.ceb})</div>
+              <div class="meta-item"><strong>Priority:</strong> <span class="badge ${ann.priority.toLowerCase()}">${ann.priority} Priority</span></div>
             </div>
             <div style="text-align: right;">
               <div class="meta-item"><strong>Date Posted (Adlaw):</strong> ${ann.datePosted}</div>
@@ -307,19 +307,19 @@ export default function AnnouncementDashboard({
 
         {/* Category Filter */}
         <div className="space-y-1 w-full md:w-52">
-          <label className="block text-[9px] font-black text-[#1B4332] uppercase">Kategorya (Category)</label>
+          <label className="block text-[9px] font-black text-[#1B4332] uppercase">Category</label>
           <select
             id="category-filter-select"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             className={`w-full px-3 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-600/30 ${theme.inputBg} font-bold`}
           >
-            <option value="All">Tanan Kategorya (All Categories)</option>
-            <option value="Price Advisory">Presyo sa Merkado (Price Advisory)</option>
-            <option value="Assistance">Tabang sa Mag-uuma (Farmer Assistance)</option>
-            <option value="Weather">Kondisyon sa Panahon (Weather Warning)</option>
-            <option value="Meeting">Pahibalo sa Tigom (Meeting Notice)</option>
-            <option value="General">Kinatibuk-ang Pahibalo (General)</option>
+            <option value="All">All Categories</option>
+            <option value="Price Advisory">Price Advisory</option>
+            <option value="Assistance">Farmer Assistance</option>
+            <option value="Weather">Weather Warning</option>
+            <option value="Meeting">Meeting Notice</option>
+            <option value="General">General Announcement</option>
           </select>
         </div>
 
@@ -332,10 +332,10 @@ export default function AnnouncementDashboard({
             onChange={(e) => setSelectedPriority(e.target.value)}
             className={`w-full px-3 py-2 text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-600/30 ${theme.inputBg} font-bold`}
           >
-            <option value="All">Tanan Importansya (All Priorities)</option>
-            <option value="High">Dinalian / High Priority</option>
-            <option value="Medium">Katamtaman / Medium Priority</option>
-            <option value="Low">Ubos / Low Priority</option>
+            <option value="All">All Priorities</option>
+            <option value="High">High Priority</option>
+            <option value="Medium">Medium Priority</option>
+            <option value="Low">Low Priority</option>
           </select>
         </div>
       </div>
@@ -398,7 +398,7 @@ export default function AnnouncementDashboard({
                       </h3>
                       <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400 font-medium">
                         <Clock className="w-3.5 h-3.5" />
-                        <span>Gi-post noong: {ann.datePosted}</span>
+                        <span>Posted on: {ann.datePosted}</span>
                       </div>
 
                       {/* Content Preview */}
@@ -421,7 +421,7 @@ export default function AnnouncementDashboard({
           ) : (
             <div className={`border border-dashed p-12 rounded-3xl text-center ${theme.cardBg}`}>
               <Megaphone className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <h3 className="font-bold text-slate-400 text-sm">Walay anunsyo nga nakit-an (No announcements found)</h3>
+              <h3 className="font-bold text-slate-400 text-sm">No announcements found</h3>
               <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
                 Sulayi pag-usab ang imong mga filters o pag-search og laing pulong.
               </p>
@@ -532,7 +532,7 @@ export default function AnnouncementDashboard({
 
                   {selectedAnnouncement.priority === 'High' && (
                     <span className="bg-red-600 text-white font-black text-[9px] tracking-widest px-2.5 py-0.5 rounded-lg uppercase">
-                      DINALIAN / HIGH PRIORITY
+                       HIGH PRIORITY
                     </span>
                   )}
                 </div>
