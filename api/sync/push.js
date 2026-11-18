@@ -2009,19 +2009,6 @@ async function saveFullStateToPostgres(pool, state) {
         ["gender", "gender", (r) => r.gender || null],
         ["birth_date", "birthDate", (r) => r.birthDate || null]
       ] },
-      { table: "financial_transactions", deletedIds: deletedTxIds, fields: [
-        ["type", "type", (r) => r.type],
-        ["category", "category", (r) => r.category],
-        ["amount", "amount", (r) => r.amount],
-        ["date", "date", (r) => r.date],
-        ["description", "description", (r) => r.description],
-        ["recorded_by", "recordedBy", (r) => r.recordedBy],
-        ["fund_source", "fundSource", (r) => r.fundSource || null],
-        ["audited_status", "auditedStatus", (r) => r.auditedStatus || "Unaudited"],
-        ["audited_by", "auditedBy", (r) => r.auditedBy || null],
-        ["audited_date", "auditedDate", (r) => r.auditedDate || null],
-        ["audit_notes", "auditNotes", (r) => r.auditNotes || null]
-      ] },
       { table: "meetings", deletedIds: deletedMeetingIds, fields: [
         ["title", "title", (r) => r.title],
         ["date", "date", (r) => r.date],
@@ -2163,7 +2150,6 @@ async function saveFullStateToPostgres(pool, state) {
     ];
     for (const mapping of saveMappings) {
       const stateKeyByTable = {
-        financial_transactions: ["financialTransactions", "transactions"],
         system_logs: ["systemLogs", "logs"],
         organization_funds: ["organizationFunds", "funds"],
         auditor_reports: ["auditorReports"],

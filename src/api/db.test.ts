@@ -233,6 +233,55 @@ describe('persisted approval and transaction fields', () => {
   });
 });
 
+describe('approval-only transaction persistence', () => {
+  it.each([
+    {
+      label: 'President approvals',
+      field: 'president_approval_status',
+      state: {
+        financialTransactions: [{
+          id: 'transaction-approval',
+          presidentApprovalStatus: 'Approved',
+          presidentApprovedBy: 'President',
+          presidentApprovedDate: '2026-11-18'
+        }],
+        presidentApprovalOnly: true
+      }
+    },
+    {
+      label: 'Auditor reviews',
+      field: 'audited_status',
+      state: {
+        financialTransactions: [{
+          id: 'transaction-audit',
+          auditedStatus: 'Audited',
+          auditedBy: 'Auditor',
+          auditedDate: '2026-11-18'
+        }],
+        auditorReviewOnly: true
+      }
+    }
+  ])('updates $label without reinserting a partial transaction', async ({ state, field }) => {
+    const queries: Array<{ sql: string; values?: unknown[] }> = [];
+    const pool = {
+      connect: async () => ({
+        query: async (sql: string, values?: unknown[]) => {
+          queries.push({ sql, values });
+          return { rows: [], rowCount: 1 };
+        },
+        release: () => undefined
+      })
+    };
+
+    await saveFullStateToPostgres(pool as any, state);
+
+    expect(queries.some(query =>
+      query.sql.includes('UPDATE financial_transactions SET') && query.sql.includes(field)
+    )).toBe(true);
+    expect(queries.some(query => query.sql.includes('INSERT INTO financial_transactions ('))).toBe(false);
+  });
+});
+
 describe('IGP expense persistence', () => {
   it('uses the structured expense columns and avoids defaulting RTL stock to swine', async () => {
     const queries: Array<{ sql: string; values?: unknown[] }> = [];
