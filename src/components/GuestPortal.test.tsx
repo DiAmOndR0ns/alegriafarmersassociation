@@ -25,7 +25,6 @@ const makeEggState = (eggCount: number, status: EggHarvestLog['status'] = 'Signe
     revenue: eggsSold * 5,
     recordedBy: 'Treasurer'
   }] : [],
-  groups: [],
   eggHarvests: [{
     id: 'egg-harvest',
     produce: 'Poultry Raising (RTL)',

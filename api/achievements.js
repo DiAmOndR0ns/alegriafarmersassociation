@@ -144,7 +144,7 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_by TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_date VARCHAR(50);`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approval_remarks TEXT;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
+    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS expenses JSONB;`,
@@ -169,18 +169,6 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS recorded_by TEXT;`,
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS hog_stage TEXT;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_groups (
-      id VARCHAR(100) PRIMARY KEY,
-      name TEXT NOT NULL,
-      schedule_days TEXT[],
-      sort_order INTEGER NOT NULL DEFAULT 0
-    );`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_group_members (
-      group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id),
-      member_name TEXT NOT NULL,
-      position INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (group_id, member_name)
-    );`,
     `CREATE TABLE IF NOT EXISTS afa_igp_harvests (
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT,
@@ -333,37 +321,6 @@ async function runSchemaMigrations(client) {
         WHERE NULLIF(sale->>'id', '') IS NOT NULL
         ON CONFLICT (id) DO NOTHING;
 
-        INSERT INTO afa_igp_groups (id, name, schedule_days, sort_order)
-        SELECT group_row->>'id',
-          COALESCE(NULLIF(group_row->>'name', ''), 'Unnamed group'),
-          ARRAY(
-            SELECT jsonb_array_elements_text(
-              CASE WHEN jsonb_typeof(group_row->'scheduleDays') = 'array'
-                THEN group_row->'scheduleDays' ELSE '[]'::jsonb END
-            )
-          ),
-          (item.ordinality - 1)::integer
-        FROM afa_igp AS igp
-        CROSS JOIN LATERAL jsonb_array_elements(
-          CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
-        ) WITH ORDINALITY AS item(group_row, ordinality)
-        WHERE NULLIF(group_row->>'id', '') IS NOT NULL
-        ON CONFLICT (id) DO NOTHING;
-
-        INSERT INTO afa_igp_group_members (group_id, member_name, position)
-        SELECT group_row->>'id', member.member_name, (member.ordinality - 1)::integer
-        FROM afa_igp AS igp
-        CROSS JOIN LATERAL jsonb_array_elements(
-          CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
-        ) AS group_item(group_row)
-        CROSS JOIN LATERAL jsonb_array_elements_text(
-          CASE WHEN jsonb_typeof(group_row->'members') = 'array'
-            THEN group_row->'members' ELSE '[]'::jsonb END
-        ) WITH ORDINALITY AS member(member_name, ordinality)
-        WHERE NULLIF(group_row->>'id', '') IS NOT NULL
-          AND NULLIF(member.member_name, '') IS NOT NULL
-        ON CONFLICT (group_id, member_name) DO NOTHING;
-
         INSERT INTO afa_igp_harvests (
           id, produce, date, time, collected_by, egg_count, notes, status,
           audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
@@ -390,6 +347,9 @@ async function runSchemaMigrations(client) {
         WHERE NULLIF(harvest->>'id', '') IS NOT NULL
         ON CONFLICT (id) DO NOTHING;
       END $$;`,
+    `DROP TABLE IF EXISTS afa_igp_group_members;`,
+    `DROP TABLE IF EXISTS afa_igp_groups;`,
+    `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups;`,
     `DROP TABLE IF EXISTS hog_raising;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
@@ -673,7 +633,6 @@ async function initDatabaseSchema(pool) {
         produces TEXT[],
         expenses JSONB,
         sales JSONB,
-        groups JSONB,
         chore_logs JSONB,
         closed_years INT[]
       );
@@ -694,22 +653,6 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query("CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);");
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_groups (
-        id VARCHAR(100) PRIMARY KEY,
-        name TEXT NOT NULL,
-        schedule_days TEXT[],
-        sort_order INTEGER NOT NULL DEFAULT 0
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_group_members (
-        group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id),
-        member_name TEXT NOT NULL,
-        position INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (group_id, member_name)
-      );
-    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS afa_igp_harvests (
         id VARCHAR(100) PRIMARY KEY,

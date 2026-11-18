@@ -63,7 +63,6 @@ const livestock: HogRaisingState = {
     revenue: 600,
     recordedBy: 'Treasurer'
   }],
-  groups: []
 };
 
 describe('getTreasurerAnalytics', () => {

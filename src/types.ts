@@ -256,13 +256,6 @@ export interface IgpSale {
   fundSource?: string;
 }
 
-export interface IgpGroup {
-  id: string;
-  name: string; // e.g. "Batch 1 (Lunes / Monday)"
-  members: string[]; // List of member names
-  scheduleDays: string[]; // e.g. ["Monday", "Thursday"]
-}
-
 // EGG HARVEST SUBMISSION (replaces the old IGP chore log).
 // Members submit the number of chicken eggs harvested within the day. The record
 // then flows through a three-stage approval chain:
@@ -310,7 +303,6 @@ export interface HogRaisingState {
   produces?: string[]; // Dynamic list of produce projects, e.g. ["Hog Raising", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"]
   expenses: IgpExpense[];
   sales: IgpSale[];
-  groups: IgpGroup[];
   /** @deprecated Legacy chore-log field — superseded by the eggHarvests collection. */
   choreLogs?: EggHarvestLog[];
   eggHarvests?: EggHarvestLog[]; // Daily chicken-egg harvest submissions (member → Auditor → President)

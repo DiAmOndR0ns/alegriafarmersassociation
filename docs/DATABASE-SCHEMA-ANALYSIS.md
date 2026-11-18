@@ -11,14 +11,14 @@ Companion diagram: [`docs/ERD.md`](./ERD.md).
 |---|---|
 | Engine | PostgreSQL (Supabase, accessed over the pooler with TLS) |
 | Schema | `public` |
-| Tables | **20 application-managed tables** |
-| Primary keys | Tables use client-generated `VARCHAR(100)` IDs except `afa_igp_group_members`, which has a composite primary key |
-| Foreign keys | **3 in the repository-managed schema** — transaction-to-activity, inventory-to-product, and IGP group-member-to-group |
+| Tables | **18 application-managed tables** |
+| Primary keys | Tables use client-generated `VARCHAR(100)` IDs |
+| Foreign keys | **2 in the repository-managed schema** — transaction-to-activity and inventory-to-product |
 | Unique constraints | `users.username`; partial unique index on normalized officer `role` |
 | Audit | `system_logs` is a SHA-256 hash chain (`hash`, `previous_hash`) |
 | Sync model | Offline-first: queued operations stay in encrypted browser storage; state is pushed/pulled through `api/sync/{push,pull}.js` |
 
-Many cross-entity references are *name strings* (`recorded_by`, `posted_by`, `organizer`, `moved_by`) or *embedded JSONB*, not FK columns. IGP expenses, sales, groups, group members, and harvests are now persisted in normalized tables, with JSON retained as a compatibility mirror and read fallback.
+Many cross-entity references are *name strings* (`recorded_by`, `posted_by`, `organizer`, `moved_by`) or *embedded JSONB*, not FK columns. IGP expenses, sales, and harvests are persisted in normalized tables, with JSON retained as a compatibility mirror and read fallback where still used.
 
 ---
 
@@ -59,19 +59,15 @@ Many cross-entity references are *name strings* (`recorded_by`, `posted_by`, `or
 
 ### 2.4 Income-generating project (IGP)
 
-**`afa_igp`** — a **single-row state table** (`id = 'main_state'`) holding IGP-level state: `opening_hog_count`, `herd_breakdown JSONB` (fattening/gestation/lactating/dispersal/cattle…), `produces TEXT[]`, `expenses JSONB`, `sales JSONB`, `groups JSONB`, `chore_logs JSONB` (egg-harvest compatibility mirror), `closed_years INT[]`.
+**`afa_igp`** — a **single-row state table** (`id = 'main_state'`) holding IGP-level state: `opening_hog_count`, `herd_breakdown JSONB` (fattening/gestation/lactating/dispersal/cattle…), `produces TEXT[]`, `expenses JSONB`, `sales JSONB`, `chore_logs JSONB` (egg-harvest compatibility mirror), `closed_years INT[]`. The unused legacy `groups` JSONB column is removed by migration.
 
 **`afa_igp_expenses`** — expenses normalized per produce project: `produce` NOT NULL (indexed by `afa_igp_expenses_produce_idx`), `date`, `category`, `quantity`, `description`, `amount`, `recorded_by`, `fund_source`, `hog_stage`, plus retained `expense_data JSONB` compatibility data.
 
 **`afa_igp_sales`** — normalized sale records: `produce`, `date`, `hog_stage`, `hogs_count`, `produce_count`, `revenue`, `recorded_by`, `fund_source`, `notes`.
 
-**`afa_igp_groups`** — group identity and schedule: `id`, `name`, `schedule_days`, `sort_order`.
-
-**`afa_igp_group_members`** — group membership and order: composite PK `(group_id, member_name)`, `position`; `group_id` references `afa_igp_groups.id`.
-
 **`afa_igp_harvests`** — harvest count, submitter, date/time, notes, audit, and signature fields.
 
-The app reads normalized IGP rows first, merges legacy JSON-only IDs as fallback, and writes normalized rows plus JSON compatibility mirrors. Legacy expense JSON columns are retained; they are not dropped by the current migration.
+The app reads normalized IGP expense, sale, and harvest rows first, merges legacy JSON-only IDs as fallback, and writes normalized rows plus JSON compatibility mirrors. The unused IGP group tables and `afa_igp.groups` column are removed by migration. Legacy expense JSON columns are retained; they are not dropped by the current migration.
 
 ### 2.5 Marketplace, outreach & system
 
@@ -94,18 +90,15 @@ The app reads normalized IGP rows first, merges legacy JSON-only IDs as fallback
 |---|---|---|---|
 | `financial_transactions` | `activity_id` | `activities.id` | `SET NULL` |
 | `inventory` | `catalog_product_id` | `products.id` | `SET NULL` |
-| `afa_igp_group_members` | `group_id` | `afa_igp_groups.id` | Not specified in the DDL |
+The transaction and inventory constraints are `DEFERRABLE INITIALLY DEFERRED NOT VALID` then `VALIDATE`d. Supporting indexes: `financial_transactions_activity_id_idx`, `inventory_catalog_product_id_idx`.
 
-The transaction and inventory constraints are `DEFERRABLE INITIALLY DEFERRED NOT VALID` then `VALIDATE`d. The group-members FK is created with the normalized table. Supporting indexes: `financial_transactions_activity_id_idx`, `inventory_catalog_product_id_idx`.
-
-The supplied live catalog confirms the group-members FK but is truncated after 100 rows, so it does not establish a complete live FK count.
+The supplied live catalog showed the old group-members FK; the startup migration now removes that FK with both unused group tables.
 
 <!-- mermaid-checked: every attribute is `<type> <name> [<key>] ["<description>"]` with at most one of PK/FK/UK, no \n in descriptions, no {} in descriptions, every relationship label is double-quoted -->
 ```mermaid
 erDiagram
     ACTIVITIES |o--o{ FINANCIAL_TRANSACTIONS : "activity_id FK"
     PRODUCTS |o--o{ INVENTORY : "catalog_product_id FK"
-    AFA_IGP_GROUPS ||--o{ AFA_IGP_GROUP_MEMBERS : "group members FK"
 ```
 
 ### 3.2 Logical / name-based relationships (not enforced)
@@ -121,9 +114,6 @@ erDiagram
 | `financial_transactions` | `fund_source` | `organization_funds.code` | N:1 (loose string match) |
 | `auditor_reports` | `prepared_by`, `certified_by` | Auditor / President in `users` | N:1 each |
 | `delegation_requests` | `requested_by`, `reviewed_by` | President / VP in `users` | N:1 each |
-| `afa_igp` | Expense/sale/group JSON IDs | Normalized IGP tables | ID-based fallback/mirror; not a database FK |
-| `afa_igp_groups` | `id` | `afa_igp_group_members.group_id` | 1:N (database FK) |
-| `afa_igp_group_members` | `member_name` | `members.name` | N:1 (name-based; no FK) |
 | `afa_igp_harvests` | `collected_by` | `members.name` | N:1 (name-based; no FK) |
 | `products` | `farmer_name`, `farmer_sitio` | `members` | N:1 (by name) |
 | `products` | `updated_by`, `managed_by` | `users` | N:1 |
@@ -139,7 +129,6 @@ erDiagram
 | `MemberAffiliation[]` | `members` / `users` / sync payload | inline |
 | `HogHerdBreakdown` | `afa_igp` | `herd_breakdown` |
 | `IgpSale[]` | `afa_igp_sales` (normalized) and `afa_igp` (compatibility mirror) | `sales` |
-| `IgpGroup[]` | `afa_igp_groups` and `afa_igp_group_members` (normalized), plus `afa_igp` (compatibility mirror) | `groups` |
 | `EggHarvestLog[]` | `afa_igp_harvests` (normalized) and `afa_igp` (compatibility mirror) | `chore_logs` |
 | `IgpExpense[]` | `afa_igp_expenses` (normalized) and JSON compatibility columns | Structured columns / JSON |
 | Any queued op | Encrypted browser storage | `bafa_sync_queue` |

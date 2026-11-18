@@ -1,5 +1,5 @@
 import pg from 'pg';
-import { AuditorReport, DelegationRequest, EggHarvestLog, IgpGroup, IgpSale } from '../types';
+import { AuditorReport, DelegationRequest, EggHarvestLog, IgpSale } from '../types';
 import { getInitialFund } from '../utils/fundBalance';
 import { cleanDateString, cleanNumber, cleanText, cleanTextList, safeImageUrl } from './sanitize';
 
@@ -228,7 +228,7 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_by TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_date VARCHAR(50);`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approval_remarks TEXT;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
+    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS expenses JSONB;`,
@@ -253,18 +253,6 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS recorded_by TEXT;`,
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS hog_stage TEXT;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_groups (
-      id VARCHAR(100) PRIMARY KEY,
-      name TEXT NOT NULL,
-      schedule_days TEXT[],
-      sort_order INTEGER NOT NULL DEFAULT 0
-    );`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_group_members (
-      group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id),
-      member_name TEXT NOT NULL,
-      position INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (group_id, member_name)
-    );`,
     `CREATE TABLE IF NOT EXISTS afa_igp_harvests (
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT,
@@ -417,37 +405,6 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
         WHERE NULLIF(sale->>'id', '') IS NOT NULL
         ON CONFLICT (id) DO NOTHING;
 
-        INSERT INTO afa_igp_groups (id, name, schedule_days, sort_order)
-        SELECT group_row->>'id',
-          COALESCE(NULLIF(group_row->>'name', ''), 'Unnamed group'),
-          ARRAY(
-            SELECT jsonb_array_elements_text(
-              CASE WHEN jsonb_typeof(group_row->'scheduleDays') = 'array'
-                THEN group_row->'scheduleDays' ELSE '[]'::jsonb END
-            )
-          ),
-          (item.ordinality - 1)::integer
-        FROM afa_igp AS igp
-        CROSS JOIN LATERAL jsonb_array_elements(
-          CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
-        ) WITH ORDINALITY AS item(group_row, ordinality)
-        WHERE NULLIF(group_row->>'id', '') IS NOT NULL
-        ON CONFLICT (id) DO NOTHING;
-
-        INSERT INTO afa_igp_group_members (group_id, member_name, position)
-        SELECT group_row->>'id', member.member_name, (member.ordinality - 1)::integer
-        FROM afa_igp AS igp
-        CROSS JOIN LATERAL jsonb_array_elements(
-          CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
-        ) AS group_item(group_row)
-        CROSS JOIN LATERAL jsonb_array_elements_text(
-          CASE WHEN jsonb_typeof(group_row->'members') = 'array'
-            THEN group_row->'members' ELSE '[]'::jsonb END
-        ) WITH ORDINALITY AS member(member_name, ordinality)
-        WHERE NULLIF(group_row->>'id', '') IS NOT NULL
-          AND NULLIF(member.member_name, '') IS NOT NULL
-        ON CONFLICT (group_id, member_name) DO NOTHING;
-
         INSERT INTO afa_igp_harvests (
           id, produce, date, time, collected_by, egg_count, notes, status,
           audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
@@ -474,6 +431,9 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
         WHERE NULLIF(harvest->>'id', '') IS NOT NULL
         ON CONFLICT (id) DO NOTHING;
       END $$;`,
+    `DROP TABLE IF EXISTS afa_igp_group_members;`,
+    `DROP TABLE IF EXISTS afa_igp_groups;`,
+    `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups;`,
     `DROP TABLE IF EXISTS hog_raising;`,
 
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
@@ -783,7 +743,6 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         produces TEXT[],
         expenses JSONB,
         sales JSONB,
-        groups JSONB,
         chore_logs JSONB,
         closed_years INT[]
       );
@@ -805,22 +764,6 @@ export async function initDatabaseSchema(pool: pg.Pool) {
       );
     `);
     await client.query('CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);');
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_groups (
-        id VARCHAR(100) PRIMARY KEY,
-        name TEXT NOT NULL,
-        schedule_days TEXT[],
-        sort_order INTEGER NOT NULL DEFAULT 0
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_group_members (
-        group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id),
-        member_name TEXT NOT NULL,
-        position INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (group_id, member_name)
-      );
-    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS afa_igp_harvests (
         id VARCHAR(100) PRIMARY KEY,
@@ -1037,8 +980,6 @@ export async function getTableStats(pool: pg.Pool): Promise<{
         (SELECT count(*) FROM system_logs) as system_logs,
         (SELECT count(*) FROM afa_igp) as afa_igp,
         (SELECT count(*) FROM afa_igp_expenses) as afa_igp_expenses,
-        (SELECT count(*) FROM afa_igp_groups) as afa_igp_groups,
-        (SELECT count(*) FROM afa_igp_group_members) as afa_igp_group_members,
         (SELECT count(*) FROM afa_igp_harvests) as afa_igp_harvests,
         (SELECT count(*) FROM afa_igp_sales) as afa_igp_sales,
         (SELECT count(*) FROM products) as products,
@@ -1060,8 +1001,6 @@ export async function getTableStats(pool: pg.Pool): Promise<{
       system_logs: Number(row.system_logs || 0),
       afa_igp: Number(row.afa_igp || 0),
       afa_igp_expenses: Number(row.afa_igp_expenses || 0),
-      afa_igp_groups: Number(row.afa_igp_groups || 0),
-      afa_igp_group_members: Number(row.afa_igp_group_members || 0),
       afa_igp_harvests: Number(row.afa_igp_harvests || 0),
       afa_igp_sales: Number(row.afa_igp_sales || 0),
       products: Number(row.products || 0),
@@ -1248,8 +1187,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query('SELECT * FROM afa_igp LIMIT 1');
     const igpExpenseRows = await client.query('SELECT * FROM afa_igp_expenses ORDER BY date DESC, id ASC');
     const igpSalesRows = await client.query('SELECT * FROM afa_igp_sales ORDER BY date DESC, id ASC');
-    const igpGroupsRows = await client.query('SELECT * FROM afa_igp_groups ORDER BY sort_order ASC, id ASC');
-    const igpGroupMembersRows = await client.query('SELECT * FROM afa_igp_group_members ORDER BY group_id ASC, position ASC, member_name ASC');
     const igpHarvestRows = await client.query('SELECT * FROM afa_igp_harvests ORDER BY date DESC, time DESC, id ASC');
     const productsRes = await client.query('SELECT * FROM products ORDER BY name ASC');
     const inventoryRes = await client.query('SELECT * FROM inventory ORDER BY name ASC');
@@ -1308,7 +1245,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       produces: string[];
       expenses: any[];
       sales: any[];
-      groups: any[];
       choreLogs: any[];
       eggHarvests: any[];
       closedYears: any[];
@@ -1318,7 +1254,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       produces: [],
       expenses: [],
       sales: [],
-      groups: [],
       choreLogs: [],
       eggHarvests: [],
       closedYears: []
@@ -1336,27 +1271,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       ...(r.notes ? { notes: r.notes } : {}),
       ...(r.fund_source ? { fundSource: r.fund_source } : {})
     }));
-    const legacyGroups = hogRes.rows[0]?.groups;
-    const legacyGroupsById = new Map<string, any>(
-      (Array.isArray(legacyGroups) ? legacyGroups : [])
-        .filter((group: any) => typeof group?.id === 'string')
-        .map((group: any) => [group.id, group])
-    );
-    const membersByGroupId = new Map<string, string[]>();
-    for (const member of igpGroupMembersRows.rows) {
-      const names = membersByGroupId.get(member.group_id) || [];
-      names.push(member.member_name);
-      membersByGroupId.set(member.group_id, names);
-    }
-    const normalizedGroups: IgpGroup[] = igpGroupsRows.rows.map((r) => {
-      const legacyGroup = legacyGroupsById.get(r.id);
-      return {
-        id: r.id,
-        name: r.name || legacyGroup?.name || 'Unnamed group',
-        members: membersByGroupId.get(r.id) || legacyGroup?.members || [],
-        scheduleDays: r.schedule_days || legacyGroup?.scheduleDays || []
-      };
-    });
     const normalizedHarvests: EggHarvestLog[] = igpHarvestRows.rows.map((r) => ({
       id: r.id,
       date: r.date || '',
@@ -1396,7 +1310,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
           Array.isArray(row.expenses) ? row.expenses : []
         ),
         sales: mergeIgpRecords(normalizedSales, Array.isArray(row.sales) ? row.sales : []),
-        groups: mergeIgpRecords(normalizedGroups, Array.isArray(row.groups) ? row.groups : []),
         choreLogs: mergeIgpRecords(normalizedHarvests, Array.isArray(row.chore_logs) ? row.chore_logs : []),
         eggHarvests: mergeIgpRecords(normalizedHarvests, Array.isArray(row.chore_logs) ? row.chore_logs : []),
         closedYears: row.closed_years || []
@@ -1404,7 +1317,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     } else {
       hogState.expenses = mergeIgpExpenses(igpExpenseRows.rows);
       hogState.sales = normalizedSales;
-      hogState.groups = normalizedGroups;
       hogState.choreLogs = normalizedHarvests;
       hogState.eggHarvests = normalizedHarvests;
     }
@@ -1754,52 +1666,6 @@ async function saveIgpSales(
   }
 
   await client.query('DELETE FROM afa_igp_sales WHERE NOT (id = ANY($1::varchar[]))', [ids]);
-}
-
-async function saveIgpGroups(
-  client: pg.PoolClient,
-  groups: IgpGroup[]
-) {
-  const ids: string[] = [];
-  for (const group of groups) {
-    if (typeof group?.id !== 'string' || !group.id.trim()) {
-      throw new Error('Cannot sync IGP group without a valid id');
-    }
-    const name = cleanText(group.name, 200);
-    if (!name) throw new Error(`Cannot sync IGP group ${group.id} without a name`);
-    ids.push(group.id);
-    await client.query(`
-      INSERT INTO afa_igp_groups (id, name, schedule_days, sort_order)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (id) DO UPDATE SET
-        name = EXCLUDED.name,
-        schedule_days = EXCLUDED.schedule_days,
-        sort_order = EXCLUDED.sort_order;
-    `, [
-      group.id,
-      name,
-      cleanTextList(group.scheduleDays || [], 50),
-      ids.length - 1
-    ]);
-  }
-
-  await client.query(
-    'DELETE FROM afa_igp_group_members WHERE NOT (group_id = ANY($1::varchar[]))',
-    [ids]
-  );
-  for (const group of groups) {
-    await client.query('DELETE FROM afa_igp_group_members WHERE group_id = $1', [group.id]);
-    for (const [position, rawName] of (group.members || []).entries()) {
-      const memberName = cleanText(rawName, 200);
-      if (!memberName) throw new Error(`Cannot sync an empty member name in IGP group ${group.id}`);
-      await client.query(`
-        INSERT INTO afa_igp_group_members (group_id, member_name, position)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (group_id, member_name) DO UPDATE SET position = EXCLUDED.position;
-      `, [group.id, memberName, position]);
-    }
-  }
-  await client.query('DELETE FROM afa_igp_groups WHERE NOT (id = ANY($1::varchar[]))', [ids]);
 }
 
 async function saveIgpHarvests(
@@ -2234,15 +2100,14 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
           : undefined;
 
       await client.query(`
-        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, expenses, sales, groups, chore_logs, closed_years)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO afa_igp (id, opening_hog_count, herd_breakdown, produces, expenses, sales, chore_logs, closed_years)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (id) DO UPDATE SET
           opening_hog_count = EXCLUDED.opening_hog_count,
           herd_breakdown = EXCLUDED.herd_breakdown,
           produces = EXCLUDED.produces,
           expenses = COALESCE(EXCLUDED.expenses, afa_igp.expenses),
           sales = COALESCE(EXCLUDED.sales, afa_igp.sales),
-          groups = COALESCE(EXCLUDED.groups, afa_igp.groups),
           chore_logs = COALESCE(EXCLUDED.chore_logs, afa_igp.chore_logs),
           closed_years = EXCLUDED.closed_years;
       `, [
@@ -2252,7 +2117,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         state.hogRaising.produces || [],
         Array.isArray(state.hogRaising.expenses) ? JSON.stringify(state.hogRaising.expenses) : null,
         Array.isArray(state.hogRaising.sales) ? JSON.stringify(state.hogRaising.sales) : null,
-        Array.isArray(state.hogRaising.groups) ? JSON.stringify(state.hogRaising.groups) : null,
         eggHarvests ? JSON.stringify(eggHarvests) : null,
         state.hogRaising.closedYears || []
       ]);
@@ -2266,9 +2130,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       }
       if (Array.isArray(state.hogRaising.sales)) {
         await saveIgpSales(client, state.hogRaising.sales);
-      }
-      if (Array.isArray(state.hogRaising.groups)) {
-        await saveIgpGroups(client, state.hogRaising.groups);
       }
       if (eggHarvests) await saveIgpHarvests(client, eggHarvests);
       console.log('[DB DEBUG] AFA IGP state saved');

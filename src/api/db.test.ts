@@ -102,11 +102,11 @@ describe('Supabase-only configuration', () => {
 });
 
 describe('database table statistics', () => {
-  it('counts all 20 application tables', async () => {
+  it('counts all 18 application tables', async () => {
     const tableNames = [
       'users', 'members', 'meetings', 'resolutions', 'financial_transactions',
       'announcements', 'system_logs', 'afa_igp', 'afa_igp_expenses',
-      'afa_igp_groups', 'afa_igp_group_members', 'afa_igp_harvests', 'afa_igp_sales',
+      'afa_igp_harvests', 'afa_igp_sales',
       'products', 'inventory', 'activities', 'achievements', 'organization_funds',
       'auditor_reports', 'delegation_requests'
     ];
@@ -120,11 +120,10 @@ describe('database table statistics', () => {
 
     const stats = await getTableStats(pool as any);
 
-    expect(Object.keys(stats.tableCounts)).toHaveLength(20);
+    expect(Object.keys(stats.tableCounts)).toHaveLength(18);
     expect(stats.tableCounts.inventory).toBe(1);
     expect(stats.tableCounts.achievements).toBe(1);
-    expect(stats.tableCounts.afa_igp_group_members).toBe(1);
-    expect(stats.totalRecords).toBe(20);
+    expect(stats.totalRecords).toBe(18);
   });
 });
 
@@ -204,7 +203,10 @@ describe('persisted approval and transaction fields', () => {
     expect(queries.some(query => query.sql.includes('inventory_catalog_product_id_fkey'))).toBe(true);
     expect(queries.some(query => query.sql.includes('ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS category TEXT'))).toBe(true);
     expect(queries.some(query => query.sql.includes("table_name = 'afa_igp_expenses' AND column_name = 'expense_data'"))).toBe(true);
-    expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_groups'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('DROP TABLE IF EXISTS afa_igp_groups'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('DROP TABLE IF EXISTS afa_igp_group_members'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_groups'))).toBe(false);
     expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_harvests'))).toBe(true);
     expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_sales'))).toBe(true);
     expect(queries.some(query => query.sql.includes('ALTER TABLE afa_igp DROP COLUMN expenses'))).toBe(false);
@@ -253,7 +255,6 @@ describe('IGP expense persistence', () => {
           fundSource: 'AFA Allocated Fund'
         }],
         sales: [],
-        groups: [],
         eggHarvests: []
       }
     });
@@ -368,7 +369,6 @@ describe('IGP expense persistence', () => {
                 { id: 'legacy-sale', produce: 'Old project', date: '2026-01-01', hogsCount: 1, revenue: 10, recordedBy: 'Legacy' },
                 { id: 'json-only-sale', produce: 'Legacy-only project', date: '2025-12-01', hogsCount: 1, revenue: 5, recordedBy: 'Legacy' }
               ],
-              groups: [{ id: 'group-1', name: 'JSON name', members: ['Old member'], scheduleDays: ['Monday'] }],
               chore_logs: [
                 { id: 'legacy-harvest', date: '2026-01-01', time: '08:00', collectedBy: 'Legacy', eggCount: 2, status: 'Pending Audit' },
                 { id: 'json-only-harvest', date: '2025-12-01', time: '08:00', collectedBy: 'Legacy', eggCount: 1, status: 'Pending Audit' }
@@ -379,12 +379,6 @@ describe('IGP expense persistence', () => {
           if (sql.includes('FROM afa_igp_sales')) return { rows: [{
             id: 'legacy-sale', produce: 'Normalized project', date: '2026-02-01', hogs_count: 2, produce_count: 3,
             revenue: '40', recorded_by: 'Normalized', notes: 'Updated'
-          }] };
-          if (sql.includes('FROM afa_igp_groups')) return { rows: [{
-            id: 'group-1', name: 'Normalized name', schedule_days: ['Tuesday'], sort_order: 0
-          }] };
-          if (sql.includes('FROM afa_igp_group_members')) return { rows: [{
-            group_id: 'group-1', member_name: 'Normalized member', position: 0
           }] };
           if (sql.includes('FROM afa_igp_harvests')) return { rows: [{
             id: 'legacy-harvest', produce: 'Poultry Raising (RTL)', date: '2026-02-01', time: '09:00',
@@ -416,12 +410,6 @@ describe('IGP expense persistence', () => {
       revenue: 5,
       recordedBy: 'Legacy'
     }]);
-    expect(result.hogRaising.groups).toEqual([{
-      id: 'group-1',
-      name: 'Normalized name',
-      members: ['Normalized member'],
-      scheduleDays: ['Tuesday']
-    }]);
     expect(result.hogRaising.eggHarvests[0]).toMatchObject({
       id: 'legacy-harvest',
       collectedBy: 'Normalized',
@@ -440,7 +428,7 @@ describe('IGP expense persistence', () => {
     }]);
   });
 
-  it('writes IGP sales, groups, memberships, and harvests to their normalized tables', async () => {
+  it('writes IGP sales and harvests to their normalized tables', async () => {
     const queries: Array<{ sql: string; values?: unknown[] }> = [];
     const pool = {
       connect: async () => ({
@@ -463,12 +451,6 @@ describe('IGP expense persistence', () => {
       fundSource: 'AFA Fund',
       notes: 'Egg sale'
     };
-    const group = {
-      id: 'group-1',
-      name: 'Batch 1',
-      members: ['Member One'],
-      scheduleDays: ['Monday', 'Thursday']
-    };
     const harvest = {
       id: 'harvest-1',
       produce: 'Poultry Raising (RTL)',
@@ -484,27 +466,21 @@ describe('IGP expense persistence', () => {
         produces: ['Poultry Raising (RTL)'],
         expenses: [],
         sales: [sale],
-        groups: [group],
         eggHarvests: [harvest]
       }
     });
 
     const salesInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_sales'));
-    const groupInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_groups'));
-    const memberInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_group_members'));
     const harvestInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_harvests'));
     expect(salesInsert?.values).toEqual([
       sale.id, sale.produce, sale.date, sale.hogStage, sale.hogsCount, sale.produceCount,
       sale.revenue, sale.recordedBy, sale.fundSource, sale.notes
     ]);
-    expect(groupInsert?.values).toEqual([group.id, group.name, group.scheduleDays, 0]);
-    expect(memberInsert?.values).toEqual([group.id, 'Member One', 0]);
     expect(harvestInsert?.values).toEqual([
       harvest.id, harvest.produce, harvest.date, harvest.time, harvest.collectedBy,
       harvest.eggCount, null, harvest.status, null, null, null, null, null, null
     ]);
     expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_sales'))).toBe(true);
-    expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_groups'))).toBe(true);
     expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_harvests'))).toBe(true);
   });
 });

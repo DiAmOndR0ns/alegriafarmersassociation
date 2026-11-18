@@ -26,7 +26,6 @@ const livestock: HogRaisingState = {
     id: 'livestock-sale', produce: 'Poultry', date: '2026-05-06', hogsCount: 0,
     revenue: 300, recordedBy: 'Treasurer', notes: 'Egg sales', fundSource: 'SALES (Sales Account)'
   }],
-  groups: []
 };
 
 describe('Treasurer report filters', () => {
