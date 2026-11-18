@@ -42,7 +42,7 @@ Many cross-entity references are *name strings* (`recorded_by`, `posted_by`, `or
 
 **`resolutions`** — `id`, `resolution_number` NOT NULL, `title`, `description`, `date_agreed`, `moved_by`, `seconded_by`, `vote_in_favor`, `vote_against`, `vote_abstain`, `status`.
 
-**`delegation_requests`** — President → Vice President authority delegation: `requested_by` (President), `reason`, `requested_date`, `effective_start`, `effective_end`, `status` (Pending/Approved/Declined/Revoked), `reviewed_by` (VP), `reviewed_date`, `remarks`.
+**`delegation_requests`** — Vice President requests scoped temporary authority: requester/reviewer user IDs, `reason`, `scopes JSONB`, `requested_date`, `effective_start`, `effective_end`, `status` (Pending/Approved/Declined/Revoked), `reviewed_date`, `remarks`. Approved access is effective only within its date range and can be revoked by the President.
 
 ### 2.3 Finance & audit
 

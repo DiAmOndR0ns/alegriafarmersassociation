@@ -3,7 +3,7 @@ import {
   OfficerRole, Member, Meeting, Resolution, 
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState,
   IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem,
-  PasswordResetResult
+  PasswordResetResult, DelegationRequest, DelegationScope
 } from './types';
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
@@ -42,6 +42,7 @@ import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, 
 import { runNightlyBackupCheck } from './utils/backupSystem';
 import { computeFundBalances, getInitialFund } from './utils/fundBalance';
 import { getAvailableInventoryQuantity, getRentalStockStatus } from './utils/inventory';
+import { getActiveDelegationScopes } from './utils/delegation';
 import {
   Building, ShieldCheck, Megaphone, Users, Coins,
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
@@ -198,6 +199,11 @@ export default function App() {
   // Association inventory registry — custodial duty of the Auditor (no Property Custodian officer exists)
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
+  const [delegationRequests, setDelegationRequests] = useState<DelegationRequest[]>([]);
+  const [isRefreshingDelegations, setIsRefreshingDelegations] = useState(false);
+  const activeDelegationScopes = getActiveDelegationScopes(delegationRequests, currentUser?.id || '');
+  const hasDelegatedRecordApproval = currentRole === 'Vice_President' && activeDelegationScopes.has('record_approval');
+  const hasDelegatedContentPosting = currentRole === 'Vice_President' && activeDelegationScopes.has('announcements_activities');
   const [isHydrating, setIsHydrating] = useState(true);
   const [hasPendingCloudSync, setHasPendingCloudSync] = useState(false);
 
@@ -258,11 +264,11 @@ export default function App() {
     let cancelled = false;
     const loadLocalData = async () => {
       try {
-        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
+        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_delegation_requests', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
         clearSecureItems(['bafa_hog_raising']);
         await migrateSecureItems(storageKeys);
       if (cancelled) return;
-      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds] = await Promise.all([
+      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests] = await Promise.all([
         getSecureItem<Member[]>('bafa_members'),
         getSecureItem<Meeting[]>('bafa_meetings'),
         getSecureItem<Resolution[]>('bafa_resolutions'),
@@ -278,7 +284,8 @@ export default function App() {
         getSecureItem<SystemLog[]>('bafa_logs'),
         getSecureItem<User[]>('bafa_users'),
         getSecureItem<boolean>('bafa_pending_cloud_sync'),
-        getSecureItem<StoredDeletedIds>('bafa_deleted_ids')
+        getSecureItem<StoredDeletedIds>('bafa_deleted_ids'),
+        getSecureItem<DelegationRequest[]>('bafa_delegation_requests')
       ]);
       deletedIdsRef.current = storedDeletedIds || {};
       const hasStoredDeletions = Object.values(deletedIdsRef.current).some(ids => Array.isArray(ids) && ids.length > 0);
@@ -320,6 +327,7 @@ export default function App() {
         setFunds(storedFunds || INITIAL_FUNDS);
         setInventory(storedInventory || []);
       }
+      setDelegationRequests(Array.isArray(storedDelegationRequests) ? storedDelegationRequests : []);
 
       syncQueueRef.current = storedQueue || [];
       setSyncQueue(syncQueueRef.current);
@@ -500,6 +508,11 @@ export default function App() {
             if (Array.isArray(res.data.announcements) || hasPendingLocalChanges) { setAnnouncements(syncedAnnouncements); updateStorage('bafa_announcements', syncedAnnouncements); }
             if (Array.isArray(res.data.products) || hasPendingLocalChanges) { setProducts(syncedProducts); updateStorage('bafa_products', syncedProducts); }
             if (Array.isArray(res.data.activities) || hasPendingLocalChanges) { setActivities(syncedActivities); updateStorage('bafa_activities', syncedActivities); }
+            if (Array.isArray(res.data.delegationRequests)) {
+              const syncedDelegations = res.data.delegationRequests as DelegationRequest[];
+              setDelegationRequests(syncedDelegations);
+              updateStorage('bafa_delegation_requests', syncedDelegations);
+            }
             if (Array.isArray(res.data.achievements) || hasPendingLocalChanges) { setAchievements(syncedAchievements); updateStorage('bafa_achievements', syncedAchievements); }
             if (Array.isArray(res.data.funds) || hasPendingLocalChanges) { setFunds(syncedFunds); updateStorage('bafa_funds', syncedFunds); }
             if (Array.isArray(res.data.inventory) || hasPendingLocalChanges) { setInventory(syncedInventory); updateStorage('bafa_inventory', syncedInventory); }
@@ -1103,7 +1116,7 @@ export default function App() {
 
   const executeClearLocalCache = () => {
     setShowClearCacheConfirmModal(false);
-    clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_hog_raising', 'bafa_logs', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync']);
+    clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_delegation_requests', 'bafa_hog_raising', 'bafa_logs', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync']);
     syncQueueRef.current = [];
     deletedIdsRef.current = {};
     setSyncQueue([]);
@@ -2475,11 +2488,12 @@ export default function App() {
   // PRESIDENT APPROVAL WORKFLOW FOR SECRETARY MINUTES OF MEETING
   const handleApproveMeetingMinutes = (id: string, remarks?: string) => {
     const targetMeeting = meetings.find(m => m.id === id);
+    const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = meetings.map(m => m.id === id
       ? {
           ...m,
           minutesApprovalStatus: 'Approved' as const,
-          approvedBy: `President (${getOfficerName('President')})`,
+          approvedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
           approvedDate: new Date().toISOString().split('T')[0],
           approvalRemarks: remarks
         }
@@ -2488,8 +2502,8 @@ export default function App() {
     updateStorage('bafa_meetings', updated);
 
     if (isOnline) {
-      logAction('Approved Minutes of Meeting', `President approved the minutes for: "${targetMeeting?.title || 'Meeting'}"${remarks ? `. Remarks: "${remarks}"` : ''}`);
-      showToastMessage(`Minutes for "${targetMeeting?.title || 'Meeting'}" approved by the President.`, 'success');
+      logAction(`${approvingOfficer} Approved Minutes of Meeting`, `${approvingOfficer} approved the minutes for: "${targetMeeting?.title || 'Meeting'}"${remarks ? `. Remarks: "${remarks}"` : ''}`);
+      showToastMessage(`Minutes for "${targetMeeting?.title || 'Meeting'}" approved by the ${approvingOfficer}.`, 'success');
       pushAllDataToCloud({ meetings: updated }, { silent: true });
     } else {
       addToSyncQueue('update', 'meeting', { id, minutesApprovalStatus: 'Approved', remarks });
@@ -2498,11 +2512,12 @@ export default function App() {
 
   const handleReturnMeetingMinutes = (id: string, remarks: string) => {
     const targetMeeting = meetings.find(m => m.id === id);
+    const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = meetings.map(m => m.id === id
       ? {
           ...m,
           minutesApprovalStatus: 'Returned' as const,
-          approvedBy: `President (${getOfficerName('President')})`,
+          approvedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
           approvedDate: new Date().toISOString().split('T')[0],
           approvalRemarks: remarks
         }
@@ -2511,7 +2526,7 @@ export default function App() {
     updateStorage('bafa_meetings', updated);
 
     if (isOnline) {
-      logAction('Returned Minutes of Meeting', `President returned the minutes for revision: "${targetMeeting?.title || 'Meeting'}". Remarks: "${remarks}"`);
+      logAction(`${approvingOfficer} Returned Minutes of Meeting`, `${approvingOfficer} returned the minutes for revision: "${targetMeeting?.title || 'Meeting'}". Remarks: "${remarks}"`);
       showToastMessage(`Minutes returned to the Secretary for revision.`, 'warning');
       pushAllDataToCloud({ meetings: updated }, { silent: true });
     } else {
@@ -2522,11 +2537,12 @@ export default function App() {
   // PRESIDENT APPROVAL WORKFLOW FOR AUDITED FINANCIAL REPORTS / RECORDS (Auditor → President)
   const handlePresidentApproveTransaction = (id: string, remarks?: string) => {
     const targetTx = transactions.find(t => t.id === id);
+    const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = transactions.map(t => t.id === id
       ? {
           ...t,
           presidentApprovalStatus: 'Approved' as const,
-          presidentApprovedBy: `President (${getOfficerName('President')})`,
+          presidentApprovedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
           presidentApprovedDate: new Date().toISOString().split('T')[0],
           presidentApprovalRemarks: remarks
         }
@@ -2537,8 +2553,8 @@ export default function App() {
     const txDescStr = targetTx ? `PHP ${targetTx.amount.toLocaleString()} (${targetTx.category})` : 'Transaction';
 
     if (isOnline) {
-      logAction('President Approved Financial Record', `President approved the audited financial record: ${txDescStr}${remarks ? `. Remarks: "${remarks}"` : ''}`);
-      showToastMessage(`Financial record approved by the President.`, 'success');
+      logAction(`${approvingOfficer} Approved Financial Record`, `${approvingOfficer} approved the audited financial record: ${txDescStr}${remarks ? `. Remarks: "${remarks}"` : ''}`);
+      showToastMessage(`Financial record approved by the ${approvingOfficer}.`, 'success');
       pushAllDataToCloud(
         { financialTransactions: updated.filter(t => t.id === id), presidentApprovalOnly: true },
         { silent: true, scope: 'presidentApproval' }
@@ -2550,11 +2566,12 @@ export default function App() {
 
   const handlePresidentReturnTransaction = (id: string, remarks: string) => {
     const targetTx = transactions.find(t => t.id === id);
+    const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = transactions.map(t => t.id === id
       ? {
           ...t,
           presidentApprovalStatus: 'Returned' as const,
-          presidentApprovedBy: `President (${getOfficerName('President')})`,
+          presidentApprovedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
           presidentApprovedDate: new Date().toISOString().split('T')[0],
           presidentApprovalRemarks: remarks
         }
@@ -2565,8 +2582,8 @@ export default function App() {
     const txDescStr = targetTx ? `PHP ${targetTx.amount.toLocaleString()} (${targetTx.category})` : 'Transaction';
 
     if (isOnline) {
-      logAction('President Returned Financial Record', `President returned the financial record for revision: ${txDescStr}. Remarks: "${remarks}"`);
-      showToastMessage(`Financial record returned for revision.`, 'warning');
+      logAction(`${approvingOfficer} Returned Financial Record`, `${approvingOfficer} returned the financial record for revision: ${txDescStr}. Remarks: "${remarks}"`);
+      showToastMessage(`Financial record returned by the ${approvingOfficer}.`, 'warning');
       pushAllDataToCloud(
         { financialTransactions: updated.filter(t => t.id === id), presidentApprovalOnly: true },
         { silent: true, scope: 'presidentApproval' }
@@ -2574,6 +2591,117 @@ export default function App() {
     } else {
       addToSyncQueue('update', 'transaction', { id, presidentApprovalStatus: 'Returned', remarks });
     }
+  };
+
+  type DelegationAction =
+    | { action: 'request'; reason: string; scopes: DelegationScope[]; effectiveStart: string; effectiveEnd: string }
+    | { action: 'approve' | 'decline' | 'revoke'; requestId: string; remarks?: string };
+
+  const handleRefreshDelegations = async () => {
+    if (!isOnline || !navigator.onLine || isRefreshingDelegations) return;
+    setIsRefreshingDelegations(true);
+    try {
+      const response = await fetch('/api/sync/pull', { credentials: 'same-origin' });
+      const result = await response.json();
+      if (response.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+      if (!response.ok || !result?.success || !Array.isArray(result.data?.delegationRequests)) {
+        throw new Error(result?.message || 'Unable to refresh delegation requests.');
+      }
+      const latestRequests = result.data.delegationRequests as DelegationRequest[];
+      setDelegationRequests(latestRequests);
+      updateStorage('bafa_delegation_requests', latestRequests);
+    } catch (error) {
+      showToastMessage(error instanceof Error ? error.message : 'Unable to refresh delegation requests.', 'error');
+    } finally {
+      setIsRefreshingDelegations(false);
+    }
+  };
+
+  const submitDelegationAction = async (action: DelegationAction): Promise<DelegationRequest | null> => {
+    if (!isOnline || !navigator.onLine) {
+      showToastMessage('Delegated access requests and reviews require an online connection.', 'error');
+      return null;
+    }
+
+    try {
+      const response = await fetch('/api/sync/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ delegationAction: action })
+      });
+      if (response.status === 401) {
+        handleSessionExpired();
+        return null;
+      }
+      const result = await response.json();
+      if (!response.ok || !result?.success || !result.delegationRequest) {
+        throw new Error(result?.message || 'Unable to save the delegated access request.');
+      }
+
+      const savedRequest = result.delegationRequest as DelegationRequest;
+      const updatedRequests = [
+        ...delegationRequests.filter(request => request.id !== savedRequest.id),
+        savedRequest
+      ];
+      setDelegationRequests(updatedRequests);
+      updateStorage('bafa_delegation_requests', updatedRequests);
+      return savedRequest;
+    } catch (error) {
+      showToastMessage(error instanceof Error ? error.message : 'Unable to save the delegated access request.', 'error');
+      return null;
+    }
+  };
+
+  const handleRequestDelegation = async (request: {
+    reason: string;
+    scopes: DelegationScope[];
+    effectiveStart: string;
+    effectiveEnd: string;
+  }): Promise<boolean> => {
+    if (currentRole !== 'Vice_President') return false;
+    const saved = await submitDelegationAction({ action: 'request', ...request });
+    if (!saved) return false;
+    const updatedLogs = logAction(
+      'Requested Delegated Access',
+      `Requested ${saved.scopes.join(', ')} from ${saved.effectiveStart} through ${saved.effectiveEnd}.`
+    );
+    await pushAllDataToCloud({ systemLogs: [updatedLogs, ...logs] }, { silent: true, source: 'Delegation Request' });
+    showToastMessage('Delegated access request sent to the President.', 'success');
+    return true;
+  };
+
+  const handleReviewDelegation = async (
+    requestId: string,
+    decision: 'approve' | 'decline',
+    remarks?: string
+  ): Promise<boolean> => {
+    if (currentRole !== 'President') return false;
+    const saved = await submitDelegationAction({ action: decision, requestId, remarks });
+    if (!saved) return false;
+    const updatedLogs = logAction(
+      decision === 'approve' ? 'Approved Delegated Access' : 'Declined Delegated Access',
+      `${decision === 'approve' ? 'Approved' : 'Declined'} delegated access for ${saved.requestedBy}${remarks ? `: ${remarks}` : ''}.`
+    );
+    await pushAllDataToCloud({ systemLogs: [updatedLogs, ...logs] }, { silent: true, source: 'Delegation Review' });
+    showToastMessage(`Delegation request ${decision === 'approve' ? 'approved' : 'declined'}.`, 'success');
+    return true;
+  };
+
+  const handleRevokeDelegation = async (requestId: string, remarks?: string): Promise<boolean> => {
+    if (currentRole !== 'President') return false;
+    const saved = await submitDelegationAction({ action: 'revoke', requestId, remarks });
+    if (!saved) return false;
+    const updatedLogs = logAction(
+      'Revoked Delegated Access',
+      `Revoked delegated access for ${saved.requestedBy}${remarks ? `: ${remarks}` : ''}.`
+    );
+    await pushAllDataToCloud({ systemLogs: [updatedLogs, ...logs] }, { silent: true, source: 'Delegation Revocation' });
+    showToastMessage('Delegated access revoked.', 'success');
+    return true;
   };
 
   // USER AUTHENTICATION & MANAGEMENT ACTIONS
@@ -2657,6 +2785,10 @@ export default function App() {
       updateStorage('bafa_products', nextProducts);
       setActivities(nextActivities);
       updateStorage('bafa_activities', nextActivities);
+      if (Array.isArray(data.delegationRequests)) {
+        setDelegationRequests(data.delegationRequests as DelegationRequest[]);
+        updateStorage('bafa_delegation_requests', data.delegationRequests);
+      }
       setAchievements(nextAchievements);
       updateStorage('bafa_achievements', nextAchievements);
       setFunds(nextFunds);
@@ -4142,8 +4274,15 @@ export default function App() {
                 funds={funds}
                 onApproveMeetingMinutes={handleApproveMeetingMinutes}
                 onReturnMeetingMinutes={handleReturnMeetingMinutes}
-                onPresidentApproveTransaction={handlePresidentApproveTransaction}
-                onPresidentReturnTransaction={handlePresidentReturnTransaction}
+                onPresidentReturnTransaction={currentRole === 'President' || hasDelegatedRecordApproval ? handlePresidentReturnTransaction : undefined}
+                onPresidentApproveTransaction={currentRole === 'President' || hasDelegatedRecordApproval ? handlePresidentApproveTransaction : undefined}
+                delegationRequests={delegationRequests}
+                isOnline={isOnline}
+                isRefreshingDelegations={isRefreshingDelegations}
+                onRefreshDelegations={handleRefreshDelegations}
+                onRequestDelegation={handleRequestDelegation}
+                onReviewDelegation={handleReviewDelegation}
+                onRevokeDelegation={handleRevokeDelegation}
                 onUpdateUser={(updatedUser) => {
                   const exists = users.some(u => u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase());
                   const updated = exists
@@ -4281,6 +4420,7 @@ export default function App() {
                 onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
                 isAuditor={currentRole === 'Auditor'}
                 isPresident={currentRole === 'President'}
+                canSignEggHarvests={hasDelegatedRecordApproval}
                 onAddProduce={handleAddProduce}
                 onDeleteProduce={handleDeleteProduce}
                 isTreasurerOrOfficer={['Auditor', 'Treasurer', 'Assistant_Treasurer', 'President', 'Vice_President'].includes(currentRole || '')}
@@ -4311,7 +4451,7 @@ export default function App() {
           {officerTab === 'announcements' && (
             <div id="officer-announcements-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
               {/* The President (system admin) can publish and manage announcements. */}
-              {currentRole === 'President' ? (
+              {currentRole === 'President' || hasDelegatedContentPosting ? (
                 <PioView
                   announcements={announcements}
                   activities={activities}
@@ -4323,7 +4463,11 @@ export default function App() {
                   onAddActivity={handleAddActivity}
                   onUpdateActivity={handleUpdateActivity}
                   onDeleteActivity={handleDeleteActivity}
-                  postedByName={`President (${currentUser?.name || 'AFA President'})`}
+                  postedByName={currentRole === 'President'
+                    ? `President (${currentUser?.name || 'AFA President'})`
+                    : `Vice President (${currentUser?.name || 'AFA Vice President'})`}
+                  activityOrganizerName={currentRole === 'President' ? `President (${currentUser?.name || 'AFA President'})` : `Vice President (${currentUser?.name || 'AFA Vice President'})`}
+                  postingOnly={currentRole === 'Vice_President'}
                 />
               ) : (
                 <AnnouncementDashboard

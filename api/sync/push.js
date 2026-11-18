@@ -1,3 +1,6 @@
+// src/api/push.ts
+import { randomUUID } from "node:crypto";
+
 // src/api/db.ts
 import pg from "pg";
 
@@ -643,6 +646,7 @@ async function runSchemaMigrations(client) {
       id VARCHAR(100) PRIMARY KEY,
       requested_by TEXT NOT NULL,
       reason TEXT NOT NULL,
+      scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
       requested_date VARCHAR(50) NOT NULL,
       effective_start VARCHAR(50),
       effective_end VARCHAR(50),
@@ -651,6 +655,7 @@ async function runSchemaMigrations(client) {
       reviewed_date VARCHAR(50),
       remarks TEXT
     );`,
+    `ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb;`,
     `DO $$
       DECLARE queue_has_rows BOOLEAN;
       BEGIN
@@ -1009,6 +1014,7 @@ async function initDatabaseSchema(pool) {
         id VARCHAR(100) PRIMARY KEY,
         requested_by TEXT NOT NULL,
         reason TEXT NOT NULL,
+        scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
         requested_date VARCHAR(50) NOT NULL,
         effective_start VARCHAR(50),
         effective_end VARCHAR(50),
@@ -1018,6 +1024,7 @@ async function initDatabaseSchema(pool) {
         remarks TEXT
       );
     `);
+    await client.query(`ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb`);
     await client.query("COMMIT");
     console.log("[DB DEBUG] Database schema initialized successfully");
   } catch (err) {
@@ -1987,37 +1994,6 @@ async function saveFullStateToPostgres(pool, state) {
       }
       console.log("[DB DEBUG] Auditor reports saved");
     }
-    if (state.delegationRequests && Array.isArray(state.delegationRequests)) {
-      console.log("[DB DEBUG] Saving", state.delegationRequests.length, "delegation requests...");
-      for (const dr of state.delegationRequests) {
-        await client.query(`
-          INSERT INTO delegation_requests (id, requested_by, reason, requested_date, effective_start, effective_end, status, reviewed_by, reviewed_date, remarks)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          ON CONFLICT (id) DO UPDATE SET
-            requested_by = EXCLUDED.requested_by,
-            reason = EXCLUDED.reason,
-            requested_date = EXCLUDED.requested_date,
-            effective_start = EXCLUDED.effective_start,
-            effective_end = EXCLUDED.effective_end,
-            status = EXCLUDED.status,
-            reviewed_by = EXCLUDED.reviewed_by,
-            reviewed_date = EXCLUDED.reviewed_date,
-            remarks = EXCLUDED.remarks;
-        `, [
-          dr.id,
-          cleanText(dr.requestedBy, 200) || "Officer",
-          cleanText(dr.reason, 2e3) || "Delegation",
-          cleanDateString(dr.requestedDate, 50),
-          cleanDateString(dr.effectiveStart, 50),
-          cleanDateString(dr.effectiveEnd, 50),
-          cleanText(dr.status, 50) || "Pending",
-          cleanText(dr.reviewedBy, 200),
-          cleanDateString(dr.reviewedDate, 50),
-          cleanText(dr.remarks, 2e3)
-        ]);
-      }
-      console.log("[DB DEBUG] Delegation requests saved");
-    }
     const saveMappings = [
       { table: "members", deletedIds: deletedMemberIds, fields: [
         ["name", "name", (r) => r.name],
@@ -2175,6 +2151,7 @@ async function saveFullStateToPostgres(pool, state) {
       { table: "delegation_requests", deletedIds: deletedDelegationIds, fields: [
         ["requested_by", "requestedBy", (r) => r.requestedBy],
         ["reason", "reason", (r) => r.reason],
+        ["scopes", "scopes", (r) => JSON.stringify(Array.isArray(r.scopes) ? r.scopes : [])],
         ["requested_date", "requestedDate", (r) => r.requestedDate],
         ["effective_start", "effectiveStart", (r) => r.effectiveStart || null],
         ["effective_end", "effectiveEnd", (r) => r.effectiveEnd || null],
@@ -2429,6 +2406,31 @@ async function requireAuthenticated(req, res) {
   }
 }
 
+// src/utils/delegation.ts
+var DELEGATION_SCOPES = [
+  "password_change",
+  "record_approval",
+  "announcements_activities"
+];
+function getActiveDelegationScopes(requests, userId, at = /* @__PURE__ */ new Date()) {
+  const today = at.toISOString().slice(0, 10);
+  const activeScopes = /* @__PURE__ */ new Set();
+  for (const request of requests) {
+    if (request.requestedBy !== userId || request.status !== "Approved" || request.effectiveStart > today || request.effectiveEnd < today) {
+      continue;
+    }
+    for (const scope of request.scopes || []) {
+      if (DELEGATION_SCOPES.includes(scope)) activeScopes.add(scope);
+    }
+  }
+  return activeScopes;
+}
+function isValidDelegationDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = /* @__PURE__ */ new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 // src/api/push.ts
 var MAX_EGG_COUNT = 1e5;
 var ASSIGNABLE_ROLES = [
@@ -2457,6 +2459,103 @@ var AUDITOR_REVIEW_FIELDS = [
   "auditedDate",
   "auditNotes"
 ];
+function isVicePresidentRole(role) {
+  return role.trim().toLowerCase().replace(/\s+/g, "_") === "vice_president";
+}
+function toDelegationRequest(row) {
+  return {
+    id: String(row.id),
+    requestedBy: String(row.requested_by),
+    reason: String(row.reason || ""),
+    scopes: Array.isArray(row.scopes) ? row.scopes : [],
+    requestedDate: String(row.requested_date || ""),
+    effectiveStart: String(row.effective_start || ""),
+    effectiveEnd: String(row.effective_end || ""),
+    status: row.status,
+    reviewedBy: row.reviewed_by || void 0,
+    reviewedDate: row.reviewed_date || void 0,
+    remarks: row.remarks || void 0
+  };
+}
+async function getUserDelegationScopes(userId) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const result = await getPool().query(
+    `SELECT id, requested_by, reason, scopes, requested_date, effective_start, effective_end,
+            status, reviewed_by, reviewed_date, remarks
+     FROM delegation_requests
+     WHERE requested_by = $1 AND status = 'Approved'
+       AND effective_start <= $2 AND effective_end >= $2`,
+    [userId, today]
+  );
+  return getActiveDelegationScopes(result.rows.map(toDelegationRequest), userId);
+}
+async function handleDelegationAction(action, user, res) {
+  const pool = getPool();
+  const actionType = action.action;
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  if (actionType === "request") {
+    if (!isVicePresidentRole(user.role)) {
+      sendResponse(res, 403, { success: false, message: "Only the Vice President may request delegated access." });
+      return;
+    }
+    const reason = typeof action.reason === "string" ? action.reason.trim() : "";
+    const scopes = Array.isArray(action.scopes) ? [...new Set(action.scopes.filter(
+      (scope) => typeof scope === "string" && DELEGATION_SCOPES.includes(scope)
+    ))] : [];
+    const effectiveStart = typeof action.effectiveStart === "string" ? action.effectiveStart : "";
+    const effectiveEnd = typeof action.effectiveEnd === "string" ? action.effectiveEnd : "";
+    if (!reason || reason.length > 2e3 || scopes.length === 0 || !isValidDelegationDate(effectiveStart) || !isValidDelegationDate(effectiveEnd) || effectiveStart < today || effectiveEnd < effectiveStart) {
+      sendResponse(res, 400, { success: false, message: "Provide a reason, at least one valid scope, and a valid future access period." });
+      return;
+    }
+    const inserted = await pool.query(
+      `INSERT INTO delegation_requests
+        (id, requested_by, reason, scopes, requested_date, effective_start, effective_end, status)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, 'Pending')
+       RETURNING id, requested_by, reason, scopes, requested_date, effective_start, effective_end,
+                 status, reviewed_by, reviewed_date, remarks`,
+      [randomUUID(), user.id, reason, JSON.stringify(scopes), today, effectiveStart, effectiveEnd]
+    );
+    sendResponse(res, 200, {
+      success: true,
+      delegationRequest: toDelegationRequest(inserted.rows[0])
+    });
+    return;
+  }
+  if (actionType !== "approve" && actionType !== "decline" && actionType !== "revoke") {
+    sendResponse(res, 400, { success: false, message: "A valid delegation action is required." });
+    return;
+  }
+  if (!isPresidentRole(user.role)) {
+    sendResponse(res, 403, { success: false, message: "Only the President may review or revoke delegated access." });
+    return;
+  }
+  const requestId = typeof action.requestId === "string" ? action.requestId.trim() : "";
+  const remarks = typeof action.remarks === "string" ? action.remarks.trim() : "";
+  if (!requestId || requestId.length > 100 || remarks.length > 2e3) {
+    sendResponse(res, 400, { success: false, message: "A valid request and remarks are required." });
+    return;
+  }
+  const nextStatus = actionType === "approve" ? "Approved" : actionType === "decline" ? "Declined" : "Revoked";
+  const allowedStatus = actionType === "revoke" ? "Approved" : "Pending";
+  const updated = await pool.query(
+    `UPDATE delegation_requests
+     SET status = $1, reviewed_by = $2, reviewed_date = $3, remarks = $4
+     WHERE id = $5 AND status = $6
+       AND ($7 <> 'Revoked' OR effective_end >= $3)
+     RETURNING id, requested_by, reason, scopes, requested_date, effective_start, effective_end,
+               status, reviewed_by, reviewed_date, remarks`,
+    [nextStatus, user.id, today, remarks || null, requestId, allowedStatus, nextStatus]
+  );
+  if (updated.rowCount === 0) {
+    sendResponse(res, 409, { success: false, message: "The request is no longer pending or active." });
+    return;
+  }
+  sendResponse(res, 200, {
+    success: true,
+    delegationRequest: toDelegationRequest(updated.rows[0])
+  });
+}
 function extractAuditorReview(state, role) {
   const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
   if (normalized !== "auditor") return null;
@@ -2477,8 +2576,8 @@ function extractAuditorReview(state, role) {
   }
   return reviews.length > 0 ? reviews : null;
 }
-function extractPresidentFinancialApproval(state, role) {
-  if (!isPresidentRole(role)) return null;
+function extractPresidentFinancialApproval(state, role, hasDelegatedApproval = false) {
+  if (!isPresidentRole(role) && !(hasDelegatedApproval && isVicePresidentRole(role))) return null;
   const incoming = state.financialTransactions ?? state.transactions;
   if (!Array.isArray(incoming)) return null;
   const approvals = [];
@@ -2496,13 +2595,13 @@ function extractPresidentFinancialApproval(state, role) {
   }
   return approvals.length > 0 ? approvals : null;
 }
-function separateEggHarvestsFromFinancialState(state, role, name) {
+function separateEggHarvestsFromFinancialState(state, role, name, hasDelegatedApproval = false) {
   const safeState = { ...state };
   const hogRaising = safeState.hogRaising;
   const eggHarvests = Array.isArray(safeState.eggHarvests) ? safeState.eggHarvests : Array.isArray(hogRaising?.eggHarvests) ? hogRaising.eggHarvests : [];
   const normalizedRole = role.trim().toLowerCase().replace(/\s+/g, "_");
   const isMember = normalizedRole === "member";
-  const mayUpdateEggWorkflow = normalizedRole === "auditor" || normalizedRole === "president";
+  const mayUpdateEggWorkflow = normalizedRole === "auditor" || normalizedRole === "president" || normalizedRole === "vice_president" && hasDelegatedApproval;
   for (const key of ["transactions", "financialTransactions", "funds", "organizationFunds", "hogRaising"]) {
     delete safeState[key];
   }
@@ -2555,7 +2654,20 @@ async function handler(req, res) {
     if (!isValidSyncState(rawState)) {
       return sendResponse(res, 400, { success: false, message: "A valid state object is required." });
     }
+    await ensureDatabaseSchema(getPool());
     const state = rawState;
+    if (state.delegationAction !== void 0) {
+      if (Object.keys(state).length !== 1 || typeof state.delegationAction !== "object" || state.delegationAction === null) {
+        return sendResponse(res, 400, { success: false, message: "Delegation actions must be sent separately." });
+      }
+      await handleDelegationAction(state.delegationAction, user, res);
+      return;
+    }
+    if (state.delegationRequests !== void 0) {
+      return sendResponse(res, 403, { success: false, message: "Delegation records can only be changed through the review workflow." });
+    }
+    const isVicePresident = isVicePresidentRole(user.role);
+    const delegationScopes = isVicePresident ? await getUserDelegationScopes(user.id) : /* @__PURE__ */ new Set();
     if (state.roleUpdate !== void 0) {
       if (!isPresidentRole(user.role)) {
         return sendResponse(res, 403, { success: false, message: "Only the President may designate or reassign officer roles." });
@@ -2594,6 +2706,69 @@ async function handler(req, res) {
     if (Array.isArray(safeState.users)) {
       safeState.users = sanitizeUserRows(safeState.users, { roleAuthorized });
     }
+    if (isVicePresident) {
+      const deletedAnnouncements = Array.isArray(safeState.deletedIds?.announcements) ? safeState.deletedIds.announcements : [];
+      const deletedActivities = Array.isArray(safeState.deletedIds?.activities) ? safeState.deletedIds.activities : [];
+      const deleteEntity = String(safeState.deleteItem?.entity || "").toLowerCase().replace(/[\s-]/g, "_");
+      if (deletedAnnouncements.length > 0 || deletedActivities.length > 0 || ["announcement", "announcements", "activity", "activities"].includes(deleteEntity)) {
+        return sendResponse(res, 403, { success: false, message: "Delegated publishing does not include editing or deleting existing posts." });
+      }
+      const contentAllowed = delegationScopes.has("announcements_activities");
+      for (const entity of ["announcements", "activities"]) {
+        const incoming = safeState[entity];
+        if (!Array.isArray(incoming)) continue;
+        const ids = incoming.filter((record) => record && typeof record.id === "string").map((record) => String(record.id).slice(0, 100));
+        const existing = ids.length > 0 ? await getPool().query(`SELECT id FROM ${entity} WHERE id = ANY($1::varchar[])`, [ids]) : { rows: [] };
+        const existingIds = new Set(existing.rows.map((row) => row.id));
+        const newRecords = incoming.filter(
+          (record) => record && typeof record.id === "string" && !existingIds.has(String(record.id).slice(0, 100))
+        );
+        if (newRecords.length > 0 && !contentAllowed) {
+          return sendResponse(res, 403, { success: false, message: "An active announcement and activity delegation is required to publish." });
+        }
+        if (!contentAllowed) {
+          delete safeState[entity];
+        } else if (entity === "announcements") {
+          if (newRecords.some(
+            (record) => typeof record.title !== "string" || !record.title.trim() || typeof record.content !== "string" || !record.content.trim()
+          )) {
+            return sendResponse(res, 400, { success: false, message: "A title and announcement content are required." });
+          }
+          safeState.announcements = newRecords.map((record) => ({
+            id: String(record.id).slice(0, 100),
+            title: typeof record.title === "string" ? record.title.slice(0, 200) : "",
+            category: typeof record.category === "string" ? record.category.slice(0, 100) : "General",
+            content: typeof record.content === "string" ? record.content.slice(0, 1e4) : "",
+            datePosted: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+            priority: ["Low", "Medium", "High"].includes(record.priority) ? record.priority : "Low",
+            postedBy: `Vice President (${user.name})`
+          }));
+        } else {
+          if (newRecords.some(
+            (record) => typeof record.title !== "string" || !record.title.trim() || typeof record.description !== "string" || !record.description.trim() || typeof (record.scheduledDate || record.dateScheduled) !== "string" || typeof record.location !== "string" || !record.location.trim()
+          )) {
+            return sendResponse(res, 400, { success: false, message: "A title, date, location, and activity description are required." });
+          }
+          safeState.activities = newRecords.map((record) => ({
+            id: String(record.id).slice(0, 100),
+            title: typeof record.title === "string" ? record.title.slice(0, 200) : "",
+            cebTitle: typeof record.cebTitle === "string" ? record.cebTitle.slice(0, 200) : void 0,
+            category: typeof record.category === "string" ? record.category.slice(0, 100) : "General",
+            scheduledDate: typeof record.scheduledDate === "string" ? record.scheduledDate.slice(0, 50) : "",
+            dateScheduled: typeof record.dateScheduled === "string" ? record.dateScheduled.slice(0, 50) : void 0,
+            scheduledTime: typeof record.scheduledTime === "string" ? record.scheduledTime.slice(0, 50) : "",
+            timeScheduled: typeof record.timeScheduled === "string" ? record.timeScheduled.slice(0, 50) : void 0,
+            location: typeof record.location === "string" ? record.location.slice(0, 500) : "",
+            description: typeof record.description === "string" ? record.description.slice(0, 1e4) : "",
+            organizer: `Vice President (${user.name})`,
+            status: "Scheduled",
+            documentedNotes: typeof record.documentedNotes === "string" ? record.documentedNotes.slice(0, 5e3) : void 0,
+            attendeesCount: 0,
+            targetAudience: typeof record.targetAudience === "string" ? record.targetAudience.slice(0, 500) : void 0
+          }));
+        }
+      }
+    }
     if (!isPresidentRole(user.role) && user.role.trim().toLowerCase() !== "pio") {
       delete safeState.achievements;
       if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
@@ -2604,10 +2779,14 @@ async function handler(req, res) {
         delete safeState.deleteItem;
       }
     }
+    if (isVicePresident && Array.isArray(state.eggHarvests) && state.eggHarvests.length > 0 && !delegationScopes.has("record_approval")) {
+      return sendResponse(res, 403, { success: false, message: "An active record-approval delegation is required for egg-harvest sign-off." });
+    }
     if (!isTreasurerRole(user.role)) {
-      const presidentApproval = extractPresidentFinancialApproval(state, user.role);
+      const delegatedRecordApproval = isVicePresident && delegationScopes.has("record_approval");
+      const presidentApproval = extractPresidentFinancialApproval(state, user.role, delegatedRecordApproval);
       const auditorReview = extractAuditorReview(state, user.role);
-      safeState = separateEggHarvestsFromFinancialState(safeState, user.role, user.name);
+      safeState = separateEggHarvestsFromFinancialState(safeState, user.role, user.name, delegatedRecordApproval);
       if (presidentApproval) {
         safeState.financialTransactions = presidentApproval;
         safeState.presidentApprovalOnly = true;

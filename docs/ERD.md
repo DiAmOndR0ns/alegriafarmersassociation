@@ -138,13 +138,14 @@ erDiagram
 
     DELEGATION_REQUESTS {
         varchar id PK
-        text requested_by "NOT NULL (President)"
+        text requested_by "NOT NULL (Vice President user ID)"
         text reason "NOT NULL"
+        jsonb scopes "password change, record approval, announcements and activities"
         varchar requested_date "NOT NULL"
         varchar effective_start
         varchar effective_end
         varchar status "Pending | Approved | Declined | Revoked"
-        text reviewed_by "Vice President"
+        text reviewed_by "President user ID"
         varchar reviewed_date
         text remarks
     }

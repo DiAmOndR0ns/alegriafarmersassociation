@@ -26,6 +26,7 @@ interface LivestockMonitorProps {
   onUpdateEggHarvestStatus?: (id: string, action: 'audit' | 'sign' | 'return', remarks?: string) => void;
   isAuditor?: boolean;
   isPresident?: boolean;
+  canSignEggHarvests?: boolean;
   onAddProduce?: (produce: string) => void;
   onDeleteProduce?: (produce: string) => void;
   isTreasurerOrOfficer: boolean;
@@ -111,7 +112,9 @@ export default function LivestockMonitor({
   onUpdateEggHarvestStatus,
   isAuditor = false,
   isPresident = false,
+  canSignEggHarvests = false,
 }: LivestockMonitorProps) {
+  const maySignEggHarvests = isPresident || canSignEggHarvests;
   // ---------- Projects ----------
   const rawProduces = state.produces && state.produces.length > 0 ? state.produces : DEFAULT_PROJECTS;
   const produces = useMemo(
@@ -1461,11 +1464,13 @@ export default function LivestockMonitor({
             </div>
           </div>
 
-          {(isAuditor || isPresident) && (
+          {(isAuditor || maySignEggHarvests) && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs font-bold text-[#8A4B08]">
               {isAuditor
                 ? 'As Auditor, check that each submitted amount is accurate, then verify it. Only verified records can be signed by the President.'
-                : 'As President, you are the last signatory: only records already verified by the Auditor can be signed.'}
+                : isPresident
+                  ? 'As President, you are the last signatory: only records already verified by the Auditor can be signed.'
+                  : 'As an approved delegate, you may sign records verified by the Auditor during your authorized period.'}
               <div className="mt-2">
                 <input
                   type="text"
@@ -1487,12 +1492,12 @@ export default function LivestockMonitor({
                   <th className="py-2.5 pr-3 text-right font-black">Eggs</th>
                   <th className="py-2.5 pr-3 font-black">Notes</th>
                   <th className="py-2.5 pr-3 font-black">Status</th>
-                  {(isAuditor || isPresident) && <th className="py-2.5 text-center font-black">Actions</th>}
+                  {(isAuditor || maySignEggHarvests) && <th className="py-2.5 text-center font-black">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(state.eggHarvests || []).length === 0 ? (
-                  <tr><td colSpan={isAuditor || isPresident ? 6 : 5} className="py-6 text-center text-slate-500">No egg harvest submitted yet.</td></tr>
+                  <tr><td colSpan={isAuditor || maySignEggHarvests ? 6 : 5} className="py-6 text-center text-slate-500">No egg harvest submitted yet.</td></tr>
                 ) : null}
                 {(state.eggHarvests || []).map((h) => (
                   <tr key={h.id} className="hover:bg-slate-50/70 transition-colors">
@@ -1516,7 +1521,7 @@ export default function LivestockMonitor({
                         <span className="block mt-1 text-[10px] text-slate-500">Signed by {h.signedBy}{h.signedDate ? ` on ${h.signedDate}` : ''}</span>
                       )}
                     </td>
-                    {(isAuditor || isPresident) && (
+                    {(isAuditor || maySignEggHarvests) && (
                       <td className="py-2.5 text-center whitespace-nowrap">
                         {isAuditor && h.status === 'Pending Audit' && (
                           <div className="flex items-center justify-center gap-1.5">
@@ -1538,17 +1543,17 @@ export default function LivestockMonitor({
                             </button>
                           </div>
                         )}
-                        {isPresident && h.status === 'Audited' && (
+                        {maySignEggHarvests && h.status === 'Audited' && (
                           <button
                             type="button"
                             onClick={() => onUpdateEggHarvestStatus?.(h.id, 'sign', approvalRemarks.trim() || undefined)}
                             className="px-2 py-1 text-[10px] font-bold rounded-lg bg-[#1B4332] text-white hover:bg-[#143326] cursor-pointer"
-                            title="Sign off the verified record (President signs last)"
+                            title={isPresident ? 'Sign off the verified record (President signs last)' : 'Sign off the verified record under delegated authority'}
                           >
                             Sign Off
                           </button>
                         )}
-                        {!(isAuditor && h.status === 'Pending Audit') && !(isPresident && h.status === 'Audited') && (
+                        {!(isAuditor && h.status === 'Pending Audit') && !(maySignEggHarvests && h.status === 'Audited') && (
                           <span className="text-[10px] font-bold text-slate-400">{h.status === 'Signed' ? 'Complete' : h.status === 'Returned' ? 'Awaiting resubmission' : 'Awaiting next step'}</span>
                         )}
                       </td>

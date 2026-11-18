@@ -336,13 +336,16 @@ export interface AuditorReport {
   dateCertified?: string;
 }
 
+export type DelegationScope = 'password_change' | 'record_approval' | 'announcements_activities';
+
 export interface DelegationRequest {
   id: string;
   requestedBy: string;
   reason: string;
+  scopes: DelegationScope[];
   requestedDate: string;
-  effectiveStart?: string;
-  effectiveEnd?: string;
+  effectiveStart: string;
+  effectiveEnd: string;
   status: 'Pending' | 'Approved' | 'Declined' | 'Revoked';
   reviewedBy?: string;
   reviewedDate?: string;

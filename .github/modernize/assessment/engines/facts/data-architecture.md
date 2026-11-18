@@ -46,7 +46,7 @@ All tables use a string `id` primary key unless noted; `afa_igp_livestock` is ke
 | `achievements` | `id` PK | Year, title, descriptions, icon | Standalone table; no relational links. |
 | `organization_funds` | `id` PK | Name, code, initial/current balances, category, source, custodian | Transactions refer to a textual fund source, not a fund ID. Fund code is intentionally not unique. |
 | `auditor_reports` | `id` PK | Period/type, totals, findings, recommendations, preparer/certifier and status | Totals and names are report snapshots; no FK to transactions or users. |
-| `delegation_requests` | `id` PK | Requester/reviewer names, reason, date range, status and remarks | Requester/reviewer are text; no FK to users. |
+| `delegation_requests` | `id` PK | Requester/reviewer IDs, reason, permitted scopes, effective dates, status and review remarks | IDs are stored as text without user FKs; approved scopes expire by date and may be revoked. |
 
 ### Observed schema and relationship gaps
 

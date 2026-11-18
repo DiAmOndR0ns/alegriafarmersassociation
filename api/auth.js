@@ -713,6 +713,7 @@ async function runSchemaMigrations(client) {
       id VARCHAR(100) PRIMARY KEY,
       requested_by TEXT NOT NULL,
       reason TEXT NOT NULL,
+      scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
       requested_date VARCHAR(50) NOT NULL,
       effective_start VARCHAR(50),
       effective_end VARCHAR(50),
@@ -721,6 +722,7 @@ async function runSchemaMigrations(client) {
       reviewed_date VARCHAR(50),
       remarks TEXT
     );`,
+    `ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb;`,
     `DO $$
       DECLARE queue_has_rows BOOLEAN;
       BEGIN
@@ -1079,6 +1081,7 @@ async function initDatabaseSchema(pool) {
         id VARCHAR(100) PRIMARY KEY,
         requested_by TEXT NOT NULL,
         reason TEXT NOT NULL,
+        scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
         requested_date VARCHAR(50) NOT NULL,
         effective_start VARCHAR(50),
         effective_end VARCHAR(50),
@@ -1088,6 +1091,7 @@ async function initDatabaseSchema(pool) {
         remarks TEXT
       );
     `);
+    await client.query(`ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb`);
     await client.query("COMMIT");
     console.log("[DB DEBUG] Database schema initialized successfully");
   } catch (err) {

@@ -61,6 +61,26 @@ describe('extractPresidentFinancialApproval', () => {
     expect(extractPresidentFinancialApproval(state, 'Auditor')).toBeNull();
     expect(extractPresidentFinancialApproval(state, 'Treasurer')).toBeNull();
     expect(extractPresidentFinancialApproval(state, 'Member')).toBeNull();
+    expect(extractPresidentFinancialApproval(state, 'Vice_President')).toBeNull();
+  });
+
+  it('allows only a delegated Vice President to submit financial sign-off fields', () => {
+    const state = {
+      financialTransactions: [
+        transaction({
+          presidentApprovalStatus: 'Approved',
+          presidentApprovedBy: 'Vice President (Maria)'
+        })
+      ]
+    };
+
+    expect(extractPresidentFinancialApproval(state, 'Vice_President', true)).toEqual([
+      {
+        id: 'tx-1',
+        presidentApprovalStatus: 'Approved',
+        presidentApprovedBy: 'Vice President (Maria)'
+      }
+    ]);
   });
 });
 
@@ -123,5 +143,20 @@ describe('separateEggHarvestsFromFinancialState', () => {
     expect(safe).not.toHaveProperty('funds');
     expect(safe).not.toHaveProperty('financialTransactions');
     expect(safe.members).toEqual([{ id: 'm-1' }]);
+  });
+
+  it('keeps harvest workflow updates from a delegated Vice President', () => {
+    const safe = separateEggHarvestsFromFinancialState(
+      {
+        hogRaising: {
+          eggHarvests: [{ id: 'harvest-1', status: 'Signed' }]
+        }
+      },
+      'Vice_President',
+      'Maria',
+      true
+    );
+
+    expect(safe.eggHarvests).toEqual([{ id: 'harvest-1', status: 'Signed' }]);
   });
 });

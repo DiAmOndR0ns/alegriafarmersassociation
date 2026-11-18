@@ -22,6 +22,8 @@ interface PioViewProps {
   onOpenReportModal?: () => void;
   /** Name credited as the author of new announcements (defaults to the PIO). */
   postedByName?: string;
+  activityOrganizerName?: string;
+  postingOnly?: boolean;
 }
 
 export default function PioView({
@@ -36,7 +38,9 @@ export default function PioView({
   onUpdateActivity,
   onDeleteActivity,
   onOpenReportModal,
-  postedByName = 'PIO'
+  postedByName = 'PIO',
+  activityOrganizerName = 'PIO',
+  postingOnly = false
 }: PioViewProps) {
   const { t, isEnglish: en } = useLanguage();
   const [activeTab, setActiveTab] = useState<'bulletins' | 'activities' | 'achievements'>('bulletins');
@@ -163,6 +167,7 @@ export default function PioView({
     }
 
     if (editingActivity) {
+      if (postingOnly) return;
       onUpdateActivity({
         ...editingActivity,
         title: actTitle,
@@ -193,7 +198,7 @@ export default function PioView({
         targetAudience: actAudience,
         status: 'Scheduled',
         documentedNotes: actNotes,
-        organizer: 'PIO'
+        organizer: activityOrganizerName
       });
     }
 
@@ -233,7 +238,7 @@ export default function PioView({
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Megaphone className="w-5 h-5 text-emerald-200" />
-            <span>PIO Communications & Activity Management</span>
+            <span>{postingOnly ? 'Authorized Announcement & Activity Posting' : 'PIO Communications & Activity Management'}</span>
           </h2>
         </div>
 
@@ -300,7 +305,7 @@ export default function PioView({
           <Calendar className="w-4 h-4" />
           <span>Activities ({activities.length})</span>
         </button>
-        <button
+        {!postingOnly && <button
           onClick={() => setActiveTab('achievements')}
           className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
             activeTab === 'achievements'
@@ -310,10 +315,10 @@ export default function PioView({
         >
           <Trophy className="w-4 h-4" />
           <span>Achievements ({achievements.length})</span>
-        </button>
+        </button>}
       </div>
 
-      {activeTab === 'achievements' && (
+      {!postingOnly && activeTab === 'achievements' && (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-5">
           <form onSubmit={handleAddAchievement} className="bg-white border border-[#D5CFC1] rounded-2xl p-5 space-y-3 shadow-sm">
             <h3 className="text-base font-black text-[#1B4332]">Add Association Achievement</h3>
@@ -406,14 +411,14 @@ export default function PioView({
 
                 <div className="mt-5 pt-3.5 border-t border-[#E9E4D9] flex justify-between items-center text-xs">
                   <span className="text-[#6A7F72]">By: {ann.postedBy}</span>
-                  <button
+                  {!postingOnly && <button
                     id={`delete-ann-${ann.id}`}
                     onClick={() => onDeleteAnnouncement(ann.id)}
                     className="text-slate-500 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10 transition-all shrink-0 cursor-pointer"
                     title="Delete Announcement"
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </button>}
                 </div>
               </div>
             ))
@@ -458,16 +463,16 @@ export default function PioView({
                           {act.status}
                         </span>
 
-                        <button
+                        {!postingOnly && <button
                           type="button"
                           onClick={() => handleOpenEditActivity(act)}
                           className="p-1.5 rounded-lg bg-[#F5FAF6] border border-[#D5CFC1] text-[#4B6259] hover:text-[#1B4332] transition-all cursor-pointer"
                           title="Edit Activity & Record Documentation"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
-                        </button>
+                        </button>}
 
-                        <button
+                        {!postingOnly && <button
                           type="button"
                           onClick={() => {
                             if (confirm(`Sigurado ka nga gusto nimong idelete ang ${act.title}?`)) {
@@ -478,7 +483,7 @@ export default function PioView({
                           title="Delete Activity"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        </button>}
                       </div>
                     </div>
 

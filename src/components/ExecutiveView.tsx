@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
-import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, HogRaisingState, OrganizationFund, PasswordResetResult } from '../types';
+import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, HogRaisingState, OrganizationFund, PasswordResetResult, DelegationRequest, DelegationScope } from '../types';
 import {
   ShieldCheck, Users, Coins, BookOpen, FileCheck, Activity, Check, X,
   KeyRound, Trash2, Clock, Smartphone, AlertTriangle, Printer, Calendar,
@@ -10,6 +10,7 @@ import { buildAuditChain } from '../utils/audit';
 import { getInitialFund } from '../utils/fundBalance';
 import { generateInitialPassword } from '../utils/passwordPolicy';
 import PrintMinutesModal from './PrintMinutesModal';
+import DelegationAccessPanel from './DelegationAccessPanel';
 import { useLanguage } from '../i18n/LanguageContext';
 import {
   Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, LabelList
@@ -56,6 +57,18 @@ interface ExecutiveViewProps {
   onPresidentApproveTransaction?: (id: string, remarks?: string) => void;
   onPresidentReturnTransaction?: (id: string, remarks: string) => void;
   onUpdateUser?: (updatedUser: User) => void;
+  delegationRequests?: DelegationRequest[];
+  isOnline?: boolean;
+  isRefreshingDelegations?: boolean;
+  onRefreshDelegations?: () => Promise<void>;
+  onRequestDelegation?: (request: {
+    reason: string;
+    scopes: DelegationScope[];
+    effectiveStart: string;
+    effectiveEnd: string;
+  }) => Promise<boolean>;
+  onReviewDelegation?: (requestId: string, decision: 'approve' | 'decline', remarks?: string) => Promise<boolean>;
+  onRevokeDelegation?: (requestId: string, remarks?: string) => Promise<boolean>;
 }
 
 export default function ExecutiveView({
@@ -86,7 +99,14 @@ export default function ExecutiveView({
   onReturnMeetingMinutes,
   onPresidentApproveTransaction,
   onPresidentReturnTransaction,
-  onUpdateUser
+  onUpdateUser,
+  delegationRequests = [],
+  isOnline = true,
+  isRefreshingDelegations = false,
+  onRefreshDelegations,
+  onRequestDelegation,
+  onReviewDelegation,
+  onRevokeDelegation
 }: ExecutiveViewProps) {
   const { t, isEnglish } = useLanguage();
 
@@ -575,6 +595,21 @@ export default function ExecutiveView({
           </button>
         </div>
       </div>
+
+      {onRequestDelegation && onReviewDelegation && onRevokeDelegation && onRefreshDelegations && (
+        <DelegationAccessPanel
+          currentRole={currentRole}
+          currentUserId={currentUserId}
+          users={users}
+          requests={delegationRequests}
+          isOnline={isOnline}
+          isRefreshing={isRefreshingDelegations}
+          onRefresh={onRefreshDelegations}
+          onRequest={onRequestDelegation}
+          onReview={onReviewDelegation}
+          onRevoke={onRevokeDelegation}
+        />
+      )}
 
       {/* OVERVIEW SCOREBOARD */}
 {(() => {

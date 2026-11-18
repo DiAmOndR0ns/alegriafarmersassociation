@@ -637,6 +637,7 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
       id VARCHAR(100) PRIMARY KEY,
       requested_by TEXT NOT NULL,
       reason TEXT NOT NULL,
+      scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
       requested_date VARCHAR(50) NOT NULL,
       effective_start VARCHAR(50),
       effective_end VARCHAR(50),
@@ -645,6 +646,7 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
       reviewed_date VARCHAR(50),
       remarks TEXT
     );`,
+    `ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb;`,
 
     `DO $$
       DECLARE queue_has_rows BOOLEAN;
@@ -1042,6 +1044,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         id VARCHAR(100) PRIMARY KEY,
         requested_by TEXT NOT NULL,
         reason TEXT NOT NULL,
+        scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
         requested_date VARCHAR(50) NOT NULL,
         effective_start VARCHAR(50),
         effective_end VARCHAR(50),
@@ -1051,6 +1054,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         remarks TEXT
       );
     `);
+    await client.query(`ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb`);
 
     await client.query('COMMIT');
     console.log('[DB DEBUG] Database schema initialized successfully');
@@ -1340,6 +1344,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
         id: r.id,
         requestedBy: r.requested_by,
         reason: r.reason,
+        scopes: Array.isArray(r.scopes) ? r.scopes : [],
         requestedDate: r.requested_date,
         effectiveStart: r.effective_start,
         effectiveEnd: r.effective_end,
@@ -2552,33 +2557,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Auditor reports saved');
     }
 
-    // 13. Delegation Requests
-    if (state.delegationRequests && Array.isArray(state.delegationRequests)) {
-      console.log('[DB DEBUG] Saving', state.delegationRequests.length, 'delegation requests...');
-      for (const dr of state.delegationRequests) {
-        await client.query(`
-          INSERT INTO delegation_requests (id, requested_by, reason, requested_date, effective_start, effective_end, status, reviewed_by, reviewed_date, remarks)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          ON CONFLICT (id) DO UPDATE SET
-            requested_by = EXCLUDED.requested_by,
-            reason = EXCLUDED.reason,
-            requested_date = EXCLUDED.requested_date,
-            effective_start = EXCLUDED.effective_start,
-            effective_end = EXCLUDED.effective_end,
-            status = EXCLUDED.status,
-            reviewed_by = EXCLUDED.reviewed_by,
-            reviewed_date = EXCLUDED.reviewed_date,
-            remarks = EXCLUDED.remarks;
-        `, [
-          dr.id, cleanText(dr.requestedBy, 200) || 'Officer', cleanText(dr.reason, 2000) || 'Delegation',
-          cleanDateString(dr.requestedDate, 50), cleanDateString(dr.effectiveStart, 50),
-          cleanDateString(dr.effectiveEnd, 50), cleanText(dr.status, 50) || 'Pending', cleanText(dr.reviewedBy, 200),
-          cleanDateString(dr.reviewedDate, 50), cleanText(dr.remarks, 2000)
-        ]);
-      }
-      console.log('[DB DEBUG] Delegation requests saved');
-    }
-
     const saveMappings: SaveMapping[] = [
       { table: 'members', deletedIds: deletedMemberIds, fields: [
         ['name', 'name', (r) => r.name], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],
@@ -2669,7 +2647,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['date_submitted', 'dateSubmitted', (r) => r.dateSubmitted], ['date_certified', 'dateCertified', (r) => r.dateCertified || null]
       ] },
       { table: 'delegation_requests', deletedIds: deletedDelegationIds, fields: [
-        ['requested_by', 'requestedBy', (r) => r.requestedBy], ['reason', 'reason', (r) => r.reason], ['requested_date', 'requestedDate', (r) => r.requestedDate],
+        ['requested_by', 'requestedBy', (r) => r.requestedBy], ['reason', 'reason', (r) => r.reason],
+        ['scopes', 'scopes', (r) => JSON.stringify(Array.isArray(r.scopes) ? r.scopes : [])], ['requested_date', 'requestedDate', (r) => r.requestedDate],
         ['effective_start', 'effectiveStart', (r) => r.effectiveStart || null], ['effective_end', 'effectiveEnd', (r) => r.effectiveEnd || null],
         ['status', 'status', (r) => r.status || 'Pending'], ['reviewed_by', 'reviewedBy', (r) => r.reviewedBy || null],
         ['reviewed_date', 'reviewedDate', (r) => r.reviewedDate || null], ['remarks', 'remarks', (r) => r.remarks || null]
