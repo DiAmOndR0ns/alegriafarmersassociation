@@ -310,10 +310,62 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_by TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_date VARCHAR(50);`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approval_remarks TEXT;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, chore_logs JSONB, closed_years INT[]);`,
+    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, produces TEXT[], expenses JSONB, sales JSONB, chore_logs JSONB, closed_years INT[]);`,
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS expenses JSONB;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
-    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS expenses JSONB;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_livestock (
+      produce TEXT PRIMARY KEY,
+      opening_count INTEGER NOT NULL DEFAULT 0,
+      stage_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb
+    );`,
+    `DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp' AND column_name = 'herd_breakdown'
+        ) THEN
+          EXECUTE $migration$
+            INSERT INTO afa_igp_livestock (produce, opening_count, stage_breakdown)
+            SELECT 'Swine Raising (Baboyan)',
+              CASE WHEN COALESCE(opening_hog_count::text, '') ~ '^[0-9]+$' THEN opening_hog_count ELSE 0 END,
+              jsonb_build_object(
+                'Fattening', CASE WHEN COALESCE(herd_breakdown->>'fattening', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'fattening')::integer ELSE 0 END,
+                'Gestation', CASE WHEN COALESCE(herd_breakdown->>'gestation', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'gestation')::integer ELSE 0 END,
+                'Lactating', CASE WHEN COALESCE(herd_breakdown->>'lactating', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'lactating')::integer ELSE 0 END,
+                'Dispersal', CASE WHEN COALESCE(herd_breakdown->>'dispersal', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'dispersal')::integer ELSE 0 END
+              )
+            FROM afa_igp
+            WHERE opening_hog_count > 0 OR COALESCE(herd_breakdown, '{}'::jsonb) <> '{}'::jsonb
+            ON CONFLICT (produce) DO NOTHING;
+
+            INSERT INTO afa_igp_livestock (produce, opening_count, stage_breakdown)
+            SELECT 'Cattle Raising (Bakahan)',
+              (CASE WHEN COALESCE(herd_breakdown->>'cattleFattening', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleFattening')::integer ELSE 0 END) +
+              (CASE WHEN COALESCE(herd_breakdown->>'cattleDispersal', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleDispersal')::integer ELSE 0 END),
+              jsonb_build_object(
+                'Fattening', CASE WHEN COALESCE(herd_breakdown->>'cattleFattening', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleFattening')::integer ELSE 0 END,
+                'Dispersal', CASE WHEN COALESCE(herd_breakdown->>'cattleDispersal', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleDispersal')::integer ELSE 0 END
+              )
+            FROM afa_igp
+            WHERE COALESCE(herd_breakdown->>'cattleFattening', '0') <> '0'
+              OR COALESCE(herd_breakdown->>'cattleDispersal', '0') <> '0'
+            ON CONFLICT (produce) DO NOTHING;
+
+            INSERT INTO afa_igp_livestock (produce, opening_count, stage_breakdown)
+            SELECT 'Poultry Raising (RTL)',
+              CASE WHEN COALESCE(herd_breakdown->>'rtlCount', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'rtlCount')::integer ELSE 0 END,
+              jsonb_build_object(
+                'RTL', CASE WHEN COALESCE(herd_breakdown->>'rtlCount', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'rtlCount')::integer ELSE 0 END
+              )
+            FROM afa_igp
+            WHERE COALESCE(herd_breakdown->>'rtlCount', '0') <> '0'
+            ON CONFLICT (produce) DO NOTHING;
+          $migration$;
+        END IF;
+      END $$;`,
+    `ALTER TABLE afa_igp DROP COLUMN IF EXISTS opening_hog_count;`,
+    `ALTER TABLE afa_igp DROP COLUMN IF EXISTS herd_breakdown;`,
     `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT NOT NULL,
@@ -325,7 +377,7 @@ async function runSchemaMigrations(client) {
       amount NUMERIC,
       recorded_by TEXT,
       fund_source TEXT,
-      hog_stage TEXT
+      stage TEXT
     );`,
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS expense_data JSONB;`,
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS category TEXT;`,
@@ -334,7 +386,16 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS amount NUMERIC;`,
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS recorded_by TEXT;`,
     `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS hog_stage TEXT;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS stage TEXT;`,
+    `DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_expenses' AND column_name = 'hog_stage'
+        ) THEN
+          EXECUTE 'UPDATE afa_igp_expenses SET stage = COALESCE(NULLIF(stage, ''''), hog_stage)';
+        END IF;
+      END $$;`,
     `CREATE TABLE IF NOT EXISTS afa_igp_harvests (
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT,
@@ -355,14 +416,44 @@ async function runSchemaMigrations(client) {
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT NOT NULL,
       date VARCHAR(50),
-      hog_stage VARCHAR(50),
-      hogs_count INTEGER NOT NULL DEFAULT 0,
-      produce_count INTEGER NOT NULL DEFAULT 0,
+      stage TEXT,
+      quantity NUMERIC NOT NULL DEFAULT 0,
       revenue NUMERIC NOT NULL DEFAULT 0,
       recorded_by TEXT,
       fund_source TEXT,
       notes TEXT
     );`,
+    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS stage TEXT;`,
+    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS quantity NUMERIC NOT NULL DEFAULT 0;`,
+    `DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'hog_stage'
+        ) THEN
+          EXECUTE 'UPDATE afa_igp_sales SET stage = COALESCE(NULLIF(stage, ''''), hog_stage)';
+        END IF;
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'produce_count'
+        ) AND EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'hogs_count'
+        ) THEN
+          EXECUTE 'UPDATE afa_igp_sales
+            SET quantity = CASE WHEN quantity = 0 THEN COALESCE(NULLIF(produce_count, 0), hogs_count, 0) ELSE quantity END';
+        ELSIF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'produce_count'
+        ) THEN
+          EXECUTE 'UPDATE afa_igp_sales SET quantity = CASE WHEN quantity = 0 THEN produce_count ELSE quantity END';
+        ELSIF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'hogs_count'
+        ) THEN
+          EXECUTE 'UPDATE afa_igp_sales SET quantity = CASE WHEN quantity = 0 THEN hogs_count ELSE quantity END';
+        END IF;
+      END $$;`,
     `DO $$
       BEGIN
         IF EXISTS (
@@ -385,9 +476,9 @@ async function runSchemaMigrations(client) {
                 ELSE amount END,
               recorded_by = COALESCE(NULLIF(recorded_by, ''), expense_data->>'recordedBy'),
               fund_source = COALESCE(NULLIF(fund_source, ''), expense_data->>'fundSource'),
-              hog_stage = COALESCE(NULLIF(hog_stage, ''), expense_data->>'hogStage'),
+              stage = COALESCE(NULLIF(stage, ''), expense_data->>'stage', expense_data->>'hogStage'),
               produce = CASE
-                WHEN (COALESCE(hog_stage, expense_data->>'hogStage') = 'RTL'
+                WHEN (COALESCE(stage, expense_data->>'stage', expense_data->>'hogStage') = 'RTL'
                   OR COALESCE(category, expense_data->>'category') ~* '(rtl|poultry|chicken|egg)')
                   AND COALESCE(produce, expense_data->>'produce', '') ~* '(swine|hog|baboy|^$)'
                   THEN 'Poultry Raising (RTL)'
@@ -406,11 +497,12 @@ async function runSchemaMigrations(client) {
         ) THEN
           EXECUTE $migration$
             INSERT INTO afa_igp_expenses (
-              id, produce, date, expense_data, category, quantity, description, amount, recorded_by, fund_source, hog_stage
+              id, produce, date, expense_data, category, quantity, description, amount, recorded_by, fund_source, stage
             )
             SELECT expense->>'id',
               CASE
-                WHEN expense->>'hogStage' = 'RTL' OR expense->>'category' ~* '(rtl|poultry|chicken|egg)'
+                WHEN COALESCE(expense->>'stage', expense->>'hogStage') = 'RTL'
+                  OR expense->>'category' ~* '(rtl|poultry|chicken|egg)'
                   THEN 'Poultry Raising (RTL)'
                 ELSE COALESCE(
                   NULLIF(expense->>'produce', ''),
@@ -429,7 +521,7 @@ async function runSchemaMigrations(client) {
                 THEN (expense->>'amount')::numeric END,
               expense->>'recordedBy',
               expense->>'fundSource',
-              expense->>'hogStage'
+              COALESCE(expense->>'stage', expense->>'hogStage')
             FROM afa_igp AS igp
             CROSS JOIN LATERAL jsonb_array_elements(
               CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]'::jsonb END
@@ -458,23 +550,21 @@ async function runSchemaMigrations(client) {
               END,
               recorded_by = COALESCE(NULLIF(afa_igp_expenses.recorded_by, ''), EXCLUDED.recorded_by),
               fund_source = COALESCE(NULLIF(afa_igp_expenses.fund_source, ''), EXCLUDED.fund_source),
-              hog_stage = COALESCE(NULLIF(afa_igp_expenses.hog_stage, ''), EXCLUDED.hog_stage)
+              stage = COALESCE(NULLIF(afa_igp_expenses.stage, ''), EXCLUDED.stage)
           $migration$;
         END IF;
       END $$;`,
     `DO $$
       BEGIN
         INSERT INTO afa_igp_sales (
-          id, produce, date, hog_stage, hogs_count, produce_count, revenue, recorded_by, fund_source, notes
+          id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes
         )
         SELECT sale->>'id',
           COALESCE(NULLIF(sale->>'produce', ''), 'Unspecified'),
           sale->>'date',
-          sale->>'hogStage',
-          CASE WHEN COALESCE(sale->>'hogsCount', '') ~ '^[0-9]+$'
-            THEN (sale->>'hogsCount')::integer ELSE 0 END,
-          CASE WHEN COALESCE(sale->>'produceCount', '') ~ '^[0-9]+$'
-            THEN (sale->>'produceCount')::integer ELSE 0 END,
+          COALESCE(sale->>'stage', sale->>'hogStage'),
+          CASE WHEN COALESCE(sale->>'quantity', sale->>'produceCount', sale->>'hogsCount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+            THEN COALESCE(sale->>'quantity', sale->>'produceCount', sale->>'hogsCount')::numeric ELSE 0 END,
           CASE WHEN COALESCE(sale->>'revenue', '') ~ '^[0-9]+(\\.[0-9]+)?$'
             THEN (sale->>'revenue')::numeric ELSE 0 END,
           sale->>'recordedBy',
@@ -516,6 +606,8 @@ async function runSchemaMigrations(client) {
     `DROP TABLE IF EXISTS afa_igp_group_members;`,
     `DROP TABLE IF EXISTS afa_igp_groups;`,
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups;`,
+    `ALTER TABLE afa_igp_expenses DROP COLUMN IF EXISTS hog_stage;`,
+    `ALTER TABLE afa_igp_sales DROP COLUMN IF EXISTS hog_stage, DROP COLUMN IF EXISTS hogs_count, DROP COLUMN IF EXISTS produce_count;`,
     `DROP TABLE IF EXISTS hog_raising;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
@@ -794,13 +886,18 @@ async function initDatabaseSchema(pool) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS afa_igp (
         id VARCHAR(100) PRIMARY KEY,
-        opening_hog_count INTEGER NOT NULL DEFAULT 0,
-        herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb,
         produces TEXT[],
         expenses JSONB,
         sales JSONB,
         chore_logs JSONB,
         closed_years INT[]
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_livestock (
+        produce TEXT PRIMARY KEY,
+        opening_count INTEGER NOT NULL DEFAULT 0,
+        stage_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb
       );
     `);
     await client.query(`
@@ -815,7 +912,7 @@ async function initDatabaseSchema(pool) {
         amount NUMERIC,
         recorded_by TEXT,
         fund_source TEXT,
-        hog_stage TEXT
+        stage TEXT
       );
     `);
     await client.query("CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);");
@@ -842,9 +939,8 @@ async function initDatabaseSchema(pool) {
         id VARCHAR(100) PRIMARY KEY,
         produce TEXT NOT NULL,
         date VARCHAR(50),
-        hog_stage VARCHAR(50),
-        hogs_count INTEGER NOT NULL DEFAULT 0,
-        produce_count INTEGER NOT NULL DEFAULT 0,
+        stage TEXT,
+        quantity NUMERIC NOT NULL DEFAULT 0,
         revenue NUMERIC NOT NULL DEFAULT 0,
         recorded_by TEXT,
         fund_source TEXT,

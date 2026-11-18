@@ -104,7 +104,7 @@ export function getTreasurerReportRows(
         id: sale.id,
         date: sale.date,
         type: 'Livestock Sale',
-        category: `${sale.produce || 'Livestock'} · ${sale.hogStage || 'Sale'}`,
+        category: `${sale.produce || 'Livestock'} · ${sale.stage || 'Sale'}`,
         description: sale.notes || `${sale.produce || 'Livestock'} sale proceeds`,
         fundSource: sale.fundSource || 'Not specified',
         recordedBy: sale.recordedBy,

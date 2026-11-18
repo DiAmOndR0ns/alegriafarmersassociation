@@ -217,23 +217,19 @@ export interface SystemLog {
   previousHash: string;
 }
 
-// HOG RAISING & GENERAL INCOME GENERATING PROJECT (IGP) TYPES
-export type HogStage = 'Fattening' | 'Gestation' | 'Breeding' | 'Lactating' | 'Dispersal' | 'RTL' | 'Eggs' | 'Other' | 'General';
+// Income-generating project (IGP) records.
+export type IgpStage = string;
 
-export interface HogHerdBreakdown {
-  fattening: number;
-  gestation: number;
-  lactating: number;
-  dispersal?: number;
-  cattleFattening?: number;
-  cattleDispersal?: number;
-  rtlCount?: number;
+export interface IgpLivestockInventory {
+  produce: string;
+  openingCount: number;
+  stageBreakdown: Record<string, number>;
 }
 
 export interface IgpExpense {
   id: string;
   produce?: string; // e.g., "Hog Raising", "Poultry Raising"
-  hogStage?: HogStage; // Stage classification: Fattening, Gestation, Lactating, or General
+  stage?: IgpStage;
   category: 'Piglets' | 'Feeds' | 'Breeding / AI Service' | 'Vitamins/Medicines' | 'Farrowing & Pen Care' | 'Other' | string;
   quantity?: number;
   description: string;
@@ -246,10 +242,9 @@ export interface IgpExpense {
 export interface IgpSale {
   id: string;
   produce?: string; // e.g., "Hog Raising", "Poultry Raising"
-  hogStage?: HogStage; // Stage sold: Fattening (Market Hog), Lactating (Weaned Piglets), Gestation (Sow)
+  stage?: IgpStage;
   date: string;
-  hogsCount: number; // For backward compatibility
-  produceCount?: number; // General quantity
+  quantity: number;
   revenue: number;
   recordedBy: string;
   notes?: string;
@@ -298,8 +293,7 @@ export interface OrganizationFund {
 }
 
 export interface HogRaisingState {
-  openingHogCount?: number;
-  herdBreakdown?: HogHerdBreakdown;
+  livestockInventory?: IgpLivestockInventory[];
   produces?: string[]; // Dynamic list of produce projects, e.g. ["Hog Raising", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"]
   expenses: IgpExpense[];
   sales: IgpSale[];

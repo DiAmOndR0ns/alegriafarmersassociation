@@ -7,7 +7,7 @@ const isVerifiedHarvest = (harvest: EggHarvestLog) =>
   harvest.status === 'Audited' || harvest.status === 'Signed';
 
 const isEggSale = (sale: IgpSale) =>
-  sale.hogStage === 'Eggs' || sale.hogStage === 'General' || sale.hogStage === undefined;
+  sale.stage === 'Eggs' || sale.stage === 'General' || sale.stage === undefined;
 
 export function getAvailableEggCount(
   harvests: EggHarvestLog[],
@@ -28,7 +28,7 @@ export function getAvailableEggCount(
       (sale.produce || 'Poultry Raising (RTL)') === produce &&
       isEggSale(sale)
     )
-    .reduce((total, sale) => total + Math.max(0, Math.floor(Number(sale.produceCount || sale.hogsCount) || 0)), 0);
+    .reduce((total, sale) => total + Math.max(0, Math.floor(Number(sale.quantity) || 0)), 0);
 
   return Math.max(0, collected - sold);
 }

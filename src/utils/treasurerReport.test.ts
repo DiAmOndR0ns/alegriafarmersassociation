@@ -23,7 +23,7 @@ const livestock: HogRaisingState = {
     amount: 80, date: '2026-05-05', recordedBy: 'Treasurer', fundSource: 'GENERAL (General Fund)'
   }],
   sales: [{
-    id: 'livestock-sale', produce: 'Poultry', date: '2026-05-06', hogsCount: 0,
+    id: 'livestock-sale', produce: 'Poultry', date: '2026-05-06', quantity: 0,
     revenue: 300, recordedBy: 'Treasurer', notes: 'Egg sales', fundSource: 'SALES (Sales Account)'
   }],
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   OfficerRole, Member, Meeting, Resolution, 
-  FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState, HogHerdBreakdown,
+  FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState,
   IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem,
   PasswordResetResult
 } from './types';
@@ -1833,7 +1833,7 @@ export default function App() {
     const officerLabel = currentUser ? `${currentUser.role.replace('_', ' ')} (${currentUser.name})` : `Treasurer (${getOfficerName('Treasurer')})`;
     const newExp: IgpExpense = {
       ...expData,
-      id: `pig-exp-${Date.now()}`,
+      id: `igp-exp-${Date.now()}`,
       recordedBy: officerLabel
     };
     const updatedState: HogRaisingState = {
@@ -1844,7 +1844,7 @@ export default function App() {
     updateStorage('bafa_afa_igp', updatedState);
 
     const projectLabel = expData.produce || 'AFA IGP';
-    const stageLabel = expData.hogStage && expData.hogStage !== 'General' ? ` • ${expData.hogStage}` : '';
+    const stageLabel = expData.stage && expData.stage !== 'General' ? ` • ${expData.stage}` : '';
     // Also register in general ledger for complete co-op records!
     handleAddTransaction({
       type: 'expense',
@@ -1873,7 +1873,7 @@ export default function App() {
     const officerLabel = currentUser ? `${currentUser.role.replace('_', ' ')} (${currentUser.name})` : `Treasurer (${getOfficerName('Treasurer')})`;
     const newSale: IgpSale = {
       ...saleData,
-      id: `pig-sale-${Date.now()}`,
+      id: `igp-sale-${Date.now()}`,
       recordedBy: officerLabel
     };
     const updatedState: HogRaisingState = {
@@ -1884,14 +1884,14 @@ export default function App() {
     updateStorage('bafa_afa_igp', updatedState);
 
     const projectLabel = saleData.produce || 'AFA IGP';
-    const stageLabel = saleData.hogStage && saleData.hogStage !== 'General' ? ` (${saleData.hogStage})` : '';
+    const stageLabel = saleData.stage && saleData.stage !== 'General' ? ` (${saleData.stage})` : '';
     // Also register in general ledger for complete co-op records!
     handleAddTransaction({
       type: 'income',
       category: `${projectLabel} Project`,
       amount: saleData.revenue,
       date: saleData.date,
-      description: `[${projectLabel} IGP] Revenue (${saleData.hogsCount} unit/head${stageLabel}): ${saleData.notes || `${projectLabel} sale/rental income.`}`,
+      description: `[${projectLabel} IGP] Revenue (${saleData.quantity} unit/head${stageLabel}): ${saleData.notes || `${projectLabel} sale/rental income.`}`,
       fundSource: saleData.fundSource,
       recordedBy: officerLabel
     });
@@ -2359,45 +2359,6 @@ export default function App() {
       pushAllDataToCloud({ eggHarvests: updatedState.eggHarvests }, { silent: true, scope: 'eggHarvests' });
     } else {
       addToSyncQueue('update', 'egg_harvest', { id: harvestId, action, remarks, ...target });
-    }
-  };
-
-  const handleUpdateOpeningHogCount = (
-    count: number,
-    herdBreakdown?: HogHerdBreakdown
-  ) => {
-    const normalizedBreakdown: HogHerdBreakdown = herdBreakdown
-      ? {
-          fattening: Math.max(0, Math.floor(Number(herdBreakdown.fattening) || 0)),
-          gestation: Math.max(0, Math.floor(Number(herdBreakdown.gestation) || 0)),
-          lactating: Math.max(0, Math.floor(Number(herdBreakdown.lactating) || 0)),
-          dispersal: Math.max(0, Math.floor(Number(herdBreakdown.dispersal) || 0)),
-          cattleFattening: Math.max(0, Math.floor(Number(herdBreakdown.cattleFattening) || 0)),
-          cattleDispersal: Math.max(0, Math.floor(Number(herdBreakdown.cattleDispersal) || 0)),
-          rtlCount: Math.max(0, Math.floor(Number(herdBreakdown.rtlCount) || 0))
-        }
-      : hogRaising.herdBreakdown || { fattening: 0, gestation: 0, lactating: 0, dispersal: 0, cattleFattening: 0, cattleDispersal: 0, rtlCount: 0 };
-    const openingHogCount = normalizedBreakdown
-      ? normalizedBreakdown.fattening + normalizedBreakdown.gestation + normalizedBreakdown.lactating + (normalizedBreakdown.dispersal || 0)
-      : Math.max(0, Math.floor(Number(count) || 0));
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
-      openingHogCount,
-      herdBreakdown: normalizedBreakdown
-    };
-    setHogRaising(updatedState);
-    updateStorage('bafa_afa_igp', updatedState);
-
-    const breakdownDetail = normalizedBreakdown
-      ? ` (Swine: ${openingHogCount}, Cattle: ${(normalizedBreakdown.cattleFattening || 0) + (normalizedBreakdown.cattleDispersal || 0)}, RTL: ${normalizedBreakdown.rtlCount || 0})`
-      : '';
-
-    if (isOnline) {
-      logAction('Updated Livestock Headcount', `Updated livestock inventory counts${breakdownDetail}.`);
-      showToastMessage(`Livestock inventory updated: ${openingHogCount} total swine, Cattle: ${(normalizedBreakdown.cattleFattening || 0) + (normalizedBreakdown.cattleDispersal || 0)}, RTL: ${normalizedBreakdown.rtlCount || 0}.`);
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Opening Livestock Inventory' });
-    } else {
-      addToSyncQueue('update', 'hog_expense', { id: 'opening-hog-count', quantity: openingHogCount, herdBreakdown: normalizedBreakdown });
     }
   };
 
@@ -4320,7 +4281,6 @@ export default function App() {
                 onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
                 isAuditor={currentRole === 'Auditor'}
                 isPresident={currentRole === 'President'}
-                onUpdateOpeningHogCount={handleUpdateOpeningHogCount}
                 onAddProduce={handleAddProduce}
                 onDeleteProduce={handleDeleteProduce}
                 isTreasurerOrOfficer={['Auditor', 'Treasurer', 'Assistant_Treasurer', 'President', 'Vice_President'].includes(currentRole || '')}

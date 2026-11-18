@@ -1,6 +1,6 @@
 # Data Architecture & Persistence Layer
 
-The application manages 18 PostgreSQL tables in hosted Supabase through raw SQL and the `pg` driver; it does not use an ORM. A user-supplied live catalog snapshot also shows legacy IGP JSON columns retained for compatibility; the snapshot is truncated, so it is not a complete production inventory.
+The application manages 19 PostgreSQL tables in hosted Supabase through raw SQL and the `pg` driver; it does not use an ORM. IGP livestock inventory is stored per produce, while legacy IGP JSON collections remain as compatibility fallbacks.
 
 ## Database Configuration
 
@@ -17,12 +17,12 @@ The PostgreSQL connection enables TLS with server-certificate verification. The 
 
 | Service | Tables Owned | ORM Framework | Caching | Notes |
 |---|---|---|---|---|
-| Shared application persistence (`src/api/db.ts`) | All 18 repository-managed tables listed below | None; parameterized SQL with `pg` | Per-process PostgreSQL pool cache; no query/result cache | Pull, push, deletion, and schema setup use a shared database. Authentication also accesses `users` directly through `src/api/auth.ts`. |
+| Shared application persistence (`src/api/db.ts`) | All 19 repository-managed tables listed below | None; parameterized SQL with `pg` | Per-process PostgreSQL pool cache; no query/result cache | Pull, push, deletion, and schema setup use a shared database. Authentication also accesses `users` directly through `src/api/auth.ts`. |
 | Browser application | No PostgreSQL tables; local copies of application state | None | Encrypted localStorage and an offline sync queue | Local state is a fallback/cache, not an independent relational database. |
 
 ## Entity Model
 
-All tables use a string `id` primary key unless noted. The physical schema is created and mapped in [`src/api/db.ts`](../../../../../src/api/db.ts); TypeScript contracts are in [`src/types.ts`](../../../../../src/types.ts). Table ownership is shared by the application API, not divided into independently deployed services.
+All tables use a string `id` primary key unless noted; `afa_igp_livestock` is keyed by the produce name. The physical schema is created and mapped in [`src/api/db.ts`](../../../../../src/api/db.ts); TypeScript contracts are in [`src/types.ts`](../../../../../src/types.ts). Table ownership is shared by the application API, not divided into independently deployed services.
 
 ### Table-by-table connection inventory
 
@@ -35,10 +35,11 @@ All tables use a string `id` primary key unless noted. The physical schema is cr
 | `financial_transactions` | `id` PK | Type, category, amount, dates, `activity_id`, `fund_source`, purpose/deadline, audit and presidential approval fields | `activity_id` now has a deferred FK to `activities.id` with `ON DELETE SET NULL`; legacy dangling IDs are nulled before validation. `fund_source` remains a text snapshot, not a stable `organization_funds.id`. Actor names are text. Purpose and liquidation deadline are persisted, with existing values preserved when a sync omits them. |
 | `announcements` | `id` PK | Title, category, content, date, priority | `posted_by` is text; no user FK. |
 | `system_logs` | `id` PK | Timestamp, user/role/action/details, hash and previous hash | Actor and role are snapshots as text; no user FK. |
-| `afa_igp` | `id` PK; application uses `main_state` | Herd count/breakdown, produces and years as columns; expenses, sales, and chore logs as JSONB compatibility mirrors | The application uses one state/snapshot row and keeps JSON collections as read fallbacks and compatibility mirrors. The unused groups column is removed by migration. |
-| `afa_igp_expenses` | `id` PK | Expense produce, date, category, quantity, description, amount, recorder, fund source and stage; `expense_data` JSONB compatibility mirror | Reads use structured columns first and JSON as fallback; writes maintain both. There is no FK to `afa_igp`. |
+| `afa_igp` | `id` PK; application uses `main_state` | Produce list and years as columns; expenses, sales, and chore logs as JSONB compatibility mirrors | The application uses one state/snapshot row and keeps JSON collections as read fallbacks and compatibility mirrors. The unused groups and legacy hog inventory columns are removed by migration. |
+| `afa_igp_livestock` | `produce` PK | Opening count and per-stage inventory for one produce project | Inventory records are isolated by produce; project names are not FK-linked to `afa_igp.produces`. |
+| `afa_igp_expenses` | `id` PK | Expense produce, date, category, quantity, description, amount, recorder, fund source and generic stage; `expense_data` JSONB compatibility mirror | Reads use structured columns first and JSON as fallback; writes maintain both. There is no FK to `afa_igp`. |
 | `afa_igp_harvests` | `id` PK | Produce, date/time, collector, egg count, audit and signature fields | Read and written by current application source; `afa_igp.chore_logs` remains a JSON fallback/mirror. |
-| `afa_igp_sales` | `id` PK | Produce, date, stage, counts, revenue, recorder and fund source | Read and written by current application source; `afa_igp.sales` remains a JSON compatibility mirror. |
+| `afa_igp_sales` | `id` PK | Produce, date, generic stage and quantity, revenue, recorder and fund source | Read and written by current application source; `afa_igp.sales` remains a JSON compatibility mirror. |
 | `products` | `id` PK | Catalog identity, category, description, price/unit, stock, publication, farmer/contact fields | Rental inventory association is stored from `inventory.catalog_product_id`; the reference now has an FK with `ON DELETE SET NULL`. |
 | `inventory` | `id` PK | Asset name/category, quantity, damaged count, condition, location and custodial notes | Optional `catalog_product_id` FK to `products.id`; legacy dangling IDs are nulled before constraint validation. |
 | `activities` | `id` PK | Title, schedule, location, organizer, status, audience, attendance count | Referenced by a deferred FK from `financial_transactions.activity_id`; deleted activities clear the optional reference. |
@@ -52,10 +53,10 @@ All tables use a string `id` primary key unless noted. The physical schema is cr
 - Repository-managed database FKs protect transaction-to-activity and inventory-to-product references. Fund source, actor names, and user/member profile matching remain text/application-level associations.
 - Schema initialization now creates all base tables idempotently before applying migrations, including `inventory` for existing deployments. Migration cleanup nulls old dangling activity/product IDs before validating the new constraints; the related transaction or inventory record is retained.
 - The server-side sync queue is unused by current source; the offline queue is maintained in browser storage. The Supabase Table Editor still showed a `sync_queue` table, but its row count and migration status were not provided.
-- Database status reports the 18 repository-managed tables actively owned by the application; it is not a complete live Supabase table inventory.
+- Database status reports the 19 repository-managed tables actively owned by the application; it is not a complete live Supabase table inventory.
 - Meeting-minute approval and transaction purpose/deadline fields are now present in SQL, pull mappings, and save mappings.
 - Most date/time values are stored as `VARCHAR`, not PostgreSQL date/timestamp types. This permits inconsistent formats and makes ordering/index behavior dependent on string representation.
-- IGP collections now read normalized tables first, merge JSON-only records as fallback, and write both normalized rows and JSON compatibility mirrors. The supplied live catalog confirms `afa_igp.expenses` and `afa_igp_expenses.expense_data` still exist as JSONB.
+- IGP collections now read normalized tables first, merge JSON-only records as fallback, and write both normalized rows and JSON compatibility mirrors. The migration copies existing hog-specific inventory, stage, and sale quantity values before dropping their old columns.
 - Only the username/role constraints and the `afa_igp_expenses.produce` index are created explicitly. The tables queried or sorted by activity, transaction, meeting, and log dates have no corresponding secondary indexes in this schema.
 
 <!-- mermaid-checked: every attribute is `<type> <name> [<key>] ["<description>"]` with at most one of PK/FK/UK, no \n in descriptions, no {} in descriptions, every relationship label is double-quoted -->
@@ -121,11 +122,14 @@ erDiagram
     }
     afaIgp {
         string id PK
-        int openingHogCount
-        json herdBreakdown
         json expenses "still present in live catalog"
         json sales
         json choreLogs
+    }
+    afaIgpLivestock {
+        string produce PK
+        int openingCount
+        json stageBreakdown
     }
     afaIgpExpenses {
         string id PK
@@ -138,7 +142,7 @@ erDiagram
         decimal amount
         string recordedBy
         string fundSource
-        string hogStage
+        string stage
     }
     afaIgpHarvests {
         string id PK
@@ -155,9 +159,8 @@ erDiagram
         string id PK
         string produce
         string date
-        string hogStage
-        int hogsCount
-        int produceCount
+        string stage
+        decimal quantity
         decimal revenue
         string recordedBy
         string fundSource
@@ -211,7 +214,7 @@ erDiagram
     }
 ```
 
-The diagram distinguishes application-level links from enforced relational constraints. Most tables are independent records; names and embedded JSON are used instead of normalized actor and attendance relations. The application reads and writes normalized IGP sales and harvests while retaining applicable JSON fallback/mirrors. The unused IGP group tables and `afa_igp.groups` column are removed by migration.
+The diagram distinguishes application-level links from enforced relational constraints. Most tables are independent records; names and embedded JSON are used instead of normalized actor and attendance relations. Per-produce inventory uses a produce-name primary key but has no FK to the project-name array in `afa_igp`. Generic stage and quantity columns replace the old hog-specific sale and expense columns after migration.
 
 ## Key Repository Methods
 
@@ -221,7 +224,7 @@ There are no repository interfaces or ORM-derived CRUD methods. The shared persi
 |---|---|---|---|
 | Shared persistence | [`src/api/db.ts`](../../../../../src/api/db.ts) | `getPool`, `ensureDatabaseSchema`, `initDatabaseSchema`, `runSchemaMigrations` | Configure per-process pool and initialize/migrate the PostgreSQL schema. |
 | Shared persistence | [`src/api/db.ts`](../../../../../src/api/db.ts) | `fetchAllDataFromPostgres` | Read each application table and map SQL columns into client state; joins are mostly absent. |
-| Shared persistence | [`src/api/db.ts`](../../../../../src/api/db.ts) | `saveFullStateToPostgres`, `saveEntity`, `saveIgpExpenseSegments` | Transactional state persistence with per-table upserts and specialized expense synchronization. |
+| Shared persistence | [`src/api/db.ts`](../../../../../src/api/db.ts) | `saveFullStateToPostgres`, `saveEntity`, `saveIgpExpenseSegments`, `saveIgpSales`, `saveIgpLivestock` | Transactional state persistence with per-table upserts and per-produce IGP inventory synchronization. |
 | Shared persistence | [`src/api/db.ts`](../../../../../src/api/db.ts) | `deleteEntityFromPostgres`, `lookupEntityTable`, `getTableStats` | Entity-name deletion mapping and database record-count reporting. |
 | Authentication | [`src/api/auth.ts`](../../../../../src/api/auth.ts) | Direct parameterized queries against `users` | Login, password changes, MFA, and account operations; no repository abstraction. |
 
@@ -231,7 +234,7 @@ The server caches PostgreSQL `Pool` instances by normalized connection string in
 
 ## Data Ownership Boundaries
 
-All server-side modules share one PostgreSQL database and one schema; there are no database-per-service or schema-per-service boundaries. The application API performs cross-entity access and pushes/pulls state, while authentication queries the user table directly. Cross-table links are primarily text or ID conventions in application code, not joins backed by foreign keys. Most read paths fetch table collections independently; IGP combines its state row with structured expense, sales, and harvest tables while preserving JSON fallbacks. Browser localStorage is an offline replica and synchronization queue, not a separate authoritative data service.
+All server-side modules share one PostgreSQL database and one schema; there are no database-per-service or schema-per-service boundaries. The application API performs cross-entity access and pushes/pulls state, while authentication queries the user table directly. Cross-table links are primarily text or ID conventions in application code, not joins backed by foreign keys. Most read paths fetch table collections independently; IGP combines its state row with per-produce inventory, expense, sales, and harvest tables while preserving JSON fallbacks. Browser localStorage is an offline replica and synchronization queue, not a separate authoritative data service.
 
 ### Data Classification & Sensitivity
 
@@ -245,6 +248,7 @@ All server-side modules share one PostgreSQL database and one schema; there are 
 | `announcements` | Poster name | PII | Stored as text; no user FK. |
 | `system_logs` | User name, role, actions and details | PII and security/audit data | Hash-chain fields are stored; no field-level masking found. |
 | `afa_igp` | Egg-harvest submitter details in JSON | PII and operational data | JSONB persistence; no field-level encryption or RLS found. |
+| `afa_igp_livestock` | None identified | Operational inventory data | Per-produce inventory; no field-level masking required or found. |
 | `afa_igp_expenses` | Recorded-by name and expense details | PII and financial/operational data | Structured columns; no field-level masking found. |
 | `afa_igp_harvests` | Collector, auditor, and signer names | PII and operational data | Application-managed; no field-level masking information found. |
 | `afa_igp_sales` | Recorder name and financial amounts | PII and financial/operational data | Application-managed; no field-level masking information found. |

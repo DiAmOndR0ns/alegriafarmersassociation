@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  HogRaisingState, HogStage, HogHerdBreakdown, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund
+  HogRaisingState, IgpStage, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund
 } from '../types';
 import {
   Briefcase, Plus, Trash2, Printer, Calculator, Lock, ArrowDownRight, ArrowUpRight,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import AttendanceDividendCalculatorModal from './AttendanceDividendCalculatorModal';
 import { getAvailableEggCount } from '../utils/eggInventory';
+import { getIgpInventoryStageCount, getIgpInventoryTotal, isIgpStockPurchaseCategory } from '../utils/igpInventory';
 
 interface LivestockMonitorProps {
   state: HogRaisingState;
@@ -25,7 +26,6 @@ interface LivestockMonitorProps {
   onUpdateEggHarvestStatus?: (id: string, action: 'audit' | 'sign' | 'return', remarks?: string) => void;
   isAuditor?: boolean;
   isPresident?: boolean;
-  onUpdateOpeningHogCount?: (count: number, herdBreakdown?: HogHerdBreakdown) => void;
   onAddProduce?: (produce: string) => void;
   onDeleteProduce?: (produce: string) => void;
   isTreasurerOrOfficer: boolean;
@@ -51,13 +51,8 @@ const QUARTERS = [
   { name: 'Q4', label: 'Oct – Dec', months: ['10', '11', '12'] },
 ];
 
-// Only expenses in these categories add heads to the inventory.
-const STOCK_CATEGORIES = ['Piglets / Stock', 'Calves / Cattle Stock', 'RTL Pullets Stock'];
-
 const peso = (n: number) => `₱${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const toInt = (v: unknown) => Math.max(0, Math.floor(Number(v) || 0));
-// Baselines may be negative: they are stored as (headcount typed) minus (ledger additions and sales).
-const toSigned = (v: unknown) => Math.trunc(Number(v) || 0);
 // Local date (not UTC), so entries made between 12:00 AM and 8:00 AM in the Philippines get the right day.
 const today = () => {
   const d = new Date();
@@ -83,6 +78,7 @@ const getExpenseCategories = (produce: string): string[] => {
   if (isSwineProject(produce)) return ['Feeds', 'Piglets / Stock', 'Breeding / AI Service', 'Vitamins & Medicines', 'Pen Care & Utilities', 'Other'];
   if (isCattleProject(produce)) return ['Feed Supplements / Silage', 'Calves / Cattle Stock', 'Veterinary Care & Vaccines', 'Pasture & Fencing', 'Other'];
   if (isPoultryProject(produce)) return ['Layer Feeds', 'RTL Pullets Stock', 'Vitamins & Antibiotics', 'Coop Maintenance', 'Egg Trays & Packaging', 'Other'];
+  if (/\b(goat|sheep|rabbit|duck|quail|livestock)\b/i.test(produce)) return ['Animal Feeds', 'Animal Stock', 'Veterinary Care & Vaccines', 'Shelter & Fencing', 'Other'];
   if (/chairs|lingkoranan/i.test(produce)) return ['New Chairs', 'Repairs & Maintenance', 'Transport', 'Other'];
   if (/sacks|sako/i.test(produce)) return ['New Sacks', 'Washing & Drying', 'Repairs', 'Other'];
   return ['Supplies & Materials', 'Equipment', 'Maintenance & Repairs', 'Other'];
@@ -91,13 +87,6 @@ const getExpenseCategories = (produce: string): string[] => {
 const inputCls = 'w-full px-3 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600 font-semibold';
 const labelCls = 'block text-[11px] font-black text-[#1B4332] uppercase mb-1';
 const fundSourceValue = (fund: OrganizationFund) => `${fund.code} (${fund.name})`;
-
-// Stage matchers used by the inventory reconciliation.
-const inFattening = (s?: HogStage) => s === 'Fattening';
-const inBreeding = (s?: HogStage) => s === 'Breeding' || s === 'Gestation';
-const inDispersal = (s?: HogStage) => s === 'Dispersal';
-const inLactating = (s?: HogStage) => s === 'Lactating';
-const inRtl = (s?: HogStage) => s === 'RTL' || !s;
 
 export default function LivestockMonitor({
   state,
@@ -110,7 +99,6 @@ export default function LivestockMonitor({
   onAddSale,
   onUpdateSale,
   onDeleteSale,
-  onUpdateOpeningHogCount,
   onAddProduce,
   onDeleteProduce,
   isTreasurerOrOfficer,
@@ -162,66 +150,33 @@ export default function LivestockMonitor({
   const isCattle = isCattleProject(selected);
   const isPoultry = isPoultryProject(selected);
 
-  // ---------- Live Livestock Inventory Reconciliation ----------
-  const bd: HogHerdBreakdown = state.herdBreakdown || {
-    fattening: 44,
-    gestation: 3,
-    lactating: 0,
-    dispersal: 4,
-    cattleFattening: 20,
-    cattleDispersal: 2,
-    rtlCount: 250
-  };
-  const baseSwineFattening = bd.fattening !== undefined ? toSigned(bd.fattening) : 44;
-  const baseSwineBreeding = bd.gestation !== undefined ? toSigned(bd.gestation) : 3;
-  const baseSwineDispersal = bd.dispersal !== undefined ? toSigned(bd.dispersal) : 4;
-  const baseSwineLactating = toSigned(bd.lactating);
-
-  const baseCattleFattening = bd.cattleFattening !== undefined ? toSigned(bd.cattleFattening) : 20;
-  const baseCattleDispersal = bd.cattleDispersal !== undefined ? toSigned(bd.cattleDispersal) : 2;
-
-  const baseRtl = bd.rtlCount !== undefined ? toSigned(bd.rtlCount) : 250;
-
   // Selected-project records (used for the ledger, finance cards and reports).
   const expenses = useMemo(() => state.expenses.filter((e) => (e.produce || produces[0]) === selected), [state.expenses, selected, produces]);
   const sales = useMemo(() => state.sales.filter((s) => (s.produce || produces[0]) === selected), [state.sales, selected, produces]);
 
-  // Net change in heads for one portfolio and stage, computed from ALL projects' records,
-  // so the three portfolio cards never depend on which project is currently selected.
-  // Heads are added only by stock-purchase expenses, and removed by sales / dispersals.
-  const projectOf = (r: { produce?: string }) => r.produce || produces[0];
-  const stageDelta = (inProject: (p: string) => boolean, inStage: (s?: HogStage) => boolean) => {
-    const added = state.expenses
-      .filter((e) => inProject(projectOf(e)) && e.quantity && STOCK_CATEGORIES.includes(e.category) && inStage(e.hogStage))
-      .reduce((sum, e) => sum + toInt(e.quantity), 0);
-    const sold = state.sales
-      .filter((s) => inProject(projectOf(s)) && inStage(s.hogStage))
-      .reduce((sum, s) => sum + toInt(s.produceCount || s.hogsCount), 0);
-    return added - sold;
-  };
+  const livestockInventory = state.livestockInventory || [];
+  const inventoryFor = (produce: string) => livestockInventory.find((item) => item.produce === produce);
+  const currentStageCount = (produce: string, stages: string[]) =>
+    getIgpInventoryStageCount(produce, stages, livestockInventory, state.expenses, state.sales, produces[0]);
+  const currentInventoryTotal = (produce: string) =>
+    getIgpInventoryTotal(produce, livestockInventory, state.expenses, state.sales, produces[0]);
+  const swineProduce = produces.find(isSwineProject) || DEFAULT_PROJECTS[0];
+  const cattleProduce = produces.find(isCattleProject) || DEFAULT_PROJECTS[1];
+  const poultryProduce = produces.find(isPoultryProject) || DEFAULT_PROJECTS[2];
 
-  const dSwineFattening = stageDelta(isSwineProject, inFattening);
-  const dSwineBreeding = stageDelta(isSwineProject, inBreeding);
-  const dSwineDispersal = stageDelta(isSwineProject, inDispersal);
-  const dSwineLactating = stageDelta(isSwineProject, inLactating);
-  const dCattleFattening = stageDelta(isCattleProject, inFattening);
-  const dCattleDispersal = stageDelta(isCattleProject, inDispersal);
-  const dRtl = stageDelta(isPoultryProject, inRtl);
-
-  // Swine stage counts
-  const currentSwineFattening = Math.max(0, baseSwineFattening + dSwineFattening);
-  const currentSwineBreeding = Math.max(0, baseSwineBreeding + dSwineBreeding);
-  const currentSwineDispersal = Math.max(0, baseSwineDispersal + dSwineDispersal);
-  const currentSwineLactating = Math.max(0, baseSwineLactating + dSwineLactating);
+  const currentSwineFattening = currentStageCount(swineProduce, ['Fattening']);
+  const currentSwineBreeding = currentStageCount(swineProduce, ['Breeding', 'Gestation']);
+  const currentSwineDispersal = currentStageCount(swineProduce, ['Dispersal']);
+  const currentSwineLactating = currentStageCount(swineProduce, ['Lactating']);
   const totalSwine = currentSwineFattening + currentSwineBreeding + currentSwineDispersal + currentSwineLactating;
 
-  // Cattle stage counts
-  const currentCattleFattening = Math.max(0, baseCattleFattening + dCattleFattening);
-  const currentCattleDispersal = Math.max(0, baseCattleDispersal + dCattleDispersal);
+  const currentCattleFattening = currentStageCount(cattleProduce, ['Fattening']);
+  const currentCattleDispersal = currentStageCount(cattleProduce, ['Dispersal']);
   const totalCattle = currentCattleFattening + currentCattleDispersal;
 
-  // Poultry stage counts
-  const currentRtl = Math.max(0, baseRtl + dRtl);
+  const currentRtl = currentStageCount(poultryProduce, ['RTL']);
+  const selectedInventory = inventoryFor(selected);
+  const selectedInventoryTotal = currentInventoryTotal(selected);
   const currentEggInventory = isPoultry
     ? getAvailableEggCount(state.eggHarvests || [], state.sales || [], selected)
     : 0;
@@ -239,7 +194,7 @@ export default function LivestockMonitor({
       rawExpense: e,
       date: e.date,
       kind: 'Expense' as const,
-      stage: e.hogStage,
+      stage: e.stage,
       label: e.category,
       detail: e.description,
       qty: e.quantity,
@@ -252,10 +207,10 @@ export default function LivestockMonitor({
       rawSale: s,
       date: s.date,
       kind: 'Income' as const,
-      stage: s.hogStage,
+      stage: s.stage,
       label: isRental(selected) ? 'Rental' : 'Sale',
       detail: s.notes || '',
-      qty: s.produceCount || s.hogsCount,
+      qty: s.quantity,
       amount: s.revenue,
       by: s.recordedBy
     })),
@@ -273,7 +228,7 @@ export default function LivestockMonitor({
     const inQ = (d: string) => parseInt(d.substring(0, 4)) === reportYear && q.months.includes(d.substring(5, 7));
     const exp = expenses.filter((e) => inQ(e.date)).reduce((s, e) => s + e.amount, 0);
     const rev = sales.filter((s) => inQ(s.date)).reduce((sum, s) => sum + s.revenue, 0);
-    const units = sales.filter((s) => inQ(s.date)).reduce((sum, s) => sum + toInt(s.produceCount || s.hogsCount), 0);
+    const units = sales.filter((s) => inQ(s.date)).reduce((sum, s) => sum + toInt(s.quantity), 0);
     return { ...q, exp, rev, units, net: rev - exp };
   });
   const yearTotals = quarters.reduce((t, q) => ({ exp: t.exp + q.exp, rev: t.rev + q.rev, units: t.units + q.units }), { exp: 0, rev: 0, units: 0 });
@@ -308,7 +263,7 @@ export default function LivestockMonitor({
   const [formError, setFormError] = useState('');
 
   // Expense Form Fields
-  const [expStage, setExpStage] = useState<HogStage>('Fattening');
+  const [expStage, setExpStage] = useState<IgpStage>('Fattening');
   const [expCategory, setExpCategory] = useState('Feeds');
   const [expCustom, setExpCustom] = useState('');
   const [expQty, setExpQty] = useState('');
@@ -318,7 +273,7 @@ export default function LivestockMonitor({
   const [expFundSource, setExpFundSource] = useState('');
 
   // Sale Form Fields
-  const [saleStage, setSaleStage] = useState<HogStage>('Fattening');
+  const [saleStage, setSaleStage] = useState<IgpStage>('Fattening');
   const [saleQty, setSaleQty] = useState('');
   const [saleRevenue, setSaleRevenue] = useState('');
   const [saleDate, setSaleDate] = useState(today());
@@ -383,7 +338,7 @@ export default function LivestockMonitor({
   const openEditExpense = (expense: IgpExpense) => {
     setEditingExpense(expense);
     setExpCategory(expense.category);
-    setExpStage(expense.hogStage || (isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'RTL' : 'General'));
+    setExpStage(expense.stage || (isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'RTL' : 'General'));
     setExpCustom('');
     setExpQty(expense.quantity ? String(expense.quantity) : '');
     setExpDesc(expense.description);
@@ -408,8 +363,8 @@ export default function LivestockMonitor({
 
   const openEditSale = (sale: IgpSale) => {
     setEditingSale(sale);
-    setSaleStage(sale.hogStage || (isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'Eggs' : 'General'));
-    setSaleQty(String(sale.produceCount || sale.hogsCount || ''));
+    setSaleStage(sale.stage || (isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'Eggs' : 'General'));
+    setSaleQty(String(sale.quantity || ''));
     setSaleRevenue(String(sale.revenue));
     setSaleNotes(sale.notes || '');
     setSaleDate(sale.date);
@@ -436,13 +391,13 @@ export default function LivestockMonitor({
 
     const cat = expCategory === 'Other' ? (expCustom.trim() || 'Other') : expCategory;
     // Quantity only means "heads purchased" for stock categories; ignore it everywhere else.
-    const qty = expQty && STOCK_CATEGORIES.includes(cat) ? parseInt(expQty, 10) : undefined;
+    const qty = expQty && isIgpStockPurchaseCategory(cat) ? parseInt(expQty, 10) : undefined;
 
     if (editingExpense) {
       onUpdateExpense?.({
         ...editingExpense,
         produce: selected,
-        hogStage: expStage,
+        stage: expStage,
         category: cat,
         quantity: qty,
         description: expDesc.trim(),
@@ -453,7 +408,7 @@ export default function LivestockMonitor({
     } else {
       onAddExpense({
         produce: selected,
-        hogStage: expStage,
+        stage: expStage,
         category: cat,
         quantity: qty,
         description: expDesc.trim(),
@@ -499,10 +454,9 @@ export default function LivestockMonitor({
       onUpdateSale?.({
         ...editingSale,
         produce: selected,
-        hogStage: saleStage,
+        stage: saleStage,
         date: saleDate,
-        hogsCount: isSwine ? qty : 0,
-        produceCount: qty,
+        quantity: qty,
         revenue,
         notes: saleNotes.trim() || undefined,
         fundSource: saleFundSource,
@@ -510,10 +464,9 @@ export default function LivestockMonitor({
     } else {
       onAddSale({
         produce: selected,
-        hogStage: saleStage,
+        stage: saleStage,
         date: saleDate,
-        hogsCount: isSwine ? qty : 0,
-        produceCount: qty,
+        quantity: qty,
         revenue,
         notes: saleNotes.trim() || undefined,
         fundSource: saleFundSource,
@@ -574,16 +527,17 @@ export default function LivestockMonitor({
             const pTotalExp = pExpenses.reduce((sum, e) => sum + e.amount, 0);
             const pTotalRev = pSales.reduce((sum, s) => sum + s.revenue, 0);
             const pNet = pTotalRev - pTotalExp;
-            const pUnits = pSales.reduce((sum, s) => sum + toInt(s.produceCount || s.hogsCount), 0);
+            const pUnits = pSales.reduce((sum, s) => sum + toInt(s.quantity), 0);
+            const pInventory = inventoryFor(p);
+            const pInventoryTotal = currentInventoryTotal(p);
 
             // Clean title without any livestock emoji
             const displayTitle = getProjectDisplayTitle(p);
 
             // Badge pill at top right
             let badgeText = 'Active IGP';
-            if (isSwine) badgeText = `${totalSwine} Head`;
-            else if (isCattle) badgeText = `${totalCattle} Head`;
-            else if (isPoultry) badgeText = `${currentRtl} Head`;
+            if (isSwine || isCattle || isPoultry) badgeText = `${pInventoryTotal} Head`;
+            else if (pInventory) badgeText = `${pInventoryTotal} Units`;
             else if (pUnits > 0) badgeText = `${pUnits} ${isRental(p) ? 'Rented' : 'Units'}`;
             else if (pTotalRev > 0) badgeText = peso(pTotalRev);
 
@@ -598,21 +552,30 @@ export default function LivestockMonitor({
             };
 
             if (isSwine) {
-              row1 = { label: 'Fattening', value: String(currentSwineFattening) };
-              row2 = { label: 'Breeding (Anay)', value: String(currentSwineBreeding) };
-              row3 = { label: 'For Dispersal', value: String(currentSwineDispersal), highlight: 'amber' };
+              row1 = { label: 'Fattening', value: String(currentStageCount(p, ['Fattening'])) };
+              row2 = { label: 'Breeding (Anay)', value: String(currentStageCount(p, ['Breeding', 'Gestation'])) };
+              row3 = { label: 'For Dispersal', value: String(currentStageCount(p, ['Dispersal'])), highlight: 'amber' };
             } else if (isCattle) {
-              row1 = { label: 'Fattening', value: String(currentCattleFattening) };
-              row2 = { label: 'For Dispersal', value: String(currentCattleDispersal), highlight: 'amber' };
+              row1 = { label: 'Fattening', value: String(currentStageCount(p, ['Fattening'])) };
+              row2 = { label: 'For Dispersal', value: String(currentStageCount(p, ['Dispersal'])), highlight: 'amber' };
               row3 = { label: 'Status', value: 'Active Livelihood' };
             } else if (isPoultry) {
-              row1 = { label: 'Ready-to-Lay (RTL)', value: String(currentRtl) };
+              row1 = { label: 'Ready-to-Lay (RTL)', value: String(currentStageCount(p, ['RTL'])) };
               row2 = {
                 label: 'Eggs Available',
                 value: String(getAvailableEggCount(state.eggHarvests || [], state.sales || [], p)),
                 highlight: 'emerald'
               };
               row3 = { label: 'Coop Setup', value: 'Layer Cages' };
+            } else if (pInventory || pInventoryTotal > 0) {
+              const stageNames = Object.keys(pInventory.stageBreakdown || {});
+              const stageMetric = (index: number, fallback: MetricRow): MetricRow => {
+                const stage = stageNames[index];
+                return stage ? { label: stage, value: String(currentStageCount(p, [stage])) } : fallback;
+              };
+              row1 = stageMetric(0, { label: 'Opening Inventory', value: String(pInventoryTotal) });
+              row2 = stageMetric(1, { label: 'Gross Revenue', value: peso(pTotalRev) });
+              row3 = stageMetric(2, { label: 'Net Balance', value: peso(pNet), highlight: pNet >= 0 ? 'emerald' : 'amber' });
             } else if (pUnits > 0) {
               row1 = { label: isRental(p) ? 'Units Rented' : 'Units Sold', value: String(pUnits) };
               row2 = { label: 'Gross Revenue', value: peso(pTotalRev) };
@@ -738,7 +701,7 @@ export default function LivestockMonitor({
               {isSwine ? 'Total Swine Heads' : isCattle ? 'Total Cattle Heads' : isPoultry ? 'Total RTL Birds' : 'Inventory / Units'}
             </span>
             <div className="text-2xl font-black text-[#1B4332] font-mono mt-1">
-              {isSwine ? `${totalSwine} heads` : isCattle ? `${totalCattle} heads` : isPoultry ? `${currentRtl} birds` : 'Active'}
+              {isSwine ? `${totalSwine} heads` : isCattle ? `${totalCattle} heads` : isPoultry ? `${currentRtl} birds` : selectedInventory || selectedInventoryTotal > 0 ? `${selectedInventoryTotal} units` : 'Active'}
             </div>
 
           </div>
@@ -1050,7 +1013,7 @@ export default function LivestockMonitor({
               <div>
                 <label className={labelCls}>Swine Stage / Classification</label>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {(['Fattening', 'Breeding', 'Dispersal'] as HogStage[]).map((stg) => (
+                  {(['Fattening', 'Breeding', 'Dispersal'] as IgpStage[]).map((stg) => (
                     <button
                       key={stg}
                       type="button"
@@ -1071,7 +1034,7 @@ export default function LivestockMonitor({
               <div>
                 <label className={labelCls}>Cattle Stage / Classification</label>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {(['Fattening', 'Dispersal'] as HogStage[]).map((stg) => (
+                  {(['Fattening', 'Dispersal'] as IgpStage[]).map((stg) => (
                     <button
                       key={stg}
                       type="button"
@@ -1094,6 +1057,13 @@ export default function LivestockMonitor({
                 <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-200 text-xs font-black text-[#1B4332]">
                   Ready-to-Lay (RTL) Layer Portfolio
                 </div>
+              </div>
+            )}
+
+            {!isSwine && !isCattle && !isPoultry && (
+              <div>
+                <label className={labelCls}>Stage / Classification</label>
+                <input type="text" value={expStage} onChange={(event) => setExpStage(event.target.value)} className={inputCls} />
               </div>
             )}
 
@@ -1124,7 +1094,7 @@ export default function LivestockMonitor({
             )}
 
             {/* Heads purchased: only for stock-purchase categories */}
-            {(isSwine || isCattle || isPoultry) && STOCK_CATEGORIES.includes(expCategory) && (
+            {isIgpStockPurchaseCategory(expCategory === 'Other' ? expCustom : expCategory) && (
               <div>
                 <label className={labelCls}>Heads Purchased</label>
                 <input
@@ -1222,7 +1192,7 @@ export default function LivestockMonitor({
               <div>
                 <label className={labelCls}>Swine Stage Sold</label>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {(['Fattening', 'Breeding', 'Dispersal'] as HogStage[]).map((stg) => (
+                  {(['Fattening', 'Breeding', 'Dispersal'] as IgpStage[]).map((stg) => (
                     <button
                       key={stg}
                       type="button"
@@ -1243,7 +1213,7 @@ export default function LivestockMonitor({
               <div>
                 <label className={labelCls}>Cattle Stage Sold</label>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {(['Fattening', 'Dispersal'] as HogStage[]).map((stg) => (
+                  {(['Fattening', 'Dispersal'] as IgpStage[]).map((stg) => (
                     <button
                       key={stg}
                       type="button"
@@ -1264,7 +1234,7 @@ export default function LivestockMonitor({
               <div>
                 <label className={labelCls}>What Was Sold?</label>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {([['Eggs', 'Eggs (deducts egg inventory)'], ['Other', 'Other income'], ['RTL', 'Birds (reduces RTL count)']] as [HogStage, string][]).map(([stg, label]) => (
+                  {([['Eggs', 'Eggs (deducts egg inventory)'], ['Other', 'Other income'], ['RTL', 'Birds (reduces RTL count)']] as [IgpStage, string][]).map(([stg, label]) => (
                     <button
                       key={stg}
                       type="button"
@@ -1278,6 +1248,13 @@ export default function LivestockMonitor({
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {!isSwine && !isCattle && !isPoultry && (
+              <div>
+                <label className={labelCls}>Stage / Classification</label>
+                <input type="text" value={saleStage} onChange={(event) => setSaleStage(event.target.value)} className={inputCls} />
               </div>
             )}
 

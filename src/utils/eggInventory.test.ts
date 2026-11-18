@@ -12,13 +12,12 @@ const harvest = (id: string, eggCount: number, status: EggHarvestLog['status'] =
   status
 });
 
-const sale = (id: string, quantity: number, hogStage: IgpSale['hogStage'] = 'Eggs'): IgpSale => ({
+const sale = (id: string, quantity: number, stage: IgpSale['stage'] = 'Eggs'): IgpSale => ({
   id,
   produce: 'Poultry Raising (RTL)',
   date: '2026-11-03',
-  hogStage,
-  hogsCount: 0,
-  produceCount: quantity,
+  stage,
+  quantity,
   revenue: quantity * 5,
   recordedBy: 'Treasurer'
 });

@@ -152,13 +152,17 @@ erDiagram
     %% ==================== IGP (INCOME GENERATING PROJECT) ====================
     AFA_IGP {
         varchar id PK "singleton state row"
-        integer opening_hog_count "DEFAULT 0"
-        jsonb herd_breakdown "fattening, gestation, lactating, dispersal, cattle..."
         text produces "TEXT[] e.g. Hog Raising, Chairs Rental"
         jsonb expenses "still present in live catalog"
         jsonb sales "denormalized array"
         jsonb chore_logs "daily care logs"
         int closed_years "INT[]"
+    }
+
+    AFA_IGP_LIVESTOCK {
+        text produce PK "one inventory record per produce"
+        integer opening_count "DEFAULT 0"
+        jsonb stage_breakdown "stage counts for this produce only"
     }
 
     AFA_IGP_EXPENSES {
@@ -172,7 +176,7 @@ erDiagram
         numeric amount "NOT NULL; DEFAULT 0"
         text recorded_by
         text fund_source
-        varchar hog_stage "VARCHAR(50)"
+        text stage "generic project stage"
     }
 
     AFA_IGP_HARVESTS {
@@ -196,9 +200,8 @@ erDiagram
         varchar id PK "VARCHAR(100)"
         text produce "NOT NULL"
         varchar date
-        varchar hog_stage
-        integer hogs_count "NOT NULL; DEFAULT 0"
-        integer produce_count "NOT NULL; DEFAULT 0"
+        text stage
+        numeric quantity "NOT NULL; DEFAULT 0"
         numeric revenue "NOT NULL; DEFAULT 0"
         text recorded_by
         text fund_source
@@ -299,7 +302,7 @@ erDiagram
     PRODUCTS |o--o{ INVENTORY : "optional product FK; set null on delete"
 ```
 
-## Tables in the Repository-Managed PostgreSQL Schema (18)
+## Tables in the Repository-Managed PostgreSQL Schema (19)
 
 | # | Table | Purpose | Owner/Role |
 |---|-------|---------|-----------|
@@ -311,25 +314,26 @@ erDiagram
 | 6 | `announcements` | Public/member announcements | PIO |
 | 7 | `system_logs` | Hash-chained tamper-evident audit trail | System |
 | 8 | `afa_igp` | IGP state (herd breakdown, produce projects, sales, chores) | Treasurer |
-| 9 | `afa_igp_expenses` | IGP expenses indexed per produce project | Treasurer |
-| 10 | `afa_igp_harvests` | Harvest records and audit/signature fields | Treasurer/Auditor |
-| 11 | `afa_igp_sales` | Normalized IGP sales records | Treasurer |
-| 12 | `products` | Marketplace product catalog | Treasurer/Auditor |
-| 13 | `inventory` | Asset and equipment registry | Auditor |
-| 14 | `activities` | Events, trainings, outreach calendar | PIO |
-| 15 | `achievements` | Association achievements | PIO |
-| 16 | `organization_funds` | Fund envelopes (allocations & balances) | Treasurer |
-| 17 | `auditor_reports` | Formal audit reports (period, findings, certification) | Auditor → President |
-| 18 | `delegation_requests` | President → Vice President executive delegation | President / VP |
+| 9 | `afa_igp_livestock` | Opening and stage inventory per produce project | Treasurer |
+| 10 | `afa_igp_expenses` | IGP expenses indexed per produce project | Treasurer |
+| 11 | `afa_igp_harvests` | Harvest records and audit/signature fields | Treasurer/Auditor |
+| 12 | `afa_igp_sales` | Normalized IGP sales records | Treasurer |
+| 13 | `products` | Marketplace product catalog | Treasurer/Auditor |
+| 14 | `inventory` | Asset and equipment registry | Auditor |
+| 15 | `activities` | Events, trainings, outreach calendar | PIO |
+| 16 | `achievements` | Association achievements | PIO |
+| 17 | `organization_funds` | Fund envelopes (allocations & balances) | Treasurer |
+| 18 | `auditor_reports` | Formal audit reports (period, findings, certification) | Auditor → President |
+| 19 | `delegation_requests` | President → Vice President executive delegation | President / VP |
 
-The supplied live catalog confirms that `afa_igp.expenses` and `afa_igp_expenses.expense_data` still exist as JSONB columns alongside structured expense columns. The application now reads normalized IGP sales and harvests first, merges JSON-only records as fallback, and writes both normalized rows and JSON compatibility mirrors. The unused group tables and `afa_igp.groups` column are removed by migration. The Supabase Table Editor also showed a `sync_queue` table, but its columns were not included in the supplied catalog output; it is not application-managed.
+The supplied live catalog confirms that `afa_igp.expenses` and `afa_igp_expenses.expense_data` still exist as JSONB columns alongside structured expense columns. The application now reads normalized IGP records first, merges JSON-only records as fallback, and writes JSON compatibility mirrors. Inventory is keyed by produce, while sale and expense stage/quantity fields are generic. The migration copies legacy hog-specific inventory, stage, and quantity values before dropping those columns. The unused group tables and `afa_igp.groups` column are removed by migration. The Supabase Table Editor also showed a `sync_queue` table, but its columns were not included in the supplied catalog output; it is not application-managed.
 
 ## App-Level Entities (not separate tables)
 
 These exist in the client data model (`src/types.ts`) but are stored embedded (JSONB) or as part of other structures rather than as standalone relational tables:
 
 - **MemberAffiliation** — embedded array on `Member` / `User`
-- **IgpSale, EggHarvestLog, HogHerdBreakdown** — IGP records are mirrored in JSONB for compatibility; normalized sales and harvests are used by the application, with JSON fallback on reads
+- **IgpLivestockInventory, IgpSale, EggHarvestLog** — inventory, sales, and harvests use normalized tables; legacy JSON collections remain as compatibility fallbacks
 - **SyncQueueItem** — offline operation queue stored in encrypted browser storage
 
 ## Relationship Notes
@@ -337,6 +341,7 @@ These exist in the client data model (`src/types.ts`) but are stored embedded (J
 - **Repository-managed foreign keys:** `financial_transactions.activity_id` references `activities.id`; `inventory.catalog_product_id` references `products.id`. Both are nullable and use `ON DELETE SET NULL`.
 - **Live foreign-key scope:** the supplied catalog included the old group-members FK but was truncated before the remaining tables; the startup migration now removes that FK with the unused group tables.
 - **No parent FK for IGP collections:** `afa_igp` has no FK to the normalized IGP tables; `produce` associations are text, not database-enforced relationships.
+- **Per-produce inventory:** `afa_igp_livestock.produce` is its primary key; the project names remain application-managed text and are not FK-linked to `afa_igp.produces`.
 - **Application-level links:** recorder/poster/organizer names, `financial_transactions.fund_source`, attendance JSON, and IGP expense records have no database foreign key.
 - **Unique constraints:** `users.username` is unique. The partial `users_unique_named_role_idx` permits only one account per officer role while excluding Member and Board Member roles. `organization_funds.code` is not unique.
 - **MFA enforcement:** `mfa_enabled` is force-set to `TRUE` for the President on migration.

@@ -11,14 +11,14 @@ Companion diagram: [`docs/ERD.md`](./ERD.md).
 |---|---|
 | Engine | PostgreSQL (Supabase, accessed over the pooler with TLS) |
 | Schema | `public` |
-| Tables | **18 application-managed tables** |
+| Tables | **19 application-managed tables** |
 | Primary keys | Tables use client-generated `VARCHAR(100)` IDs |
 | Foreign keys | **2 in the repository-managed schema** — transaction-to-activity and inventory-to-product |
 | Unique constraints | `users.username`; partial unique index on normalized officer `role` |
 | Audit | `system_logs` is a SHA-256 hash chain (`hash`, `previous_hash`) |
 | Sync model | Offline-first: queued operations stay in encrypted browser storage; state is pushed/pulled through `api/sync/{push,pull}.js` |
 
-Many cross-entity references are *name strings* (`recorded_by`, `posted_by`, `organizer`, `moved_by`) or *embedded JSONB*, not FK columns. IGP expenses, sales, and harvests are persisted in normalized tables, with JSON retained as a compatibility mirror and read fallback where still used.
+Many cross-entity references are *name strings* (`recorded_by`, `posted_by`, `organizer`, `moved_by`) or *embedded JSONB*, not FK columns. IGP inventory, expenses, sales, and harvests are persisted in normalized tables; legacy JSON collections remain as compatibility mirrors and read fallbacks.
 
 ---
 
@@ -59,15 +59,17 @@ Many cross-entity references are *name strings* (`recorded_by`, `posted_by`, `or
 
 ### 2.4 Income-generating project (IGP)
 
-**`afa_igp`** — a **single-row state table** (`id = 'main_state'`) holding IGP-level state: `opening_hog_count`, `herd_breakdown JSONB` (fattening/gestation/lactating/dispersal/cattle…), `produces TEXT[]`, `expenses JSONB`, `sales JSONB`, `chore_logs JSONB` (egg-harvest compatibility mirror), `closed_years INT[]`. The unused legacy `groups` JSONB column is removed by migration.
+**`afa_igp`** — a **single-row state table** (`id = 'main_state'`) holding IGP-level collections: `produces TEXT[]`, `expenses JSONB`, `sales JSONB`, `chore_logs JSONB` (egg-harvest compatibility mirror), `closed_years INT[]`. Legacy hog-specific count fields are copied to per-produce inventory before being dropped; the unused legacy `groups` JSONB column is also removed by migration.
 
-**`afa_igp_expenses`** — expenses normalized per produce project: `produce` NOT NULL (indexed by `afa_igp_expenses_produce_idx`), `date`, `category`, `quantity`, `description`, `amount`, `recorded_by`, `fund_source`, `hog_stage`, plus retained `expense_data JSONB` compatibility data.
+**`afa_igp_livestock`** — one row per produce project, keyed by `produce`, with `opening_count` and generic `stage_breakdown JSONB`. This isolates swine, cattle, poultry, and future livestock counts.
 
-**`afa_igp_sales`** — normalized sale records: `produce`, `date`, `hog_stage`, `hogs_count`, `produce_count`, `revenue`, `recorded_by`, `fund_source`, `notes`.
+**`afa_igp_expenses`** — expenses normalized per produce project: `produce` NOT NULL (indexed by `afa_igp_expenses_produce_idx`), `date`, `category`, `quantity`, `description`, `amount`, `recorded_by`, `fund_source`, generic `stage`, plus retained `expense_data JSONB` compatibility data.
+
+**`afa_igp_sales`** — normalized sale records: `produce`, `date`, generic `stage` and `quantity`, `revenue`, `recorded_by`, `fund_source`, `notes`.
 
 **`afa_igp_harvests`** — harvest count, submitter, date/time, notes, audit, and signature fields.
 
-The app reads normalized IGP expense, sale, and harvest rows first, merges legacy JSON-only IDs as fallback, and writes normalized rows plus JSON compatibility mirrors. The unused IGP group tables and `afa_igp.groups` column are removed by migration. Legacy expense JSON columns are retained; they are not dropped by the current migration.
+The app reads normalized IGP rows first, merges legacy JSON-only IDs as fallback, and writes normalized rows plus JSON compatibility mirrors. Startup migration copies the legacy inventory, stage, and sale quantity values before dropping the hog-specific columns. The unused IGP group tables and `afa_igp.groups` column are removed by migration. Legacy expense JSON columns are retained; they are not dropped by the current migration.
 
 ### 2.5 Marketplace, outreach & system
 
@@ -114,6 +116,7 @@ erDiagram
 | `financial_transactions` | `fund_source` | `organization_funds.code` | N:1 (loose string match) |
 | `auditor_reports` | `prepared_by`, `certified_by` | Auditor / President in `users` | N:1 each |
 | `delegation_requests` | `requested_by`, `reviewed_by` | President / VP in `users` | N:1 each |
+| `afa_igp_livestock` | `produce` | `afa_igp.produces` | N:1 logical name match; no FK |
 | `afa_igp_harvests` | `collected_by` | `members.name` | N:1 (name-based; no FK) |
 | `products` | `farmer_name`, `farmer_sitio` | `members` | N:1 (by name) |
 | `products` | `updated_by`, `managed_by` | `users` | N:1 |
@@ -127,7 +130,7 @@ erDiagram
 | App entity | Stored in | Column |
 |---|---|---|
 | `MemberAffiliation[]` | `members` / `users` / sync payload | inline |
-| `HogHerdBreakdown` | `afa_igp` | `herd_breakdown` |
+| `IgpLivestockInventory[]` | `afa_igp_livestock` | Per-produce rows |
 | `IgpSale[]` | `afa_igp_sales` (normalized) and `afa_igp` (compatibility mirror) | `sales` |
 | `EggHarvestLog[]` | `afa_igp_harvests` (normalized) and `afa_igp` (compatibility mirror) | `chore_logs` |
 | `IgpExpense[]` | `afa_igp_expenses` (normalized) and JSON compatibility columns | Structured columns / JSON |

@@ -105,6 +105,7 @@ var APP_TABLES = [
   "announcements",
   "system_logs",
   "afa_igp",
+  "afa_igp_livestock",
   "afa_igp_expenses",
   "afa_igp_harvests",
   "afa_igp_sales",

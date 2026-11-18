@@ -51,7 +51,7 @@ export const getPublishedProducts = (products: PublicProduct[], hogRaising?: Hog
       .map(harvest => harvest.produce || 'Poultry Raising (RTL)')
       .filter(isPoultryProject),
     ...(hogRaising.sales || [])
-      .filter(sale => sale.hogStage === 'Eggs' || sale.hogStage === 'General' || sale.hogStage === undefined)
+      .filter(sale => sale.stage === 'Eggs' || sale.stage === 'General' || sale.stage === undefined)
       .map(sale => sale.produce || 'Poultry Raising (RTL)')
       .filter(isPoultryProject)
   ]);

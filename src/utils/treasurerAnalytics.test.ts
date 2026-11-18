@@ -59,7 +59,7 @@ const livestock: HogRaisingState = {
     id: 'egg-income',
     produce: 'Poultry Raising',
     date: '2026-03-12',
-    hogsCount: 0,
+    quantity: 0,
     revenue: 600,
     recordedBy: 'Treasurer'
   }],
