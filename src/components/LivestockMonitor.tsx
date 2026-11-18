@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   HogRaisingState, HogStage, HogHerdBreakdown, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund
 } from '../types';
@@ -131,10 +131,21 @@ export default function LivestockMonitor({
     [rawProduces]
   );
   const [selected, setSelected] = useState<string>(produces[0] || 'Swine Raising (Baboyan)');
+  const projectSelectionMadeRef = useRef(false);
+  const selectProject = (project: string) => {
+    projectSelectionMadeRef.current = true;
+    setSelected(project);
+  };
   useEffect(() => {
     if (produces.length === 0) setSelected('');
     else if (!produces.includes(selected)) setSelected(produces[0]);
-  }, [produces, selected]);
+    else if (!projectSelectionMadeRef.current) {
+      const latestProject = [...state.expenses, ...state.sales]
+        .filter(record => record.produce && produces.includes(record.produce))
+        .sort((left, right) => right.date.localeCompare(left.date))[0]?.produce;
+      if (latestProject && latestProject !== selected) setSelected(latestProject);
+    }
+  }, [produces, selected, state.expenses, state.sales]);
 
   const [showAddProject, setShowAddProject] = useState(false);
   const [newProject, setNewProject] = useState('');
@@ -142,7 +153,7 @@ export default function LivestockMonitor({
     const clean = name.trim();
     if (!clean) return;
     onAddProduce?.(clean);
-    setSelected(clean);
+    selectProject(clean);
     setNewProject('');
     setShowAddProject(false);
   };
@@ -613,7 +624,7 @@ export default function LivestockMonitor({
                 key={p}
                 type="button"
                 aria-pressed={isSelected}
-                onClick={() => setSelected(p)}
+                onClick={() => selectProject(p)}
                 className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 flex flex-col justify-between ${
                   isSelected
                     ? 'bg-emerald-50 text-slate-900 border-emerald-700 shadow-sm'
@@ -672,7 +683,7 @@ export default function LivestockMonitor({
             <button
               key={p}
               type="button"
-              onClick={() => setSelected(p)}
+              onClick={() => selectProject(p)}
               aria-pressed={selected === p}
               className={`min-h-11 px-3.5 py-2 rounded-xl text-sm font-bold border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 ${
                 selected === p

@@ -1,9 +1,10 @@
 # Alegria Farmers Association — Entity Relationship Diagram (ERD)
 
-Generated from the actual PostgreSQL schema defined in `src/api/db.ts` (`initDatabaseSchema`) and the TypeScript domain types in `src/types.ts`.
+This diagram combines the repository-managed PostgreSQL schema in `src/api/db.ts` (`initDatabaseSchema`) with IGP tables and columns confirmed by the Supabase catalog output supplied by the user. That output is truncated after 100 rows, so it is not a complete live-schema inventory or a complete live foreign-key count.
 
 ## ERD Diagram (Mermaid)
 
+<!-- mermaid-checked: every attribute is `<type> <name> [<key>] ["<description>"]` with at most one of PK/FK/UK, no \n in descriptions, no {} in descriptions, every relationship label is double-quoted -->
 ```mermaid
 erDiagram
     %% ==================== CORE IDENTITY ====================
@@ -52,13 +53,6 @@ erDiagram
         varchar birth_date
     }
 
-    MEMBER_AFFILIATIONS {
-        varchar id PK "client-generated key"
-        varchar name "Senior Citizen ID, PWD ID, 4Ps, FCCT, CFIDP..."
-        varchar id_number "e.g. SC-2024-8819"
-        varchar type "Senior Citizen, PWD, 4Ps/DSWD, Cooperative..."
-    }
-
     %% ==================== MEETINGS & RESOLUTIONS ====================
     MEETINGS {
         varchar id PK
@@ -101,6 +95,7 @@ erDiagram
         text purpose "required for expenses/cash advances"
         varchar liquidation_deadline
         text recorded_by "Treasurer"
+        varchar activity_id FK "nullable; deferred"
         text fund_source "GF-SLP, DOLE-IGP, ATI-TRG, DISP-5%, CBU..."
         varchar audited_status "Unaudited | Audited | Flagged"
         text audited_by "Auditor"
@@ -115,9 +110,11 @@ erDiagram
     ORGANIZATION_FUNDS {
         varchar id PK
         text name "NOT NULL"
-        varchar code UK "UNIQUE NOT NULL"
-        numeric allocated_amount
+        varchar code "NOT UNIQUE"
+        numeric initial_fund
         numeric current_balance
+        text category
+        text source_origin
         text description
         text custodian
         varchar last_updated
@@ -158,7 +155,7 @@ erDiagram
         integer opening_hog_count "DEFAULT 0"
         jsonb herd_breakdown "fattening, gestation, lactating, dispersal, cattle..."
         text produces "TEXT[] e.g. Hog Raising, Chairs Rental"
-        jsonb expenses "denormalized array"
+        jsonb expenses "still present in live catalog"
         jsonb sales "denormalized array"
         jsonb groups "IGP member batches"
         jsonb chore_logs "daily care logs"
@@ -167,9 +164,59 @@ erDiagram
 
     AFA_IGP_EXPENSES {
         varchar id PK
-        text produce "NOT NULL, indexed — e.g. Hog Raising"
+        text produce "NOT NULL"
+        varchar date "VARCHAR(50)"
+        jsonb expense_data "legacy JSONB column"
+        varchar category "VARCHAR(100)"
+        numeric quantity
+        text description
+        numeric amount "NOT NULL; DEFAULT 0"
+        text recorded_by
+        text fund_source
+        varchar hog_stage "VARCHAR(50)"
+    }
+
+    AFA_IGP_GROUPS {
+        varchar id PK "VARCHAR(100)"
+        text name "NOT NULL"
+        text schedule_days "TEXT array"
+        integer sort_order "NOT NULL; DEFAULT 0"
+    }
+
+    AFA_IGP_GROUP_MEMBERS {
+        varchar group_id PK "also FK to AFA_IGP_GROUPS"
+        text member_name PK "composite PK with group_id"
+        integer position "NOT NULL; DEFAULT 0"
+    }
+
+    AFA_IGP_HARVESTS {
+        varchar id PK "VARCHAR(100)"
+        text produce
         varchar date
-        jsonb expense_data "full IgpExpense JSON"
+        varchar time
+        text collected_by "NOT NULL"
+        integer egg_count "NOT NULL; DEFAULT 0"
+        text notes
+        varchar status "NOT NULL; DEFAULT Pending Audit"
+        text audited_by
+        varchar audited_date
+        text audit_remarks
+        text signed_by
+        varchar signed_date
+        text signature_remarks
+    }
+
+    AFA_IGP_SALES {
+        varchar id PK "VARCHAR(100)"
+        text produce "NOT NULL"
+        varchar date
+        varchar hog_stage
+        integer hogs_count "NOT NULL; DEFAULT 0"
+        integer produce_count "NOT NULL; DEFAULT 0"
+        numeric revenue "NOT NULL; DEFAULT 0"
+        text recorded_by
+        text fund_source
+        text notes
     }
 
     %% ==================== MARKETPLACE / OUTREACH ====================
@@ -213,6 +260,15 @@ erDiagram
         text image_url
     }
 
+    ACHIEVEMENTS {
+        varchar id PK
+        varchar year
+        text title
+        text ceb_title
+        text description
+        varchar icon
+    }
+
     ANNOUNCEMENTS {
         varchar id PK
         text title "NOT NULL"
@@ -224,16 +280,18 @@ erDiagram
     }
 
     %% ==================== INVENTORY & AUDIT ====================
-    INVENTORY_ITEMS {
-        varchar id PK "app-level entity (Auditor custody)"
-        text name "IGP Plastic Chairs, Harvest Sacks, Sprayer..."
-        varchar category "IGP Equipment, Farm Tools, Rental Assets, Livestock..."
+    INVENTORY {
+        varchar id PK
+        text name
+        varchar category
         integer quantity
+        integer damaged_quantity
         varchar unit "pieces, sacks, units"
-        varchar condition "Good | Needs Repair | Damaged | Lost"
+        varchar item_condition
         text location
         text notes
-        text recorded_by "Auditor"
+        varchar catalog_product_id FK
+        text recorded_by
         varchar date_recorded
         varchar last_updated
     }
@@ -250,40 +308,13 @@ erDiagram
         text previous_hash "hash-chain (tamper-evident audit log)"
     }
 
-    SYNC_QUEUE {
-        varchar id PK
-        varchar timestamp
-        varchar action "create | update | delete"
-        varchar entity_type "user, member, meeting, transaction, hog_expense..."
-        jsonb payload
-        varchar status "DEFAULT synced"
-    }
-
     %% ==================== RELATIONSHIPS ====================
-    MEMBERS ||--o{ MEMBER_AFFILIATIONS : "has (embedded jsonb/inline in app)"
-    USERS ||--o{ MEMBER_AFFILIATIONS : "has (embedded, Member users)"
-    USERS |o..o| MEMBERS : "Member-role user mirrors a member profile"
-
-    MEETINGS ||..o{ MEMBERS : "attendance_record (JSONB map memberId->status)"
-    RESOLUTIONS }o..|| USERS : "moved_by / seconded_by (by name)"
-    FINANCIAL_TRANSACTIONS }o..o| USERS : "recorded_by (Treasurer)"
-    FINANCIAL_TRANSACTIONS }o..o| USERS : "audited_by (Auditor)"
-    ORGANIZATION_FUNDS |o..o{ FINANCIAL_TRANSACTIONS : "fund_source -> code (loose reference)"
-    AUDITOR_REPORTS }o..|| USERS : "prepared_by (Auditor) / certified_by (President)"
-    DELEGATION_REQUESTS }o..|| USERS : "requested_by (President), reviewed_by (VP)"
-    AFA_IGP ||--o{ AFA_IGP_EXPENSES : "expenses also materialized per-produce"
-    AFA_IGP }o..o{ USERS : "IgpGroup.members (member names)"
-    AFA_IGP_EXPENSES }o..o| USERS : "recorded_by (Treasurer)"
-    PRODUCTS }o..o| USERS : "updated_by / managed_by"
-    PRODUCTS }o..o| MEMBERS : "farmer_name / farmer_sitio (by name)"
-    ACTIVITIES }o..o| USERS : "organizer (PIO)"
-    ANNOUNCEMENTS }o..o| USERS : "posted_by (PIO)"
-    INVENTORY_ITEMS }o..o| USERS : "recorded_by (Auditor)"
-    SYSTEM_LOGS }o..o| USERS : "user (by name)"
-    SYNC_QUEUE }o..o{ SYSTEM_LOGS : "audit trail of pending ops"
+    ACTIVITIES |o--o{ FINANCIAL_TRANSACTIONS : "activity FK; set null on delete"
+    PRODUCTS |o--o{ INVENTORY : "optional product FK; set null on delete"
+    AFA_IGP_GROUPS ||--o{ AFA_IGP_GROUP_MEMBERS : "has member rows"
 ```
 
-## Tables in the PostgreSQL Database (15)
+## Tables in the Repository-Managed PostgreSQL Schema (20)
 
 | # | Table | Purpose | Owner/Role |
 |---|-------|---------|-----------|
@@ -296,25 +327,34 @@ erDiagram
 | 7 | `system_logs` | Hash-chained tamper-evident audit trail | System |
 | 8 | `afa_igp` | IGP state (herd breakdown, produce projects, sales, chores) | Treasurer |
 | 9 | `afa_igp_expenses` | IGP expenses indexed per produce project | Treasurer |
-| 10 | `products` | Marketplace product catalog | Treasurer/Auditor |
-| 11 | `activities` | Events, trainings, outreach calendar | PIO |
-| 12 | `organization_funds` | Fund envelopes (allocations & balances) | Treasurer |
-| 13 | `auditor_reports` | Formal audit reports (period, findings, certification) | Auditor → President |
-| 14 | `delegation_requests` | President → Vice President executive delegation | President / VP |
-| 15 | `sync_queue` | Offline-first sync/audit queue of CRUD operations | System |
+| 10 | `afa_igp_groups` | Normalized IGP groups and schedules | Treasurer |
+| 11 | `afa_igp_group_members` | Group member names and ordering | Treasurer |
+| 12 | `afa_igp_harvests` | Harvest records and audit/signature fields | Treasurer/Auditor |
+| 13 | `afa_igp_sales` | Normalized IGP sales records | Treasurer |
+| 14 | `products` | Marketplace product catalog | Treasurer/Auditor |
+| 15 | `inventory` | Asset and equipment registry | Auditor |
+| 16 | `activities` | Events, trainings, outreach calendar | PIO |
+| 17 | `achievements` | Association achievements | PIO |
+| 18 | `organization_funds` | Fund envelopes (allocations & balances) | Treasurer |
+| 19 | `auditor_reports` | Formal audit reports (period, findings, certification) | Auditor → President |
+| 20 | `delegation_requests` | President → Vice President executive delegation | President / VP |
+
+The supplied live catalog confirms that `afa_igp.expenses` and `afa_igp_expenses.expense_data` still exist as JSONB columns alongside structured expense columns. The application now reads normalized IGP sales, groups, memberships, and harvests first, merges JSON-only records as fallback, and writes both normalized rows and JSON compatibility mirrors. The Supabase Table Editor also showed a `sync_queue` table, but its columns were not included in the supplied catalog output; it is not application-managed.
 
 ## App-Level Entities (not separate tables)
 
 These exist in the client data model (`src/types.ts`) but are stored embedded (JSONB) or as part of other structures rather than as standalone relational tables:
 
 - **MemberAffiliation** — embedded array on `Member` / `User`
-- **IgpSale, IgpGroup, IgpChoreLog, HogHerdBreakdown** — embedded JSONB in `afa_igp`
-- **InventoryItem** — Auditor-managed registry, stored client-side/synced via `sync_queue`
-- **SyncQueueItem** — mirrors `sync_queue` table
+- **IgpSale, IgpGroup, EggHarvestLog, HogHerdBreakdown** — IGP records are mirrored in JSONB for compatibility; normalized sales, groups, group members, and harvests are now used by the application, with JSON fallback on reads
+- **SyncQueueItem** — offline operation queue stored in encrypted browser storage
 
 ## Relationship Notes
 
-- **Weak/no hard foreign keys:** the schema intentionally uses name-based references (`recorded_by`, `posted_by`, `organizer`, etc.) — shown as dashed (`o..`) relationships in the diagram. Only `username`, `organization_funds.code`, and the partial unique index `users_unique_named_role_idx` enforce uniqueness in the database.
-- **Partial unique constraint:** only one user may hold each officer role (`President`, `Treasurer`, `Auditor`, `PIO`, `Secretary`, `VP`, `Assistant_*`); multiple `Member` and `Board_Member` rows are allowed.
+- **Repository-managed foreign keys:** `financial_transactions.activity_id` references `activities.id`; `inventory.catalog_product_id` references `products.id`; and `afa_igp_group_members.group_id` references `afa_igp_groups.id`. The first two are nullable and use `ON DELETE SET NULL`; group membership has a composite primary key of `(group_id, member_name)`.
+- **Live foreign-key scope:** the supplied catalog confirms the group-members FK but is truncated before the remaining tables, so it cannot establish the complete live foreign-key count.
+- **No parent FK for IGP collections:** `afa_igp` has no FK to the normalized IGP tables; `produce` associations are text, not database-enforced relationships.
+- **Application-level links:** recorder/poster/organizer names, `financial_transactions.fund_source`, attendance JSON, and IGP expense records have no database foreign key.
+- **Unique constraints:** `users.username` is unique. The partial `users_unique_named_role_idx` permits only one account per officer role while excluding Member and Board Member roles. `organization_funds.code` is not unique.
 - **MFA enforcement:** `mfa_enabled` is force-set to `TRUE` for the President on migration.
 - **Hash-chain audit:** each `system_logs` row stores its own `hash` plus `previous_hash`, forming a tamper-evident chain.

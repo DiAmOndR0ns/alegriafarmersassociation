@@ -313,24 +313,249 @@ async function runSchemaMigrations(client) {
     `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, opening_hog_count INTEGER NOT NULL DEFAULT 0, herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb, produces TEXT[], expenses JSONB, sales JSONB, groups JSONB, chore_logs JSONB, closed_years INT[]);`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
     `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
+    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS expenses JSONB;`,
     `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT NOT NULL,
       date VARCHAR(50),
-      expense_data JSONB NOT NULL
+      expense_data JSONB,
+      category TEXT,
+      quantity NUMERIC,
+      description TEXT,
+      amount NUMERIC,
+      recorded_by TEXT,
+      fund_source TEXT,
+      hog_stage TEXT
     );`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS expense_data JSONB;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS category TEXT;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS quantity NUMERIC;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS description TEXT;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS amount NUMERIC;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS recorded_by TEXT;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS hog_stage TEXT;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_groups (
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      schedule_days TEXT[],
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_group_members (
+      group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id),
+      member_name TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (group_id, member_name)
+    );`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_harvests (
+      id VARCHAR(100) PRIMARY KEY,
+      produce TEXT,
+      date VARCHAR(50),
+      time VARCHAR(50),
+      collected_by TEXT NOT NULL,
+      egg_count INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
+      audited_by TEXT,
+      audited_date VARCHAR(50),
+      audit_remarks TEXT,
+      signed_by TEXT,
+      signed_date VARCHAR(50),
+      signature_remarks TEXT
+    );`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_sales (
+      id VARCHAR(100) PRIMARY KEY,
+      produce TEXT NOT NULL,
+      date VARCHAR(50),
+      hog_stage VARCHAR(50),
+      hogs_count INTEGER NOT NULL DEFAULT 0,
+      produce_count INTEGER NOT NULL DEFAULT 0,
+      revenue NUMERIC NOT NULL DEFAULT 0,
+      recorded_by TEXT,
+      fund_source TEXT,
+      notes TEXT
+    );`,
+    `DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_expenses' AND column_name = 'expense_data'
+        ) THEN
+          EXECUTE $migration$
+            UPDATE afa_igp_expenses SET
+              category = COALESCE(NULLIF(category, ''), expense_data->>'category'),
+              quantity = CASE
+                WHEN quantity IS NULL OR quantity = 0 THEN
+                  CASE WHEN COALESCE(expense_data->>'quantity', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                    THEN (expense_data->>'quantity')::numeric ELSE quantity END
+                ELSE quantity END,
+              description = COALESCE(NULLIF(description, ''), expense_data->>'description'),
+              amount = CASE
+                WHEN amount IS NULL OR amount = 0 THEN
+                  CASE WHEN COALESCE(expense_data->>'amount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                    THEN (expense_data->>'amount')::numeric ELSE amount END
+                ELSE amount END,
+              recorded_by = COALESCE(NULLIF(recorded_by, ''), expense_data->>'recordedBy'),
+              fund_source = COALESCE(NULLIF(fund_source, ''), expense_data->>'fundSource'),
+              hog_stage = COALESCE(NULLIF(hog_stage, ''), expense_data->>'hogStage'),
+              produce = CASE
+                WHEN (COALESCE(hog_stage, expense_data->>'hogStage') = 'RTL'
+                  OR COALESCE(category, expense_data->>'category') ~* '(rtl|poultry|chicken|egg)')
+                  AND COALESCE(produce, expense_data->>'produce', '') ~* '(swine|hog|baboy|^$)'
+                  THEN 'Poultry Raising (RTL)'
+                ELSE COALESCE(NULLIF(produce, ''), NULLIF(expense_data->>'produce', ''), 'Swine Raising (Baboyan)')
+              END
+            WHERE expense_data IS NOT NULL
+          $migration$;
+        END IF;
+      END $$;`,
     `CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);`,
-    `INSERT INTO afa_igp_expenses (id, produce, date, expense_data)
-      SELECT expense->>'id',
-        COALESCE(NULLIF(expense->>'produce', ''), 'Swine Raising (Baboyan)'),
-        expense->>'date',
-        expense
-      FROM afa_igp AS igp
-      CROSS JOIN LATERAL jsonb_array_elements(
-        CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]'::jsonb END
-      ) AS item(expense)
-      WHERE NULLIF(expense->>'id', '') IS NOT NULL
-      ON CONFLICT (id) DO NOTHING;`,
+    `DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp' AND column_name = 'expenses'
+        ) THEN
+          EXECUTE $migration$
+            INSERT INTO afa_igp_expenses (
+              id, produce, date, expense_data, category, quantity, description, amount, recorded_by, fund_source, hog_stage
+            )
+            SELECT expense->>'id',
+              CASE
+                WHEN expense->>'hogStage' = 'RTL' OR expense->>'category' ~* '(rtl|poultry|chicken|egg)'
+                  THEN 'Poultry Raising (RTL)'
+                ELSE COALESCE(
+                  NULLIF(expense->>'produce', ''),
+                  CASE WHEN expense->>'category' ~* '(calf|cattle|baka)'
+                    THEN 'Cattle Raising (Bakahan)' END,
+                  'Swine Raising (Baboyan)'
+                )
+              END,
+              expense->>'date',
+              expense,
+              expense->>'category',
+              CASE WHEN COALESCE(expense->>'quantity', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (expense->>'quantity')::numeric END,
+              expense->>'description',
+              CASE WHEN COALESCE(expense->>'amount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (expense->>'amount')::numeric END,
+              expense->>'recordedBy',
+              expense->>'fundSource',
+              expense->>'hogStage'
+            FROM afa_igp AS igp
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]'::jsonb END
+            ) AS item(expense)
+            WHERE NULLIF(expense->>'id', '') IS NOT NULL
+            ON CONFLICT (id) DO UPDATE SET
+              produce = CASE
+                WHEN afa_igp_expenses.produce ~* '(swine|hog|baboy)'
+                  AND EXCLUDED.produce ~* '(poultry|rtl|chicken|egg)'
+                  THEN EXCLUDED.produce
+                ELSE COALESCE(NULLIF(afa_igp_expenses.produce, ''), EXCLUDED.produce)
+              END,
+              date = COALESCE(NULLIF(afa_igp_expenses.date, ''), EXCLUDED.date),
+              expense_data = COALESCE(afa_igp_expenses.expense_data, EXCLUDED.expense_data),
+              category = COALESCE(NULLIF(afa_igp_expenses.category, ''), EXCLUDED.category),
+              quantity = CASE
+                WHEN afa_igp_expenses.quantity IS NULL OR afa_igp_expenses.quantity = 0
+                  THEN EXCLUDED.quantity
+                ELSE afa_igp_expenses.quantity
+              END,
+              description = COALESCE(NULLIF(afa_igp_expenses.description, ''), EXCLUDED.description),
+              amount = CASE
+                WHEN afa_igp_expenses.amount IS NULL OR afa_igp_expenses.amount = 0
+                  THEN EXCLUDED.amount
+                ELSE afa_igp_expenses.amount
+              END,
+              recorded_by = COALESCE(NULLIF(afa_igp_expenses.recorded_by, ''), EXCLUDED.recorded_by),
+              fund_source = COALESCE(NULLIF(afa_igp_expenses.fund_source, ''), EXCLUDED.fund_source),
+              hog_stage = COALESCE(NULLIF(afa_igp_expenses.hog_stage, ''), EXCLUDED.hog_stage)
+          $migration$;
+        END IF;
+      END $$;`,
+    `DO $$
+      BEGIN
+        INSERT INTO afa_igp_sales (
+          id, produce, date, hog_stage, hogs_count, produce_count, revenue, recorded_by, fund_source, notes
+        )
+        SELECT sale->>'id',
+          COALESCE(NULLIF(sale->>'produce', ''), 'Unspecified'),
+          sale->>'date',
+          sale->>'hogStage',
+          CASE WHEN COALESCE(sale->>'hogsCount', '') ~ '^[0-9]+$'
+            THEN (sale->>'hogsCount')::integer ELSE 0 END,
+          CASE WHEN COALESCE(sale->>'produceCount', '') ~ '^[0-9]+$'
+            THEN (sale->>'produceCount')::integer ELSE 0 END,
+          CASE WHEN COALESCE(sale->>'revenue', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+            THEN (sale->>'revenue')::numeric ELSE 0 END,
+          sale->>'recordedBy',
+          sale->>'fundSource',
+          sale->>'notes'
+        FROM afa_igp AS igp
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(igp.sales) = 'array' THEN igp.sales ELSE '[]'::jsonb END
+        ) AS item(sale)
+        WHERE NULLIF(sale->>'id', '') IS NOT NULL
+        ON CONFLICT (id) DO NOTHING;
+
+        INSERT INTO afa_igp_groups (id, name, schedule_days, sort_order)
+        SELECT group_row->>'id',
+          COALESCE(NULLIF(group_row->>'name', ''), 'Unnamed group'),
+          ARRAY(
+            SELECT jsonb_array_elements_text(
+              CASE WHEN jsonb_typeof(group_row->'scheduleDays') = 'array'
+                THEN group_row->'scheduleDays' ELSE '[]'::jsonb END
+            )
+          ),
+          (item.ordinality - 1)::integer
+        FROM afa_igp AS igp
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
+        ) WITH ORDINALITY AS item(group_row, ordinality)
+        WHERE NULLIF(group_row->>'id', '') IS NOT NULL
+        ON CONFLICT (id) DO NOTHING;
+
+        INSERT INTO afa_igp_group_members (group_id, member_name, position)
+        SELECT group_row->>'id', member.member_name, (member.ordinality - 1)::integer
+        FROM afa_igp AS igp
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(igp.groups) = 'array' THEN igp.groups ELSE '[]'::jsonb END
+        ) AS group_item(group_row)
+        CROSS JOIN LATERAL jsonb_array_elements_text(
+          CASE WHEN jsonb_typeof(group_row->'members') = 'array'
+            THEN group_row->'members' ELSE '[]'::jsonb END
+        ) WITH ORDINALITY AS member(member_name, ordinality)
+        WHERE NULLIF(group_row->>'id', '') IS NOT NULL
+          AND NULLIF(member.member_name, '') IS NOT NULL
+        ON CONFLICT (group_id, member_name) DO NOTHING;
+
+        INSERT INTO afa_igp_harvests (
+          id, produce, date, time, collected_by, egg_count, notes, status,
+          audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
+        )
+        SELECT harvest->>'id',
+          harvest->>'produce',
+          harvest->>'date',
+          harvest->>'time',
+          COALESCE(NULLIF(harvest->>'collectedBy', ''), 'Unknown'),
+          CASE WHEN COALESCE(harvest->>'eggCount', '') ~ '^[0-9]+$'
+            THEN (harvest->>'eggCount')::integer ELSE 0 END,
+          harvest->>'notes',
+          COALESCE(NULLIF(harvest->>'status', ''), 'Pending Audit'),
+          harvest->>'auditedBy',
+          harvest->>'auditedDate',
+          harvest->>'auditRemarks',
+          harvest->>'signedBy',
+          harvest->>'signedDate',
+          harvest->>'signatureRemarks'
+        FROM afa_igp AS igp
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(igp.chore_logs) = 'array' THEN igp.chore_logs ELSE '[]'::jsonb END
+        ) AS item(harvest)
+        WHERE NULLIF(harvest->>'id', '') IS NOT NULL
+        ON CONFLICT (id) DO NOTHING;
+      END $$;`,
     `DROP TABLE IF EXISTS hog_raising;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
@@ -396,7 +621,6 @@ async function runSchemaMigrations(client) {
       id VARCHAR(100) PRIMARY KEY,
       name TEXT NOT NULL,
       code VARCHAR(50) NOT NULL,
-      allocated_amount NUMERIC DEFAULT 0,
       current_balance NUMERIC DEFAULT 0,
       description TEXT,
       custodian TEXT,
@@ -445,15 +669,15 @@ async function runSchemaMigrations(client) {
       reviewed_date VARCHAR(50),
       remarks TEXT
     );`,
-    // Sync Queue Audit Table
-    `CREATE TABLE IF NOT EXISTS sync_queue (
-      id VARCHAR(100) PRIMARY KEY,
-      timestamp VARCHAR(100),
-      action VARCHAR(50),
-      entity_type VARCHAR(50),
-      payload JSONB,
-      status VARCHAR(50) DEFAULT 'synced'
-    );`
+    `DO $$
+      BEGIN
+        IF to_regclass('public.sync_queue') IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM public.sync_queue LIMIT 1) THEN
+          DROP TABLE public.sync_queue;
+        ELSIF to_regclass('public.sync_queue') IS NOT NULL THEN
+          RAISE NOTICE 'Preserving non-empty legacy sync_queue table';
+        END IF;
+      END $$;`
   ];
   const failures = [];
   for (const stmt of statements) {
@@ -625,10 +849,65 @@ async function initDatabaseSchema(pool) {
         id VARCHAR(100) PRIMARY KEY,
         produce TEXT NOT NULL,
         date VARCHAR(50),
-        expense_data JSONB NOT NULL
+        expense_data JSONB,
+        category TEXT,
+        quantity NUMERIC,
+        description TEXT,
+        amount NUMERIC,
+        recorded_by TEXT,
+        fund_source TEXT,
+        hog_stage TEXT
       );
     `);
     await client.query("CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_groups (
+        id VARCHAR(100) PRIMARY KEY,
+        name TEXT NOT NULL,
+        schedule_days TEXT[],
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_group_members (
+        group_id VARCHAR(100) NOT NULL REFERENCES afa_igp_groups(id),
+        member_name TEXT NOT NULL,
+        position INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (group_id, member_name)
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_harvests (
+        id VARCHAR(100) PRIMARY KEY,
+        produce TEXT,
+        date VARCHAR(50),
+        time VARCHAR(50),
+        collected_by TEXT NOT NULL,
+        egg_count INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
+        audited_by TEXT,
+        audited_date VARCHAR(50),
+        audit_remarks TEXT,
+        signed_by TEXT,
+        signed_date VARCHAR(50),
+        signature_remarks TEXT
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS afa_igp_sales (
+        id VARCHAR(100) PRIMARY KEY,
+        produce TEXT NOT NULL,
+        date VARCHAR(50),
+        hog_stage VARCHAR(50),
+        hogs_count INTEGER NOT NULL DEFAULT 0,
+        produce_count INTEGER NOT NULL DEFAULT 0,
+        revenue NUMERIC NOT NULL DEFAULT 0,
+        recorded_by TEXT,
+        fund_source TEXT,
+        notes TEXT
+      );
+    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(100) PRIMARY KEY,
@@ -765,16 +1044,6 @@ async function initDatabaseSchema(pool) {
         reviewed_by TEXT,
         reviewed_date VARCHAR(50),
         remarks TEXT
-      );
-    `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS sync_queue (
-        id VARCHAR(100) PRIMARY KEY,
-        timestamp VARCHAR(100),
-        action VARCHAR(50),
-        entity_type VARCHAR(50),
-        payload JSONB,
-        status VARCHAR(50) DEFAULT 'synced'
       );
     `);
     await client.query("COMMIT");

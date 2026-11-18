@@ -46,14 +46,17 @@ const APP_TABLES = [
   'system_logs',
   'afa_igp',
   'afa_igp_expenses',
+  'afa_igp_groups',
+  'afa_igp_group_members',
+  'afa_igp_harvests',
+  'afa_igp_sales',
   'products',
   'inventory',
   'activities',
   'achievements',
   'organization_funds',
   'auditor_reports',
-  'delegation_requests',
-  'sync_queue'
+  'delegation_requests'
 ];
 
 async function getLiveTableStats(pool: pg.Pool) {
