@@ -216,7 +216,9 @@ describe('persisted approval and transaction fields', () => {
     expect(queries.some(query => query.sql.includes('ALTER TABLE afa_igp DROP COLUMN expenses'))).toBe(false);
     expect(queries.some(query => query.sql.includes('ALTER TABLE afa_igp_expenses DROP COLUMN IF EXISTS expense_data'))).toBe(false);
     expect(queries.some(query => query.sql.includes('expenses JSONB') || query.sql.includes('expense_data JSONB'))).toBe(true);
-    expect(queries.some(query => query.sql.includes("to_regclass('public.sync_queue')") && query.sql.includes('DROP TABLE public.sync_queue'))).toBe(true);
+    const syncQueueMigration = queries.find(query => query.sql.includes("to_regclass('public.sync_queue')"));
+    expect(syncQueueMigration?.sql).toContain("EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.sync_queue LIMIT 1)' INTO queue_has_rows");
+    expect(syncQueueMigration?.sql).toContain("EXECUTE 'DROP TABLE public.sync_queue'");
     expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS sync_queue'))).toBe(false);
     expect(meetingInsert?.sql).toContain('minutes_approval_status');
     expect(meetingInsert?.values).toContain('Approved');

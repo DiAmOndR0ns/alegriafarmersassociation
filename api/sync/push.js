@@ -652,12 +652,15 @@ async function runSchemaMigrations(client) {
       remarks TEXT
     );`,
     `DO $$
+      DECLARE queue_has_rows BOOLEAN;
       BEGIN
-        IF to_regclass('public.sync_queue') IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM public.sync_queue LIMIT 1) THEN
-          DROP TABLE public.sync_queue;
-        ELSIF to_regclass('public.sync_queue') IS NOT NULL THEN
-          RAISE NOTICE 'Preserving non-empty legacy sync_queue table';
+        IF to_regclass('public.sync_queue') IS NOT NULL THEN
+          EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.sync_queue LIMIT 1)' INTO queue_has_rows;
+          IF NOT queue_has_rows THEN
+            EXECUTE 'DROP TABLE public.sync_queue';
+          ELSE
+            RAISE NOTICE 'Preserving non-empty legacy sync_queue table';
+          END IF;
         END IF;
       END $$;`
   ];
