@@ -18,7 +18,7 @@ function getStatusPool(): pg.Pool {
   const { connectionString } = cleanDatabaseUrl(rawDbUrl);
   if (!poolInstance || lastUsedConnectionString !== connectionString) {
     if (poolInstance) {
-      poolInstance.end().catch(() => {});
+      poolInstance.end().catch(() => { });
     }
     // Supabase's pooler may present a self-signed chain; keep this scoped to
     // the database connection rather than changing Node's global TLS settings.
@@ -45,7 +45,7 @@ const APP_TABLES = [
   'announcements',
   'system_logs',
   'afa_igp',
-  'afa_igp_livestock',
+  'afa_igp_livestocks',
   'afa_igp_expenses',
   'afa_igp_harvests',
   'afa_igp_sales',

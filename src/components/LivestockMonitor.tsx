@@ -39,12 +39,6 @@ interface LivestockMonitorProps {
   onCloseDecemberBook?: (year: number) => void;
 }
 
-const DEFAULT_PROJECTS = [
-  'Swine Raising (Baboyan)',
-  'Cattle Raising (Bakahan)',
-  'Poultry Raising (RTL)'
-];
-
 const QUARTERS = [
   { name: 'Q1', label: 'Jan – Mar', months: ['01', '02', '03'] },
   { name: 'Q2', label: 'Apr – Jun', months: ['04', '05', '06'] },
@@ -66,7 +60,7 @@ const isRental = (p: string) => /rental|lingkoranan|sako/i.test(p);
 
 const isSwineProject = (p: string) => /swine|hog|baboy/i.test(p);
 const isCattleProject = (p: string) => /cattle|baka/i.test(p);
-const isPoultryProject = (p: string) => /poultry|rtl|manok|chicken/i.test(p);
+const isPoultryProject = (p: string) => /poultry|rtl|manok|chicken|egg|layer/i.test(p);
 
 const getProjectDisplayTitle = (p: string) => {
   if (isSwineProject(p)) return 'Swine / Baboy';
@@ -115,22 +109,24 @@ export default function LivestockMonitor({
   canSignEggHarvests = false,
 }: LivestockMonitorProps) {
   const maySignEggHarvests = isPresident || canSignEggHarvests;
-  // ---------- Projects ----------
-  const rawProduces = state.produces && state.produces.length > 0 ? state.produces : DEFAULT_PROJECTS;
+  // ---------- Projects (no hardcoded defaults — every IGP is addable and deletable) ----------
+  const rawProduces = Array.isArray(state.produces) ? state.produces : [];
   const produces = useMemo(
     () => Array.from(new Set(rawProduces.filter((p) => p && p.trim() && !/tilapia/i.test(p)))),
     [rawProduces]
   );
-  const [selected, setSelected] = useState<string>(produces[0] || 'Swine Raising (Baboyan)');
+  const [selected, setSelected] = useState<string>(produces[0] || '');
   const projectSelectionMadeRef = useRef(false);
   const selectProject = (project: string) => {
     projectSelectionMadeRef.current = true;
     setSelected(project);
   };
   useEffect(() => {
-    if (produces.length === 0) setSelected('');
-    else if (!produces.includes(selected)) setSelected(produces[0]);
-    else if (!projectSelectionMadeRef.current) {
+    if (produces.length === 0) {
+      if (selected !== '') setSelected('');
+    } else if (!produces.includes(selected)) {
+      setSelected(produces[0]);
+    } else if (!projectSelectionMadeRef.current) {
       const latestProject = [...state.expenses, ...state.sales]
         .filter(record => record.produce && produces.includes(record.produce))
         .sort((left, right) => right.date.localeCompare(left.date))[0]?.produce;
@@ -149,23 +145,29 @@ export default function LivestockMonitor({
     setShowAddProject(false);
   };
 
-  const isSwine = isSwineProject(selected);
-  const isCattle = isCattleProject(selected);
-  const isPoultry = isPoultryProject(selected);
+  const isSwine = Boolean(selected) && isSwineProject(selected);
+  const isCattle = Boolean(selected) && isCattleProject(selected);
+  const isPoultry = Boolean(selected) && isPoultryProject(selected);
 
   // Selected-project records (used for the ledger, finance cards and reports).
-  const expenses = useMemo(() => state.expenses.filter((e) => (e.produce || produces[0]) === selected), [state.expenses, selected, produces]);
-  const sales = useMemo(() => state.sales.filter((s) => (s.produce || produces[0]) === selected), [state.sales, selected, produces]);
+  const expenses = useMemo(
+    () => (selected ? state.expenses.filter((e) => (e.produce || produces[0]) === selected) : []),
+    [state.expenses, selected, produces]
+  );
+  const sales = useMemo(
+    () => (selected ? state.sales.filter((s) => (s.produce || produces[0]) === selected) : []),
+    [state.sales, selected, produces]
+  );
 
   const livestockInventory = state.livestockInventory || [];
-  const inventoryFor = (produce: string) => livestockInventory.find((item) => item.produce === produce);
+  const inventoryFor = (produce: string) => (produce ? livestockInventory.find((item) => item.produce === produce) : undefined);
   const currentStageCount = (produce: string, stages: string[]) =>
-    getIgpInventoryStageCount(produce, stages, livestockInventory, state.expenses, state.sales, produces[0]);
+    produce ? getIgpInventoryStageCount(produce, stages, livestockInventory, state.expenses, state.sales, produces[0]) : 0;
   const currentInventoryTotal = (produce: string) =>
-    getIgpInventoryTotal(produce, livestockInventory, state.expenses, state.sales, produces[0]);
-  const swineProduce = produces.find(isSwineProject) || DEFAULT_PROJECTS[0];
-  const cattleProduce = produces.find(isCattleProject) || DEFAULT_PROJECTS[1];
-  const poultryProduce = produces.find(isPoultryProject) || DEFAULT_PROJECTS[2];
+    produce ? getIgpInventoryTotal(produce, livestockInventory, state.expenses, state.sales, produces[0]) : 0;
+  const swineProduce = produces.find(isSwineProject) || '';
+  const cattleProduce = produces.find(isCattleProject) || '';
+  const poultryProduce = produces.find(isPoultryProject) || '';
 
   const currentSwineFattening = currentStageCount(swineProduce, ['Fattening']);
   const currentSwineBreeding = currentStageCount(swineProduce, ['Breeding', 'Gestation']);
@@ -511,6 +513,16 @@ export default function LivestockMonitor({
         </div>
 
         {/* All Association IGP Portfolios (Automatically renders a card for each active or added IGP) */}
+        {produces.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[#D5CFC1] bg-[#FAF8F5] p-6 text-center space-y-2">
+            <p className="text-sm font-bold text-[#1B4332]">No active IGP projects registered yet.</p>
+            <p className="text-xs text-[#4A5F57]">
+              {isTreasurerOrOfficer
+                ? 'Click "Add New IGP" above to add an association livelihood project (such as RTL Chickens, Swine Raising, or Chairs Rental). Egg harvest tracking automatically appears when an RTL Chicken / Poultry IGP is added.'
+                : 'Association officers have not registered any active IGP projects yet.'}
+            </p>
+          </div>
+        ) : (
         <div className={`grid min-w-0 grid-cols-1 sm:grid-cols-2 ${
           produces.length <= 2
             ? 'lg:grid-cols-2'
@@ -634,8 +646,11 @@ export default function LivestockMonitor({
             );
           })}
         </div>
+        )}
       </section>
 
+      {produces.length > 0 && selected && (
+      <>
       {/* ========================================================================= */}
       {/* 2. PROJECT SWITCHER BAR                                                   */}
       {/* ========================================================================= */}
@@ -682,7 +697,7 @@ export default function LivestockMonitor({
           <h3 className="text-sm font-black uppercase tracking-wider text-[#1B4332]">
             {getProjectDisplayTitle(selected)} — Active Status
           </h3>
-          {isTreasurerOrOfficer && onDeleteProduce && produces.length > 1 && (
+          {isTreasurerOrOfficer && onDeleteProduce && Boolean(selected) && (
             <button
               type="button"
               onClick={() => {
@@ -1001,6 +1016,8 @@ export default function LivestockMonitor({
           </div>
         )}
       </section>
+      </>
+      )}
 
       {/* ========================================================================= */}
       {/* 5. MODAL: ADD / EDIT EXPENSE                                              */}
@@ -1346,9 +1363,9 @@ export default function LivestockMonitor({
       )}
 
       {/* ========================================================================= */}
-      {/* 8. MODAL: SUBMIT EGG HARVEST (MEMBER DAILY SUBMISSION)                    */}
+      {/* 8. MODAL: SUBMIT EGG HARVEST (MEMBER DAILY SUBMISSION — CONDITIONAL ON RTL/POULTRY IGP) */}
       {/* ========================================================================= */}
-      {showEggModal && (
+      {showEggModal && isPoultry && (
         <Modal title="Submit Daily Egg Harvest" onClose={() => setShowEggModal(false)}>
           <form onSubmit={submitEggHarvest} className="space-y-3.5 text-left">
             <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-xs font-bold text-[#8A4B08]">
@@ -1425,7 +1442,14 @@ export default function LivestockMonitor({
             <div className="space-y-1.5">
               <span className="text-sm font-semibold text-slate-700 block">Suggestions</span>
               <div className="flex flex-wrap gap-1.5">
-                {['Chairs Rental (Abang sa Lingkoranan)', 'Sacks Rental (Abang sa Sako)', 'Tent & Sound Rental', 'Corn Production'].map((s) => (
+                {[
+                  'RTL Chickens (Poultry / Eggs)',
+                  'Swine Raising (Baboyan)',
+                  'Cattle Raising (Bakahan)',
+                  'Chairs Rental (Abang sa Lingkoranan)',
+                  'Sacks Rental (Abang sa Sako)',
+                  'Corn Production',
+                ].map((s) => (
                   <button
                     key={s}
                     type="button"

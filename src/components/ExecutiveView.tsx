@@ -601,24 +601,14 @@ export default function ExecutiveView({
           >
             <ShieldAlert className="w-4 h-4 text-[#D8F3DC] shrink-0" />
             <span className="truncate">Admin Tasks</span>
+            {currentRole === 'President' && delegationRequests.some(r => r.status === 'Pending') && (
+              <span className="ml-0.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-amber-400 text-[#1B4332] text-[10px] font-black leading-none shrink-0">
+                {delegationRequests.filter(r => r.status === 'Pending').length}
+              </span>
+            )}
           </button>
         </div>
       </div>
-
-      {onRequestDelegation && onReviewDelegation && onRevokeDelegation && onRefreshDelegations && (
-        <DelegationAccessPanel
-          currentRole={currentRole}
-          currentUserId={currentUserId}
-          users={users}
-          requests={delegationRequests}
-          isOnline={isOnline}
-          isRefreshing={isRefreshingDelegations}
-          onRefresh={onRefreshDelegations}
-          onRequest={onRequestDelegation}
-          onReview={onReviewDelegation}
-          onRevoke={onRevokeDelegation}
-        />
-      )}
 
       {/* OVERVIEW SCOREBOARD */}
 {(() => {
@@ -1162,7 +1152,7 @@ const CategoryTick = ({ x, y, payload }: any) => (
               <div className="max-w-md space-y-1">
                 <h4 className="font-extrabold text-[#1B4332] text-sm">Dedicated Admin Security Gate</h4>
                 <p className="text-xs text-[#5D6B54]">
-                  Re-enter your signed-in account password to open backup and officer administration tools.
+                  Re-enter your signed-in account password to open backup, delegated President access, and officer administration tools.
                 </p>
               </div>
               <form onSubmit={handleAdminPasswordSubmit} className="flex flex-col gap-2 w-full max-w-sm pt-2">
@@ -1248,6 +1238,21 @@ const CategoryTick = ({ x, y, payload }: any) => (
                 </div>
               );
             })()
+          )}
+
+          {isAdminUnlocked && onRequestDelegation && onReviewDelegation && onRevokeDelegation && onRefreshDelegations && (
+            <DelegationAccessPanel
+              currentRole={currentRole}
+              currentUserId={currentUserId}
+              users={users}
+              requests={delegationRequests}
+              isOnline={isOnline}
+              isRefreshing={isRefreshingDelegations}
+              onRefresh={onRefreshDelegations}
+              onRequest={onRequestDelegation}
+              onReview={onReviewDelegation}
+              onRevoke={onRevokeDelegation}
+            />
           )}
 
           {canAppointOfficers && showAddOfficerForm && (

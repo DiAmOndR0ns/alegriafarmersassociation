@@ -200,6 +200,22 @@ describe('App Component', () => {
           currentRole="President"
           currentUserId="pres-1"
           onOpenReportModal={() => {}}
+          delegationRequests={[
+            {
+              id: 'del-1',
+              requestedBy: 'vp-1',
+              reason: 'President on leave',
+              scopes: ['record_approval'],
+              requestedDate: '2026-03-01',
+              effectiveStart: '2026-03-02',
+              effectiveEnd: '2026-03-05',
+              status: 'Pending'
+            }
+          ]}
+          onRefreshDelegations={async () => {}}
+          onRequestDelegation={async () => true}
+          onReviewDelegation={async () => true}
+          onRevokeDelegation={async () => true}
         />
       );
 
@@ -208,6 +224,7 @@ describe('App Component', () => {
       expect(html).toContain('Monthly income and expenses');
       expect(html).toContain('Registered fund sources');
       expect(html).not.toContain('Executive Admin Desk');
+      expect(html).not.toContain('Delegated President Access');
       expect(html).not.toContain('executive-download-backup-btn');
       expect(html).not.toContain('JBSWY3DPEHPK3PXPTESTFIXTURE');
     });

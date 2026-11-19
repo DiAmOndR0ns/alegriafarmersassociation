@@ -146,14 +146,12 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_by TEXT;`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approved_date VARCHAR(50);`,
     `ALTER TABLE meetings ADD COLUMN IF NOT EXISTS approval_remarks TEXT;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, produces TEXT[], expenses JSONB, sales JSONB, chore_logs JSONB, closed_years INT[]);`,
-    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS expenses JSONB;`,
-    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS opening_hog_count INTEGER NOT NULL DEFAULT 0;`,
-    `ALTER TABLE afa_igp ADD COLUMN IF NOT EXISTS herd_breakdown JSONB DEFAULT '{"fattening":0,"gestation":0,"lactating":0}'::jsonb;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_livestock (
-      produce TEXT PRIMARY KEY,
-      opening_count INTEGER NOT NULL DEFAULT 0,
-      stage_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb
+    `CREATE TABLE IF NOT EXISTS afa_igp (id VARCHAR(100) PRIMARY KEY, produces TEXT[], closed_years INT[]);`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_livestocks (
+      produce TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      head_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (produce, stage)
     );`,
     `DO $$
       BEGIN
@@ -162,46 +160,69 @@ async function runSchemaMigrations(client) {
           WHERE table_schema = 'public' AND table_name = 'afa_igp' AND column_name = 'herd_breakdown'
         ) THEN
           EXECUTE $migration$
-            INSERT INTO afa_igp_livestock (produce, opening_count, stage_breakdown)
-            SELECT 'Swine Raising (Baboyan)',
-              CASE WHEN COALESCE(opening_hog_count::text, '') ~ '^[0-9]+$' THEN opening_hog_count ELSE 0 END,
-              jsonb_build_object(
-                'Fattening', CASE WHEN COALESCE(herd_breakdown->>'fattening', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'fattening')::integer ELSE 0 END,
-                'Gestation', CASE WHEN COALESCE(herd_breakdown->>'gestation', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'gestation')::integer ELSE 0 END,
-                'Lactating', CASE WHEN COALESCE(herd_breakdown->>'lactating', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'lactating')::integer ELSE 0 END,
-                'Dispersal', CASE WHEN COALESCE(herd_breakdown->>'dispersal', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'dispersal')::integer ELSE 0 END
-              )
-            FROM afa_igp
-            WHERE opening_hog_count > 0 OR COALESCE(herd_breakdown, '{}'::jsonb) <> '{}'::jsonb
-            ON CONFLICT (produce) DO NOTHING;
+            INSERT INTO afa_igp_livestocks (produce, stage, head_count)
+            SELECT 'Swine Raising (Baboyan)', stage_name, stage_qty
+            FROM afa_igp,
+            LATERAL (VALUES
+              ('Fattening', CASE WHEN COALESCE(herd_breakdown->>'fattening', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'fattening')::integer ELSE 0 END),
+              ('Gestation', CASE WHEN COALESCE(herd_breakdown->>'gestation', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'gestation')::integer ELSE 0 END),
+              ('Lactating', CASE WHEN COALESCE(herd_breakdown->>'lactating', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'lactating')::integer ELSE 0 END),
+              ('Dispersal', CASE WHEN COALESCE(herd_breakdown->>'dispersal', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'dispersal')::integer ELSE 0 END)
+            ) AS s(stage_name, stage_qty)
+            WHERE stage_qty > 0
+            ON CONFLICT (produce, stage) DO NOTHING;
 
-            INSERT INTO afa_igp_livestock (produce, opening_count, stage_breakdown)
-            SELECT 'Cattle Raising (Bakahan)',
-              (CASE WHEN COALESCE(herd_breakdown->>'cattleFattening', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleFattening')::integer ELSE 0 END) +
-              (CASE WHEN COALESCE(herd_breakdown->>'cattleDispersal', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleDispersal')::integer ELSE 0 END),
-              jsonb_build_object(
-                'Fattening', CASE WHEN COALESCE(herd_breakdown->>'cattleFattening', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleFattening')::integer ELSE 0 END,
-                'Dispersal', CASE WHEN COALESCE(herd_breakdown->>'cattleDispersal', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleDispersal')::integer ELSE 0 END
-              )
-            FROM afa_igp
-            WHERE COALESCE(herd_breakdown->>'cattleFattening', '0') <> '0'
-              OR COALESCE(herd_breakdown->>'cattleDispersal', '0') <> '0'
-            ON CONFLICT (produce) DO NOTHING;
+            INSERT INTO afa_igp_livestocks (produce, stage, head_count)
+            SELECT 'Cattle Raising (Bakahan)', stage_name, stage_qty
+            FROM afa_igp,
+            LATERAL (VALUES
+              ('Fattening', CASE WHEN COALESCE(herd_breakdown->>'cattleFattening', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleFattening')::integer ELSE 0 END),
+              ('Dispersal', CASE WHEN COALESCE(herd_breakdown->>'cattleDispersal', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'cattleDispersal')::integer ELSE 0 END)
+            ) AS s(stage_name, stage_qty)
+            WHERE stage_qty > 0
+            ON CONFLICT (produce, stage) DO NOTHING;
 
-            INSERT INTO afa_igp_livestock (produce, opening_count, stage_breakdown)
-            SELECT 'Poultry Raising (RTL)',
-              CASE WHEN COALESCE(herd_breakdown->>'rtlCount', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'rtlCount')::integer ELSE 0 END,
-              jsonb_build_object(
-                'RTL', CASE WHEN COALESCE(herd_breakdown->>'rtlCount', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'rtlCount')::integer ELSE 0 END
-              )
+            INSERT INTO afa_igp_livestocks (produce, stage, head_count)
+            SELECT 'Poultry Raising (RTL)', 'RTL',
+              CASE WHEN COALESCE(herd_breakdown->>'rtlCount', '') ~ '^[0-9]+$' THEN (herd_breakdown->>'rtlCount')::integer ELSE 0 END
             FROM afa_igp
             WHERE COALESCE(herd_breakdown->>'rtlCount', '0') <> '0'
-            ON CONFLICT (produce) DO NOTHING;
+            ON CONFLICT (produce, stage) DO NOTHING;
           $migration$;
         END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_livestock'
+        ) THEN
+          EXECUTE $migration$
+            INSERT INTO afa_igp_livestocks (produce, stage, head_count)
+            SELECT l.produce, kv.key,
+              CASE WHEN COALESCE(kv.value, '') ~ '^[0-9]+$' THEN kv.value::integer ELSE 0 END
+            FROM afa_igp_livestock AS l
+            CROSS JOIN LATERAL jsonb_each_text(
+              CASE WHEN jsonb_typeof(l.stage_breakdown) = 'object' THEN l.stage_breakdown ELSE '{}'::jsonb END
+            ) AS kv(key, value)
+            WHERE NULLIF(trim(kv.key), '') IS NOT NULL
+            ON CONFLICT (produce, stage) DO NOTHING;
+
+            INSERT INTO afa_igp_livestocks (produce, stage, head_count)
+            SELECT l.produce, 'General',
+              CASE WHEN COALESCE(l.opening_count::text, '') ~ '^[0-9]+$' THEN l.opening_count ELSE 0 END
+            FROM afa_igp_livestock AS l
+            WHERE COALESCE(l.stage_breakdown, '{}'::jsonb) = '{}'::jsonb
+              AND COALESCE(l.opening_count, 0) > 0
+            ON CONFLICT (produce, stage) DO NOTHING;
+          $migration$;
+          DROP TABLE IF EXISTS afa_igp_livestock;
+        END IF;
       END $$;`,
+    `ALTER TABLE afa_igp_livestocks DROP COLUMN IF EXISTS initial_count;`,
+    `ALTER TABLE afa_igp_livestocks DROP COLUMN IF EXISTS opening_count;`,
+    `ALTER TABLE afa_igp_livestocks DROP COLUMN IF EXISTS stage_breakdown;`,
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS opening_hog_count;`,
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS herd_breakdown;`,
+    `ALTER TABLE afa_igp DROP COLUMN IF EXISTS initial_count;`,
     `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
       id VARCHAR(100) PRIMARY KEY,
       produce TEXT NOT NULL,
@@ -392,53 +413,68 @@ async function runSchemaMigrations(client) {
       END $$;`,
     `DO $$
       BEGIN
-        INSERT INTO afa_igp_sales (
-          id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes
-        )
-        SELECT sale->>'id',
-          COALESCE(NULLIF(sale->>'produce', ''), 'Unspecified'),
-          sale->>'date',
-          COALESCE(sale->>'stage', sale->>'hogStage'),
-          CASE WHEN COALESCE(sale->>'quantity', sale->>'produceCount', sale->>'hogsCount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
-            THEN COALESCE(sale->>'quantity', sale->>'produceCount', sale->>'hogsCount')::numeric ELSE 0 END,
-          CASE WHEN COALESCE(sale->>'revenue', '') ~ '^[0-9]+(\\.[0-9]+)?$'
-            THEN (sale->>'revenue')::numeric ELSE 0 END,
-          sale->>'recordedBy',
-          sale->>'fundSource',
-          sale->>'notes'
-        FROM afa_igp AS igp
-        CROSS JOIN LATERAL jsonb_array_elements(
-          CASE WHEN jsonb_typeof(igp.sales) = 'array' THEN igp.sales ELSE '[]'::jsonb END
-        ) AS item(sale)
-        WHERE NULLIF(sale->>'id', '') IS NOT NULL
-        ON CONFLICT (id) DO NOTHING;
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp' AND column_name = 'sales'
+        ) THEN
+          EXECUTE $migration$
+            INSERT INTO afa_igp_sales (
+              id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes
+            )
+            SELECT sale->>'id',
+              COALESCE(NULLIF(sale->>'produce', ''), 'Unspecified'),
+              sale->>'date',
+              COALESCE(sale->>'stage', sale->>'hogStage'),
+              CASE WHEN COALESCE(sale->>'quantity', sale->>'produceCount', sale->>'hogsCount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN COALESCE(sale->>'quantity', sale->>'produceCount', sale->>'hogsCount')::numeric ELSE 0 END,
+              CASE WHEN COALESCE(sale->>'revenue', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+                THEN (sale->>'revenue')::numeric ELSE 0 END,
+              sale->>'recordedBy',
+              sale->>'fundSource',
+              sale->>'notes'
+            FROM afa_igp AS igp
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE WHEN jsonb_typeof(igp.sales) = 'array' THEN igp.sales ELSE '[]'::jsonb END
+            ) AS item(sale)
+            WHERE NULLIF(sale->>'id', '') IS NOT NULL
+            ON CONFLICT (id) DO NOTHING;
+          $migration$;
+        END IF;
 
-        INSERT INTO afa_igp_harvests (
-          id, produce, date, time, collected_by, egg_count, notes, status,
-          audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
-        )
-        SELECT harvest->>'id',
-          harvest->>'produce',
-          harvest->>'date',
-          harvest->>'time',
-          COALESCE(NULLIF(harvest->>'collectedBy', ''), 'Unknown'),
-          CASE WHEN COALESCE(harvest->>'eggCount', '') ~ '^[0-9]+$'
-            THEN (harvest->>'eggCount')::integer ELSE 0 END,
-          harvest->>'notes',
-          COALESCE(NULLIF(harvest->>'status', ''), 'Pending Audit'),
-          harvest->>'auditedBy',
-          harvest->>'auditedDate',
-          harvest->>'auditRemarks',
-          harvest->>'signedBy',
-          harvest->>'signedDate',
-          harvest->>'signatureRemarks'
-        FROM afa_igp AS igp
-        CROSS JOIN LATERAL jsonb_array_elements(
-          CASE WHEN jsonb_typeof(igp.chore_logs) = 'array' THEN igp.chore_logs ELSE '[]'::jsonb END
-        ) AS item(harvest)
-        WHERE NULLIF(harvest->>'id', '') IS NOT NULL
-        ON CONFLICT (id) DO NOTHING;
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp' AND column_name = 'chore_logs'
+        ) THEN
+          EXECUTE $migration$
+            INSERT INTO afa_igp_harvests (
+              id, produce, date, time, collected_by, egg_count, notes, status,
+              audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
+            )
+            SELECT harvest->>'id',
+              harvest->>'produce',
+              harvest->>'date',
+              harvest->>'time',
+              COALESCE(NULLIF(harvest->>'collectedBy', ''), 'Unknown'),
+              CASE WHEN COALESCE(harvest->>'eggCount', '') ~ '^[0-9]+$'
+                THEN (harvest->>'eggCount')::integer ELSE 0 END,
+              harvest->>'notes',
+              COALESCE(NULLIF(harvest->>'status', ''), 'Pending Audit'),
+              harvest->>'auditedBy',
+              harvest->>'auditedDate',
+              harvest->>'auditRemarks',
+              harvest->>'signedBy',
+              harvest->>'signedDate',
+              harvest->>'signatureRemarks'
+            FROM afa_igp AS igp
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE WHEN jsonb_typeof(igp.chore_logs) = 'array' THEN igp.chore_logs ELSE '[]'::jsonb END
+            ) AS item(harvest)
+            WHERE NULLIF(harvest->>'id', '') IS NOT NULL
+            ON CONFLICT (id) DO NOTHING;
+          $migration$;
+        END IF;
       END $$;`,
+    `ALTER TABLE afa_igp DROP COLUMN IF EXISTS expenses, DROP COLUMN IF EXISTS sales, DROP COLUMN IF EXISTS chore_logs;`,
     `DROP TABLE IF EXISTS afa_igp_group_members;`,
     `DROP TABLE IF EXISTS afa_igp_groups;`,
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups;`,
@@ -771,17 +807,15 @@ async function initDatabaseSchema(pool) {
       CREATE TABLE IF NOT EXISTS afa_igp (
         id VARCHAR(100) PRIMARY KEY,
         produces TEXT[],
-        expenses JSONB,
-        sales JSONB,
-        chore_logs JSONB,
         closed_years INT[]
       );
     `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_livestock (
-        produce TEXT PRIMARY KEY,
-        opening_count INTEGER NOT NULL DEFAULT 0,
-        stage_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb
+      CREATE TABLE IF NOT EXISTS afa_igp_livestocks (
+        produce TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        head_count INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (produce, stage)
       );
     `);
     await client.query(`
@@ -1107,7 +1141,7 @@ async function fetchAllDataFromPostgres(pool) {
     const logsRes = await client.query("SELECT * FROM system_logs ORDER BY timestamp DESC");
     const hogQuery = await client.query("SELECT * FROM afa_igp WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
     const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query("SELECT * FROM afa_igp LIMIT 1");
-    const igpLivestockRows = await client.query("SELECT * FROM afa_igp_livestock ORDER BY produce ASC");
+    const igpLivestockRows = await client.query("SELECT produce, stage, head_count FROM afa_igp_livestocks ORDER BY produce ASC, stage ASC");
     const igpExpenseRows = await client.query("SELECT * FROM afa_igp_expenses ORDER BY date DESC, id ASC");
     const igpSalesRows = await client.query("SELECT * FROM afa_igp_sales ORDER BY date DESC, id ASC");
     const igpHarvestRows = await client.query("SELECT * FROM afa_igp_harvests ORDER BY date DESC, time DESC, id ASC");
@@ -1234,16 +1268,24 @@ async function fetchAllDataFromPostgres(pool) {
       ...r.signed_date ? { signedDate: r.signed_date } : {},
       ...r.signature_remarks ? { signatureRemarks: r.signature_remarks } : {}
     }));
+    const livestockByProduce = /* @__PURE__ */ new Map();
+    for (const r of igpLivestockRows.rows) {
+      const produce = String(r.produce || "").trim();
+      const stage = String(r.stage || "").trim();
+      if (!produce || !stage) continue;
+      const existing = livestockByProduce.get(produce) || {};
+      existing[stage] = Math.max(0, Math.floor(Number(r.head_count) || 0));
+      livestockByProduce.set(produce, existing);
+    }
+    const normalizedLivestock = Array.from(livestockByProduce.entries()).map(
+      ([produce, stageBreakdown]) => ({ produce, stageBreakdown })
+    );
     if (hogRes.rows.length > 0) {
       const row = hogRes.rows[0];
       const rawProduces = Array.isArray(row.produces) ? row.produces : [];
       const cleanProduces = rawProduces.filter((p) => Boolean(p && p.trim()) && p !== "Tilapia Breeding" && !p.toLowerCase().includes("tilapia"));
       hogState = {
-        livestockInventory: igpLivestockRows.rows.map((inventory2) => ({
-          produce: inventory2.produce,
-          openingCount: Math.max(0, Math.floor(Number(inventory2.opening_count) || 0)),
-          stageBreakdown: inventory2.stage_breakdown && typeof inventory2.stage_breakdown === "object" ? inventory2.stage_breakdown : {}
-        })),
+        livestockInventory: normalizedLivestock,
         produces: cleanProduces,
         expenses: mergeIgpRecords(
           mergeIgpExpenses(igpExpenseRows.rows),
@@ -1255,11 +1297,7 @@ async function fetchAllDataFromPostgres(pool) {
         closedYears: row.closed_years || []
       };
     } else {
-      hogState.livestockInventory = igpLivestockRows.rows.map((inventory2) => ({
-        produce: inventory2.produce,
-        openingCount: Math.max(0, Math.floor(Number(inventory2.opening_count) || 0)),
-        stageBreakdown: inventory2.stage_breakdown && typeof inventory2.stage_breakdown === "object" ? inventory2.stage_breakdown : {}
-      }));
+      hogState.livestockInventory = normalizedLivestock;
       hogState.expenses = mergeIgpExpenses(igpExpenseRows.rows);
       hogState.sales = normalizedSales;
       hogState.choreLogs = normalizedHarvests;

@@ -281,7 +281,8 @@ export type IgpStage = string;
 
 export interface IgpLivestockInventory {
   produce: string;
-  openingCount: number;
+  /** @deprecated Removed from afa_igp_livestocks; totals derive directly from stageBreakdown rows. */
+  openingCount?: number;
   stageBreakdown: Record<string, number>;
 }
 

@@ -105,7 +105,7 @@ describe('database table statistics', () => {
   it('counts all 21 application tables', async () => {
     const tableNames = [
       'users', 'members', 'meetings', 'resolutions', 'financial_transactions',
-      'announcements', 'system_logs', 'afa_igp', 'afa_igp_livestock', 'afa_igp_expenses',
+      'announcements', 'system_logs', 'afa_igp', 'afa_igp_livestocks', 'afa_igp_expenses',
       'afa_igp_harvests', 'afa_igp_sales',
       'products', 'inventory', 'activities', 'achievements', 'organization_funds',
       'auditor_reports', 'delegation_requests',
@@ -211,13 +211,16 @@ describe('persisted approval and transaction fields', () => {
     expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_groups'))).toBe(false);
     expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_harvests'))).toBe(true);
     expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_sales'))).toBe(true);
-    expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_livestock'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('CREATE TABLE IF NOT EXISTS afa_igp_livestocks'))).toBe(true);
     expect(queries.some(query => query.sql.includes('DROP COLUMN IF EXISTS opening_hog_count'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('DROP COLUMN IF EXISTS initial_count'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('DROP COLUMN IF EXISTS opening_count'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('DROP COLUMN IF EXISTS stage_breakdown'))).toBe(true);
     expect(queries.some(query => query.sql.includes('DROP COLUMN IF EXISTS hog_stage'))).toBe(true);
     expect(queries.some(query => query.sql.includes('DROP COLUMN IF EXISTS produce_count'))).toBe(true);
-    expect(queries.some(query => query.sql.includes('ALTER TABLE afa_igp DROP COLUMN expenses'))).toBe(false);
+    expect(queries.some(query => query.sql.includes('ALTER TABLE afa_igp DROP COLUMN IF EXISTS expenses, DROP COLUMN IF EXISTS sales, DROP COLUMN IF EXISTS chore_logs'))).toBe(true);
     expect(queries.some(query => query.sql.includes('ALTER TABLE afa_igp_expenses DROP COLUMN IF EXISTS expense_data'))).toBe(false);
-    expect(queries.some(query => query.sql.includes('expenses JSONB') || query.sql.includes('expense_data JSONB'))).toBe(true);
+    expect(queries.some(query => query.sql.includes('expense_data JSONB'))).toBe(true);
     const syncQueueMigration = queries.find(query => query.sql.includes("to_regclass('public.sync_queue')"));
     expect(syncQueueMigration?.sql).toContain("EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.sync_queue LIMIT 1)' INTO queue_has_rows");
     expect(syncQueueMigration?.sql).toContain("EXECUTE 'DROP TABLE public.sync_queue'");
@@ -345,7 +348,8 @@ describe('IGP expense persistence', () => {
 
     const stateWrites = queries.filter(query => query.sql.includes('INSERT INTO afa_igp ('));
     expect(stateWrites).toHaveLength(1);
-    expect(stateWrites[0].sql).toContain('expenses');
+    expect(stateWrites[0].sql).toContain('produces');
+    expect(stateWrites[0].sql).not.toContain('expenses');
   });
 
   it('reconstructs an IGP expense solely from its structured columns', () => {
@@ -420,143 +424,157 @@ describe('IGP expense persistence', () => {
       connect: async () => ({
         query: async (sql: string) => {
           if (sql.includes("FROM afa_igp WHERE id IN")) {
-            return { rows: [{
-              id: 'main_state',
-              sales: [
-                { id: 'legacy-sale', produce: 'Old project', date: '2026-01-01', hogsCount: 1, revenue: 10, recordedBy: 'Legacy' },
-                { id: 'json-only-sale', produce: 'Legacy-only project', date: '2025-12-01', hogsCount: 1, revenue: 5, recordedBy: 'Legacy' }
-              ],
-              chore_logs: [
-                { id: 'legacy-harvest', date: '2026-01-01', time: '08:00', collectedBy: 'Legacy', eggCount: 2, status: 'Pending Audit' },
-                { id: 'json-only-harvest', date: '2025-12-01', time: '08:00', collectedBy: 'Legacy', eggCount: 1, status: 'Pending Audit' }
-              ],
-              expenses: [{ id: 'legacy-expense', produce: 'Poultry Raising (RTL)', amount: 20 }]
-            }] };
+            return {
+              rows: [{
+                id: 'main_state',
+                sales: [
+                  { id: 'legacy-sale', produce: 'Old project', date: '2026-01-01', hogsCount: 1, revenue: 10, recordedBy: 'Legacy' },
+                  { id: 'json-only-sale', produce: 'Legacy-only project', date: '2025-12-01', hogsCount: 1, revenue: 5, recordedBy: 'Legacy' }
+                ],
+                chore_logs: [
+                  { id: 'legacy-harvest', date: '2026-01-01', time: '08:00', collectedBy: 'Legacy', eggCount: 2, status: 'Pending Audit' },
+                  { id: 'json-only-harvest', date: '2025-12-01', time: '08:00', collectedBy: 'Legacy', eggCount: 1, status: 'Pending Audit' }
+                ],
+                expenses: [{ id: 'legacy-expense', produce: 'Poultry Raising (RTL)', amount: 20 }]
+              }]
+            };
           }
-          if (sql.includes('FROM afa_igp_livestock')) return { rows: [
-            { produce: 'Swine Raising (Baboyan)', opening_count: 7, stage_breakdown: { Fattening: 5, Gestation: 2 } },
-            { produce: 'Goat Raising', opening_count: 12, stage_breakdown: { Breeding: 4, Growing: 8 } }
-          ] };
-          if (sql.includes('FROM afa_igp_sales')) return { rows: [{
-            id: 'legacy-sale', produce: 'Normalized project', date: '2026-02-01', quantity: 3, stage: 'RTL',
-            revenue: '40', recorded_by: 'Normalized', notes: 'Updated'
-          }] };
-          if (sql.includes('FROM afa_igp_harvests')) return { rows: [{
-            id: 'legacy-harvest', produce: 'Poultry Raising (RTL)', date: '2026-02-01', time: '09:00',
-            collected_by: 'Normalized', egg_count: 5, status: 'Audited'
-          }] };
-          if (sql.includes('FROM afa_igp_expenses')) return { rows: [] };
-          return { rows: [] };
-        },
-        release: () => undefined
+          if(sql.includes('FROM afa_igp_livestocks')) return {
+        rows: [
+          { produce: 'Swine Raising (Baboyan)', stage: 'Fattening', head_count: 5 },
+          { produce: 'Swine Raising (Baboyan)', stage: 'Gestation', head_count: 2 },
+          { produce: 'Goat Raising', stage: 'Breeding', head_count: 4 },
+          { produce: 'Goat Raising', stage: 'Growing', head_count: 8 }
+        ]
+      };
+      if(sql.includes('FROM afa_igp_sales')) return {
+        rows: [{
+          id: 'legacy-sale', produce: 'Normalized project', date: '2026-02-01', quantity: 3, stage: 'RTL',
+          revenue: '40', recorded_by: 'Normalized', notes: 'Updated'
+        }]
+      };
+  if (sql.includes('FROM afa_igp_harvests')) return {
+    rows: [{
+      id: 'legacy-harvest', produce: 'Poultry Raising (RTL)', date: '2026-02-01', time: '09:00',
+      collected_by: 'Normalized', egg_count: 5, status: 'Audited'
+    }]
+  };
+  if (sql.includes('FROM afa_igp_expenses')) return { rows: [] };
+  return { rows: [] };
+},
+  release: () => undefined
       })
     };
 
-    const result = await fetchAllDataFromPostgres(pool as any);
+const result = await fetchAllDataFromPostgres(pool as any);
 
-    expect(result.hogRaising.livestockInventory).toEqual([
-      { produce: 'Swine Raising (Baboyan)', openingCount: 7, stageBreakdown: { Fattening: 5, Gestation: 2 } },
-      { produce: 'Goat Raising', openingCount: 12, stageBreakdown: { Breeding: 4, Growing: 8 } }
-    ]);
-    expect(result.hogRaising.sales).toEqual([{
-      id: 'legacy-sale',
-      produce: 'Normalized project',
-      date: '2026-02-01',
-      quantity: 3,
-      stage: 'RTL',
-      revenue: 40,
-      recordedBy: 'Normalized',
-      notes: 'Updated'
-    }, {
-      id: 'json-only-sale',
-      produce: 'Legacy-only project',
-      date: '2025-12-01',
-      quantity: 1,
-      revenue: 5,
-      recordedBy: 'Legacy'
-    }]);
-    expect(result.hogRaising.eggHarvests[0]).toMatchObject({
-      id: 'legacy-harvest',
-      collectedBy: 'Normalized',
-      eggCount: 5,
-      status: 'Audited'
-    });
-    expect(result.hogRaising.eggHarvests[1]).toMatchObject({
-      id: 'json-only-harvest',
-      collectedBy: 'Legacy',
-      eggCount: 1
-    });
-    expect(result.hogRaising.expenses).toEqual([{
-      id: 'legacy-expense',
-      produce: 'Poultry Raising (RTL)',
-      amount: 20
-    }]);
+expect(result.hogRaising.livestockInventory).toEqual([
+      { produce: 'Swine Raising (Baboyan)', stageBreakdown: { Fattening: 5, Gestation: 2 } },
+  { produce: 'Goat Raising', stageBreakdown: { Breeding: 4, Growing: 8 } }
+]);
+expect(result.hogRaising.sales).toEqual([{
+  id: 'legacy-sale',
+  produce: 'Normalized project',
+  date: '2026-02-01',
+  quantity: 3,
+  stage: 'RTL',
+  revenue: 40,
+  recordedBy: 'Normalized',
+  notes: 'Updated'
+}, {
+  id: 'json-only-sale',
+  produce: 'Legacy-only project',
+  date: '2025-12-01',
+  quantity: 1,
+  revenue: 5,
+  recordedBy: 'Legacy'
+}]);
+expect(result.hogRaising.eggHarvests[0]).toMatchObject({
+  id: 'legacy-harvest',
+  collectedBy: 'Normalized',
+  eggCount: 5,
+  status: 'Audited'
+});
+expect(result.hogRaising.eggHarvests[1]).toMatchObject({
+  id: 'json-only-harvest',
+  collectedBy: 'Legacy',
+  eggCount: 1
+});
+expect(result.hogRaising.expenses).toEqual([{
+  id: 'legacy-expense',
+  produce: 'Poultry Raising (RTL)',
+  amount: 20
+}]);
   });
 
-  it('writes IGP sales and harvests to their normalized tables', async () => {
-    const queries: Array<{ sql: string; values?: unknown[] }> = [];
-    const pool = {
-      connect: async () => ({
-        query: async (sql: string, values?: unknown[]) => {
-          queries.push({ sql, values });
-          return { rows: [], rowCount: 1 };
-        },
-        release: () => undefined
-      })
-    };
-    const sale = {
-      id: 'sale-1',
-      produce: 'Poultry Raising (RTL)',
-      date: '2026-02-01',
-      stage: 'RTL',
-      quantity: 30,
-      revenue: 1500,
-      recordedBy: 'Treasurer',
-      fundSource: 'AFA Fund',
-      notes: 'Egg sale'
-    };
-    const harvest = {
-      id: 'harvest-1',
-      produce: 'Poultry Raising (RTL)',
-      date: '2026-02-01',
-      time: '08:30',
-      collectedBy: 'Member One',
-      eggCount: 30,
-      status: 'Pending Audit' as const
-    };
+it('writes IGP sales and harvests to their normalized tables', async () => {
+  const queries: Array<{ sql: string; values?: unknown[] }> = [];
+  const pool = {
+    connect: async () => ({
+      query: async (sql: string, values?: unknown[]) => {
+        queries.push({ sql, values });
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => undefined
+    })
+  };
+  const sale = {
+    id: 'sale-1',
+    produce: 'Poultry Raising (RTL)',
+    date: '2026-02-01',
+    stage: 'RTL',
+    quantity: 30,
+    revenue: 1500,
+    recordedBy: 'Treasurer',
+    fundSource: 'AFA Fund',
+    notes: 'Egg sale'
+  };
+  const harvest = {
+    id: 'harvest-1',
+    produce: 'Poultry Raising (RTL)',
+    date: '2026-02-01',
+    time: '08:30',
+    collectedBy: 'Member One',
+    eggCount: 30,
+    status: 'Pending Audit' as const
+  };
 
-    await saveFullStateToPostgres(pool as any, {
-      hogRaising: {
-        produces: ['Poultry Raising (RTL)'],
-        livestockInventory: [
-          { produce: 'Swine Raising (Baboyan)', openingCount: 8, stageBreakdown: { Fattening: 8 } },
-          { produce: 'Goat Raising', openingCount: 4, stageBreakdown: { Growing: 4 } }
-        ],
-        expenses: [],
-        sales: [sale],
-        eggHarvests: [harvest]
-      }
-    });
-
-    const salesInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_sales'));
-    const harvestInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_harvests'));
-    const livestockInserts = queries.filter(query => query.sql.includes('INSERT INTO afa_igp_livestock'));
-    expect(salesInsert?.values).toEqual([
-      sale.id, sale.produce, sale.date, sale.stage, sale.quantity,
-      sale.revenue, sale.recordedBy, sale.fundSource, sale.notes
-    ]);
-    expect(harvestInsert?.values).toEqual([
-      harvest.id, harvest.produce, harvest.date, harvest.time, harvest.collectedBy,
-      harvest.eggCount, null, harvest.status, null, null, null, null, null, null
-    ]);
-    expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_sales'))).toBe(true);
-    expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_harvests'))).toBe(true);
-    expect(livestockInserts.map(query => query.values)).toEqual([
-      ['Swine Raising (Baboyan)', 8, JSON.stringify({ Fattening: 8 })],
-      ['Goat Raising', 4, JSON.stringify({ Growing: 4 })]
-    ]);
-    expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_livestock'))).toBe(true);
+  await saveFullStateToPostgres(pool as any, {
+    hogRaising: {
+      produces: ['Poultry Raising (RTL)'],
+      livestockInventory: [
+          { produce: 'Swine Raising (Baboyan)', stageBreakdown: { Fattening: 5, Gestation: 3 } },
+        { produce: 'Goat Raising', stageBreakdown: { Growing: 4 } }
+      ],
+      expenses: [],
+      sales: [sale],
+      eggHarvests: [harvest]
+    }
   });
+
+  const igpInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp ('));
+  const salesInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_sales'));
+  const harvestInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_harvests'));
+  const livestockInserts = queries.filter(query => query.sql.includes('INSERT INTO afa_igp_livestocks'));
+  expect(igpInsert?.sql).toContain('INSERT INTO afa_igp (id, produces, closed_years)');
+  expect(igpInsert?.values).toEqual(['main_state', ['Poultry Raising (RTL)'], []]);
+  expect(salesInsert?.values).toEqual([
+    sale.id, sale.produce, sale.date, sale.stage, sale.quantity,
+    sale.revenue, sale.recordedBy, sale.fundSource, sale.notes
+  ]);
+  expect(harvestInsert?.values).toEqual([
+    harvest.id, harvest.produce, harvest.date, harvest.time, harvest.collectedBy,
+    harvest.eggCount, null, harvest.status, null, null, null, null, null, null
+  ]);
+  expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_sales'))).toBe(true);
+  expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_harvests'))).toBe(true);
+  expect(livestockInserts.map(query => query.values)).toEqual([
+    ['Swine Raising (Baboyan)', 'Fattening', 5],
+    ['Swine Raising (Baboyan)', 'Gestation', 3],
+    ['Goat Raising', 'Growing', 4]
+  ]);
+  expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_livestocks'))).toBe(true);
+});
 });
 
 async function callStatusHandler() {
