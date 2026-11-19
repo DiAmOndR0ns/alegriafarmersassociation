@@ -103,6 +103,8 @@ function getPool() {
 async function runSchemaMigrations(client) {
   const statements = [
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
+    `ALTER TABLE members ADD COLUMN IF NOT EXISTS membership_paid_through INTEGER;`,
+    `ALTER TABLE members ADD COLUMN IF NOT EXISTS inactive_reason TEXT;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS rsbsa_number VARCHAR(100);`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS is_rsbsa_registered BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
@@ -557,6 +559,49 @@ async function runSchemaMigrations(client) {
       remarks TEXT
     );`,
     `ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb;`,
+    // Annual membership dues. One row per member per membership year; the roster
+    // and the printed year-end list are derived from these receipts, not from a
+    // hand-toggled Active/Inactive flag.
+    `CREATE TABLE IF NOT EXISTS membership_payments (
+      id VARCHAR(100) PRIMARY KEY,
+      member_id VARCHAR(100) NOT NULL,
+      member_name TEXT NOT NULL,
+      member_id_number VARCHAR(100),
+      year INTEGER NOT NULL,
+      amount NUMERIC DEFAULT 0,
+      date_paid VARCHAR(50),
+      method VARCHAR(50) DEFAULT 'Cash',
+      reference_no VARCHAR(100),
+      status VARCHAR(50) DEFAULT 'Pending',
+      recorded_by TEXT,
+      recorded_at VARCHAR(50),
+      verified_by TEXT,
+      verified_date VARCHAR(50),
+      voided_by TEXT,
+      voided_date VARCHAR(50),
+      void_reason TEXT,
+      notes TEXT,
+      transaction_id VARCHAR(100)
+    );`,
+    `CREATE INDEX IF NOT EXISTS membership_payments_year_idx ON membership_payments (year);`,
+    `CREATE INDEX IF NOT EXISTS membership_payments_member_idx ON membership_payments (member_id);`,
+    // One live receipt per member per year; voided rows are kept for the audit trail.
+    `CREATE UNIQUE INDEX IF NOT EXISTS membership_payments_one_live_per_year_idx
+       ON membership_payments (member_id, year) WHERE status <> 'Voided';`,
+    // Immutable roster snapshot written when an officer closes a membership year.
+    `CREATE TABLE IF NOT EXISTS membership_year_snapshots (
+      year INTEGER PRIMARY KEY,
+      closed_by TEXT,
+      closed_at VARCHAR(50),
+      dues_amount NUMERIC DEFAULT 0,
+      total_members INTEGER DEFAULT 0,
+      paid_members INTEGER DEFAULT 0,
+      unpaid_members INTEGER DEFAULT 0,
+      total_collected NUMERIC DEFAULT 0,
+      listed_members JSONB DEFAULT '[]'::jsonb,
+      unpaid_member_ids JSONB DEFAULT '[]'::jsonb,
+      remarks TEXT
+    );`,
     `DO $$
       DECLARE queue_has_rows BOOLEAN;
       BEGIN
@@ -926,6 +971,46 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS membership_payments (
+        id VARCHAR(100) PRIMARY KEY,
+        member_id VARCHAR(100) NOT NULL,
+        member_name TEXT NOT NULL,
+        member_id_number VARCHAR(100),
+        year INTEGER NOT NULL,
+        amount NUMERIC DEFAULT 0,
+        date_paid VARCHAR(50),
+        method VARCHAR(50) DEFAULT 'Cash',
+        reference_no VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'Pending',
+        recorded_by TEXT,
+        recorded_at VARCHAR(50),
+        verified_by TEXT,
+        verified_date VARCHAR(50),
+        voided_by TEXT,
+        voided_date VARCHAR(50),
+        void_reason TEXT,
+        notes TEXT,
+        transaction_id VARCHAR(100)
+      );
+      CREATE INDEX IF NOT EXISTS membership_payments_year_idx ON membership_payments (year);
+      CREATE INDEX IF NOT EXISTS membership_payments_member_idx ON membership_payments (member_id);
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS membership_year_snapshots (
+        year INTEGER PRIMARY KEY,
+        closed_by TEXT,
+        closed_at VARCHAR(50),
+        dues_amount NUMERIC DEFAULT 0,
+        total_members INTEGER DEFAULT 0,
+        paid_members INTEGER DEFAULT 0,
+        unpaid_members INTEGER DEFAULT 0,
+        total_collected NUMERIC DEFAULT 0,
+        listed_members JSONB DEFAULT '[]'::jsonb,
+        unpaid_member_ids JSONB DEFAULT '[]'::jsonb,
+        remarks TEXT
+      );
+    `);
     await client.query("COMMIT");
     console.log("[DB DEBUG] Database schema initialized successfully");
   } catch (err) {
@@ -978,6 +1063,10 @@ var ENTITY_TABLE_MAP = {
   delegationrequests: "delegation_requests",
   delegation_request: "delegation_requests",
   delegation_requests: "delegation_requests",
+  membershippayment: "membership_payments",
+  membershippayments: "membership_payments",
+  membership_payment: "membership_payments",
+  membership_payments: "membership_payments",
   afa_igp: "afa_igp",
   afaigp: "afa_igp",
   igp: "afa_igp",

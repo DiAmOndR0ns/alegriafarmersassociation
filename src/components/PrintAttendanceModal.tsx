@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Member, User, OfficerRole } from '../types';
+import { Member, User, OfficerRole, MembershipPayment } from '../types';
 import { resolveOfficerName } from '../utils/officers';
+import { getDerivedMemberStatus } from '../utils/membership';
 import { Printer, Download, Copy, X, Settings, Check, FileText, Sprout, Landmark, Users, Calendar, MapPin } from 'lucide-react';
 
 interface PrintAttendanceModalProps {
@@ -8,9 +9,18 @@ interface PrintAttendanceModalProps {
   onClose: () => void;
   members: Member[];
   users?: User[];
+  membershipPayments?: MembershipPayment[];
+  membershipYear?: number;
 }
 
-export default function PrintAttendanceModal({ isOpen, onClose, members, users = [] }: PrintAttendanceModalProps) {
+export default function PrintAttendanceModal({
+  isOpen,
+  onClose,
+  members,
+  users = [],
+  membershipPayments = [],
+  membershipYear
+}: PrintAttendanceModalProps) {
   const [showSettings, setShowSettings] = useState(true);
   const [copied, setCopied] = useState(false);
   
@@ -29,8 +39,11 @@ export default function PrintAttendanceModal({ isOpen, onClose, members, users =
 
   if (!isOpen) return null;
 
-  // Filter only active members for the pre-populated checklist
-  const activeMembers = members.filter(m => m.status === 'Active');
+  // Filter only members whose dues are settled for the year: an unpaid member
+  // is not a voting/present member of the assembly.
+  const activeMembers = members.filter(m =>
+    getDerivedMemberStatus(m, membershipPayments, membershipYear ?? new Date().getFullYear()) === 'Active'
+  );
 
   // Helper to trigger standard printing
   const handlePrint = () => {

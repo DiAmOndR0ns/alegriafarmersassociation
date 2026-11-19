@@ -103,6 +103,8 @@ function getPool() {
 async function runSchemaMigrations(client) {
   const statements = [
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
+    `ALTER TABLE members ADD COLUMN IF NOT EXISTS membership_paid_through INTEGER;`,
+    `ALTER TABLE members ADD COLUMN IF NOT EXISTS inactive_reason TEXT;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS rsbsa_number VARCHAR(100);`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS is_rsbsa_registered BOOLEAN DEFAULT FALSE;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
@@ -557,6 +559,49 @@ async function runSchemaMigrations(client) {
       remarks TEXT
     );`,
     `ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb;`,
+    // Annual membership dues. One row per member per membership year; the roster
+    // and the printed year-end list are derived from these receipts, not from a
+    // hand-toggled Active/Inactive flag.
+    `CREATE TABLE IF NOT EXISTS membership_payments (
+      id VARCHAR(100) PRIMARY KEY,
+      member_id VARCHAR(100) NOT NULL,
+      member_name TEXT NOT NULL,
+      member_id_number VARCHAR(100),
+      year INTEGER NOT NULL,
+      amount NUMERIC DEFAULT 0,
+      date_paid VARCHAR(50),
+      method VARCHAR(50) DEFAULT 'Cash',
+      reference_no VARCHAR(100),
+      status VARCHAR(50) DEFAULT 'Pending',
+      recorded_by TEXT,
+      recorded_at VARCHAR(50),
+      verified_by TEXT,
+      verified_date VARCHAR(50),
+      voided_by TEXT,
+      voided_date VARCHAR(50),
+      void_reason TEXT,
+      notes TEXT,
+      transaction_id VARCHAR(100)
+    );`,
+    `CREATE INDEX IF NOT EXISTS membership_payments_year_idx ON membership_payments (year);`,
+    `CREATE INDEX IF NOT EXISTS membership_payments_member_idx ON membership_payments (member_id);`,
+    // One live receipt per member per year; voided rows are kept for the audit trail.
+    `CREATE UNIQUE INDEX IF NOT EXISTS membership_payments_one_live_per_year_idx
+       ON membership_payments (member_id, year) WHERE status <> 'Voided';`,
+    // Immutable roster snapshot written when an officer closes a membership year.
+    `CREATE TABLE IF NOT EXISTS membership_year_snapshots (
+      year INTEGER PRIMARY KEY,
+      closed_by TEXT,
+      closed_at VARCHAR(50),
+      dues_amount NUMERIC DEFAULT 0,
+      total_members INTEGER DEFAULT 0,
+      paid_members INTEGER DEFAULT 0,
+      unpaid_members INTEGER DEFAULT 0,
+      total_collected NUMERIC DEFAULT 0,
+      listed_members JSONB DEFAULT '[]'::jsonb,
+      unpaid_member_ids JSONB DEFAULT '[]'::jsonb,
+      remarks TEXT
+    );`,
     `DO $$
       DECLARE queue_has_rows BOOLEAN;
       BEGIN
@@ -926,6 +971,46 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS membership_payments (
+        id VARCHAR(100) PRIMARY KEY,
+        member_id VARCHAR(100) NOT NULL,
+        member_name TEXT NOT NULL,
+        member_id_number VARCHAR(100),
+        year INTEGER NOT NULL,
+        amount NUMERIC DEFAULT 0,
+        date_paid VARCHAR(50),
+        method VARCHAR(50) DEFAULT 'Cash',
+        reference_no VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'Pending',
+        recorded_by TEXT,
+        recorded_at VARCHAR(50),
+        verified_by TEXT,
+        verified_date VARCHAR(50),
+        voided_by TEXT,
+        voided_date VARCHAR(50),
+        void_reason TEXT,
+        notes TEXT,
+        transaction_id VARCHAR(100)
+      );
+      CREATE INDEX IF NOT EXISTS membership_payments_year_idx ON membership_payments (year);
+      CREATE INDEX IF NOT EXISTS membership_payments_member_idx ON membership_payments (member_id);
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS membership_year_snapshots (
+        year INTEGER PRIMARY KEY,
+        closed_by TEXT,
+        closed_at VARCHAR(50),
+        dues_amount NUMERIC DEFAULT 0,
+        total_members INTEGER DEFAULT 0,
+        paid_members INTEGER DEFAULT 0,
+        unpaid_members INTEGER DEFAULT 0,
+        total_collected NUMERIC DEFAULT 0,
+        listed_members JSONB DEFAULT '[]'::jsonb,
+        unpaid_member_ids JSONB DEFAULT '[]'::jsonb,
+        remarks TEXT
+      );
+    `);
     await client.query("COMMIT");
     console.log("[DB DEBUG] Database schema initialized successfully");
   } catch (err) {
@@ -1069,6 +1154,50 @@ async function fetchAllDataFromPostgres(pool) {
       }));
     } catch {
     }
+    let membershipPayments = [];
+    let membershipYearSnapshots = [];
+    try {
+      const payRes = await client.query("SELECT * FROM membership_payments ORDER BY year DESC, date_paid DESC");
+      membershipPayments = payRes.rows.map((r) => ({
+        id: r.id,
+        memberId: r.member_id,
+        memberName: r.member_name,
+        memberIdNumber: r.member_id_number || void 0,
+        year: Number(r.year),
+        amount: Number(r.amount || 0),
+        datePaid: r.date_paid || "",
+        method: r.method || "Cash",
+        referenceNo: r.reference_no || void 0,
+        status: r.status || "Pending",
+        recordedBy: r.recorded_by || "",
+        recordedAt: r.recorded_at || "",
+        verifiedBy: r.verified_by || void 0,
+        verifiedDate: r.verified_date || void 0,
+        voidedBy: r.voided_by || void 0,
+        voidedDate: r.voided_date || void 0,
+        voidReason: r.void_reason || void 0,
+        notes: r.notes || void 0,
+        transactionId: r.transaction_id || void 0
+      }));
+    } catch {
+    }
+    try {
+      const snapRes = await client.query("SELECT * FROM membership_year_snapshots ORDER BY year DESC");
+      membershipYearSnapshots = snapRes.rows.map((r) => ({
+        year: Number(r.year),
+        closedBy: r.closed_by || "",
+        closedAt: r.closed_at || "",
+        duesAmount: Number(r.dues_amount || 0),
+        totalMembers: Number(r.total_members || 0),
+        paidMembers: Number(r.paid_members || 0),
+        unpaidMembers: Number(r.unpaid_members || 0),
+        totalCollected: Number(r.total_collected || 0),
+        listedMembers: Array.isArray(r.listed_members) ? r.listed_members : [],
+        unpaidMemberIds: Array.isArray(r.unpaid_member_ids) ? r.unpaid_member_ids : [],
+        remarks: r.remarks || void 0
+      }));
+    } catch {
+    }
     let hogState = {
       livestockInventory: [],
       produces: [],
@@ -1149,7 +1278,9 @@ async function fetchAllDataFromPostgres(pool) {
       isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
       avatarUrl: r.avatar_url,
       gender: r.gender,
-      birthDate: r.birth_date
+      birthDate: r.birth_date,
+      membershipPaidThrough: r.membership_paid_through == null ? void 0 : Number(r.membership_paid_through),
+      inactiveReason: r.inactive_reason || void 0
     }));
     const users = usersRes.rows.map((r) => ({
       id: r.id,
@@ -1166,6 +1297,8 @@ async function fetchAllDataFromPostgres(pool) {
       memberIdNumber: r.member_id_number,
       rsbsaNumber: r.rsbsa_number,
       isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
+      membershipPaidThrough: r.membership_paid_through == null ? void 0 : Number(r.membership_paid_through),
+      inactiveReason: r.inactive_reason || void 0,
       resetRequested: Boolean(r.reset_requested),
       mfaEnabled: Boolean(r.mfa_enabled)
     }));
@@ -1330,7 +1463,9 @@ async function fetchAllDataFromPostgres(pool) {
       funds,
       organizationFunds: funds,
       auditorReports,
-      delegationRequests
+      delegationRequests,
+      membershipPayments,
+      membershipYearSnapshots
     };
   } finally {
     client.release();

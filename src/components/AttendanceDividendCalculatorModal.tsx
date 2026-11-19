@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Member, Meeting, HogRaisingState, User } from '../types';
+import { Member, Meeting, HogRaisingState, User, MembershipPayment } from '../types';
 import { resolveOfficerName } from '../utils/officers';
+import { getDerivedMemberStatus } from '../utils/membership';
 import { 
   DollarSign, Calculator, Printer, CheckCircle, AlertTriangle, 
   Users, Percent, Calendar, Sparkles, TrendingUp, X, Award, ShieldAlert
@@ -14,6 +15,9 @@ interface AttendanceDividendCalculatorModalProps {
   hogRaisingState: HogRaisingState;
   currentUser?: User;
   users?: User[];
+  /** Only members with settled dues for the year can receive a dividend. */
+  membershipPayments?: MembershipPayment[];
+  membershipYear?: number;
 }
 
 export default function AttendanceDividendCalculatorModal({
@@ -23,7 +27,9 @@ export default function AttendanceDividendCalculatorModal({
   meetings,
   hogRaisingState,
   currentUser,
-  users = []
+  users = [],
+  membershipPayments = [],
+  membershipYear
 }: AttendanceDividendCalculatorModalProps) {
   const [selectedProduce, setSelectedProduce] = useState<string>('all');
   const [allowAbsenceThreshold, setAllowAbsenceThreshold] = useState<number>(1); // Minimum required attended meetings
@@ -39,6 +45,10 @@ export default function AttendanceDividendCalculatorModal({
     if (selectedProduce === 'all') return hogRaisingState.sales;
     return hogRaisingState.sales.filter(s => (s.produce || 'Hog Raising') === selectedProduce);
   }, [hogRaisingState.sales, selectedProduce]);
+
+  const dividendYear = membershipYear ?? new Date().getFullYear();
+  const isActiveMember = (member: Member) =>
+    getDerivedMemberStatus(member, membershipPayments, dividendYear) === 'Active';
 
   const totalRevenue = useMemo(() => sales.reduce((sum, s) => sum + s.revenue, 0), [sales]);
   const totalExpenses = useMemo(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
@@ -71,13 +81,13 @@ export default function AttendanceDividendCalculatorModal({
           attendedCount += 1;
         } else if (meet.attendanceRecord && (meet.attendanceRecord[m.name] === 'Present' || meet.attendanceRecord[m.id] === 'Present')) {
           attendedCount += 1;
-        } else if (!meet.attendanceRecord && m.status === 'Active') {
+        } else if (!meet.attendanceRecord && isActiveMember(m)) {
           // If no granular roll call record exists, default to proportional attendance based on active status
           attendedCount += 1;
         }
       });
 
-      const isEligible = m.status === 'Active' && attendedCount >= allowAbsenceThreshold;
+      const isEligible = isActiveMember(m) && attendedCount >= allowAbsenceThreshold;
 
       return {
         member: m,
@@ -87,7 +97,7 @@ export default function AttendanceDividendCalculatorModal({
         isEligible
       };
     });
-  }, [members, meetings, allowAbsenceThreshold]);
+  }, [members, meetings, allowAbsenceThreshold, membershipPayments, dividendYear]);
 
   // ATTENDANCE-WEIGHTED SHARE & FORFEITED SURPLUS REDISTRIBUTION
   const calculatedDividendRoster = useMemo(() => {
@@ -102,7 +112,7 @@ export default function AttendanceDividendCalculatorModal({
           attendanceWeight: 0,
           attendanceBonus: 0,
           finalDividend: 0,
-          reason: data.member.status !== 'Active' ? 'Inactive Membership' : 'Excessive Absences / Ineligible'
+          reason: !isActiveMember(data.member) ? 'Inactive Membership (Dues Not Settled)' : 'Excessive Absences / Ineligible'
         };
       }
 

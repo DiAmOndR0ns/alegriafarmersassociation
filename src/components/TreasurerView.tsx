@@ -1,5 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FinancialTransaction, OrganizationFund, HogRaisingState, User, OfficerRole, InventoryItem, AssociationActivity } from '../types';
+import {
+  FinancialTransaction, OrganizationFund, HogRaisingState, User, OfficerRole, InventoryItem, AssociationActivity,
+  Member, MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot
+} from '../types';
+import {
+  DEFAULT_MEMBERSHIP_DUES,
+  getDuesCollected,
+  getMembershipReceiptLabel,
+  getMembershipStanding,
+  hasPaymentForYear,
+  isEffectivePayment
+} from '../utils/membership';
 import { resolveOfficerPrefixed } from '../utils/officers';
 import { isActivityOpenForExpenses } from '../utils/activityExpenses';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
@@ -11,7 +22,7 @@ import {
   Coins, ArrowUpRight, ArrowDownRight, Plus, 
   Search, ShieldCheck, AlertTriangle, CheckCircle, 
   XCircle, Filter, FileText, Info, Building2, Wallet, Database,
-  Briefcase, BarChart3, Calendar, Sparkles, Trash2} from 'lucide-react';
+  Briefcase, BarChart3, Calendar, Sparkles, Trash2, Users} from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -37,6 +48,27 @@ interface TreasurerViewProps {
   users?: User[];
   currentUser?: User;
   currentRole?: OfficerRole;
+  // Annual membership dues (calendar year). Recording a payment is what puts a
+  // member back on the roster; closing the year freezes that roster.
+  members?: Member[];
+  membershipPayments?: MembershipPayment[];
+  membershipYearSnapshots?: MembershipYearSnapshot[];
+  duesAmount?: number;
+  onRecordMembershipPayment?: (
+    input: {
+      memberId: string;
+      year: number;
+      amount: number;
+      datePaid: string;
+      method: MembershipPaymentMethod;
+      referenceNo?: string;
+      notes?: string;
+    },
+    options?: { verifyImmediately?: boolean }
+  ) => boolean;
+  onVoidMembershipPayment?: (paymentId: string, reason: string) => void;
+  onCloseMembershipYear?: (year: number, remarks?: string) => void;
+  onUpdateDuesAmount?: (amount: number) => void;
 }
 
 const getFundSourceValue = (fund: OrganizationFund) => `${fund.code} (${fund.name})`;
@@ -54,8 +86,27 @@ export default function TreasurerView({
   onOpenReportModal,
   users = [],
   currentUser,
-  currentRole = 'Treasurer'
+  currentRole = 'Treasurer',
+  members = [],
+  membershipPayments = [],
+  membershipYearSnapshots = [],
+  duesAmount = DEFAULT_MEMBERSHIP_DUES,
+  onRecordMembershipPayment,
+  onVoidMembershipPayment,
+  onCloseMembershipYear,
+  onUpdateDuesAmount
 }: TreasurerViewProps) {
+  // Membership dues year selector + payment form state
+  const [duesYear, setDuesYear] = useState<number>(new Date().getFullYear());
+  const [showDuesModal, setShowDuesModal] = useState(false);
+  const [duesMemberId, setDuesMemberId] = useState('');
+  const [duesPaymentAmount, setDuesPaymentAmount] = useState(String(duesAmount));
+  const [duesDatePaid, setDuesDatePaid] = useState(new Date().toISOString().split('T')[0]);
+  const [duesMethod, setDuesMethod] = useState<MembershipPaymentMethod>('Cash');
+  const [duesReference, setDuesReference] = useState('');
+  const [duesNotes, setDuesNotes] = useState('');
+  const [duesVerifyNow, setDuesVerifyNow] = useState(false);
+  const [duesAmountInput, setDuesAmountInput] = useState(String(duesAmount));
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterAudit, setFilterAudit] = useState<'all' | 'Unaudited' | 'Audited' | 'Flagged'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -148,6 +199,31 @@ export default function TreasurerView({
     });
     return Array.from(yearsSet).sort().reverse();
   }, [transactions, hogRaising]);
+
+  // Dues ledger view for the selected membership year: one row per member with
+  // their standing and the receipt that put them there (if any).
+  const duesRows = useMemo(() => members.map(member => {
+    const payment = membershipPayments.find(p =>
+      p.memberId === member.id && Number(p.year) === duesYear && isEffectivePayment(p)
+    );
+    return { member, payment, standing: getMembershipStanding(member, membershipPayments, duesYear) };
+  }).sort((a, b) => {
+    // Unpaid first: that is the list the Treasurer works through.
+    const rank = (s: string) => (s === 'Unpaid' ? 0 : 1);
+    return rank(a.standing) - rank(b.standing) || a.member.name.localeCompare(b.member.name);
+  }), [members, membershipPayments, duesYear]);
+
+  const duesStats = useMemo(() => ({
+    paid: duesRows.filter(row => row.standing === 'Paid').length,
+    unpaid: duesRows.filter(row => row.standing === 'Unpaid').length,
+    collected: getDuesCollected(membershipPayments, duesYear)
+  }), [duesRows, membershipPayments, duesYear]);
+
+  const closedYearSnapshot = membershipYearSnapshots.find(s => Number(s.year) === duesYear);
+  const duesYearClosed = Boolean(closedYearSnapshot);
+
+  useEffect(() => { setDuesAmountInput(String(duesAmount)); }, [duesAmount]);
+  useEffect(() => { setDuesPaymentAmount(String(duesAmount)); }, [duesAmount]);
 
   const treasurerAnalytics = useMemo(
     () => getTreasurerAnalytics(transactions, hogRaising, activities, funds, chartYear),
@@ -672,6 +748,298 @@ export default function TreasurerView({
           ) : <p className="text-base text-[#33473D]">No registered or transaction fund sources are available.</p>}
         </div>
       </div>
+
+      {/* ANNUAL MEMBERSHIP DUES LEDGER — the year-end book. Status is derived from
+          these receipts: a member is listed only for a year they paid. */}
+      {onRecordMembershipPayment && onCloseMembershipYear && (
+        <div id="membership-dues-panel" className="bg-[#F7F4EF] border border-[#D5CFC1] p-5 rounded-2xl space-y-4 shadow-md">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 pb-3 border-b border-[#D5CFC1]">
+            <div>
+              <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wide flex items-center gap-2">
+                <Users className="w-4 h-4 text-emerald-700" />
+                <span>Annual Membership Dues — {duesYear}</span>
+              </h3>
+              <p className="text-sm text-[#4A5F57] mt-1">
+                The book closes every 31 December. A member is delisted for {duesYear} until the PHP {duesAmount.toLocaleString()} dues are recorded here.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              <label className="flex items-center gap-1.5 text-sm font-bold text-[#1B4332]">
+                <span>Dues (PHP)</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  value={duesAmountInput}
+                  onChange={(e) => setDuesAmountInput(e.target.value)}
+                  onBlur={() => onUpdateDuesAmount && onUpdateDuesAmount(parseFloat(duesAmountInput) || duesAmount)}
+                  className="w-24 min-h-11 px-2.5 py-1.5 bg-white border border-[#8FA99A] rounded-lg font-mono text-[#1B4332]"
+                  aria-label="Annual membership dues amount"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowDuesModal(true)}
+                className="flex min-h-11 items-center gap-1.5 px-3 py-2 text-sm font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Record Dues Payment</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-white border border-[#B8CDBE] p-3 rounded-xl">
+              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Listed / Paid</span>
+              <span className="text-lg font-black text-emerald-800 font-mono">{duesStats.paid.toLocaleString()}</span>
+            </div>
+            <div className="bg-white border border-[#B8CDBE] p-3 rounded-xl">
+              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Unpaid</span>
+              <span className="text-lg font-black text-rose-800 font-mono">{duesStats.unpaid.toLocaleString()}</span>
+            </div>
+            <div className="bg-white border border-[#B8CDBE] p-3 rounded-xl">
+              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Collected</span>
+              <span className="text-lg font-black text-[#1B4332] font-mono">PHP {duesStats.collected.toLocaleString()}</span>
+            </div>
+            <div className="bg-white border border-[#B8CDBE] p-3 rounded-xl">
+              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Expected</span>
+              <span className="text-lg font-black text-[#1B4332] font-mono">PHP {(duesAmount * members.length).toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm border-collapse">
+              <thead>
+                <tr className="bg-[#F0EAE1] text-[#4A5F57] text-[11px] uppercase tracking-wider">
+                  <th className="px-3 py-2">Member</th>
+                  <th className="px-3 py-2">Standing</th>
+                  <th className="px-3 py-2">Receipt</th>
+                  <th className="px-3 py-2 text-right">Amount</th>
+                  <th className="px-3 py-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#D5CFC1]">
+                {duesRows.length === 0 ? (
+                  <tr><td colSpan={5} className="px-3 py-6 text-center text-[#4A5F57]">No members registered yet.</td></tr>
+                ) : duesRows.map(row => (
+                  <tr key={row.member.id} className={row.payment ? 'bg-emerald-50/40' : ''}>
+                    <td className="px-3 py-2.5">
+                      <span className="font-bold text-[#1B4332]">{row.member.name}</span>
+                      <span className="block text-[10px] font-mono text-[#3A4A42]">{row.member.memberIdNumber || 'No AFA ID'} · {row.member.farmLocation}</span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {row.standing === 'Paid' ? (
+                        <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full">
+                          <CheckCircle className="w-3 h-3" /> Listed
+                        </span>
+                      ) : row.standing === 'Inactive' ? (
+                        <span className="inline-flex items-center gap-1 bg-slate-200 text-slate-800 border border-slate-400 text-[10px] font-black px-2 py-0.5 rounded-full" title={row.member.inactiveReason}>
+                          <XCircle className="w-3 h-3" /> {row.member.inactiveReason || 'Inactive'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-900 border border-rose-300 text-[10px] font-black px-2 py-0.5 rounded-full">
+                          <AlertTriangle className="w-3 h-3" /> Unpaid
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] text-[#3A4A42]">
+                      {row.payment ? (
+                        <>
+                          <span className="font-mono">{getMembershipReceiptLabel(row.payment)}</span>
+                          <span className="block">{row.payment.datePaid} · {row.payment.method} · {row.payment.status}</span>
+                        </>
+                      ) : <span className="text-[#8A9A92]">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono font-bold text-[#1B4332]">
+                      {row.payment ? `PHP ${row.payment.amount.toLocaleString()}` : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {row.payment && row.payment.status !== 'Voided' && onVoidMembershipPayment ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const reason = window.prompt(`Void the ${row.payment!.year} dues receipt of ${row.member.name}? Give a reason for the audit trail:`);
+                            if (reason !== null) onVoidMembershipPayment(row.payment!.id, reason);
+                          }}
+                          className="text-[11px] font-bold text-rose-700 hover:text-rose-900 underline cursor-pointer"
+                        >
+                          Void
+                        </button>
+                      ) : row.payment ? (
+                        <span className="text-[11px] text-[#8A9A92]">Voided</span>
+                      ) : row.standing === 'Inactive' ? (
+                        // Removed by an officer (resigned, expelled): paying dues is
+                        // not what brings them back, so no payment shortcut here.
+                        <span className="text-[11px] text-[#8A9A92]" title={row.member.inactiveReason}>Delisted</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setDuesMemberId(row.member.id); setShowDuesModal(true); }}
+                          className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                        >
+                          Record payment
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-3 border-t border-[#D5CFC1]">
+            <p className="text-sm text-[#33473D]">
+              Closing the year freezes the official roster and delists every member who has not paid.
+            </p>
+            <button
+              type="button"
+              disabled={duesYearClosed}
+              onClick={() => {
+                if (window.confirm(`Close membership year ${duesYear}? The roster is frozen and unpaid members are delisted from the active list.`)) {
+                  const remarks = window.prompt('Remarks for the year-end minutes (optional):') || undefined;
+                  onCloseMembershipYear(duesYear, remarks);
+                }
+              }}
+              className={`flex min-h-11 items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-xl transition-all ${duesYearClosed ? 'bg-slate-300 text-slate-600 cursor-not-allowed' : 'bg-[#14532D] hover:bg-[#123F25] text-white cursor-pointer'}`}
+            >
+              <Calendar className="w-4 h-4" />
+              <span>{duesYearClosed ? 'Year closed' : `Close ${duesYear} Membership Year`}</span>
+            </button>
+          </div>
+
+          {duesYearClosed && (
+            <p className="text-sm font-bold text-emerald-900 bg-emerald-50 border border-emerald-300 rounded-xl p-3">
+              The {duesYear} roster is closed and sealed
+              {closedYearSnapshot ? ` — ${closedYearSnapshot.paidMembers} listed, ${closedYearSnapshot.unpaidMembers} delisted, PHP ${closedYearSnapshot.totalCollected.toLocaleString()} collected.` : '.'}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* RECORD DUES PAYMENT MODAL */}
+      {showDuesModal && onRecordMembershipPayment && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const ok = onRecordMembershipPayment({
+                memberId: duesMemberId,
+                year: duesYear,
+                amount: parseFloat(duesPaymentAmount) || 0,
+                datePaid: duesDatePaid,
+                method: duesMethod,
+                referenceNo: duesReference,
+                notes: duesNotes
+              }, { verifyImmediately: duesVerifyNow });
+              if (ok) setShowDuesModal(false);
+            }}
+            className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-5 space-y-3"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-[#D5CFC1] pb-3">
+              <div>
+                <h3 className="text-lg font-black text-[#1B4332]">Record Annual Membership Dues</h3>
+                <p className="text-sm text-[#4A5F57]">Membership year {duesYear} · PHP {duesAmount.toLocaleString()} per member</p>
+              </div>
+              <button type="button" onClick={() => setShowDuesModal(false)} className="text-2xl leading-none text-[#33473D] hover:text-[#1B4332] cursor-pointer" aria-label="Close">&times;</button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Member</label>
+              <select
+                required
+                value={duesMemberId}
+                onChange={(e) => setDuesMemberId(e.target.value)}
+                className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332]"
+              >
+                <option value="">Select a registered member</option>
+                {members.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} — {member.memberIdNumber || 'No AFA ID'}{hasPaymentForYear(membershipPayments, member.id, duesYear) ? ' (already paid)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Amount Received (PHP)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  required
+                  value={duesPaymentAmount}
+                  onChange={(e) => setDuesPaymentAmount(e.target.value)}
+                  className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl font-mono text-[#1B4332]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Date Paid</label>
+                <input
+                  type="date"
+                  required
+                  value={duesDatePaid}
+                  onChange={(e) => setDuesDatePaid(e.target.value)}
+                  className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Method</label>
+                <select
+                  value={duesMethod}
+                  onChange={(e) => setDuesMethod(e.target.value as MembershipPaymentMethod)}
+                  className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332]"
+                >
+                  {(['Cash', 'GCash', 'Bank Transfer', 'In-Kind', 'Other'] as MembershipPaymentMethod[]).map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">OR / Reference No.</label>
+                <input
+                  type="text"
+                  value={duesReference}
+                  onChange={(e) => setDuesReference(e.target.value)}
+                  className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Notes (optional)</label>
+              <textarea
+                rows={2}
+                value={duesNotes}
+                onChange={(e) => setDuesNotes(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332]"
+              />
+            </div>
+
+            <label className="flex items-start gap-2 text-sm text-[#33473D]">
+              <input
+                type="checkbox"
+                checked={duesVerifyNow}
+                onChange={(e) => setDuesVerifyNow(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>Mark as verified now. Leave unchecked to send it to the Auditor for verification.</span>
+            </label>
+
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => setShowDuesModal(false)} className="flex-1 min-h-12 py-2.5 text-sm font-bold bg-white border-2 border-[#B8CDBE] rounded-xl text-[#1B4332] cursor-pointer">
+                Cancel
+              </button>
+              <button type="submit" className="flex-1 min-h-12 py-2.5 text-sm font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl cursor-pointer">
+                Save Dues Payment
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* OFFICER SUMMARY DESCRIPTION AND TOOLS */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-[#F7F4EF] p-4 sm:p-5 rounded-2xl border border-[#B8CDBE]">

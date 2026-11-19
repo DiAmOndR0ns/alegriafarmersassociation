@@ -30,6 +30,8 @@ export interface PushSyncState {
   organizationFunds?: unknown[];
   auditorReports?: unknown[];
   delegationRequests?: unknown[];
+  membershipPayments?: unknown[];
+  membershipYearSnapshots?: unknown[];
   eggHarvests?: unknown[];
   hogRaising?: Record<string, unknown>;
   systemLogs?: unknown[];
@@ -541,6 +543,23 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
     if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
       const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds as Record<string, unknown>;
       safeState.deletedIds = safeDeletedIds;
+    }
+    // Annual dues are money in the hands of the association: only the Treasurer
+    // (or Assistant Treasurer) may record, verify-as-paid, void, or close a year.
+    // Everyone else's attempts are rejected outright rather than silently dropped,
+    // so a Secretary's member edit is never half-saved.
+    if (!isTreasurerRole(user.role)) {
+      const duesFields = ['membershipPayments', 'membershipYearSnapshots']
+        .filter(key => key in state);
+      const duesDeletions = safeState.deletedIds && typeof safeState.deletedIds === 'object'
+        && (Array.isArray((safeState.deletedIds as Record<string, unknown>).membershipPayments)
+          || Array.isArray((safeState.deletedIds as Record<string, unknown>).membership_payments));
+      if (duesFields.length > 0 || duesDeletions) {
+        return sendResponse(res, 403, {
+          success: false,
+          message: 'Only the Treasurer or Assistant Treasurer may record or close membership dues.',
+        });
+      }
     }
     await saveFullStateToPostgres(getPool(), safeState);
     return sendResponse(res, 200, { success: true, offlineMode: false, message: 'State successfully synced.' });

@@ -21,9 +21,10 @@
  * and member records — no hardcoded officers or members.
  */
 import { useState, useEffect } from "react";
-import { Member, User, OfficerRole } from "../types";
+import { Member, User, OfficerRole, MembershipPayment } from "../types";
 import { resolveOfficerName, OFFICER_ROLES, OFFICER_ROLE_LABELS } from "../utils/officers";
 import { getSurname } from "../utils/names";
+import { getDerivedMemberStatus } from "../utils/membership";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -154,18 +155,27 @@ export function buildMemberRows(members: Member[]): MemberRow[] {
   });
 }
 
-export function buildDefaultPages(users: User[], members: Member[]): PageDef[] {
-  const rows = buildMemberRows(members);
+export function buildDefaultPages(
+  users: User[],
+  members: Member[],
+  membershipPayments: readonly MembershipPayment[] = [],
+  year: number = new Date().getFullYear()
+): PageDef[] {
+  // The printed roster is the list of members who have settled dues for the
+  // year — the same list the book is closed against. Unpaid members are not
+  // "updated members" of that year and must not appear on the official list.
+  const listed = members.filter(member => getDerivedMemberStatus(member, membershipPayments, year) === 'Active');
+  const rows = buildMemberRows(listed);
   const chunkSize = 26;
   const chunks: MemberRow[][] = [];
   for (let i = 0; i < rows.length; i += chunkSize) chunks.push(rows.slice(i, i + chunkSize));
   return [
     { kind: "officers", title: "List of Officers with Contact Information", rows: buildOfficerRows(users) },
     ...(chunks.length === 0
-      ? [{ kind: "members" as const, title: "List of Updated Members", rows: [] }]
+      ? [{ kind: "members" as const, title: `List of Updated Members in ${year}`, rows: [] }]
       : chunks.map((c, i) => ({
         kind: "members" as const,
-        title: `List of Updated Members in ${new Date().getFullYear()}${chunks.length > 1 ? ` (cont. ${i + 1})` : ""}`,
+        title: `List of Updated Members in ${year}${chunks.length > 1 ? ` (cont. ${i + 1})` : ""}`,
         columnHeaders: i === 0,
         rows: c,
       }))),
@@ -411,11 +421,13 @@ export default function AFAMemberLists({
   pages,
   users = [],
   members = [],
+  membershipPayments = [],
+  membershipYear: requestedYear,
   paper: initialPaper = "a4",
   certifiedBy,
   attestedBy,
   onClose,
-}: Props & { users?: User[]; members?: Member[] }) {
+}: Props & { users?: User[]; members?: Member[]; membershipPayments?: MembershipPayment[]; membershipYear?: number }) {
   const [paper, setPaper] = useState<PaperKey>(initialPaper);
   const [logoOk, setLogoOk] = useState(true);
 
@@ -434,7 +446,8 @@ export default function AFAMemberLists({
   const resolvedAttestedBy: Signatory =
     attestedBy ?? { name: resolveOfficerName(users, "President"), role: "President" };
 
-  const resolvedPages = pages ?? buildDefaultPages(users, members);
+  const membershipYear = requestedYear ?? new Date().getFullYear();
+  const resolvedPages = pages ?? buildDefaultPages(users, members, membershipPayments, membershipYear);
 
   return (
     <div className="afa-root">

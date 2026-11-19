@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Member, Meeting, Resolution, User, MemberAffiliation, OfficerRole, PasswordResetResult } from '../types';
+import { Member, Meeting, Resolution, User, MemberAffiliation, OfficerRole, PasswordResetResult, MembershipPayment } from '../types';
 import {
   Users, BookOpen, FileText, Plus, Search,
   MapPin, CheckCircle, FilePlus, Calendar,
@@ -15,6 +15,7 @@ import AFAMemberLists from './AFAMemberLists';
 import MemberIdBadgeModal from './MemberIdBadgeModal';
 import AffiliationManager from './AffiliationManager';
 import { splitName } from '../utils/names';
+import { getMembershipStanding } from '../utils/membership';
 import { generateInitialPassword, validatePasswordPolicy } from '../utils/passwordPolicy';
 
 interface SecretaryViewProps {
@@ -43,6 +44,9 @@ interface SecretaryViewProps {
 
   isOnline: boolean;
   onOpenReportModal?: () => void;
+  /** Dues receipts decide who is listed on the roster, roll call, and attendance sheets. */
+  membershipPayments?: MembershipPayment[];
+  membershipYear?: number;
 }
 
 const splitBirthDate = (value: string) => {
@@ -98,7 +102,9 @@ export default function SecretaryView({
   onAddResolution,
   onDeleteResolution,
   isOnline,
-  onOpenReportModal
+  onOpenReportModal,
+  membershipPayments = [],
+  membershipYear
 }: SecretaryViewProps) {
   const [activeTab, setActiveTab] = useState<'members' | 'meetings' | 'resolutions'>('members');
   const [searchTerm, setSearchTerm] = useState('');
@@ -601,10 +607,34 @@ export default function SecretaryView({
                           <div className="flex items-center gap-2">
                             <span>{member.name}</span>
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] text-[#3A4A42] font-mono mt-0.5">
+                          <div className="flex items-center gap-2 text-[10px] text-[#3A4A42] font-mono mt-0.5 flex-wrap">
                             <span className="text-emerald-700 font-bold">{member.memberIdNumber || 'AFA-2026-000'}</span>
                             <span>•</span>
                             <span>Joined: {member.joinedDate || 'Recent'}</span>
+                            {(() => {
+                              // The authoritative roster status is the dues ledger for the
+                              // year, not the stored flag.
+                              const standing = getMembershipStanding(member, membershipPayments, membershipYear ?? new Date().getFullYear());
+                              if (standing === 'Paid') {
+                                return (
+                                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded font-bold uppercase">
+                                    <CheckCircle2 className="w-2.5 h-2.5" /> Dues {membershipYear ?? new Date().getFullYear()} paid
+                                  </span>
+                                );
+                              }
+                              if (standing === 'Inactive') {
+                                return (
+                                  <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold uppercase" title={member.inactiveReason}>
+                                    <XCircle className="w-2.5 h-2.5" /> {member.inactiveReason || 'Inactive'}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded font-bold uppercase">
+                                  <AlertCircle className="w-2.5 h-2.5" /> Dues unpaid
+                                </span>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="px-3 py-4">
@@ -1745,6 +1775,8 @@ export default function SecretaryView({
         onClose={() => setShowAttendanceModal(false)}
         members={members}
         users={users}
+        membershipPayments={membershipPayments}
+        membershipYear={membershipYear}
       />
 
       {/* DIGITAL ROLL CALL MODAL - NEW MEETING CREATION */}
@@ -1755,6 +1787,8 @@ export default function SecretaryView({
         members={members}
         initialRecord={meetingAttendanceRecord}
         onSave={setMeetingAttendanceRecord}
+        membershipPayments={membershipPayments}
+        membershipYear={membershipYear}
       />
 
       {/* DIGITAL ROLL CALL MODAL - EXISTING MEETING EDIT/UPDATE */}
@@ -1764,6 +1798,8 @@ export default function SecretaryView({
         meetingTitle={rollCallMeeting?.title || ''}
         members={members}
         initialRecord={rollCallMeeting?.attendanceRecord}
+        membershipPayments={membershipPayments}
+        membershipYear={membershipYear}
         onSave={(newRecord) => {
           if (rollCallMeeting) {
             onUpdateMeeting({
@@ -1782,6 +1818,8 @@ export default function SecretaryView({
           <AFAMemberLists
             users={users}
             members={members}
+            membershipPayments={membershipPayments}
+            membershipYear={membershipYear}
             onClose={() => setShowMemberLists(false)}
           />
         </div>

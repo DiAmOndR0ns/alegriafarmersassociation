@@ -48,6 +48,8 @@ export interface User {
   contactNumber?: string;
   joinedDate?: string;
   status?: 'Active' | 'Inactive'; // for Member status
+  membershipPaidThrough?: number; // latest calendar membership year with settled dues
+  inactiveReason?: string; // why the account was deactivated ("Unpaid dues", "Resigned", ...)
   resetRequested?: boolean; // True if they applied to reset their password
   failedLoginAttempts?: number; // Consecutive failed sign-in attempts; resets to 0 on success
   lockedUntil?: string; // ISO timestamp until which sign-in is blocked after too many failures
@@ -72,6 +74,63 @@ export interface Member {
   gender?: 'Male' | 'Female' | 'Other';
   birthDate?: string;
   affiliations?: MemberAffiliation[]; // Other IDs or organizations aside from RSBSA (e.g., Senior Citizen, PWD, 4Ps, Cooperative)
+  /** Membership year through which dues are settled (e.g. 2026). Derived from verified payments. */
+  membershipPaidThrough?: number;
+  /** Reason recorded when an officer closes a membership year without this member paying. */
+  inactiveReason?: string;
+}
+
+// ANNUAL MEMBERSHIP DUES
+// The book closes every 31 December. A member is only "Active" for a year when
+// a verified payment exists for it, so status is derived from these records
+// instead of being hand-toggled by an officer.
+export type MembershipPaymentStatus = 'Pending' | 'Verified' | 'Voided';
+export type MembershipPaymentMethod = 'Cash' | 'GCash' | 'Bank Transfer' | 'In-Kind' | 'Other';
+
+export interface MembershipPayment {
+  id: string;
+  memberId: string;
+  memberName: string; // snapshot, so the dues ledger survives a member rename
+  memberIdNumber?: string; // snapshot of the AFA ID at the time of payment
+  /** Calendar membership year this payment settles (e.g. 2026). */
+  year: number;
+  amount: number;
+  datePaid: string; // YYYY-MM-DD
+  method: MembershipPaymentMethod;
+  referenceNo?: string; // OR number / GCash reference
+  status: MembershipPaymentStatus;
+  recordedBy: string; // Treasurer / Assistant Treasurer
+  recordedAt: string; // ISO timestamp
+  verifiedBy?: string; // Auditor
+  verifiedDate?: string;
+  voidedBy?: string;
+  voidedDate?: string;
+  voidReason?: string;
+  notes?: string;
+  /** Links this payment to the income entry it produced in the association ledger. */
+  transactionId?: string;
+}
+
+/** Immutable roster kept when an officer closes a membership year. */
+export interface MembershipYearSnapshot {
+  year: number;
+  closedBy: string;
+  closedAt: string; // ISO timestamp
+  duesAmount: number;
+  totalMembers: number;
+  paidMembers: number;
+  unpaidMembers: number;
+  totalCollected: number;
+  listedMembers: Array<{
+    memberId: string;
+    name: string;
+    memberIdNumber?: string;
+    farmLocation: string;
+    amountPaid: number;
+    datePaid?: string;
+  }>;
+  unpaidMemberIds: string[];
+  remarks?: string;
 }
 
 export interface Meeting {
@@ -200,7 +259,7 @@ export interface SyncQueueItem {
   id: string;
   timestamp: string;
   action: 'create' | 'update' | 'delete';
-  entityType: 'user' | 'officer' | 'member' | 'meeting' | 'resolution' | 'transaction' | 'announcement' | 'hog_expense' | 'hog_sale' | 'hog_chore' | 'egg_harvest' | 'product' | 'activity' | string;
+  entityType: 'user' | 'officer' | 'member' | 'meeting' | 'resolution' | 'transaction' | 'announcement' | 'hog_expense' | 'hog_sale' | 'hog_chore' | 'egg_harvest' | 'product' | 'activity' | 'membership_payment' | string;
   payload: any;
 }
 

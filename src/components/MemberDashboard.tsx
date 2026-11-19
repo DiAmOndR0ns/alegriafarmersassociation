@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Announcement, HogRaisingState, EggHarvestLog, Member, Product, AssociationActivity, MemberAffiliation } from '../types';
+import { User, Announcement, HogRaisingState, EggHarvestLog, Member, Product, AssociationActivity, MemberAffiliation, MembershipPayment } from '../types';
 import { resolveOfficerName } from '../utils/officers';
+import { DEFAULT_MEMBERSHIP_DUES, getMembershipStanding, hasPaymentForYear } from '../utils/membership';
 import { 
   User as UserIcon, MapPin, Smartphone, Layers, Tag, Calendar, 
   Printer, Upload, LogOut, FileText, CheckCircle, CreditCard, 
@@ -25,6 +26,9 @@ interface MemberDashboardProps {
   products?: Product[];
   activities?: AssociationActivity[];
   users?: User[];
+  /** Dues receipts for the member's own record, and the amount set by the Treasurer. */
+  membershipPayments?: MembershipPayment[];
+  duesAmount?: number;
 }
 
 const SITIOS = [
@@ -65,8 +69,28 @@ export default function MemberDashboard({
   onUpdateEggHarvestStatus,
   products = [],
   activities = [],
-  users = []
+  users = [],
+  membershipPayments = [],
+  duesAmount = DEFAULT_MEMBERSHIP_DUES
 }: MemberDashboardProps) {
+  // The member's own dues standing for the current calendar year.
+  const currentMembershipYear = new Date().getFullYear();
+  const myPayment = membershipPayments
+    .filter(payment =>
+      payment.memberId === currentUser.memberId
+      || (currentUser.memberIdNumber && payment.memberIdNumber === currentUser.memberIdNumber)
+      || payment.memberName.trim().toLowerCase() === currentUser.name.trim().toLowerCase()
+    )
+    .find(payment => Number(payment.year) === currentMembershipYear && payment.status !== 'Voided');
+  const myRosterRecord = members.find(m =>
+    m.id === currentUser.memberId
+    || (currentUser.memberIdNumber && m.memberIdNumber === currentUser.memberIdNumber)
+    || m.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase()
+  );
+  const duesSettled = Boolean(myPayment) || Boolean(myRosterRecord && hasPaymentForYear(membershipPayments, myRosterRecord.id, currentMembershipYear));
+  const membershipStanding = myRosterRecord
+    ? getMembershipStanding(myRosterRecord, membershipPayments, currentMembershipYear)
+    : (duesSettled ? 'Paid' : 'Unpaid');
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(currentUser.name);
   const [contact, setContact] = useState(currentUser.contactNumber || '');
@@ -663,11 +687,15 @@ export default function MemberDashboard({
             <div className="space-y-1 text-xs text-[#5D4037]">
               <h4 className="font-black">Tinuig nga Amot ug Katungod (Annual Renewal)</h4>
               <p className="leading-relaxed text-[#6D4C41]">
-                Sigon sa balaod sa atong AFA, ang imong membership balido sulod sa **usa ka (1) tuig**. Kada dapit sa **Disyembre**, ang atong Tesorero ({resolveOfficerName(users, 'Treasurer')}) mangolekta og **PHP 100.00** nga tinuig nga amot para sa pag-renew sa imong mga benepisyo.
+                Sigon sa balaod sa atong AFA, ang imong membership balido sulod sa **usa ka (1) tuig** — gikan sa <strong>Enero 1 hangtod Disyembre 31 {currentMembershipYear}</strong>. Ang atong Tesorero ({resolveOfficerName(users, 'Treasurer')}) mangolekta og **PHP {duesAmount.toLocaleString()}.00** nga tinuig nga amot para sa pag-renew sa imong mga benepisyo. Kung dili mabayran, dili ka maapil sa listahan sa mga miyembro alang nianang tuiga.
               </p>
-              <div className="pt-1 text-[10px] font-black text-[#1B4332] flex items-center gap-1 uppercase">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                <span>Karon nga Status: Bayad na para sa tuig 2026 (Active)</span>
+              <div className={`pt-1 text-[10px] font-black flex items-center gap-1 uppercase ${membershipStanding === 'Paid' ? 'text-[#1B4332]' : 'text-rose-800'}`}>
+                <span className={`w-2 h-2 rounded-full inline-block ${membershipStanding === 'Paid' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                <span>
+                  {membershipStanding === 'Paid'
+                    ? `Karon nga Status: Bayad na para sa tuig ${currentMembershipYear} (Listed Member)${myPayment ? ` · OR ${myPayment.referenceNo || myPayment.id}` : ''}`
+                    : `Karon nga Status: Wala pa mabayran ang amot sa tuig ${currentMembershipYear} — palihog bayad sa Tesorero`}
+                </span>
               </div>
             </div>
           </div>
@@ -1213,7 +1241,7 @@ export default function MemberDashboard({
           </div>
 
           <p className="text-sm text-slate-800 leading-loose text-justify indent-10 font-serif">
-            This is to certify that <strong className="text-black font-sans font-black uppercase text-base underline decoration-1 underline-offset-4">{currentUser.name}</strong>, of legal age, residing at <strong className="text-black font-sans font-bold">{currentUser.farmLocation}</strong>, Tuburan, Cebu, is a registered active member in good standing of the Alegria Farmers Association (AFA).
+            This is to certify that <strong className="text-black font-sans font-black uppercase text-base underline decoration-1 underline-offset-4">{currentUser.name}</strong>, of legal age, residing at <strong className="text-black font-sans font-bold">{currentUser.farmLocation}</strong>, Tuburan, Cebu, is a registered active member in good standing of the Alegria Farmers Association (AFA) for membership year {currentMembershipYear}{duesSettled ? '' : ' (dues for the coming year are still outstanding)'}.
           </p>
 
           <p className="text-sm text-slate-800 leading-loose text-justify indent-10 font-serif">
@@ -1225,7 +1253,7 @@ export default function MemberDashboard({
           </p>
 
           <div className="bg-slate-50 border border-slate-300 p-3 text-xs leading-relaxed font-sans text-slate-600 rounded-lg text-center max-w-lg mx-auto">
-            <strong>⚠️ ID Validity Period:</strong> Membership status and digital ID credentials are valid for one year from the date of payment and expire on December 31, 2026. Annual dues of PHP 100.00 must be settled with the Treasurer each December to sustain active enrollment benefits.
+            <strong>⚠️ ID Validity Period:</strong> Membership status and digital ID credentials cover the calendar year {currentMembershipYear} (January 1 – December 31) and expire on December 31, {currentMembershipYear}. Annual dues of PHP {duesAmount.toLocaleString()}.00 must be settled with the Treasurer each December to remain on the official list of members for the coming year.
           </div>
 
           <div className="pt-12 grid grid-cols-2 gap-12 text-center font-sans text-xs">

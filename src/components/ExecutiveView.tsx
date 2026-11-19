@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
-import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, HogRaisingState, OrganizationFund, PasswordResetResult, DelegationRequest, DelegationScope } from '../types';
+import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, HogRaisingState, OrganizationFund, PasswordResetResult, DelegationRequest, DelegationScope, MembershipPayment } from '../types';
+import { getDerivedMemberStatus } from '../utils/membership';
 import {
   ShieldCheck, Users, Coins, BookOpen, FileCheck, Activity, Check, X,
   KeyRound, Trash2, Clock, Smartphone, AlertTriangle, Printer, Calendar,
@@ -69,6 +70,9 @@ interface ExecutiveViewProps {
   }) => Promise<boolean>;
   onReviewDelegation?: (requestId: string, decision: 'approve' | 'decline', remarks?: string) => Promise<boolean>;
   onRevokeDelegation?: (requestId: string, remarks?: string) => Promise<boolean>;
+  /** Dues receipts: "active members" counts only members who settled the year's dues. */
+  membershipPayments?: MembershipPayment[];
+  membershipYear?: number;
 }
 
 export default function ExecutiveView({
@@ -106,7 +110,9 @@ export default function ExecutiveView({
   onRefreshDelegations,
   onRequestDelegation,
   onReviewDelegation,
-  onRevokeDelegation
+  onRevokeDelegation,
+  membershipPayments = [],
+  membershipYear
 }: ExecutiveViewProps) {
   const { t, isEnglish } = useLanguage();
 
@@ -345,7 +351,10 @@ export default function ExecutiveView({
   );
 
   const totalMembers = members.length;
-  const activeMembers = members.filter(m => m.status === 'Active').length;
+  // "Active" means dues are settled for the current membership year.
+  const activeMembers = members.filter(m =>
+    getDerivedMemberStatus(m, membershipPayments, membershipYear ?? new Date().getFullYear()) === 'Active'
+  ).length;
   const pendingResolutions = resolutions.filter(r => r.status === 'Pending Approval');
   const currentBalance = transactions.reduce(
     (balance, transaction) => balance + (transaction.type === 'income' ? transaction.amount : -transaction.amount),

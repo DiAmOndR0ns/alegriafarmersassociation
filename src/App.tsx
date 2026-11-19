@@ -3,7 +3,8 @@ import {
   OfficerRole, Member, Meeting, Resolution, 
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState,
   IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem,
-  PasswordResetResult, DelegationRequest, DelegationScope
+  PasswordResetResult, DelegationRequest, DelegationScope,
+  MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot
 } from './types';
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
@@ -44,6 +45,14 @@ import { computeFundBalances, getInitialFund } from './utils/fundBalance';
 import { getAvailableInventoryQuantity, getRentalStockStatus } from './utils/inventory';
 import { getActiveDelegationScopes } from './utils/delegation';
 import {
+  DEFAULT_MEMBERSHIP_DUES,
+  UNPAID_DUES_REASON,
+  buildMembershipYearSnapshot,
+  canCloseMembershipYear,
+  getPaidThroughYear,
+  hasPaymentForYear
+} from './utils/membership';
+import {
   Building, ShieldCheck, Megaphone, Users, Coins,
   Layers, CheckCircle, AlertTriangle, HelpCircle, ArrowRight, LogOut, Briefcase, FileText, ShoppingBag,
   ChevronLeft, ChevronRight, Database
@@ -73,6 +82,7 @@ interface StoredDeletedIds {
   achievements?: string[];
   funds?: string[];
   inventory?: string[];
+  membershipPayments?: string[];
 }
 
 /** Entities a push may carry, keyed by the override field that supplies them. */
@@ -86,6 +96,8 @@ const SYNC_ENTITY_KEYS = [
   ['activities', 'activities'],
   ['achievements', 'achievements'],
   ['inventory', 'inventory'],
+  ['membershipPayments', 'membershipPayments'],
+  ['membershipYearSnapshots', 'membershipYearSnapshots'],
 ] as const;
 
 /**
@@ -142,6 +154,12 @@ export function buildSyncPayload(params: {
     if (canWriteFinancials && overrides!.financialTransactions !== undefined) {
       payload.financialTransactions = overrides!.financialTransactions;
     }
+    if (canWriteFinancials && overrides!.membershipPayments !== undefined) {
+      payload.membershipPayments = overrides!.membershipPayments;
+    }
+    if (canWriteFinancials && overrides!.membershipYearSnapshots !== undefined) {
+      payload.membershipYearSnapshots = overrides!.membershipYearSnapshots;
+    }
     if (canWriteFinancials && overrides!.funds !== undefined) payload.funds = overrides!.funds;
     if (canWriteFinancials && overrides!.hogRaising !== undefined) payload.hogRaising = overrides!.hogRaising;
     if (overrides!.systemLogs !== undefined) payload.systemLogs = overrides!.systemLogs;
@@ -158,6 +176,8 @@ export function buildSyncPayload(params: {
     snapshotPayload.financialTransactions = snapshot.transactions;
     snapshotPayload.funds = snapshot.funds;
     snapshotPayload.hogRaising = snapshot.hogRaising;
+    snapshotPayload.membershipPayments = snapshot.membershipPayments;
+    snapshotPayload.membershipYearSnapshots = snapshot.membershipYearSnapshots;
   }
   snapshotPayload.deletedIds = deletedIds;
   return snapshotPayload;
@@ -199,6 +219,10 @@ export default function App() {
   // Association inventory registry — custodial duty of the Auditor (no Property Custodian officer exists)
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
+  // Annual membership dues ledger + the frozen rosters of closed membership years.
+  const [membershipPayments, setMembershipPayments] = useState<MembershipPayment[]>([]);
+  const [membershipYearSnapshots, setMembershipYearSnapshots] = useState<MembershipYearSnapshot[]>([]);
+  const [duesAmount, setDuesAmount] = useState<number>(DEFAULT_MEMBERSHIP_DUES);
   const [delegationRequests, setDelegationRequests] = useState<DelegationRequest[]>([]);
   const [isRefreshingDelegations, setIsRefreshingDelegations] = useState(false);
   const activeDelegationScopes = getActiveDelegationScopes(delegationRequests, currentUser?.id || '');
@@ -225,6 +249,8 @@ export default function App() {
     hogRaising: INITIAL_HOG_RAISING,
     funds: [] as OrganizationFund[],
     inventory: [] as InventoryItem[],
+    membershipPayments: [] as MembershipPayment[],
+    membershipYearSnapshots: [] as MembershipYearSnapshot[],
     logs: [] as SystemLog[]
   });
 
@@ -243,9 +269,11 @@ export default function App() {
       hogRaising,
       funds,
       inventory,
+      membershipPayments,
+      membershipYearSnapshots,
       logs
     };
-  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, achievements, hogRaising, funds, inventory, logs]);
+  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, achievements, hogRaising, funds, inventory, membershipPayments, membershipYearSnapshots, logs]);
 
   // Feedback State (Toasts)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' | 'error' } | null>(null);
@@ -264,11 +292,11 @@ export default function App() {
     let cancelled = false;
     const loadLocalData = async () => {
       try {
-        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_delegation_requests', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
+        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_delegation_requests', 'bafa_membership_payments', 'bafa_membership_year_snapshots', 'bafa_membership_dues_amount', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
         clearSecureItems(['bafa_hog_raising']);
         await migrateSecureItems(storageKeys);
       if (cancelled) return;
-      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests] = await Promise.all([
+      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests, storedMembershipPayments, storedMembershipYearSnapshots, storedDuesAmount] = await Promise.all([
         getSecureItem<Member[]>('bafa_members'),
         getSecureItem<Meeting[]>('bafa_meetings'),
         getSecureItem<Resolution[]>('bafa_resolutions'),
@@ -285,7 +313,10 @@ export default function App() {
         getSecureItem<User[]>('bafa_users'),
         getSecureItem<boolean>('bafa_pending_cloud_sync'),
         getSecureItem<StoredDeletedIds>('bafa_deleted_ids'),
-        getSecureItem<DelegationRequest[]>('bafa_delegation_requests')
+        getSecureItem<DelegationRequest[]>('bafa_delegation_requests'),
+        getSecureItem<MembershipPayment[]>('bafa_membership_payments'),
+        getSecureItem<MembershipYearSnapshot[]>('bafa_membership_year_snapshots'),
+        getSecureItem<number>('bafa_membership_dues_amount')
       ]);
       deletedIdsRef.current = storedDeletedIds || {};
       const hasStoredDeletions = Object.values(deletedIdsRef.current).some(ids => Array.isArray(ids) && ids.length > 0);
@@ -328,6 +359,10 @@ export default function App() {
         setInventory(storedInventory || []);
       }
       setDelegationRequests(Array.isArray(storedDelegationRequests) ? storedDelegationRequests : []);
+      setMembershipPayments(Array.isArray(storedMembershipPayments) ? storedMembershipPayments : []);
+      setMembershipYearSnapshots(Array.isArray(storedMembershipYearSnapshots) ? storedMembershipYearSnapshots : []);
+      const storedDues = Number(storedDuesAmount);
+      setDuesAmount(Number.isFinite(storedDues) && storedDues > 0 ? storedDues : DEFAULT_MEMBERSHIP_DUES);
 
       syncQueueRef.current = storedQueue || [];
       setSyncQueue(syncQueueRef.current);
@@ -496,6 +531,16 @@ export default function App() {
               ? mergeSyncRecordsById(cleanFunds, storedFunds || [], bootDeletedIds.funds) : cleanFunds;
             const syncedInventory = storedPendingCloudSync || hasQueuedEntity('inventory') || delInventory.size > 0
               ? mergeSyncRecordsById(cleanInventory, storedInventory || [], bootDeletedIds.inventory) : cleanInventory;
+            const delMembershipPayments = new Set(bootDeletedIds.membershipPayments || []);
+            const cleanMembershipPayments = Array.isArray(res.data.membershipPayments)
+              ? res.data.membershipPayments.filter((p: any) => !delMembershipPayments.has(p.id))
+              : [];
+            const syncedMembershipPayments = storedPendingCloudSync || hasQueuedEntity('membership_payment', 'membership_payments') || delMembershipPayments.size > 0
+              ? mergeSyncRecordsById(cleanMembershipPayments, storedMembershipPayments || [], bootDeletedIds.membershipPayments)
+              : cleanMembershipPayments;
+            const syncedMembershipYearSnapshots: MembershipYearSnapshot[] = Array.isArray(res.data.membershipYearSnapshots)
+              ? res.data.membershipYearSnapshots as MembershipYearSnapshot[]
+              : (storedMembershipYearSnapshots || []);
             const hasPendingHogChanges = storedPendingCloudSync || hasQueuedEntity('hog_expense', 'hog_sale', 'hog_chore', 'egg_harvest');
             const syncedHogRaising = hasPendingHogChanges && storedHogRaising
               ? storedHogRaising
@@ -516,6 +561,8 @@ export default function App() {
             if (Array.isArray(res.data.achievements) || hasPendingLocalChanges) { setAchievements(syncedAchievements); updateStorage('bafa_achievements', syncedAchievements); }
             if (Array.isArray(res.data.funds) || hasPendingLocalChanges) { setFunds(syncedFunds); updateStorage('bafa_funds', syncedFunds); }
             if (Array.isArray(res.data.inventory) || hasPendingLocalChanges) { setInventory(syncedInventory); updateStorage('bafa_inventory', syncedInventory); }
+            if (Array.isArray(res.data.membershipPayments) || hasPendingLocalChanges) { setMembershipPayments(syncedMembershipPayments); updateStorage('bafa_membership_payments', syncedMembershipPayments); }
+            if (Array.isArray(res.data.membershipYearSnapshots)) { setMembershipYearSnapshots(syncedMembershipYearSnapshots); updateStorage('bafa_membership_year_snapshots', syncedMembershipYearSnapshots); }
             if (res.data.hogRaising || hasPendingLocalChanges) { setHogRaising(syncedHogRaising); updateStorage('bafa_afa_igp', syncedHogRaising); }
             const cleanUsers = Array.isArray(res.data.users) ? res.data.users
                 .filter((u: any) => !delUsers.has(u.id))
@@ -571,6 +618,8 @@ export default function App() {
                 achievements: syncedAchievements,
                 funds: syncedFunds,
                 inventory: syncedInventory,
+                membershipPayments: syncedMembershipPayments,
+                membershipYearSnapshots: syncedMembershipYearSnapshots,
                 hogRaising: syncedHogRaising,
                 systemLogs: activeLogs,
                 deletedIds: bootDeletedIds
@@ -896,6 +945,8 @@ export default function App() {
       eggHarvests?: EggHarvestLog[];
       funds?: OrganizationFund[];
       inventory?: InventoryItem[];
+      membershipPayments?: MembershipPayment[];
+      membershipYearSnapshots?: MembershipYearSnapshot[];
       systemLogs?: SystemLog[];
       deletedIds?: StoredDeletedIds;
       roleUpdate?: { userId: string; role: OfficerRole | 'Member' };
@@ -986,6 +1037,8 @@ export default function App() {
             hogRaising: overrides?.hogRaising ?? appDataRef.current.hogRaising,
             funds: overrides?.funds ?? appDataRef.current.funds,
             inventory: overrides?.inventory ?? appDataRef.current.inventory,
+            membershipPayments: overrides?.membershipPayments ?? appDataRef.current.membershipPayments,
+            membershipYearSnapshots: overrides?.membershipYearSnapshots ?? appDataRef.current.membershipYearSnapshots,
             logs: overrides?.systemLogs ?? appDataRef.current.logs
           }
         : appDataRef.current;
@@ -1506,6 +1559,15 @@ export default function App() {
   };
 
   const handleUpdateMemberStatus = (id: string, status: 'Active' | 'Inactive') => {
+    // Re-activating by hand is not enough: the dues ledger for the current year
+    // is what puts a member on the list. Tell the officer instead of leaving a
+    // flag that reads "Active" while the roster still shows them unpaid.
+    if (status === 'Active' && !hasPaymentForYear(membershipPayments, id, new Date().getFullYear())) {
+      showToastMessage(
+        `Record the ${new Date().getFullYear()} membership dues first — paying is what lists a member again.`, 'warning'
+      );
+      return;
+    }
     const updated = members.map(m => m.id === id ? { ...m, status } : m);
     setMembers(updated);
     updateStorage('bafa_members', updated);
@@ -1520,6 +1582,240 @@ export default function App() {
     } else {
       addToSyncQueue('update', 'member', { id, status, name: mName });
     }
+  };
+
+  // ANNUAL MEMBERSHIP DUES
+  // The book closes every 31 December. A member is listed again only after the
+  // dues for the new year are recorded here — status is derived from the ledger,
+  // never hand-toggled.
+  const currentMembershipYear = new Date().getFullYear();
+
+  const handleRecordMembershipPayment = (
+    input: {
+      memberId: string;
+      year: number;
+      amount: number;
+      datePaid: string;
+      method: MembershipPaymentMethod;
+      referenceNo?: string;
+      notes?: string;
+    },
+    options?: { verifyImmediately?: boolean }
+  ) => {
+    if (!isTreasurerAuthorized(currentUser?.role)) {
+      showToastMessage('Only the Treasurer or Assistant Treasurer may record membership dues.', 'error');
+      return false;
+    }
+    const member = members.find(m => m.id === input.memberId);
+    if (!member) {
+      showToastMessage('Select a registered member before recording dues.', 'error');
+      return false;
+    }
+    if (member.status === 'Inactive' && member.inactiveReason && member.inactiveReason !== UNPAID_DUES_REASON) {
+      showToastMessage(`${member.name} was delisted (${member.inactiveReason}). Reinstate the member before recording dues.`, 'error');
+      return false;
+    }
+    const year = Math.floor(Number(input.year));
+    const amount = Number(input.amount);
+    if (!Number.isFinite(year) || year < 2000 || year > 2100) {
+      showToastMessage('Enter a valid membership year.', 'error');
+      return false;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToastMessage('Enter the amount actually received.', 'error');
+      return false;
+    }
+    if (hasPaymentForYear(membershipPayments, member.id, year)) {
+      showToastMessage(`${member.name} already has a recorded payment for ${year}.`, 'warning');
+      return false;
+    }
+
+    const now = new Date().toISOString();
+    const newPayment: MembershipPayment = {
+      id: `mp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      memberId: member.id,
+      memberName: member.name,
+      memberIdNumber: member.memberIdNumber,
+      year,
+      amount,
+      datePaid: input.datePaid,
+      method: input.method,
+      referenceNo: input.referenceNo?.trim() || undefined,
+      status: options?.verifyImmediately ? 'Verified' : 'Pending',
+      recordedBy: currentUser?.name || 'Treasurer',
+      recordedAt: now,
+      verifiedBy: options?.verifyImmediately ? (currentUser?.name || undefined) : undefined,
+      verifiedDate: options?.verifyImmediately ? now.split('T')[0] : undefined,
+      notes: input.notes?.trim() || undefined
+    };
+    const updatedPayments = [newPayment, ...membershipPayments];
+    setMembershipPayments(updatedPayments);
+    updateStorage('bafa_membership_payments', updatedPayments);
+
+    // Paying dues reinstates a member who was dropped for unpaid dues only. An
+    // officer-recorded removal (resigned, expelled) keeps its own reason.
+    const updatedMembers = members.map(m => m.id === member.id
+      ? {
+          ...m,
+          status: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.status : 'Active' as const,
+          membershipPaidThrough: getPaidThroughYear(updatedPayments, m.id),
+          inactiveReason: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.inactiveReason : undefined
+        }
+      : m);
+    setMembers(updatedMembers);
+    updateStorage('bafa_members', updatedMembers);
+
+    // Mirror the dues on the member's portal account so sign-in and the
+    // dashboard agree with the roster.
+    const linkedUserIds = new Set<string>();
+    const updatedUsers = users.map(u => {
+      const linked = u.id === member.id
+        || (member.memberIdNumber && u.memberIdNumber === member.memberIdNumber)
+        || (u.role === 'Member' && u.name.trim().toLowerCase() === member.name.trim().toLowerCase());
+      if (!linked) return u;
+      linkedUserIds.add(u.id);
+      const keepsInactive = u.status === 'Inactive' && u.inactiveReason && u.inactiveReason !== UNPAID_DUES_REASON;
+      return {
+        ...u,
+        status: keepsInactive ? 'Inactive' as const : 'Active' as const,
+        membershipPaidThrough: getPaidThroughYear(updatedPayments, member.id),
+        inactiveReason: keepsInactive ? u.inactiveReason : undefined
+      };
+    });
+    if (linkedUserIds.size > 0) {
+      setUsers(updatedUsers);
+      updateStorage('bafa_users', updatedUsers);
+    }
+
+    // Dues are income in the ledger, so the fund balance and the books agree.
+    const duesFund = funds.find(f => f.code.toUpperCase() === 'DUES') || funds[0];
+    const label = `Membership dues ${year} - ${member.memberIdNumber || member.name}${input.referenceNo?.trim() ? ` (OR ${input.referenceNo.trim()})` : ''}`;
+    if (duesFund) {
+      handleAddTransaction({
+        type: 'income',
+        category: 'Membership Dues',
+        amount,
+        date: input.datePaid,
+        description: label,
+        purpose: `Annual membership dues for ${year}`,
+        fundSource: `${duesFund.code} (${duesFund.name})`,
+        recordedBy: currentUser?.name || 'Treasurer'
+      });
+    }
+
+    if (isOnline) {
+      logAction('Recorded Membership Dues', `${member.name} paid PHP ${amount.toLocaleString()} for membership year ${year}.`);
+      pushAllDataToCloud({ membershipPayments: updatedPayments, members: updatedMembers, users: updatedUsers }, { silent: true, source: 'Membership Dues Recorded' });
+    } else {
+      addToSyncQueue('create', 'membership_payment', newPayment);
+    }
+    showToastMessage(`${member.name} is now listed as a member for ${year}.`, 'success');
+    return true;
+  };
+
+  const handleVoidMembershipPayment = (paymentId: string, reason: string) => {
+    if (!isTreasurerAuthorized(currentUser?.role)) {
+      showToastMessage('Only the Treasurer or Assistant Treasurer may void a dues receipt.', 'error');
+      return;
+    }
+    const target = membershipPayments.find(p => p.id === paymentId);
+    if (!target) return;
+    const today = new Date().toISOString().split('T')[0];
+    const updatedPayments = membershipPayments.map(p => p.id === paymentId
+      ? { ...p, status: 'Voided' as const, voidedBy: currentUser?.name || 'Treasurer', voidedDate: today, voidReason: reason.trim() || 'Voided by officer' }
+      : p);
+    setMembershipPayments(updatedPayments);
+    updateStorage('bafa_membership_payments', updatedPayments);
+
+    // The member's standing follows the ledger, so re-derive it from the remaining receipts.
+    const paidThrough = getPaidThroughYear(updatedPayments, target.memberId);
+    const stillPaidForCurrentYear = Boolean(paidThrough && paidThrough >= currentMembershipYear);
+    const updatedMembers = members.map(m => m.id === target.memberId ? {
+      ...m,
+      membershipPaidThrough: paidThrough,
+      status: stillPaidForCurrentYear || (m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON) ? m.status : 'Inactive' as const,
+      inactiveReason: stillPaidForCurrentYear ? m.inactiveReason : UNPAID_DUES_REASON
+    } : m);
+    setMembers(updatedMembers);
+    updateStorage('bafa_members', updatedMembers);
+
+    if (isOnline) {
+      logAction('Voided Membership Dues', `Voided the PHP ${target.amount.toLocaleString()} dues receipt of ${target.memberName} for ${target.year}: ${reason.trim() || 'No reason given'}`);
+      pushAllDataToCloud({ membershipPayments: updatedPayments, members: updatedMembers }, { silent: true, source: 'Membership Dues Voided' });
+    } else {
+      addToSyncQueue('update', 'membership_payment', { id: paymentId, action: 'void', reason });
+    }
+    showToastMessage(`Dues receipt for ${target.memberName} (${target.year}) voided.`, 'warning');
+  };
+
+  const handleCloseMembershipYear = (year: number, remarks?: string) => {
+    if (!isTreasurerAuthorized(currentUser?.role)) {
+      showToastMessage('Only the Treasurer or Assistant Treasurer may close a membership year.', 'error');
+      return;
+    }
+    if (!canCloseMembershipYear(membershipYearSnapshots, year)) {
+      showToastMessage(`Membership year ${year} is already closed.`, 'warning');
+      return;
+    }
+    const snapshot = buildMembershipYearSnapshot({
+      year,
+      members,
+      payments: membershipPayments,
+      duesAmount,
+      closedBy: currentUser?.name || 'Treasurer',
+      remarks
+    });
+    const updatedSnapshots = [snapshot, ...membershipYearSnapshots];
+    setMembershipYearSnapshots(updatedSnapshots);
+    updateStorage('bafa_membership_year_snapshots', updatedSnapshots);
+
+    // Members who did not settle are dropped from the active roster, with the
+    // reason recorded so a later payment is recognised as a renewal.
+    const unpaidIds = new Set(snapshot.unpaidMemberIds);
+    const updatedMembers = members.map(m => unpaidIds.has(m.id)
+      ? {
+          ...m,
+          status: 'Inactive' as const,
+          membershipPaidThrough: getPaidThroughYear(membershipPayments, m.id),
+          inactiveReason: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.inactiveReason : UNPAID_DUES_REASON
+        }
+      : m);
+    setMembers(updatedMembers);
+    updateStorage('bafa_members', updatedMembers);
+
+    const updatedUsers = users.map(u => {
+      const member = updatedMembers.find(m =>
+        m.id === u.id
+        || (m.memberIdNumber && u.memberIdNumber === m.memberIdNumber)
+        || (u.role === 'Member' && m.name.trim().toLowerCase() === u.name.trim().toLowerCase())
+      );
+      if (!member || !unpaidIds.has(member.id)) return u;
+      if (u.inactiveReason && u.inactiveReason !== UNPAID_DUES_REASON) return u;
+      return { ...u, status: 'Inactive' as const, inactiveReason: UNPAID_DUES_REASON, membershipPaidThrough: member.membershipPaidThrough };
+    });
+    if (JSON.stringify(updatedUsers) !== JSON.stringify(users)) {
+      setUsers(updatedUsers);
+      updateStorage('bafa_users', updatedUsers);
+    }
+
+    if (isOnline) {
+      logAction(
+        'Closed Membership Year',
+        `Closed membership year ${year}: ${snapshot.paidMembers} of ${snapshot.totalMembers} members paid, PHP ${snapshot.totalCollected.toLocaleString()} collected. ${snapshot.unpaidMembers} member(s) delisted.`
+      );
+      pushAllDataToCloud({ membershipYearSnapshots: updatedSnapshots, members: updatedMembers, users: updatedUsers }, { silent: true, source: 'Membership Year Closed' });
+    } else {
+      addToSyncQueue('create', 'membership_year_snapshot', snapshot);
+    }
+    showToastMessage(`Membership year ${year} closed. ${snapshot.paidMembers} listed, ${snapshot.unpaidMembers} delisted.`, 'success');
+  };
+
+  const handleUpdateDuesAmount = (amount: number) => {
+    if (!isTreasurerAuthorized(currentUser?.role)) return;
+    const next = Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : DEFAULT_MEMBERSHIP_DUES;
+    setDuesAmount(next);
+    updateStorage('bafa_membership_dues_amount', next);
+    logAction('Set Annual Dues', `Annual membership dues set to PHP ${next.toLocaleString()}.`);
   };
 
   const handleDeleteMember = async (id: string) => {
@@ -2764,6 +3060,10 @@ export default function App() {
       const nextAchievements = reconcile(data.achievements, local.achievements, pendingDeletes.achievements);
       const nextFunds = reconcile(data.funds, local.funds, pendingDeletes.funds);
       const nextInventory = reconcile(data.inventory, local.inventory, pendingDeletes.inventory);
+      const nextMembershipPayments = reconcile(data.membershipPayments, local.membershipPayments, pendingDeletes.membershipPayments);
+      const nextMembershipYearSnapshots = Array.isArray(data.membershipYearSnapshots)
+        ? data.membershipYearSnapshots as MembershipYearSnapshot[]
+        : local.membershipYearSnapshots;
       const nextLogs = reconcile(data.logs ?? data.systemLogs, local.logs);
       const nextHogRaising = hasPendingLocalChanges || !data.hogRaising
         ? local.hogRaising
@@ -2795,6 +3095,10 @@ export default function App() {
       updateStorage('bafa_funds', nextFunds);
       setInventory(nextInventory);
       updateStorage('bafa_inventory', nextInventory);
+      setMembershipPayments(nextMembershipPayments);
+      updateStorage('bafa_membership_payments', nextMembershipPayments);
+      setMembershipYearSnapshots(nextMembershipYearSnapshots);
+      updateStorage('bafa_membership_year_snapshots', nextMembershipYearSnapshots);
       setLogs(nextLogs);
       updateStorage('bafa_logs', nextLogs);
       if (data.hogRaising) {
@@ -3905,6 +4209,8 @@ export default function App() {
               products={products}
               activities={activities}
               users={users}
+              membershipPayments={membershipPayments}
+              duesAmount={duesAmount}
             />
           </Suspense>
         </main>
@@ -4283,6 +4589,8 @@ export default function App() {
                 onRequestDelegation={handleRequestDelegation}
                 onReviewDelegation={handleReviewDelegation}
                 onRevokeDelegation={handleRevokeDelegation}
+                membershipPayments={membershipPayments}
+                membershipYear={new Date().getFullYear()}
                 onUpdateUser={(updatedUser) => {
                   const exists = users.some(u => u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase());
                   const updated = exists
@@ -4325,6 +4633,8 @@ export default function App() {
                 users={users}
                 currentUser={currentUser!}
                 currentRole={currentRole}
+                membershipPayments={membershipPayments}
+                membershipYear={currentMembershipYear}
             onAddMember={async (memberData, loginCredentials) => {
                   if (loginCredentials && users.some((user) => user.username.toLowerCase() === loginCredentials.username.toLowerCase())) {
                     showToastMessage('That username is already in use.', 'error');
@@ -4364,6 +4674,14 @@ export default function App() {
                 users={users}
                 currentUser={currentUser!}
                 currentRole={currentRole}
+                members={members}
+                membershipPayments={membershipPayments}
+                membershipYearSnapshots={membershipYearSnapshots}
+                duesAmount={duesAmount}
+                onRecordMembershipPayment={handleRecordMembershipPayment}
+                onVoidMembershipPayment={handleVoidMembershipPayment}
+                onCloseMembershipYear={handleCloseMembershipYear}
+                onUpdateDuesAmount={handleUpdateDuesAmount}
               />
             )}
 
@@ -4515,6 +4833,8 @@ export default function App() {
                 products={products}
                 activities={activities}
                 users={users}
+                membershipPayments={membershipPayments}
+                duesAmount={duesAmount}
               />
             </div>
           )}

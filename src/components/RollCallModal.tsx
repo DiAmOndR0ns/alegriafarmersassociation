@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Member } from '../types';
+import { Member, MembershipPayment } from '../types';
+import { getDerivedMemberStatus } from '../utils/membership';
 import { 
   CheckCircle2, XCircle, AlertCircle, Search, 
   MapPin, Check, RefreshCw, Star, HelpCircle, 
@@ -13,6 +14,9 @@ interface RollCallModalProps {
   members: Member[];
   initialRecord?: Record<string, 'Present' | 'Absent' | 'Excused'>;
   onSave: (record: Record<string, 'Present' | 'Absent' | 'Excused'>) => void;
+  /** Dues receipts drive who counts as an active member for the year. */
+  membershipPayments?: MembershipPayment[];
+  membershipYear?: number;
 }
 
 export default function RollCallModal({
@@ -21,16 +25,20 @@ export default function RollCallModal({
   meetingTitle,
   members,
   initialRecord,
-  onSave
+  onSave,
+  membershipPayments = [],
+  membershipYear
 }: RollCallModalProps) {
   const [record, setRecord] = useState<Record<string, 'Present' | 'Absent' | 'Excused'>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSitio, setSelectedSitio] = useState('All');
+  const activeMembers = members.filter(m =>
+    getDerivedMemberStatus(m, membershipPayments, membershipYear ?? new Date().getFullYear()) === 'Active'
+  );
 
   // Load or initialize record when modal opens or members/initialRecord change
   useEffect(() => {
     if (isOpen) {
-      const activeMembers = members.filter(m => m.status === 'Active');
       const defaultRecord: Record<string, 'Present' | 'Absent' | 'Excused'> = {};
       
       activeMembers.forEach(member => {
@@ -44,11 +52,9 @@ export default function RollCallModal({
       });
       setRecord(defaultRecord);
     }
-  }, [isOpen, initialRecord, members]);
+  }, [isOpen, initialRecord, members, membershipPayments, membershipYear]);
 
   if (!isOpen) return null;
-
-  const activeMembers = members.filter(m => m.status === 'Active');
 
   // Filter members based on search and sitio
   const filteredMembers = activeMembers.filter(m => {

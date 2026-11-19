@@ -55,7 +55,9 @@ const APP_TABLES = [
   'achievements',
   'organization_funds',
   'auditor_reports',
-  'delegation_requests'
+  'delegation_requests',
+  'membership_payments',
+  'membership_year_snapshots'
 ];
 
 async function getLiveTableStats(pool: pg.Pool) {
