@@ -491,7 +491,62 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       }
     }
 
-    if (!isPresidentRole(user.role) && user.role.trim().toLowerCase() !== 'pio') {
+    const normalizedPushRole = user.role.trim().toLowerCase().replace(/\s+/g, '_');
+    const canManageProducts = ['president', 'treasurer', 'assistant_treasurer', 'auditor', 'pio'].includes(normalizedPushRole);
+    const canManagePublicFeed = normalizedPushRole === 'president' || normalizedPushRole === 'pio';
+
+    if (!canManageProducts) {
+      const stateKeys = Object.keys(state);
+      const isProductsOnlyMutation = stateKeys.length > 0 && stateKeys.every(key => ['products', 'deletedIds', 'deleteItem'].includes(key)) && (
+        'products' in state ||
+        (safeState.deleteItem && ['product', 'products'].includes(String(safeState.deleteItem.entity || '').toLowerCase())) ||
+        Boolean(safeState.deletedIds && Array.isArray((safeState.deletedIds as Record<string, unknown>).products) && ((safeState.deletedIds as Record<string, unknown>).products as unknown[]).length > 0)
+      );
+      if (isProductsOnlyMutation) {
+        return sendResponse(res, 403, {
+          success: false,
+          message: 'Only the President, PIO, Treasurer, Assistant Treasurer, or Auditor may manage catalog products.'
+        });
+      }
+      delete safeState.products;
+      if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
+        const { products: _deletedProducts, ...allowedDeletions } = safeState.deletedIds as Record<string, unknown>;
+        safeState.deletedIds = allowedDeletions;
+      }
+      if (safeState.deleteItem && ['product', 'products'].includes(String(safeState.deleteItem.entity || '').toLowerCase())) {
+        delete safeState.deleteItem;
+      }
+    }
+
+    if (!canManagePublicFeed && !isVicePresident) {
+      const stateKeys = Object.keys(state);
+      const isPublicFeedOnlyMutation = stateKeys.length > 0 && stateKeys.every(key => ['announcements', 'activities', 'deletedIds', 'deleteItem'].includes(key)) && (
+        'announcements' in state ||
+        'activities' in state ||
+        (safeState.deleteItem && ['announcement', 'announcements', 'activity', 'activities'].includes(String(safeState.deleteItem.entity || '').toLowerCase()))
+      );
+      if (isPublicFeedOnlyMutation) {
+        return sendResponse(res, 403, {
+          success: false,
+          message: 'Only the President, PIO, or a delegated Vice President may publish announcements or activities.'
+        });
+      }
+      delete safeState.announcements;
+      delete safeState.activities;
+      if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
+        const {
+          announcements: _deletedAnnouncements,
+          activities: _deletedActivities,
+          ...allowedDeletions
+        } = safeState.deletedIds as Record<string, unknown>;
+        safeState.deletedIds = allowedDeletions;
+      }
+      if (safeState.deleteItem && ['announcement', 'announcements', 'activity', 'activities'].includes(String(safeState.deleteItem.entity || '').toLowerCase())) {
+        delete safeState.deleteItem;
+      }
+    }
+
+    if (!isPresidentRole(user.role) && normalizedPushRole !== 'pio') {
       delete safeState.achievements;
       if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
         const { achievements: _deletedAchievements, ...allowedDeletions } = safeState.deletedIds;

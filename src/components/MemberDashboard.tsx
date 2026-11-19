@@ -249,38 +249,42 @@ export default function MemberDashboard({
   const unreadAnnouncementsCount = announcements.filter(ann => !readAnnouncements.includes(ann.id)).length;
 
   return (
-    <div id="member-dashboard-root" className="space-y-4 sm:space-y-5 text-[#2D3A22]">
+    <div id="member-dashboard-root" className="space-y-4 sm:space-y-5 text-[#163327]">
       
       {/* HEADER GREETING BANNER */}
-      <div className="bg-[#EAF4EC] text-[#1B4332] p-5 sm:p-6 rounded-3xl border-2 border-[#2D6A4F]/30 no-print text-left shadow-sm">
-        <div className="space-y-1.5 min-w-0">
+      <div className="dim-card-mint p-4 sm:p-6 rounded-3xl no-print text-left">
+        <div className="space-y-2 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="bg-[#1B4332] text-[#D8F3DC] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+            <span className="bg-[#1B4332] text-[#FFF0C2] text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
               AFA Regular Member
             </span>
-            <span className="bg-amber-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm">
-              <ShieldCheck className="w-3 h-3" />
+            <span className="bg-[#FFF0C2] text-[#7A4904] border border-[#E9B34A]/60 text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               Active Member
             </span>
-            <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">
-              📍 {currentUser.farmLocation || 'Tuburan, Cebu'}
+            <span className="bg-white/90 text-[#1B4332] border border-[#1B4332]/20 text-xs font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-[#C2410C] shrink-0" aria-hidden="true" />
+              {currentUser.farmLocation || 'Tuburan, Cebu'}
             </span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-black text-[#1B4332] font-display break-words">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#1B4332] font-display break-words leading-tight">
             Maayong Pag-abot, {currentUser.name}!
           </h2>
         </div>
       </div>
 
-      {/* MEMBER NAVIGATION TABS BAR (Senior Citizen Accessible) */}
-      <nav className="bg-white border-2 border-[#D5CFC1] p-1.5 sm:p-2 rounded-2xl shadow-sm no-print" aria-label="Member Navigation Tabs">
-        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+      {/* MEMBER NAVIGATION TABS BAR (Desktop/Tablet for standalone Member Portal; inline 2-tab bar when embedded in Officer Suite) */}
+      <nav
+        className={`dim-card p-1.5 sm:p-2 rounded-2xl no-print ${isMemberPortalMode ? 'hidden md:block' : 'block'}`}
+        aria-label="Member Navigation Tabs"
+      >
+        <div className="filter-bar items-center">
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
-            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'profile'
-                ? 'bg-[#1B4332] text-white shadow-md'
+                ? 'bg-[#1B4332] text-white shadow-sm'
                 : 'text-[#1B4332] hover:bg-[#EAF4EC]'
             }`}
           >
@@ -292,17 +296,17 @@ export default function MemberDashboard({
             <button
               type="button"
               onClick={() => setActiveTab('announcements')}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'announcements'
-                  ? 'bg-[#1B4332] text-white shadow-md'
+                  ? 'bg-[#1B4332] text-white shadow-sm'
                   : 'text-[#1B4332] hover:bg-[#EAF4EC]'
               }`}
             >
               <Megaphone className="w-4 h-4 shrink-0" />
               <span>Mga Pahibalo</span>
               {unreadAnnouncementsCount > 0 && (
-                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
-                  activeTab === 'announcements' ? 'bg-amber-400 text-slate-900' : 'bg-rose-600 text-white'
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full font-mono ${
+                  activeTab === 'announcements' ? 'bg-[#F4C76D] text-[#163327]' : 'bg-[#C2410C] text-white'
                 }`}>
                   {unreadAnnouncementsCount}
                 </span>
@@ -314,9 +318,9 @@ export default function MemberDashboard({
             <button
               type="button"
               onClick={() => setActiveTab('hog-raising')}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'hog-raising'
-                  ? 'bg-[#1B4332] text-white shadow-md'
+                  ? 'bg-[#1B4332] text-white shadow-sm'
                   : 'text-[#1B4332] hover:bg-[#EAF4EC]'
               }`}
             >
@@ -329,17 +333,17 @@ export default function MemberDashboard({
             <button
               type="button"
               onClick={() => setActiveTab('products')}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'products'
-                  ? 'bg-[#1B4332] text-white shadow-md'
+                  ? 'bg-[#1B4332] text-white shadow-sm'
                   : 'text-[#1B4332] hover:bg-[#EAF4EC]'
               }`}
             >
               <ShoppingBag className="w-4 h-4 shrink-0" />
               <span>Merkado / Abot</span>
               {publishedProductsCount > 0 && (
-                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
-                  activeTab === 'products' ? 'bg-[#D8F3DC] text-[#1B4332]' : 'bg-[#EAF4EC] text-[#1B4332]'
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full font-mono ${
+                  activeTab === 'products' ? 'bg-[#D6EFD9] text-[#1B4332]' : 'bg-[#EAF4EC] text-[#1B4332]'
                 }`}>
                   {publishedProductsCount}
                 </span>
@@ -350,17 +354,17 @@ export default function MemberDashboard({
           <button
             type="button"
             onClick={() => setActiveTab('activities')}
-            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'activities'
-                ? 'bg-[#1B4332] text-white shadow-md'
+                ? 'bg-[#1B4332] text-white shadow-sm'
                 : 'text-[#1B4332] hover:bg-[#EAF4EC]'
             }`}
           >
             <Calendar className="w-4 h-4 shrink-0" />
             <span>Kalihokan</span>
             {activities.length > 0 && (
-              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full font-mono ${
-                activeTab === 'activities' ? 'bg-[#D8F3DC] text-[#1B4332]' : 'bg-[#EAF4EC] text-[#1B4332]'
+              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full font-mono ${
+                activeTab === 'activities' ? 'bg-[#D6EFD9] text-[#1B4332]' : 'bg-[#EAF4EC] text-[#1B4332]'
               }`}>
                 {activities.length}
               </span>
@@ -1365,6 +1369,43 @@ export default function MemberDashboard({
         </div>
 
       </div>
+
+      {/* FIXED 5-TAB MEMBER MOBILE BOTTOM DOCK (<768px) */}
+      {isMemberPortalMode && (
+        <nav aria-label="Member mobile navigation" className="mobile-bottom-dock cols-5 no-print">
+          {([
+            { id: 'profile' as const, label: 'Profile', icon: UserIcon, badge: 0 },
+            { id: 'announcements' as const, label: 'Pahibalo', icon: Megaphone, badge: unreadAnnouncementsCount },
+            { id: 'hog-raising' as const, label: 'IGP', icon: Sprout, badge: 0 },
+            { id: 'products' as const, label: 'Merkado', icon: ShoppingBag, badge: 0 },
+            { id: 'activities' as const, label: 'Kalihokan', icon: Calendar, badge: 0 }
+          ]).map(({ id, label, icon: Icon, badge }) => {
+            const isActive = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-current={isActive ? 'page' : undefined}
+                onClick={() => {
+                  setActiveTab(id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`mobile-dock-btn relative ${isActive ? 'is-active' : ''}`}
+              >
+                <span className="relative inline-flex">
+                  <Icon className="w-[19px] h-[19px] shrink-0" aria-hidden="true" />
+                  {badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-4 h-4 px-1 rounded-full bg-[#C2410C] text-white font-mono text-[9px] font-extrabold flex items-center justify-center">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  )}
+                </span>
+                <span className="mobile-dock-label">{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
 
     </div>
   );

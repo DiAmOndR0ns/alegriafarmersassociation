@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { 
-  OfficerRole, Member, Meeting, Resolution, 
+import {
+  OfficerRole, Member, Meeting, Resolution,
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState,
-  IgpExpense, IgpSale, EggHarvestLog, Product, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem,
+  IgpExpense, IgpSale, EggHarvestLog, Product, PublicProduct, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem,
   PasswordResetResult, DelegationRequest, DelegationScope,
   MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot
 } from './types';
+import type { PublicSummary } from './components/GuestPortal';
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
   INITIAL_TRANSACTIONS, INITIAL_ANNOUNCEMENTS, INITIAL_LOGS, INITIAL_HOG_RAISING,
@@ -188,7 +189,49 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [guestMode, setGuestMode] = useState<boolean>(true);
+  const [showPrivacyPage, setShowPrivacyPage] = useState<boolean>(
+    () => typeof window !== 'undefined' && (window.location.pathname === '/privacy' || window.location.pathname === '/privacy/')
+  );
+  const [cachedPublicSummary, setCachedPublicSummary] = useState<PublicSummary | null>(null);
+  const [cachedPublicAchievements, setCachedPublicAchievements] = useState<AssociationAchievement[] | null>(null);
+  const [cachedPublicProducts, setCachedPublicProducts] = useState<PublicProduct[] | null>(null);
   const [dismissedPasswordWarningFor, setDismissedPasswordWarningFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      setShowPrivacyPage(path === '/privacy' || path === '/privacy/');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const openPrivacyInApp = () => {
+    setShowPrivacyPage(true);
+    if (typeof window !== 'undefined' && typeof window.history?.pushState === 'function') {
+      window.history.pushState({ view: 'privacy' }, '', '/privacy');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const closePrivacyInApp = () => {
+    setShowPrivacyPage(false);
+    if (typeof window !== 'undefined' && typeof window.history?.pushState === 'function') {
+      window.history.pushState({ view: 'portal' }, '', '/');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handlePublicDataLoaded = (payload: {
+    summary?: PublicSummary;
+    achievements?: AssociationAchievement[];
+    products?: PublicProduct[];
+  }) => {
+    if (payload.summary) setCachedPublicSummary(payload.summary);
+    if (payload.achievements) setCachedPublicAchievements(payload.achievements);
+    if (payload.products) setCachedPublicProducts(payload.products);
+  };
 
   // Connection and Sync State
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -295,276 +338,307 @@ export default function App() {
         const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_delegation_requests', 'bafa_membership_payments', 'bafa_membership_year_snapshots', 'bafa_membership_dues_amount', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
         clearSecureItems(['bafa_hog_raising']);
         await migrateSecureItems(storageKeys);
-      if (cancelled) return;
-      const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests, storedMembershipPayments, storedMembershipYearSnapshots, storedDuesAmount] = await Promise.all([
-        getSecureItem<Member[]>('bafa_members'),
-        getSecureItem<Meeting[]>('bafa_meetings'),
-        getSecureItem<Resolution[]>('bafa_resolutions'),
-        getSecureItem<FinancialTransaction[]>('bafa_transactions'),
-        getSecureItem<Announcement[]>('bafa_announcements'),
-        getSecureItem<HogRaisingState>('bafa_afa_igp'),
-        getSecureItem<Product[]>('bafa_products'),
-        getSecureItem<AssociationActivity[]>('bafa_activities'),
-        getSecureItem<AssociationAchievement[]>('bafa_achievements'),
-        getSecureItem<OrganizationFund[]>('bafa_funds'),
-        getSecureItem<InventoryItem[]>('bafa_inventory'),
-        getSecureItem<SyncQueueItem[]>('bafa_sync_queue'),
-        getSecureItem<SystemLog[]>('bafa_logs'),
-        getSecureItem<User[]>('bafa_users'),
-        getSecureItem<boolean>('bafa_pending_cloud_sync'),
-        getSecureItem<StoredDeletedIds>('bafa_deleted_ids'),
-        getSecureItem<DelegationRequest[]>('bafa_delegation_requests'),
-        getSecureItem<MembershipPayment[]>('bafa_membership_payments'),
-        getSecureItem<MembershipYearSnapshot[]>('bafa_membership_year_snapshots'),
-        getSecureItem<number>('bafa_membership_dues_amount')
-      ]);
-      deletedIdsRef.current = storedDeletedIds || {};
-      const hasStoredDeletions = Object.values(deletedIdsRef.current).some(ids => Array.isArray(ids) && ids.length > 0);
-      setHasPendingCloudSync(Boolean(storedPendingCloudSync) || Boolean(storedQueue?.length) || hasStoredDeletions);
+        if (cancelled) return;
+        const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests, storedMembershipPayments, storedMembershipYearSnapshots, storedDuesAmount] = await Promise.all([
+          getSecureItem<Member[]>('bafa_members'),
+          getSecureItem<Meeting[]>('bafa_meetings'),
+          getSecureItem<Resolution[]>('bafa_resolutions'),
+          getSecureItem<FinancialTransaction[]>('bafa_transactions'),
+          getSecureItem<Announcement[]>('bafa_announcements'),
+          getSecureItem<HogRaisingState>('bafa_afa_igp'),
+          getSecureItem<Product[]>('bafa_products'),
+          getSecureItem<AssociationActivity[]>('bafa_activities'),
+          getSecureItem<AssociationAchievement[]>('bafa_achievements'),
+          getSecureItem<OrganizationFund[]>('bafa_funds'),
+          getSecureItem<InventoryItem[]>('bafa_inventory'),
+          getSecureItem<SyncQueueItem[]>('bafa_sync_queue'),
+          getSecureItem<SystemLog[]>('bafa_logs'),
+          getSecureItem<User[]>('bafa_users'),
+          getSecureItem<boolean>('bafa_pending_cloud_sync'),
+          getSecureItem<StoredDeletedIds>('bafa_deleted_ids'),
+          getSecureItem<DelegationRequest[]>('bafa_delegation_requests'),
+          getSecureItem<MembershipPayment[]>('bafa_membership_payments'),
+          getSecureItem<MembershipYearSnapshot[]>('bafa_membership_year_snapshots'),
+          getSecureItem<number>('bafa_membership_dues_amount')
+        ]);
+        deletedIdsRef.current = storedDeletedIds || {};
+        const hasStoredDeletions = Object.values(deletedIdsRef.current).some(ids => Array.isArray(ids) && ids.length > 0);
+        setHasPendingCloudSync(Boolean(storedPendingCloudSync) || Boolean(storedQueue?.length) || hasStoredDeletions);
 
-      // Detect and clear legacy dummy seed data from previous versions (e.g. Roberto Cañete / m-001)
-      const storedMembersText = JSON.stringify(storedMembers || []);
-      const hasOldSeedMembers = storedMembersText.includes('m-001') || storedMembersText.includes('Roberto M. Cañete') || storedMembersText.includes('Juanito') || storedMembersText.includes('user-m1');
-      if (hasOldSeedMembers) {
-        console.log('[Auto-Cleanup]: Detected legacy dummy seed data in local cache. Cleaning storage for real data...');
-        clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_afa_igp']);
-        setMembers([]);
-        setMeetings([]);
-        setResolutions([]);
-        setTransactions([]);
-        setAnnouncements([]);
-        setProducts([]);
-        setActivities([]);
-        setAchievements([]);
-        setFunds([]);
-        setHogRaising(INITIAL_HOG_RAISING);
-      } else {
-        setMembers(storedMembers || INITIAL_MEMBERS);
-        setMeetings(storedMeetings || INITIAL_MEETINGS);
-        setResolutions(storedResolutions || INITIAL_RESOLUTIONS);
-        setTransactions(storedTransactions || INITIAL_TRANSACTIONS);
-        setAnnouncements(storedAnnouncements || INITIAL_ANNOUNCEMENTS);
-        setHogRaising(storedHogRaising || INITIAL_HOG_RAISING);
-        const legacySeedProductIds = new Set(['prod-chairs-rental', 'prod-sacks-rental', 'prod-coffee', 'prod-corn', 'prod-coconut']);
-        const localProducts = Array.isArray(storedProducts)
-          ? storedProducts.filter(product => !legacySeedProductIds.has(product.id))
-          : [];
-        setProducts(localProducts);
-        if (localProducts.length !== (storedProducts?.length || 0)) {
-          updateStorage('bafa_products', localProducts);
-        }
-        setActivities(storedActivities || INITIAL_ACTIVITIES);
-        setAchievements(storedAchievements || []);
-        setFunds(storedFunds || INITIAL_FUNDS);
-        setInventory(storedInventory || []);
-      }
-      setDelegationRequests(Array.isArray(storedDelegationRequests) ? storedDelegationRequests : []);
-      setMembershipPayments(Array.isArray(storedMembershipPayments) ? storedMembershipPayments : []);
-      setMembershipYearSnapshots(Array.isArray(storedMembershipYearSnapshots) ? storedMembershipYearSnapshots : []);
-      const storedDues = Number(storedDuesAmount);
-      setDuesAmount(Number.isFinite(storedDues) && storedDues > 0 ? storedDues : DEFAULT_MEMBERSHIP_DUES);
-
-      syncQueueRef.current = storedQueue || [];
-      setSyncQueue(syncQueueRef.current);
-
-      const parsedUsers = storedUsers || [];
-      // Filter out any dummy members from users and strip any plain-text passwords
-      const sanitizedUsers = (Array.isArray(parsedUsers) ? parsedUsers : [])
-        .filter((u: any) => u.role !== 'Member' || !u.id.startsWith('user-m'))
-        .map((u: any) => {
-          const copy = { ...u };
-          const isPresident = copy.role?.toLowerCase() === 'president';
-          if (isPresident) {
-            copy.mfaEnabled = true;
+        // Detect and clear legacy dummy seed data from previous versions (e.g. Roberto Cañete / m-001)
+        const storedMembersText = JSON.stringify(storedMembers || []);
+        const hasOldSeedMembers = storedMembersText.includes('m-001') || storedMembersText.includes('Roberto M. Cañete') || storedMembersText.includes('Juanito') || storedMembersText.includes('user-m1');
+        if (hasOldSeedMembers) {
+          console.log('[Auto-Cleanup]: Detected legacy dummy seed data in local cache. Cleaning storage for real data...');
+          clearSecureItems(['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_afa_igp']);
+          setMembers([]);
+          setMeetings([]);
+          setResolutions([]);
+          setTransactions([]);
+          setAnnouncements([]);
+          setProducts([]);
+          setActivities([]);
+          setAchievements([]);
+          setFunds([]);
+          setHogRaising(INITIAL_HOG_RAISING);
+        } else {
+          setMembers(storedMembers || INITIAL_MEMBERS);
+          setMeetings(storedMeetings || INITIAL_MEETINGS);
+          setResolutions(storedResolutions || INITIAL_RESOLUTIONS);
+          setTransactions(storedTransactions || INITIAL_TRANSACTIONS);
+          setAnnouncements(storedAnnouncements || INITIAL_ANNOUNCEMENTS);
+          setHogRaising(storedHogRaising || INITIAL_HOG_RAISING);
+          const legacySeedProductIds = new Set(['prod-chairs-rental', 'prod-sacks-rental', 'prod-coffee', 'prod-corn', 'prod-coconut']);
+          const localProducts = Array.isArray(storedProducts)
+            ? storedProducts.filter(product => !legacySeedProductIds.has(product.id))
+            : [];
+          setProducts(localProducts);
+          if (localProducts.length !== (storedProducts?.length || 0)) {
+            updateStorage('bafa_products', localProducts);
           }
-          const hadLegacyPlaintext = Boolean(copy.password);
-          if (copy.password) {
-            copy.passwordHash = copy.passwordHash?.startsWith('$2') ? copy.passwordHash : hashPolicyPassword(copy.password);
-            copy.passwordChangedAt = copy.passwordChangedAt || new Date(0).toISOString();
-            copy.passwordHistory = copy.passwordHistory || [];
-            copy.mustChangePassword = true;
-            delete copy.password;
-          }
-          if (hadLegacyPlaintext || !copy.passwordHash?.startsWith('$2')) copy.mustChangePassword = true;
-          if (!copy.passwordHistory) copy.passwordHistory = [];
-          return copy;
-        });
-      setUsers(sanitizedUsers);
-      await setSecureItem('bafa_users', sanitizedUsers);
-
-      const storedCurr = await getSecureItem<User>('bafa_current_user');
-      if (storedCurr?.password) {
-        const safeCurrentUser = { ...storedCurr };
-        delete safeCurrentUser.password;
-        await setSecureItem('bafa_current_user', safeCurrentUser);
-      }
-      if (storedCurr && !cancelled) {
-        const safeUser = { ...storedCurr };
-        delete safeUser.password;
-        delete safeUser.passwordHash;
-        delete safeUser.passwordHistory;
-        if (safeUser.role?.toLowerCase() === 'president') {
-          safeUser.mfaEnabled = true;
+          setActivities(storedActivities || INITIAL_ACTIVITIES);
+          setAchievements(storedAchievements || []);
+          setFunds(storedFunds || INITIAL_FUNDS);
+          setInventory(storedInventory || []);
         }
-        setCurrentUser(safeUser);
-        if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
-        setGuestMode(false);
-      }
+        setDelegationRequests(Array.isArray(storedDelegationRequests) ? storedDelegationRequests : []);
+        setMembershipPayments(Array.isArray(storedMembershipPayments) ? storedMembershipPayments : []);
+        setMembershipYearSnapshots(Array.isArray(storedMembershipYearSnapshots) ? storedMembershipYearSnapshots : []);
+        const storedDues = Number(storedDuesAmount);
+        setDuesAmount(Number.isFinite(storedDues) && storedDues > 0 ? storedDues : DEFAULT_MEMBERSHIP_DUES);
 
-      const rawLogs = storedLogs || INITIAL_LOGS;
-      const needsChaining = rawLogs.some((l: any) => !l.hash || !l.previousHash);
-      const activeLogs = needsChaining ? buildAuditChain(rawLogs) : rawLogs;
-      if (needsChaining) {
-        updateStorage('bafa_logs', activeLogs);
-      }
-      setLogs(activeLogs);
+        syncQueueRef.current = storedQueue || [];
+        setSyncQueue(syncQueueRef.current);
 
-      // Check authenticated session before completing hydration
-      try {
-        const sessionRes = await fetch('/api/auth/session', { credentials: 'same-origin' });
-        if (sessionRes.ok) {
-          const result = await sessionRes.json();
-          if (result?.authenticated && result.user && !cancelled) {
-            const safeUser = { ...result.user } as User;
-            delete safeUser.password;
-            delete safeUser.passwordHash;
-            delete safeUser.passwordHistory;
-            setCurrentUser(safeUser);
-            if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
-            setGuestMode(false);
-            setUsers(previous => [safeUser, ...previous.filter(user => user.id !== safeUser.id)]);
-            if (typeof result.hasPresident === 'boolean') {
-              setDbStatus(prev => ({ ...prev, hasPresident: result.hasPresident }));
+        const parsedUsers = storedUsers || [];
+        // Filter out any dummy members from users and strip any plain-text passwords
+        const sanitizedUsers = (Array.isArray(parsedUsers) ? parsedUsers : [])
+          .filter((u: any) => u.role !== 'Member' || !u.id.startsWith('user-m'))
+          .map((u: any) => {
+            const copy = { ...u };
+            const isPresident = copy.role?.toLowerCase() === 'president';
+            if (isPresident) {
+              copy.mfaEnabled = true;
             }
-          } else if (!result?.authenticated && (import.meta.env.PROD || result?.configured) && !cancelled) {
-            // No server session: the visitor is not signed in. Stay on the guest
-            // portal (guestMode defaults to true) instead of forcing the login
-            // form. `dbStatus.hasPresident` is only populated after a live status
-            // check, so never leave a stale `false` standing here, or the login
-            // screen offers "First-Time Setup" even though a President exists.
-            setCurrentUser(null);
-            void removeSecureItem('bafa_current_user');
-            setDbStatus(prev => (typeof result.hasPresident === 'boolean'
-              ? { ...prev, hasPresident: result.hasPresident }
-              : (prev.hasPresident ? prev : { ...prev, hasPresident: undefined })));
-          }
-        }
-      } catch {
-        // Offline or session endpoint unreachable
-      }
-
-      // Initial database status check
-      checkDatabaseConnection();
-      void runNightlyBackupCheck();
-      if (!cancelled) {
-        setIsHydrating(false);
-      }
-
-      // Attempt pulling fresh data from PostgreSQL Cloud Database if online
-      fetch('/api/sync/pull')
-        .then(async res => {
-          const text = await res.text();
+            const hadLegacyPlaintext = Boolean(copy.password);
+            if (copy.password) {
+              copy.passwordHash = copy.passwordHash?.startsWith('$2') ? copy.passwordHash : hashPolicyPassword(copy.password);
+              copy.passwordChangedAt = copy.passwordChangedAt || new Date(0).toISOString();
+              copy.passwordHistory = copy.passwordHistory || [];
+              copy.mustChangePassword = true;
+              delete copy.password;
+            }
+            if (hadLegacyPlaintext || !copy.passwordHash?.startsWith('$2')) copy.mustChangePassword = true;
+            if (!copy.passwordHistory) copy.passwordHistory = [];
+            return copy;
+          });
+        let finalLocalUsers = sanitizedUsers;
+        if (import.meta.env.DEV) {
           try {
-            return JSON.parse(text);
-          } catch {
-            return { offlineMode: true, success: false };
-          }
-        })
-        .then(res => {
-          if (res?.success && res.data) {
-            // Pending deletes are derived from the encrypted sync queue.
-            let bootDeletedIds: StoredDeletedIds = {};
-            try {
-              bootDeletedIds = getStoredDeletedIds(storedQueue || []);
-            } catch {}
-
-            const hasPendingLocalChanges = Boolean(storedPendingCloudSync) || Boolean(storedQueue?.length) || hasStoredDeletions;
-            const hasQueuedEntity = (...entities: string[]) => storedQueue?.some(item =>
-              entities.includes(String(item.entityType).toLowerCase())
-            ) || false;
-            const delUsers = new Set(bootDeletedIds.users || []);
-            const delMembers = new Set(bootDeletedIds.members || []);
-            const delMeetings = new Set(bootDeletedIds.meetings || []);
-            const delResolutions = new Set(bootDeletedIds.resolutions || []);
-            const delTx = new Set([...(bootDeletedIds.financialTransactions || []), ...(bootDeletedIds.transactions || [])]);
-            const delAnnouncements = new Set(bootDeletedIds.announcements || []);
-            const delProducts = new Set(bootDeletedIds.products || []);
-            const delActivities = new Set(bootDeletedIds.activities || []);
-            const delAchievements = new Set(bootDeletedIds.achievements || []);
-            const delFunds = new Set(bootDeletedIds.funds || []);
-            const delInventory = new Set(bootDeletedIds.inventory || []);
-
-            const cleanMembers = Array.isArray(res.data.members) ? res.data.members.filter((m: any) => !delMembers.has(m.id)) : [];
-            const cleanMeetings = Array.isArray(res.data.meetings) ? res.data.meetings.filter((m: any) => !delMeetings.has(m.id)) : [];
-            const cleanResolutions = Array.isArray(res.data.resolutions) ? res.data.resolutions.filter((r: any) => !delResolutions.has(r.id)) : [];
-            const cleanTx = Array.isArray(res.data.financialTransactions) ? res.data.financialTransactions.filter((t: any) => !delTx.has(t.id)) : [];
-            const cleanAnnouncements = Array.isArray(res.data.announcements) ? res.data.announcements.filter((a: any) => !delAnnouncements.has(a.id)) : [];
-            const cleanProducts = Array.isArray(res.data.products) ? res.data.products.filter((p: any) => !delProducts.has(p.id)) : [];
-            const cleanActivities = Array.isArray(res.data.activities) ? res.data.activities.filter((a: any) => !delActivities.has(a.id)) : [];
-            const localMembers = hasOldSeedMembers ? [] : storedMembers || [];
-            const legacySeedProductIds = new Set(['prod-chairs-rental', 'prod-sacks-rental', 'prod-coffee', 'prod-corn', 'prod-coconut']);
-            const localProducts = Array.isArray(storedProducts)
-              ? storedProducts.filter(product => !legacySeedProductIds.has(product.id))
-              : [];
-            const syncedMembers = storedPendingCloudSync || hasQueuedEntity('member') || delMembers.size > 0
-              ? mergeSyncRecordsById(cleanMembers, localMembers, bootDeletedIds.members) : cleanMembers;
-            const syncedMeetings = storedPendingCloudSync || hasQueuedEntity('meeting') || delMeetings.size > 0
-              ? mergeSyncRecordsById(cleanMeetings, storedMeetings || [], bootDeletedIds.meetings) : cleanMeetings;
-            const syncedResolutions = storedPendingCloudSync || hasQueuedEntity('resolution') || delResolutions.size > 0
-              ? mergeSyncRecordsById(cleanResolutions, storedResolutions || [], bootDeletedIds.resolutions) : cleanResolutions;
-            const syncedTransactions = storedPendingCloudSync || hasQueuedEntity('transaction') || delTx.size > 0
-              ? mergeSyncRecordsById(cleanTx, storedTransactions || [], bootDeletedIds.financialTransactions) : cleanTx;
-            const syncedAnnouncements = storedPendingCloudSync || hasQueuedEntity('announcement') || delAnnouncements.size > 0
-              ? mergeSyncRecordsById(cleanAnnouncements, storedAnnouncements || [], bootDeletedIds.announcements) : cleanAnnouncements;
-            const syncedProducts = storedPendingCloudSync || hasQueuedEntity('product') || delProducts.size > 0
-              ? mergeSyncRecordsById(cleanProducts, localProducts, bootDeletedIds.products) : cleanProducts;
-            const syncedActivities = storedPendingCloudSync || hasQueuedEntity('activity') || delActivities.size > 0
-              ? mergeSyncRecordsById(cleanActivities, storedActivities || [], bootDeletedIds.activities) : cleanActivities;
-            const achievementSource = Array.isArray(res.data.achievements) ? res.data.achievements : [];
-            const cleanAchievements = achievementSource.filter((achievement: AssociationAchievement) => !delAchievements.has(achievement.id));
-            const cleanFunds = Array.isArray(res.data.funds) ? res.data.funds.filter((f: any) => !delFunds.has(f.id)) : [];
-            const cleanInventory = Array.isArray(res.data.inventory) ? res.data.inventory.filter((i: any) => !delInventory.has(i.id)) : [];
-            const syncedAchievements = storedPendingCloudSync || hasQueuedEntity('achievement') || delAchievements.size > 0
-              ? mergeSyncRecordsById(cleanAchievements, storedAchievements || [], bootDeletedIds.achievements)
-              : cleanAchievements;
-            const syncedFunds = storedPendingCloudSync || hasQueuedEntity('fund') || delFunds.size > 0
-              ? mergeSyncRecordsById(cleanFunds, storedFunds || [], bootDeletedIds.funds) : cleanFunds;
-            const syncedInventory = storedPendingCloudSync || hasQueuedEntity('inventory') || delInventory.size > 0
-              ? mergeSyncRecordsById(cleanInventory, storedInventory || [], bootDeletedIds.inventory) : cleanInventory;
-            const delMembershipPayments = new Set(bootDeletedIds.membershipPayments || []);
-            const cleanMembershipPayments = Array.isArray(res.data.membershipPayments)
-              ? res.data.membershipPayments.filter((p: any) => !delMembershipPayments.has(p.id))
-              : [];
-            const syncedMembershipPayments = storedPendingCloudSync || hasQueuedEntity('membership_payment', 'membership_payments') || delMembershipPayments.size > 0
-              ? mergeSyncRecordsById(cleanMembershipPayments, storedMembershipPayments || [], bootDeletedIds.membershipPayments)
-              : cleanMembershipPayments;
-            const syncedMembershipYearSnapshots: MembershipYearSnapshot[] = Array.isArray(res.data.membershipYearSnapshots)
-              ? res.data.membershipYearSnapshots as MembershipYearSnapshot[]
-              : (storedMembershipYearSnapshots || []);
-            const hasPendingHogChanges = storedPendingCloudSync || hasQueuedEntity('hog_expense', 'hog_sale', 'hog_chore', 'egg_harvest');
-            const syncedHogRaising = hasPendingHogChanges && storedHogRaising
-              ? storedHogRaising
-              : res.data.hogRaising || storedHogRaising || INITIAL_HOG_RAISING;
-
-            if (Array.isArray(res.data.members) || hasPendingLocalChanges) { setMembers(syncedMembers); updateStorage('bafa_members', syncedMembers); }
-            if (Array.isArray(res.data.meetings) || hasPendingLocalChanges) { setMeetings(syncedMeetings); updateStorage('bafa_meetings', syncedMeetings); }
-            if (Array.isArray(res.data.resolutions) || hasPendingLocalChanges) { setResolutions(syncedResolutions); updateStorage('bafa_resolutions', syncedResolutions); }
-            if (Array.isArray(res.data.financialTransactions) || hasPendingLocalChanges) { setTransactions(syncedTransactions); updateStorage('bafa_transactions', syncedTransactions); }
-            if (Array.isArray(res.data.announcements) || hasPendingLocalChanges) { setAnnouncements(syncedAnnouncements); updateStorage('bafa_announcements', syncedAnnouncements); }
-            if (Array.isArray(res.data.products) || hasPendingLocalChanges) { setProducts(syncedProducts); updateStorage('bafa_products', syncedProducts); }
-            if (Array.isArray(res.data.activities) || hasPendingLocalChanges) { setActivities(syncedActivities); updateStorage('bafa_activities', syncedActivities); }
-            if (Array.isArray(res.data.delegationRequests)) {
-              const syncedDelegations = res.data.delegationRequests as DelegationRequest[];
-              setDelegationRequests(syncedDelegations);
-              updateStorage('bafa_delegation_requests', syncedDelegations);
+            const devRes = await fetch('/api/dev/local-officers');
+            if (devRes.ok) {
+              const devData = await devRes.json();
+              if (devData?.success && Array.isArray(devData.officers) && devData.officers.length > 0) {
+                const merged = [...sanitizedUsers];
+                for (const devOfficer of devData.officers) {
+                  const existingIdx = merged.findIndex(
+                    (u: any) =>
+                      u.id === devOfficer.id ||
+                      String(u.username || '').toLowerCase() === String(devOfficer.username || '').toLowerCase()
+                  );
+                  if (existingIdx === -1) {
+                    const hasRoleAlready = devOfficer.role !== 'Board_Member' &&
+                      merged.some((u: any) => u.role === devOfficer.role);
+                    if (!hasRoleAlready) {
+                      merged.push(devOfficer);
+                    }
+                  } else if (String(merged[existingIdx].id || '').startsWith('local-officer-')) {
+                    merged[existingIdx] = { ...merged[existingIdx], ...devOfficer };
+                  }
+                }
+                finalLocalUsers = merged;
+              }
             }
-            if (Array.isArray(res.data.achievements) || hasPendingLocalChanges) { setAchievements(syncedAchievements); updateStorage('bafa_achievements', syncedAchievements); }
-            if (Array.isArray(res.data.funds) || hasPendingLocalChanges) { setFunds(syncedFunds); updateStorage('bafa_funds', syncedFunds); }
-            if (Array.isArray(res.data.inventory) || hasPendingLocalChanges) { setInventory(syncedInventory); updateStorage('bafa_inventory', syncedInventory); }
-            if (Array.isArray(res.data.membershipPayments) || hasPendingLocalChanges) { setMembershipPayments(syncedMembershipPayments); updateStorage('bafa_membership_payments', syncedMembershipPayments); }
-            if (Array.isArray(res.data.membershipYearSnapshots)) { setMembershipYearSnapshots(syncedMembershipYearSnapshots); updateStorage('bafa_membership_year_snapshots', syncedMembershipYearSnapshots); }
-            if (res.data.hogRaising || hasPendingLocalChanges) { setHogRaising(syncedHogRaising); updateStorage('bafa_afa_igp', syncedHogRaising); }
-            const cleanUsers = Array.isArray(res.data.users) ? res.data.users
+          } catch {
+            // Ignore when offline or outside local dev server.
+          }
+        }
+        setUsers(finalLocalUsers);
+        await setSecureItem('bafa_users', finalLocalUsers);
+
+        const storedCurr = await getSecureItem<User>('bafa_current_user');
+        if (storedCurr?.password) {
+          const safeCurrentUser = { ...storedCurr };
+          delete safeCurrentUser.password;
+          await setSecureItem('bafa_current_user', safeCurrentUser);
+        }
+        if (storedCurr && !cancelled) {
+          const safeUser = { ...storedCurr };
+          delete safeUser.password;
+          delete safeUser.passwordHash;
+          delete safeUser.passwordHistory;
+          if (safeUser.role?.toLowerCase() === 'president') {
+            safeUser.mfaEnabled = true;
+          }
+          setCurrentUser(safeUser);
+          if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
+          setGuestMode(false);
+        }
+
+        const rawLogs = storedLogs || INITIAL_LOGS;
+        const needsChaining = rawLogs.some((l: any) => !l.hash || !l.previousHash);
+        const activeLogs = needsChaining ? buildAuditChain(rawLogs) : rawLogs;
+        if (needsChaining) {
+          updateStorage('bafa_logs', activeLogs);
+        }
+        setLogs(activeLogs);
+
+        // Check authenticated session before completing hydration
+        try {
+          const sessionRes = await fetch('/api/auth/session', { credentials: 'same-origin' });
+          if (sessionRes.ok) {
+            const result = await sessionRes.json();
+            if (result?.authenticated && result.user && !cancelled) {
+              const safeUser = { ...result.user } as User;
+              delete safeUser.password;
+              delete safeUser.passwordHash;
+              delete safeUser.passwordHistory;
+              setCurrentUser(safeUser);
+              if (safeUser.role !== 'Member') setCurrentRole(safeUser.role as OfficerRole);
+              setGuestMode(false);
+              setUsers(previous => [safeUser, ...previous.filter(user => user.id !== safeUser.id)]);
+              if (typeof result.hasPresident === 'boolean') {
+                setDbStatus(prev => ({ ...prev, hasPresident: result.hasPresident }));
+              }
+            } else if (!result?.authenticated && (import.meta.env.PROD || result?.configured) && !cancelled) {
+              // No server session: the visitor is not signed in. Stay on the guest
+              // portal (guestMode defaults to true) instead of forcing the login
+              // form. `dbStatus.hasPresident` is only populated after a live status
+              // check, so never leave a stale `false` standing here, or the login
+              // screen offers "First-Time Setup" even though a President exists.
+              setCurrentUser(null);
+              void removeSecureItem('bafa_current_user');
+              setDbStatus(prev => (typeof result.hasPresident === 'boolean'
+                ? { ...prev, hasPresident: result.hasPresident }
+                : (prev.hasPresident ? prev : { ...prev, hasPresident: undefined })));
+            }
+          }
+        } catch {
+          // Offline or session endpoint unreachable
+        }
+
+        // Initial database status check
+        checkDatabaseConnection();
+        void runNightlyBackupCheck();
+        if (!cancelled) {
+          setIsHydrating(false);
+        }
+
+        // Attempt pulling fresh data from PostgreSQL Cloud Database if online
+        fetch('/api/sync/pull')
+          .then(async res => {
+            const text = await res.text();
+            try {
+              return JSON.parse(text);
+            } catch {
+              return { offlineMode: true, success: false };
+            }
+          })
+          .then(res => {
+            if (res?.success && res.data) {
+              // Pending deletes are derived from the encrypted sync queue.
+              let bootDeletedIds: StoredDeletedIds = {};
+              try {
+                bootDeletedIds = getStoredDeletedIds(storedQueue || []);
+              } catch { }
+
+              const hasPendingLocalChanges = Boolean(storedPendingCloudSync) || Boolean(storedQueue?.length) || hasStoredDeletions;
+              const hasQueuedEntity = (...entities: string[]) => storedQueue?.some(item =>
+                entities.includes(String(item.entityType).toLowerCase())
+              ) || false;
+              const delUsers = new Set(bootDeletedIds.users || []);
+              const delMembers = new Set(bootDeletedIds.members || []);
+              const delMeetings = new Set(bootDeletedIds.meetings || []);
+              const delResolutions = new Set(bootDeletedIds.resolutions || []);
+              const delTx = new Set([...(bootDeletedIds.financialTransactions || []), ...(bootDeletedIds.transactions || [])]);
+              const delAnnouncements = new Set(bootDeletedIds.announcements || []);
+              const delProducts = new Set(bootDeletedIds.products || []);
+              const delActivities = new Set(bootDeletedIds.activities || []);
+              const delAchievements = new Set(bootDeletedIds.achievements || []);
+              const delFunds = new Set(bootDeletedIds.funds || []);
+              const delInventory = new Set(bootDeletedIds.inventory || []);
+
+              const cleanMembers = Array.isArray(res.data.members) ? res.data.members.filter((m: any) => !delMembers.has(m.id)) : [];
+              const cleanMeetings = Array.isArray(res.data.meetings) ? res.data.meetings.filter((m: any) => !delMeetings.has(m.id)) : [];
+              const cleanResolutions = Array.isArray(res.data.resolutions) ? res.data.resolutions.filter((r: any) => !delResolutions.has(r.id)) : [];
+              const cleanTx = Array.isArray(res.data.financialTransactions) ? res.data.financialTransactions.filter((t: any) => !delTx.has(t.id)) : [];
+              const cleanAnnouncements = Array.isArray(res.data.announcements) ? res.data.announcements.filter((a: any) => !delAnnouncements.has(a.id)) : [];
+              const cleanProducts = Array.isArray(res.data.products) ? res.data.products.filter((p: any) => !delProducts.has(p.id)) : [];
+              const cleanActivities = Array.isArray(res.data.activities) ? res.data.activities.filter((a: any) => !delActivities.has(a.id)) : [];
+              const localMembers = hasOldSeedMembers ? [] : storedMembers || [];
+              const legacySeedProductIds = new Set(['prod-chairs-rental', 'prod-sacks-rental', 'prod-coffee', 'prod-corn', 'prod-coconut']);
+              const localProducts = Array.isArray(storedProducts)
+                ? storedProducts.filter(product => !legacySeedProductIds.has(product.id))
+                : [];
+              const syncedMembers = storedPendingCloudSync || hasQueuedEntity('member') || delMembers.size > 0
+                ? mergeSyncRecordsById(cleanMembers, localMembers, bootDeletedIds.members) : cleanMembers;
+              const syncedMeetings = storedPendingCloudSync || hasQueuedEntity('meeting') || delMeetings.size > 0
+                ? mergeSyncRecordsById(cleanMeetings, storedMeetings || [], bootDeletedIds.meetings) : cleanMeetings;
+              const syncedResolutions = storedPendingCloudSync || hasQueuedEntity('resolution') || delResolutions.size > 0
+                ? mergeSyncRecordsById(cleanResolutions, storedResolutions || [], bootDeletedIds.resolutions) : cleanResolutions;
+              const syncedTransactions = storedPendingCloudSync || hasQueuedEntity('transaction') || delTx.size > 0
+                ? mergeSyncRecordsById(cleanTx, storedTransactions || [], bootDeletedIds.financialTransactions) : cleanTx;
+              const syncedAnnouncements = storedPendingCloudSync || hasQueuedEntity('announcement') || delAnnouncements.size > 0
+                ? mergeSyncRecordsById(cleanAnnouncements, storedAnnouncements || [], bootDeletedIds.announcements) : cleanAnnouncements;
+              const syncedProducts = storedPendingCloudSync || hasQueuedEntity('product') || delProducts.size > 0
+                ? mergeSyncRecordsById(cleanProducts, localProducts, bootDeletedIds.products) : cleanProducts;
+              const syncedActivities = storedPendingCloudSync || hasQueuedEntity('activity') || delActivities.size > 0
+                ? mergeSyncRecordsById(cleanActivities, storedActivities || [], bootDeletedIds.activities) : cleanActivities;
+              const achievementSource = Array.isArray(res.data.achievements) ? res.data.achievements : [];
+              const cleanAchievements = achievementSource.filter((achievement: AssociationAchievement) => !delAchievements.has(achievement.id));
+              const cleanFunds = Array.isArray(res.data.funds) ? res.data.funds.filter((f: any) => !delFunds.has(f.id)) : [];
+              const cleanInventory = Array.isArray(res.data.inventory) ? res.data.inventory.filter((i: any) => !delInventory.has(i.id)) : [];
+              const syncedAchievements = storedPendingCloudSync || hasQueuedEntity('achievement') || delAchievements.size > 0
+                ? mergeSyncRecordsById(cleanAchievements, storedAchievements || [], bootDeletedIds.achievements)
+                : cleanAchievements;
+              const syncedFunds = storedPendingCloudSync || hasQueuedEntity('fund') || delFunds.size > 0
+                ? mergeSyncRecordsById(cleanFunds, storedFunds || [], bootDeletedIds.funds) : cleanFunds;
+              const syncedInventory = storedPendingCloudSync || hasQueuedEntity('inventory') || delInventory.size > 0
+                ? mergeSyncRecordsById(cleanInventory, storedInventory || [], bootDeletedIds.inventory) : cleanInventory;
+              const delMembershipPayments = new Set(bootDeletedIds.membershipPayments || []);
+              const cleanMembershipPayments = Array.isArray(res.data.membershipPayments)
+                ? res.data.membershipPayments.filter((p: any) => !delMembershipPayments.has(p.id))
+                : [];
+              const syncedMembershipPayments = storedPendingCloudSync || hasQueuedEntity('membership_payment', 'membership_payments') || delMembershipPayments.size > 0
+                ? mergeSyncRecordsById(cleanMembershipPayments, storedMembershipPayments || [], bootDeletedIds.membershipPayments)
+                : cleanMembershipPayments;
+              const syncedMembershipYearSnapshots: MembershipYearSnapshot[] = Array.isArray(res.data.membershipYearSnapshots)
+                ? res.data.membershipYearSnapshots as MembershipYearSnapshot[]
+                : (storedMembershipYearSnapshots || []);
+              const hasPendingHogChanges = storedPendingCloudSync || hasQueuedEntity('hog_expense', 'hog_sale', 'hog_chore', 'egg_harvest');
+              const syncedHogRaising = hasPendingHogChanges && storedHogRaising
+                ? storedHogRaising
+                : res.data.hogRaising || storedHogRaising || INITIAL_HOG_RAISING;
+
+              if (Array.isArray(res.data.members) || hasPendingLocalChanges) { setMembers(syncedMembers); updateStorage('bafa_members', syncedMembers); }
+              if (Array.isArray(res.data.meetings) || hasPendingLocalChanges) { setMeetings(syncedMeetings); updateStorage('bafa_meetings', syncedMeetings); }
+              if (Array.isArray(res.data.resolutions) || hasPendingLocalChanges) { setResolutions(syncedResolutions); updateStorage('bafa_resolutions', syncedResolutions); }
+              if (Array.isArray(res.data.financialTransactions) || hasPendingLocalChanges) { setTransactions(syncedTransactions); updateStorage('bafa_transactions', syncedTransactions); }
+              if (Array.isArray(res.data.announcements) || hasPendingLocalChanges) { setAnnouncements(syncedAnnouncements); updateStorage('bafa_announcements', syncedAnnouncements); }
+              if (Array.isArray(res.data.products) || hasPendingLocalChanges) { setProducts(syncedProducts); updateStorage('bafa_products', syncedProducts); }
+              if (Array.isArray(res.data.activities) || hasPendingLocalChanges) { setActivities(syncedActivities); updateStorage('bafa_activities', syncedActivities); }
+              if (Array.isArray(res.data.delegationRequests)) {
+                const syncedDelegations = res.data.delegationRequests as DelegationRequest[];
+                setDelegationRequests(syncedDelegations);
+                updateStorage('bafa_delegation_requests', syncedDelegations);
+              }
+              if (Array.isArray(res.data.achievements) || hasPendingLocalChanges) { setAchievements(syncedAchievements); updateStorage('bafa_achievements', syncedAchievements); }
+              if (Array.isArray(res.data.funds) || hasPendingLocalChanges) { setFunds(syncedFunds); updateStorage('bafa_funds', syncedFunds); }
+              if (Array.isArray(res.data.inventory) || hasPendingLocalChanges) { setInventory(syncedInventory); updateStorage('bafa_inventory', syncedInventory); }
+              if (Array.isArray(res.data.membershipPayments) || hasPendingLocalChanges) { setMembershipPayments(syncedMembershipPayments); updateStorage('bafa_membership_payments', syncedMembershipPayments); }
+              if (Array.isArray(res.data.membershipYearSnapshots)) { setMembershipYearSnapshots(syncedMembershipYearSnapshots); updateStorage('bafa_membership_year_snapshots', syncedMembershipYearSnapshots); }
+              if (res.data.hogRaising || hasPendingLocalChanges) { setHogRaising(syncedHogRaising); updateStorage('bafa_afa_igp', syncedHogRaising); }
+              const cleanUsers = Array.isArray(res.data.users) ? res.data.users
                 .filter((u: any) => !delUsers.has(u.id))
                 .map((user: User) => {
                   // The database row is the source of truth for credentials. Older rows store a
@@ -586,67 +660,67 @@ export default function App() {
                   upgraded.mustChangePassword = false;
                   return upgraded;
                 }) : [];
-            const syncedUsers = storedPendingCloudSync || hasQueuedEntity('user', 'officer', 'member') || delUsers.size > 0
-              ? mergeSyncRecordsById(cleanUsers, sanitizedUsers, bootDeletedIds.users)
-              : cleanUsers;
-            if (Array.isArray(res.data.users) || hasPendingLocalChanges) {
-              setUsers(syncedUsers);
-              updateStorage('bafa_users', syncedUsers);
-              if (isOnline && syncedUsers.some((user: User) => !user.passwordHash?.startsWith('$2'))) {
-                pushAllDataToCloud({ users: syncedUsers }, { silent: true, source: 'Password Hash Upgrade' });
+              const syncedUsers = storedPendingCloudSync || hasQueuedEntity('user', 'officer', 'member') || delUsers.size > 0
+                ? mergeSyncRecordsById(cleanUsers, sanitizedUsers, bootDeletedIds.users)
+                : cleanUsers;
+              if (Array.isArray(res.data.users) || hasPendingLocalChanges) {
+                setUsers(syncedUsers);
+                updateStorage('bafa_users', syncedUsers);
+                if (isOnline && syncedUsers.some((user: User) => !user.passwordHash?.startsWith('$2'))) {
+                  pushAllDataToCloud({ users: syncedUsers }, { silent: true, source: 'Password Hash Upgrade' });
+                }
               }
-            }
-            console.log('[Cloud DB] Successfully loaded fresh data from PostgreSQL Cloud DB');
-            setDbStatus(prev => ({
-              ...prev,
-              connected: true,
-              configured: true,
-              checking: false,
-            }));
+              console.log('[Cloud DB] Successfully loaded fresh data from PostgreSQL Cloud DB');
+              setDbStatus(prev => ({
+                ...prev,
+                connected: true,
+                configured: true,
+                checking: false,
+              }));
 
-            if (hasPendingLocalChanges) {
-              console.log('[Auto-Sync]: Found locally pending changes. Merged them with cloud records and queued a full sync.');
-              void pushAllDataToCloud({
-                users: syncedUsers,
-                members: syncedMembers,
-                meetings: syncedMeetings,
-                resolutions: syncedResolutions,
-                financialTransactions: syncedTransactions,
-                announcements: syncedAnnouncements,
-                products: syncedProducts,
-                activities: syncedActivities,
-                achievements: syncedAchievements,
-                funds: syncedFunds,
-                inventory: syncedInventory,
-                membershipPayments: syncedMembershipPayments,
-                membershipYearSnapshots: syncedMembershipYearSnapshots,
-                hogRaising: syncedHogRaising,
-                systemLogs: activeLogs,
-                deletedIds: bootDeletedIds
-              }, { silent: true, source: 'Boot Sync' });
+              if (hasPendingLocalChanges) {
+                console.log('[Auto-Sync]: Found locally pending changes. Merged them with cloud records and queued a full sync.');
+                void pushAllDataToCloud({
+                  users: syncedUsers,
+                  members: syncedMembers,
+                  meetings: syncedMeetings,
+                  resolutions: syncedResolutions,
+                  financialTransactions: syncedTransactions,
+                  announcements: syncedAnnouncements,
+                  products: syncedProducts,
+                  activities: syncedActivities,
+                  achievements: syncedAchievements,
+                  funds: syncedFunds,
+                  inventory: syncedInventory,
+                  membershipPayments: syncedMembershipPayments,
+                  membershipYearSnapshots: syncedMembershipYearSnapshots,
+                  hogRaising: syncedHogRaising,
+                  systemLogs: activeLogs,
+                  deletedIds: bootDeletedIds
+                }, { silent: true, source: 'Boot Sync' });
+              }
+            } else if (res?.offlineMode) {
+              console.log('[Cloud DB] Running in offline / local-first storage mode.');
             }
-          } else if (res?.offlineMode) {
-            console.log('[Cloud DB] Running in offline / local-first storage mode.');
-          }
-        })
-        .catch(err => console.log('[Cloud DB Offline / Unreachable]: using local state', err));
-    } catch (e) {
-      console.error('Error reading encrypted local storage: ', e);
-      // Fallback
-      setMembers(INITIAL_MEMBERS);
-      setMeetings(INITIAL_MEETINGS);
-      setResolutions(INITIAL_RESOLUTIONS);
-      setTransactions(INITIAL_TRANSACTIONS);
-      setAnnouncements(INITIAL_ANNOUNCEMENTS);
-      setHogRaising(INITIAL_HOG_RAISING);
-      setAchievements([]);
-      setFunds(INITIAL_FUNDS);
-      setInventory([]);
-      syncQueueRef.current = [];
-      setSyncQueue([]);
-      setLogs(INITIAL_LOGS);
-      setUsers([]);
-    }
+          })
+          .catch(err => console.log('[Cloud DB Offline / Unreachable]: using local state', err));
+      } catch (e) {
+        console.error('Error reading encrypted local storage: ', e);
+        // Fallback
+        setMembers(INITIAL_MEMBERS);
+        setMeetings(INITIAL_MEETINGS);
+        setResolutions(INITIAL_RESOLUTIONS);
+        setTransactions(INITIAL_TRANSACTIONS);
+        setAnnouncements(INITIAL_ANNOUNCEMENTS);
+        setHogRaising(INITIAL_HOG_RAISING);
+        setAchievements([]);
+        setFunds(INITIAL_FUNDS);
+        setInventory([]);
+        syncQueueRef.current = [];
+        setSyncQueue([]);
+        setLogs(INITIAL_LOGS);
+        setUsers([]);
+      }
     };
     void loadLocalData();
     return () => { cancelled = true; };
@@ -847,7 +921,7 @@ export default function App() {
             console.log(`[Cloud DB Delete]: Successfully removed ${entity} (${ids.join(', ')}) directly from database`);
             isSuccess = true;
           }
-        } catch {}
+        } catch { }
       }
 
       // If /api/db/delete failed or returned 404 (common on edge/Vercel before redeployment), fallback to /api/sync/push
@@ -869,7 +943,7 @@ export default function App() {
               console.log(`[Cloud DB Delete Fallback]: Successfully processed deletion via /api/sync/push for ${entity}`);
               isSuccess = true;
             }
-          } catch {}
+          } catch { }
         }
       }
 
@@ -1024,23 +1098,23 @@ export default function App() {
         && Object.keys(overrides).some(key => (overrides as Record<string, unknown>)[key] !== undefined);
       const snap = overrideHasEntries
         ? {
-            ...appDataRef.current,
-            users: overrides?.users ?? appDataRef.current.users,
-            members: overrides?.members ?? appDataRef.current.members,
-            meetings: overrides?.meetings ?? appDataRef.current.meetings,
-            resolutions: overrides?.resolutions ?? appDataRef.current.resolutions,
-            transactions: overrides?.financialTransactions ?? appDataRef.current.transactions,
-            announcements: overrides?.announcements ?? appDataRef.current.announcements,
-            products: overrides?.products ?? appDataRef.current.products,
-            activities: overrides?.activities ?? appDataRef.current.activities,
-            achievements: overrides?.achievements ?? appDataRef.current.achievements,
-            hogRaising: overrides?.hogRaising ?? appDataRef.current.hogRaising,
-            funds: overrides?.funds ?? appDataRef.current.funds,
-            inventory: overrides?.inventory ?? appDataRef.current.inventory,
-            membershipPayments: overrides?.membershipPayments ?? appDataRef.current.membershipPayments,
-            membershipYearSnapshots: overrides?.membershipYearSnapshots ?? appDataRef.current.membershipYearSnapshots,
-            logs: overrides?.systemLogs ?? appDataRef.current.logs
-          }
+          ...appDataRef.current,
+          users: overrides?.users ?? appDataRef.current.users,
+          members: overrides?.members ?? appDataRef.current.members,
+          meetings: overrides?.meetings ?? appDataRef.current.meetings,
+          resolutions: overrides?.resolutions ?? appDataRef.current.resolutions,
+          transactions: overrides?.financialTransactions ?? appDataRef.current.transactions,
+          announcements: overrides?.announcements ?? appDataRef.current.announcements,
+          products: overrides?.products ?? appDataRef.current.products,
+          activities: overrides?.activities ?? appDataRef.current.activities,
+          achievements: overrides?.achievements ?? appDataRef.current.achievements,
+          hogRaising: overrides?.hogRaising ?? appDataRef.current.hogRaising,
+          funds: overrides?.funds ?? appDataRef.current.funds,
+          inventory: overrides?.inventory ?? appDataRef.current.inventory,
+          membershipPayments: overrides?.membershipPayments ?? appDataRef.current.membershipPayments,
+          membershipYearSnapshots: overrides?.membershipYearSnapshots ?? appDataRef.current.membershipYearSnapshots,
+          logs: overrides?.systemLogs ?? appDataRef.current.logs
+        }
         : appDataRef.current;
       const payload = buildSyncPayload({
         overrides,
@@ -1656,11 +1730,11 @@ export default function App() {
     // officer-recorded removal (resigned, expelled) keeps its own reason.
     const updatedMembers = members.map(m => m.id === member.id
       ? {
-          ...m,
-          status: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.status : 'Active' as const,
-          membershipPaidThrough: getPaidThroughYear(updatedPayments, m.id),
-          inactiveReason: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.inactiveReason : undefined
-        }
+        ...m,
+        status: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.status : 'Active' as const,
+        membershipPaidThrough: getPaidThroughYear(updatedPayments, m.id),
+        inactiveReason: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.inactiveReason : undefined
+      }
       : m);
     setMembers(updatedMembers);
     updateStorage('bafa_members', updatedMembers);
@@ -1774,11 +1848,11 @@ export default function App() {
     const unpaidIds = new Set(snapshot.unpaidMemberIds);
     const updatedMembers = members.map(m => unpaidIds.has(m.id)
       ? {
-          ...m,
-          status: 'Inactive' as const,
-          membershipPaidThrough: getPaidThroughYear(membershipPayments, m.id),
-          inactiveReason: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.inactiveReason : UNPAID_DUES_REASON
-        }
+        ...m,
+        status: 'Inactive' as const,
+        membershipPaidThrough: getPaidThroughYear(membershipPayments, m.id),
+        inactiveReason: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.inactiveReason : UNPAID_DUES_REASON
+      }
       : m);
     setMembers(updatedMembers);
     updateStorage('bafa_members', updatedMembers);
@@ -1863,7 +1937,7 @@ export default function App() {
       // Await direct deletes, then dispatch state push with explicit deletedIds payload
       try {
         await Promise.allSettled(deletePromises);
-      } catch {}
+      } catch { }
 
       const allDeleted = getStoredDeletedIds();
       pushAllDataToCloud(
@@ -2479,19 +2553,19 @@ export default function App() {
       ? products.map(product => product.id === linkedProduct.id
         ? shouldUnlinkRentalProduct
           ? {
-              ...product,
-              isPublished: false,
-              quantityAvailable: '0 available',
-              stockStatus: 'Out of Stock' as const
-            }
+            ...product,
+            isPublished: false,
+            quantityAvailable: '0 available',
+            stockStatus: 'Out of Stock' as const
+          }
           : {
-              ...product,
-              name: updatedItem.name,
-              specs: updatedItem.notes || undefined,
-              quantityAvailable: `${getAvailableInventoryQuantity(updatedItem)} ${updatedItem.unit} available`,
-              stockStatus: getRentalStockStatus(updatedItem),
-              dateUpdated: new Date().toISOString().split('T')[0]
-            }
+            ...product,
+            name: updatedItem.name,
+            specs: updatedItem.notes || undefined,
+            quantityAvailable: `${getAvailableInventoryQuantity(updatedItem)} ${updatedItem.unit} available`,
+            stockStatus: getRentalStockStatus(updatedItem),
+            dateUpdated: new Date().toISOString().split('T')[0]
+          }
         : product)
       : products;
     setInventory(updated);
@@ -2787,12 +2861,12 @@ export default function App() {
     const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = meetings.map(m => m.id === id
       ? {
-          ...m,
-          minutesApprovalStatus: 'Approved' as const,
-          approvedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
-          approvedDate: new Date().toISOString().split('T')[0],
-          approvalRemarks: remarks
-        }
+        ...m,
+        minutesApprovalStatus: 'Approved' as const,
+        approvedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
+        approvedDate: new Date().toISOString().split('T')[0],
+        approvalRemarks: remarks
+      }
       : m);
     setMeetings(updated);
     updateStorage('bafa_meetings', updated);
@@ -2811,12 +2885,12 @@ export default function App() {
     const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = meetings.map(m => m.id === id
       ? {
-          ...m,
-          minutesApprovalStatus: 'Returned' as const,
-          approvedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
-          approvedDate: new Date().toISOString().split('T')[0],
-          approvalRemarks: remarks
-        }
+        ...m,
+        minutesApprovalStatus: 'Returned' as const,
+        approvedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
+        approvedDate: new Date().toISOString().split('T')[0],
+        approvalRemarks: remarks
+      }
       : m);
     setMeetings(updated);
     updateStorage('bafa_meetings', updated);
@@ -2836,12 +2910,12 @@ export default function App() {
     const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = transactions.map(t => t.id === id
       ? {
-          ...t,
-          presidentApprovalStatus: 'Approved' as const,
-          presidentApprovedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
-          presidentApprovedDate: new Date().toISOString().split('T')[0],
-          presidentApprovalRemarks: remarks
-        }
+        ...t,
+        presidentApprovalStatus: 'Approved' as const,
+        presidentApprovedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
+        presidentApprovedDate: new Date().toISOString().split('T')[0],
+        presidentApprovalRemarks: remarks
+      }
       : t);
     setTransactions(updated);
     updateStorage('bafa_transactions', updated);
@@ -2865,12 +2939,12 @@ export default function App() {
     const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = transactions.map(t => t.id === id
       ? {
-          ...t,
-          presidentApprovalStatus: 'Returned' as const,
-          presidentApprovedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
-          presidentApprovedDate: new Date().toISOString().split('T')[0],
-          presidentApprovalRemarks: remarks
-        }
+        ...t,
+        presidentApprovalStatus: 'Returned' as const,
+        presidentApprovedBy: `${approvingOfficer} (${currentUser?.name || getOfficerName(currentRole)})`,
+        presidentApprovedDate: new Date().toISOString().split('T')[0],
+        presidentApprovalRemarks: remarks
+      }
       : t);
     setTransactions(updated);
     updateStorage('bafa_transactions', updated);
@@ -3300,23 +3374,51 @@ export default function App() {
     updateStorage('bafa_users', updated);
   };
 
-  const handleRequestPasswordReset = (username: string) => {
+  const handleRequestPasswordReset = async (username: string, sitio: string) => {
+    if (isOnline && (import.meta.env.PROD || dbStatus.configured)) {
+      try {
+        const response = await fetch('/api/auth/password/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, sitio })
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) {
+          showToastMessage(result?.message || 'Palihug sulayi pag-usab ang hangyo sa pag-reset.', 'error');
+          return;
+        }
+        showToastMessage(
+          'Kung adunay account nga motakdo, na-queue na ang imong hangyo sa mga opisyales sa AFA. (If an account matches, your reset request has been queued.)',
+          'success'
+        );
+        return;
+      } catch {
+        // Fall through to local offline queue when the server cannot be reached.
+      }
+    }
+
     const matchedUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
     if (!matchedUser) {
-      showToastMessage('Kung adunay account nga motakdo, ipadala ang password reset instructions.', 'success');
+      showToastMessage(
+        'Kung adunay account nga motakdo, na-queue na ang imong hangyo sa mga opisyales sa AFA. (If an account matches, your reset request has been queued.)',
+        'success'
+      );
       return;
     }
     const updated = users.map(u => u.id === matchedUser.id ? { ...u, resetRequested: true } : u);
     setUsers(updated);
     updateStorage('bafa_users', updated);
 
-    logAction('Requested Reset', `Requested password reset for ${matchedUser.name} (${matchedUser.username})`);
+    logAction('Requested Reset', `Requested password reset for ${matchedUser.name} (${matchedUser.username}) — ${sitio}`);
     if (isOnline) {
       pushAllDataToCloud({ users: updated }, { silent: true, source: 'Password Reset Requested' });
     } else {
       addToSyncQueue('update', 'user', { id: matchedUser.id, resetRequested: true });
     }
-    showToastMessage('Kung adunay account nga motakdo, ipadala ang password reset instructions.', 'success');
+    showToastMessage(
+      'Kung adunay account nga motakdo, na-queue na ang imong hangyo sa mga opisyales sa AFA. (If an account matches, your reset request has been queued.)',
+      'success'
+    );
   };
 
   const handleVerifyAdminPassword = async (
@@ -4053,11 +4155,11 @@ export default function App() {
     showToastMessage('System Backup downloaded successfully as a formatted JSON file!', 'success');
   };
 
-  const isPrivacyPage = typeof window !== 'undefined' && (window.location.pathname === '/privacy' || window.location.pathname === '/privacy/');
+  const isPrivacyPage = showPrivacyPage || (typeof window !== 'undefined' && (window.location.pathname === '/privacy' || window.location.pathname === '/privacy/'));
   if (isPrivacyPage) {
     return (
       <Suspense fallback={<DashboardSkeleton variant="app" />}>
-        <PrivacyPolicy />
+        <PrivacyPolicy onBack={closePrivacyInApp} />
       </Suspense>
     );
   }
@@ -4067,11 +4169,16 @@ export default function App() {
   }
 
   if (!currentUser) {
+    const publicPresidentName = cachedPublicSummary?.officers?.find(
+      o => o.role.trim().toLowerCase() === 'president'
+    )?.name;
+
     if (guestMode) {
       return (
         <Suspense fallback={<DashboardSkeleton variant="guest" />}>
           <GuestPortal
             onEnterLogin={() => setGuestMode(false)}
+            onOpenPrivacy={openPrivacyInApp}
             members={members}
             hogRaising={hogRaising}
             products={products}
@@ -4079,6 +4186,10 @@ export default function App() {
             activities={activities}
             achievements={achievements}
             users={users}
+            cachedSummary={cachedPublicSummary}
+            cachedAchievements={cachedPublicAchievements}
+            cachedProducts={cachedPublicProducts}
+            onPublicDataLoaded={handlePublicDataLoaded}
           />
         </Suspense>
       );
@@ -4090,6 +4201,7 @@ export default function App() {
           <AuthScreen
             users={users}
             hasPresident={Boolean(dbStatus.hasPresident || users.some(u => u.role?.toLowerCase() === 'president'))}
+            presidentName={publicPresidentName}
             onLogin={handleLogin}
             serverAuthRequired={import.meta.env.PROD || dbStatus.configured || dbStatus.checking}
             onRegister={handleRegister}
@@ -4101,15 +4213,14 @@ export default function App() {
         </Suspense>
         {toast && (
           <div className="fixed bottom-6 right-6 z-50">
-            <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${
-              toast.type === 'success'
+            <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${toast.type === 'success'
                 ? 'bg-bafa-700 text-bafa-100 border-bafa-600'
                 : toast.type === 'warning'
-                ? 'bg-amber-900 text-amber-100 border-amber-600'
-                : toast.type === 'error'
-                ? 'bg-rose-950 text-rose-100 border-rose-600'
-                : 'bg-[#F7F4EF] text-[#1B4332] border-[#D5CFC1]'
-            }`}>
+                  ? 'bg-amber-900 text-amber-100 border-amber-600'
+                  : toast.type === 'error'
+                    ? 'bg-rose-950 text-rose-100 border-rose-600'
+                    : 'bg-[#F7F4EF] text-[#1B4332] border-[#D5CFC1]'
+              }`}>
               {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-300 shrink-0" />}
               {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0" />}
               <span>{toast.message}</span>
@@ -4122,63 +4233,59 @@ export default function App() {
 
   if (currentUser.role === 'Member') {
     return (
-      <div id="member-screen-wrapper" className="min-h-screen bg-[#F5F2EB] text-slate-900 flex flex-col font-sans">
-        {/* TOP HEADER NAVIGATION AND IDENTIFIER FOR MEMBER PORTAL */}
-        <header className="bg-[#1B4332] border-b-2 border-[#122E22] py-3 sm:py-4 px-3.5 sm:px-6 shrink-0 shadow-md text-white no-print">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 max-w-full">
-              <div className="bg-[#D8F3DC] p-1 rounded-full shadow-inner text-[#1B4332] shrink-0 overflow-hidden border-2 border-[#a8d5b0]">
-                <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full bg-white" />
+      <div id="member-screen-wrapper" className="min-h-screen bg-[#F3FAF5] text-[#163327] flex flex-col font-sans antialiased">
+        {/* COMPACT STICKY DIMENSIONAL HEADER FOR MEMBER PORTAL */}
+        <header className="app-header-forest shrink-0 text-white no-print">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 h-[62px] sm:h-[68px] flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 bg-white p-0.5 rounded-full shadow-sm shrink-0 overflow-hidden border-2 border-[#7EC79F]">
+                <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-full h-full object-contain block rounded-full" />
               </div>
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <h1 className="text-base sm:text-lg font-black tracking-tight text-white uppercase font-display break-words">Alegria Farmers Association</h1>
-                  <span className="text-[9px] sm:text-[10px] bg-bafa-600 text-bafa-100 px-2 py-0.5 rounded-full border border-bafa-500 font-black font-mono shrink-0">
-                    Member Portal
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                  <h1 className="text-[13px] sm:text-base md:text-lg font-extrabold tracking-tight text-white uppercase font-display leading-tight truncate">
+                    Alegria Farmers Association
+                  </h1>
+                  <span className="hidden sm:inline-flex text-[10px] bg-[#2D6A4F] text-[#FFF0C2] px-2 py-0.5 rounded-full border border-[#7EC79F]/30 font-extrabold font-mono shrink-0">
+                    FAMS Member
                   </span>
                 </div>
-                <p className="text-[11px] sm:text-xs text-[#D8F3DC]/80 mt-0.5 font-medium truncate">Tuburan, Cebu Province • Official Member Suite</p>
+                <p className="brand-subtitle text-xs text-[#D6EFD9] font-medium truncate">
+                  FAMS • Member Portal • Tuburan, Cebu
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 sm:gap-2.5 w-full sm:w-auto max-w-full">
-              <LanguageToggle onDark />
-              {/* Active session bar with prominent Logout button */}
-              <div className="flex items-center justify-between gap-2.5 bg-[#081C15] px-3 py-1.5 rounded-2xl border-2 border-[#52B788] w-full sm:w-auto min-w-0 shrink-0 shadow-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-xl bg-[#D8F3DC] text-[#1B4332] font-mono font-black flex items-center justify-center text-xs shrink-0 uppercase shadow-xs">
-                    {currentUser?.name.substring(0, 2)}
-                  </div>
-                  <div className="text-left min-w-0">
-                    <div className="flex items-center gap-1">
-                      <span className="text-[9px] bg-[#2D6A4F] text-[#D8F3DC] font-mono font-black uppercase px-1.5 py-0.2 rounded shrink-0">
-                        Active Member
-                      </span>
-                      <span className="text-xs font-black text-white truncate max-w-[130px] sm:max-w-[160px]">{currentUser?.name}</span>
-                    </div>
-                    <span className="block text-[10px] text-[#D8F3DC] font-bold uppercase tracking-wide truncate">
-                      {currentUser?.farmLocation || 'Tuburan, Cebu'}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  id="header-member-logout-btn"
-                  type="button"
-                  onClick={handleLogout}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-xs cursor-pointer transition-all shadow-sm flex items-center gap-1.5 shrink-0 border border-rose-500"
-                  title="Sign out of member portal"
-                >
-                  <LogOut className="w-4 h-4 shrink-0" />
-                  <span>Logout</span>
-                </button>
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+              <div className="hidden md:block">
+                <OfflineIndicator dbStatus={dbStatus} />
               </div>
-
-              {/* Offline Switch & Sync Trigger */}
-              <OfflineIndicator
-                dbStatus={dbStatus}
-              />
+              <LanguageToggle onDark />
+              <div className="hidden sm:flex items-center gap-2 bg-[#0F2D24]/80 px-2.5 py-1 rounded-xl border border-[#7EC79F]/30">
+                <div className="w-7 h-7 rounded-lg bg-[#FFF0C2] text-[#163327] font-mono font-extrabold flex items-center justify-center text-xs shrink-0 uppercase">
+                  {currentUser?.name.substring(0, 2)}
+                </div>
+                <div className="text-left min-w-0 leading-tight">
+                  <span className="block text-xs font-extrabold text-white truncate max-w-[120px] md:max-w-[160px]">{currentUser?.name}</span>
+                  <span className="block text-[10px] text-[#D6EFD9] font-semibold truncate max-w-[120px]">
+                    {currentUser?.farmLocation || 'Tuburan, Cebu'}
+                  </span>
+                </div>
+              </div>
+              <button
+                id="header-member-logout-btn"
+                type="button"
+                onClick={handleLogout}
+                className="btn-bevel-terracotta px-2.5 sm:px-3.5 py-2 rounded-xl font-extrabold text-xs cursor-pointer flex items-center gap-1.5 shrink-0"
+                title="Sign out of member portal"
+                aria-label="Logout"
+              >
+                <LogOut className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
             </div>
           </div>
+          <div className="hero-banig-border !h-[6px]" aria-hidden="true" />
         </header>
 
         <Suspense fallback={null}>
@@ -4194,7 +4301,7 @@ export default function App() {
             return expiry.warning ? <PasswordChangePrompt user={users.find((candidate) => candidate.id === currentUser.id) || currentUser} forced={false} warningDays={expiry.daysRemaining} onSubmit={handleChangeOwnPassword} onClose={() => setDismissedPasswordWarningFor(currentUser.id)} /> : null;
           })()}
         </Suspense>
-        <main className="flex-1 max-w-7xl w-full mx-auto p-3.5 sm:p-6">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6">
           <Suspense fallback={<DashboardSkeleton variant="member" />}>
             <MemberDashboard
               currentUser={currentUser}
@@ -4216,17 +4323,16 @@ export default function App() {
         </main>
 
         {toast && (
-          <div className="fixed bottom-6 right-6 z-50 animate-bounce-short">
-            <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${
-              toast.type === 'success'
-                ? 'bg-[#1B4332] text-[#D8F3DC] border-[#2D6A4F]'
+          <div className="fixed bottom-20 md:bottom-6 right-4 left-4 sm:left-auto z-50 flex justify-center sm:justify-end pointer-events-none">
+            <div className={`pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl border text-sm font-extrabold max-w-sm ${toast.type === 'success'
+                ? 'bg-[#1B4332] text-[#D8F3DC] border-[#7EC79F]/40'
                 : toast.type === 'warning'
-                ? 'bg-amber-900 text-amber-100 border-amber-600'
-                : toast.type === 'error'
-                ? 'bg-rose-950 text-rose-100 border-rose-600'
-                : 'bg-slate-100 text-slate-900 border-slate-300'
-            }`}>
-              {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-300 shrink-0" />}
+                  ? 'bg-amber-900 text-amber-100 border-amber-500'
+                  : toast.type === 'error'
+                    ? 'bg-rose-950 text-rose-100 border-rose-500'
+                    : 'bg-white text-[#1B4332] border-[#1B4332]/20'
+              }`}>
+              {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-[#F4C76D] shrink-0" />}
               {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0" />}
               <span>{toast.message}</span>
             </div>
@@ -4237,21 +4343,20 @@ export default function App() {
   }
 
   return (
-    <div id="application-root" className="min-h-screen bg-[#F5F2EB] text-slate-900 flex flex-col font-sans lg:pl-72">
+    <div id="application-root" className="min-h-screen bg-[#F3FAF5] text-[#163327] flex flex-col font-sans antialiased lg:pl-72">
 
       {/* GLOBAL TOAST NOTIFICATION BANNER */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-bounce-short">
-          <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${
-            toast.type === 'success'
-              ? 'bg-[#1B4332] text-[#D8F3DC] border-[#2D6A4F]'
+        <div className="fixed bottom-20 md:bottom-6 right-4 left-4 sm:left-auto z-50 flex justify-center sm:justify-end pointer-events-none">
+          <div className={`pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl border text-sm font-extrabold max-w-sm ${toast.type === 'success'
+              ? 'bg-[#1B4332] text-[#D8F3DC] border-[#7EC79F]/40'
               : toast.type === 'warning'
-              ? 'bg-amber-900 text-amber-100 border-amber-600'
-              : toast.type === 'error'
-              ? 'bg-rose-950 text-rose-100 border-rose-600'
-              : 'bg-slate-100 text-slate-900 border-slate-300'
-          }`}>
-            {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-300 shrink-0" />}
+                ? 'bg-amber-900 text-amber-100 border-amber-500'
+                : toast.type === 'error'
+                  ? 'bg-rose-950 text-rose-100 border-rose-500'
+                  : 'bg-white text-[#1B4332] border-[#1B4332]/20'
+            }`}>
+            {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-[#F4C76D] shrink-0" />}
             {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0" />}
             <span>{toast.message}</span>
           </div>
@@ -4271,72 +4376,85 @@ export default function App() {
         })()}
       </Suspense>
 
-      {/* TOP HEADER NAVIGATION AND IDENTIFIER */}
-      <header className="bg-[#1B4332] border-b-2 border-[#122E22] py-3 sm:py-4 px-3.5 sm:px-6 shrink-0 shadow-md text-white">
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 max-w-full">
-            <div className="bg-[#D8F3DC] p-1 rounded-full shadow-inner text-[#1B4332] shrink-0 overflow-hidden border-2 border-[#a8d5b0]">
-              <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain block rounded-full bg-white" />
+      {/* COMPACT STICKY DIMENSIONAL HEADER FOR OFFICER SUITE */}
+      <header className="app-header-forest shrink-0 text-white no-print">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-[62px] sm:h-[68px] flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="lg:hidden w-10 h-10 bg-white p-0.5 rounded-full shadow-sm shrink-0 overflow-hidden border-2 border-[#7EC79F]">
+              <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-full h-full object-contain block rounded-full" />
             </div>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                <h1 className="text-base sm:text-lg font-black tracking-tight text-white uppercase font-display break-words">Alegria Farmers Association</h1>
-                <span className="text-[9px] sm:text-[10px] bg-bafa-600 text-bafa-100 px-2 py-0.5 rounded-full border border-bafa-500 font-black font-mono shrink-0">
-                  AFA Portal
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <h1 className="text-[13px] sm:text-base md:text-lg font-extrabold tracking-tight text-white uppercase font-display leading-tight truncate">
+                  Alegria Farmers Association
+                </h1>
+                <span className="hidden sm:inline-flex text-[10px] bg-[#2D6A4F] text-[#FFF0C2] px-2 py-0.5 rounded-full border border-[#7EC79F]/30 font-extrabold font-mono shrink-0">
+                  FAMS Suite
+                </span>
+              </div>
+              <p className="brand-subtitle text-xs text-[#D6EFD9] font-medium truncate">
+                {getPrimaryRoleDashboardLabel(currentRole)} • Barangay Alegria, Tuburan
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            <div className="hidden sm:block">
+              <OfflineIndicator dbStatus={dbStatus} />
+            </div>
+            <LanguageToggle onDark />
+            {/* Active officer chip */}
+            <div className="hidden md:flex items-center gap-2 bg-[#0F2D24]/80 px-2.5 py-1 rounded-xl border border-[#7EC79F]/30 shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-[#FFF0C2] text-[#163327] font-mono font-extrabold flex items-center justify-center text-xs shrink-0 uppercase">
+                {currentUser?.name.substring(0, 2)}
+              </div>
+              <div className="text-left min-w-0 leading-tight">
+                <span className="block text-xs font-extrabold text-white truncate max-w-[140px]">{currentUser?.name}</span>
+                <span className="block text-[10px] text-[#D6EFD9] font-bold uppercase tracking-wide truncate">
+                  {currentUser?.role.replace('_', ' ')}
                 </span>
               </div>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2 sm:gap-2.5 w-full lg:w-auto max-w-full">
-            <LanguageToggle onDark />
-            {/* Active session bar */}
-            <div className="flex items-center justify-between gap-2 bg-[#081C15] px-3 py-1.5 rounded-2xl border-2 border-[#52B788] w-full sm:w-auto min-w-0 shrink-0 shadow-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-xl bg-[#D8F3DC] text-[#1B4332] font-mono font-black flex items-center justify-center text-xs shrink-0 uppercase shadow-xs">
-                  {currentUser?.name.substring(0, 2)}
-                </div>
-                <div className="text-left min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] bg-[#2D6A4F] text-[#D8F3DC] font-mono font-black uppercase px-1.5 py-0.2 rounded shrink-0">
-                      Active Officer
-                    </span>
-                    <span className="text-xs font-black text-white truncate max-w-[130px] sm:max-w-[160px]">{currentUser?.name}</span>
-                  </div>
-                  <span className="block text-[10px] text-[#D8F3DC] font-bold uppercase tracking-wide truncate">
-                    {currentUser?.role.replace('_', ' ')}
-                  </span>
-                </div>
-              </div>
-              <button
-                id="header-officer-logout-btn"
-                type="button"
-                onClick={handleLogout}
-                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-xs cursor-pointer transition-all shadow-sm flex items-center gap-1.5 shrink-0 border border-rose-500 ml-1 lg:hidden"
-                title="Sign out of administration suite"
-              >
-                <LogOut className="w-4 h-4 shrink-0" />
-                <span>Logout</span>
-              </button>
-            </div>
-
-            {/* Offline Switch & Sync Trigger */}
-            <OfflineIndicator
-              dbStatus={dbStatus}
-            />
+            <button
+              id="header-officer-logout-btn"
+              type="button"
+              onClick={handleLogout}
+              className="lg:hidden btn-bevel-terracotta px-2.5 sm:px-3 py-2 rounded-xl font-extrabold text-xs cursor-pointer flex items-center gap-1.5 shrink-0"
+              title="Sign out of administration suite"
+              aria-label="Logout"
+            >
+              <LogOut className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
           </div>
         </div>
+        <div className="hero-banig-border !h-[6px]" aria-hidden="true" />
       </header>
 
-      {/* PERMANENT LEFT SIDEBAR NAVIGATION (Desktop) */}
+      {/* PERMANENT LEFT SIDEBAR NAVIGATION (Desktop 1024px+) */}
       {!guestMode && currentUser && (currentUser.role as string) !== 'Member' && (
         <aside
           id="officer-left-sidebar"
-          className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-72 flex-col bg-[#0F2D24] border-r-2 border-[#1B4332] shadow-2xl text-white"
+          className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-72 flex-col app-sidebar-dimensional text-white no-print"
         >
+          {/* FAMS Brand Header in Sidebar */}
+          <div className="px-5 py-4 border-b border-white/10 flex items-center gap-3">
+            <div className="w-11 h-11 bg-white p-0.5 rounded-full shadow-md shrink-0 overflow-hidden border-2 border-[#7EC79F]">
+              <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-full h-full object-contain block rounded-full" />
+            </div>
+            <div className="min-w-0 text-left">
+              <span className="block font-display text-sm font-bold text-white leading-tight truncate">
+                AFA • FAMS Portal
+              </span>
+              <span className="block text-[11px] font-bold text-[#FFF0C2] uppercase tracking-wider truncate">
+                {currentUser?.role.replace('_', ' ')}
+              </span>
+            </div>
+          </div>
+
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto px-3 pt-5 pb-4 space-y-1" aria-label="Officer navigation">
-            <p className="px-3 pb-1 text-[11px] font-black uppercase tracking-wider text-[#74C69D]">Main Views</p>
+          <nav className="flex-1 overflow-y-auto px-3 pt-4 pb-4 space-y-1" aria-label="Officer navigation">
+            <p className="px-3 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-[#95D5B2]">Main Views</p>
             {([
               { tab: 'tasks' as const, label: getPrimaryRoleDashboardLabel(currentRole), icon: ShieldCheck },
               { tab: 'hog-raising' as const, label: 'IGP Tracker', icon: Briefcase },
@@ -4355,30 +4473,29 @@ export default function App() {
                     setOfficerTab(tab);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left transition-all cursor-pointer border ${
-                    isActive
-                      ? 'bg-[#D8F3DC] text-[#1B4332] border-[#2D6A4F] shadow-md'
-                      : 'bg-transparent text-[#D8F3DC] border-transparent hover:bg-[#1B4332] hover:text-white'
-                  }`}
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left transition-all cursor-pointer border ${isActive
+                      ? 'bg-[#D6EFD9] text-[#1B4332] border-[#7EC79F] shadow-md'
+                      : 'bg-transparent text-[#D6EFD9] border-transparent hover:bg-white/10 hover:text-white'
+                    }`}
                 >
                   <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-[#1B4332]' : 'text-[#95D5B2]'}`} />
                   <span className="truncate">{label}</span>
-                  {isActive && <span className="ml-auto w-2 h-2 rounded-full bg-[#1B4332] shrink-0" aria-hidden="true" />}
+                  {isActive && <span className="ml-auto w-2 h-2 rounded-full bg-[#C2410C] shrink-0" aria-hidden="true" />}
                 </button>
               );
             })}
 
-            <p className="px-3 pt-4 pb-1 text-[11px] font-black uppercase tracking-wider text-[#74C69D]">System</p>
+            <p className="px-3 pt-4 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-[#95D5B2]">System</p>
             <button
               id="sidebar-nav-sync"
               type="button"
               onClick={() => jumpToDashboardSection('sync-queue-panel-window')}
-              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
+              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D6EFD9] border border-transparent hover:bg-white/10 hover:text-white transition-all cursor-pointer"
             >
               <Layers className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
               <span className="truncate">Sync Queue</span>
               {(syncQueue.length > 0 || hasPendingCloudSync) && (
-                <span className="ml-auto min-w-6 text-center bg-amber-500 text-[#1B4332] text-[11px] font-black px-1.5 py-0.5 rounded-full">
+                <span className="ml-auto min-w-6 text-center bg-[#F4C76D] text-[#163327] text-[11px] font-extrabold px-1.5 py-0.5 rounded-full">
                   {syncQueue.length || 1}
                 </span>
               )}
@@ -4389,7 +4506,7 @@ export default function App() {
                 id="sidebar-treasurer-report-btn"
                 type="button"
                 onClick={() => setShowTreasurerFinancialReport(true)}
-                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D8F3DC] border border-transparent hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer"
+                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D6EFD9] border border-transparent hover:bg-white/10 hover:text-white transition-all cursor-pointer"
               >
                 <FileText className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
                 <span className="truncate">Financial Report (PDF)</span>
@@ -4400,458 +4517,383 @@ export default function App() {
               id="sidebar-nav-logout"
               type="button"
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-rose-950/40 text-rose-200 border border-rose-800/40 hover:bg-rose-900 hover:text-white hover:border-rose-700 transition-all cursor-pointer mt-2"
+              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-rose-950/50 text-rose-100 border border-rose-700/40 hover:bg-rose-900 hover:text-white transition-all cursor-pointer mt-2"
               title="Sign out of administration suite"
             >
-              <LogOut className="w-4.5 h-4.5 shrink-0 text-rose-400" />
+              <LogOut className="w-4.5 h-4.5 shrink-0 text-rose-300" />
               <span className="truncate">Logout</span>
             </button>
           </nav>
 
           {/* Footer status */}
-          <div className="px-5 py-4 border-t border-white/10">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#D8F3DC]">
-              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dbStatus.connected ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
-              <span className="truncate">{dbStatus.checking ? 'Checking database…' : dbStatus.connected ? 'Supabase' : 'Local'}</span>
+          <div className="px-5 py-3.5 border-t border-white/10 bg-[#0B221B]/60">
+            <div className="flex items-center justify-between gap-2 text-xs font-bold text-[#D6EFD9]">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dbStatus.connected ? 'bg-emerald-400' : 'bg-[#F4C76D]'}`} aria-hidden="true" />
+                <span className="truncate">{dbStatus.checking ? 'Checking database…' : dbStatus.connected ? 'Supabase Live' : 'Local Storage'}</span>
+              </span>
+              <span className="font-mono text-[10px] text-[#95D5B2] shrink-0">DOLE #2315</span>
             </div>
           </div>
         </aside>
       )}
 
       {/* MAIN LAYOUT BODY */}
-      <main className="flex-1 p-3 sm:p-4 overflow-y-auto">
-        <div className="max-w-7xl mx-auto space-y-4">
+      <main className="flex-1 px-3 sm:px-5 lg:px-6 py-4 sm:py-5 overflow-y-auto">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-5">
 
-          {/* OFFICER MAIN VIEWS TAB BAR (Mobile only — desktop uses the left sidebar) */}
-          <div className="bg-white border-2 border-[#D5CFC1] rounded-2xl p-2.5 no-print space-y-1.5 shadow-sm lg:hidden">
-            {/* Mobile Phone Scroll Hint Indicator */}
-            <div className="flex sm:hidden items-center justify-between w-full px-2.5 py-1 text-[11px] font-black text-[#1B4332] bg-[#EAF4EC] rounded-lg border border-[#2D6A4F]/30">
-              <span className="flex items-center gap-1">
-                <ChevronLeft className="w-3.5 h-3.5 text-amber-700 animate-pulse" />
-                Scroll / swipe menu to view all options →
-              </span>
-              <ChevronRight className="w-3.5 h-3.5 text-amber-700 animate-pulse" />
+          {/* OFFICER TABLET TAB BAR (768px-1023px — mobile uses bottom dock, desktop uses left sidebar) */}
+          <nav aria-label="Officer tablet navigation" className="hidden md:block lg:hidden dim-card rounded-2xl p-2 no-print">
+            <div className="grid grid-cols-5 gap-1.5">
+              {([
+                { id: 'officer-tasks-tab-btn', tab: 'tasks' as const, label: getPrimaryRoleDashboardLabel(currentRole), icon: ShieldCheck },
+                { id: 'officer-hog-raising-tab-btn', tab: 'hog-raising' as const, label: 'IGP Tracker', icon: Briefcase },
+                { id: 'officer-announcements-tab-btn', tab: 'announcements' as const, label: 'Notices', icon: Megaphone },
+                { id: 'officer-member-view-tab-btn', tab: 'member-view' as const, label: 'My Member ID', icon: Users },
+                { id: 'officer-products-tab-btn', tab: 'products' as const, label: 'Market', icon: ShoppingBag }
+              ]).map(({ id, tab, label, icon: Icon }) => {
+                const isActive = officerTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    id={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => {
+                      setOfficerTab(tab);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`px-3 py-2.5 text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 rounded-xl border cursor-pointer min-w-0 ${isActive
+                        ? 'bg-[#D6EFD9] border-[#1B4332]/30 text-[#1B4332] shadow-xs'
+                        : 'border-transparent text-[#455C50] hover:text-[#1B4332] hover:bg-[#FAF8F5]'
+                      }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{label}</span>
+                  </button>
+                );
+              })}
             </div>
-
-            <div className="relative w-full flex items-center">
-              <div className="w-full flex justify-start gap-1.5 overflow-x-auto py-1 select-none scrollbar-thin scrollbar-thumb-emerald-600/30 px-2">
-                <button
-                  id="officer-tasks-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'tasks'}
-                  onClick={() => {
-                    setOfficerTab('tasks');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl ${
-                    officerTab === 'tasks'
-                      ? 'border-[#1B4332] text-[#1B4332] bg-[#EAF4EC]'
-                      : 'border-transparent text-slate-700 hover:text-[#1B4332] hover:bg-[#F2EFE9]'
-                  }`}
-                >
-                  <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
-                  <span>{getPrimaryRoleDashboardLabel(currentRole)}</span>
-                </button>
-
-                <button
-                  id="officer-hog-raising-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'hog-raising'}
-                  onClick={() => {
-                    setOfficerTab('hog-raising');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl ${
-                    officerTab === 'hog-raising'
-                      ? 'border-[#1B4332] text-[#1B4332] bg-[#EAF4EC]'
-                      : 'border-transparent text-slate-700 hover:text-[#1B4332] hover:bg-[#F2EFE9]'
-                  }`}
-                >
-                  <Briefcase className="w-4 h-4 text-[#1B4332]" />                  <span>IGP Tracker</span>
-                  <span className="bg-[#1B4332]/10 text-[#1B4332] border border-[#1B4332]/20 text-[9px] px-2 py-0.5 rounded-full font-black ml-1">
-                    Active
-                  </span>
-                </button>
-
-                <button
-                  id="officer-announcements-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'announcements'}
-                  onClick={() => {
-                    setOfficerTab('announcements');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl relative ${
-                    officerTab === 'announcements'
-                      ? 'border-[#1B4332] text-[#1B4332] bg-[#EAF4EC]'
-                      : 'border-transparent text-slate-700 hover:text-[#1B4332] hover:bg-[#F2EFE9]'
-                  }`}
-                >
-                  <Megaphone className="w-4 h-4 text-[#1B4332]" />
-                  <span>Announcements Board</span>
-                  <span className="bg-[#1B4332]/10 text-[#1B4332] border border-[#1B4332]/20 text-[9px] px-2 py-0.5 rounded-full font-black ml-1">
-                    Dashboard
-                  </span>
-                </button>
-
-                <button
-                  id="officer-member-view-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'member-view'}
-                  onClick={() => {
-                    setOfficerTab('member-view');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl relative ${
-                    officerTab === 'member-view'
-                      ? 'border-amber-600 text-amber-900 bg-amber-50'
-                      : 'border-transparent text-slate-700 hover:text-amber-900 hover:bg-amber-50/50'
-                  }`}
-                >
-                  <Users className="w-4 h-4 text-amber-700" />
-                  <span>My Member Portal & ID (Officer as Member)</span>
-                  <span className="bg-amber-200 text-amber-900 border border-amber-300 text-[9px] px-2 py-0.5 rounded-full font-black ml-1">
-                    Officer as Member
-                  </span>
-                </button>
-
-                <button
-                  id="officer-products-tab-btn"
-                  type="button"
-                  role="tab"
-                  aria-selected={officerTab === 'products'}
-                  onClick={() => {
-                    setOfficerTab('products');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`shrink-0 min-w-max px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold transition-all flex items-center gap-2 border-b-4 cursor-pointer whitespace-nowrap rounded-t-xl relative ${
-                    officerTab === 'products'
-                      ? 'border-[#1B4332] text-[#1B4332] bg-[#EAF4EC]'
-                      : 'border-transparent text-slate-700 hover:text-[#1B4332] hover:bg-[#F2EFE9]'
-                  }`}
-                >
-                  <ShoppingBag className="w-4 h-4 text-[#1B4332]" />
-                  <span>Products Catalog</span>
-                  <span className="bg-[#1B4332]/10 text-[#1B4332] border border-[#1B4332]/20 text-[9px] px-2 py-0.5 rounded-full font-black ml-1">
-                    Market
-                  </span>
-                </button>
-              </div>
-
-            </div>
-          </div>
+          </nav>
 
           <Suspense fallback={<DashboardSkeleton variant="officer" />}>
             {officerTab === 'tasks' && (
               /* ACTIVE VIEW WRAPPER */
-              <div id="officer-dashboard-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
-            {/* President & Vice President View */}
-            {(currentRole === 'President' || currentRole === 'Vice_President') && (
-              <ExecutiveView
-                members={members}
-                meetings={meetings}
-                resolutions={resolutions}
-                onApproveResolution={handleApproveResolution}
-                transactions={transactions}
-                logs={logs}
-                currentRole={currentRole}
-                currentUserId={currentUser?.id}
-                onUpdateLogs={(newLogs) => {
-                  setLogs(newLogs);
-                  updateStorage('bafa_logs', newLogs);
-                }}
-                users={users}
-            onAddOfficer={handleAddOfficer}
-                onDeleteUser={handleDeleteUser}
-                onUpdateUserRole={handleUpdateUserRole}
-                onResetPassword={handleResetPassword}
-                onResetMfa={handleResetMfa}
-                onPresidentTurnover={handlePresidentTurnover}
-                onOpenReportModal={() => setShowReportModal(true)}
-                onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
-                onRestoreBackup={currentRole === 'President' ? handleRestoreSystemBackup : undefined}
-                onVerifyAdminPassword={handleVerifyAdminPassword}
-                activities={activities}
-                hogRaising={hogRaising}
-                funds={funds}
-                onApproveMeetingMinutes={handleApproveMeetingMinutes}
-                onReturnMeetingMinutes={handleReturnMeetingMinutes}
-                onPresidentReturnTransaction={currentRole === 'President' || hasDelegatedRecordApproval ? handlePresidentReturnTransaction : undefined}
-                onPresidentApproveTransaction={currentRole === 'President' || hasDelegatedRecordApproval ? handlePresidentApproveTransaction : undefined}
-                delegationRequests={delegationRequests}
-                isOnline={isOnline}
-                isRefreshingDelegations={isRefreshingDelegations}
-                onRefreshDelegations={handleRefreshDelegations}
-                onRequestDelegation={handleRequestDelegation}
-                onReviewDelegation={handleReviewDelegation}
-                onRevokeDelegation={handleRevokeDelegation}
-                membershipPayments={membershipPayments}
-                membershipYear={new Date().getFullYear()}
-                onUpdateUser={(updatedUser) => {
-                  const exists = users.some(u => u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase());
-                  const updated = exists
-                    ? users.map(u => (u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase()) ? { ...u, ...updatedUser } : u)
-                    : [...users, updatedUser];
-                  setUsers(updated);
-                  updateStorage('bafa_users', updated);
-                  if (currentUser?.id === updatedUser.id || currentUser?.username.toLowerCase() === updatedUser.username.toLowerCase()) {
-                    const nextCurrent = { ...currentUser, ...updatedUser };
-                    setCurrentUser(nextCurrent);
-                    updateStorage('bafa_current_user', nextCurrent);
-                  }
-                  if (isOnline) {
-                    pushAllDataToCloud({ users: updated }, { silent: true, source: 'User Updated' });
-                  } else {
-                    addToSyncQueue('update', 'user', updatedUser);
-                  }
-                  showToastMessage(
-                    updatedUser.mfaEnabled
-                      ? 'Two-factor authentication (2FA) is now required for the President account.'
-                      : 'Two-factor authentication requirement disabled.',
-                    'info'
-                  );
-                }}
-              />
-            )}
+              <div id="officer-dashboard-window" className="dim-card p-3.5 sm:p-5 lg:p-6 rounded-3xl text-[#163327]">
+                {/* President & Vice President View */}
+                {(currentRole === 'President' || currentRole === 'Vice_President') && (
+                  <ExecutiveView
+                    members={members}
+                    meetings={meetings}
+                    resolutions={resolutions}
+                    onApproveResolution={handleApproveResolution}
+                    transactions={transactions}
+                    logs={logs}
+                    currentRole={currentRole}
+                    currentUserId={currentUser?.id}
+                    onUpdateLogs={(newLogs) => {
+                      setLogs(newLogs);
+                      updateStorage('bafa_logs', newLogs);
+                    }}
+                    users={users}
+                    onAddOfficer={handleAddOfficer}
+                    onDeleteUser={handleDeleteUser}
+                    onUpdateUserRole={handleUpdateUserRole}
+                    onResetPassword={handleResetPassword}
+                    onResetMfa={handleResetMfa}
+                    onPresidentTurnover={handlePresidentTurnover}
+                    onOpenReportModal={() => setShowReportModal(true)}
+                    onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
+                    onRestoreBackup={currentRole === 'President' ? handleRestoreSystemBackup : undefined}
+                    onVerifyAdminPassword={handleVerifyAdminPassword}
+                    activities={activities}
+                    hogRaising={hogRaising}
+                    funds={funds}
+                    onApproveMeetingMinutes={handleApproveMeetingMinutes}
+                    onReturnMeetingMinutes={handleReturnMeetingMinutes}
+                    onPresidentReturnTransaction={currentRole === 'President' || hasDelegatedRecordApproval ? handlePresidentReturnTransaction : undefined}
+                    onPresidentApproveTransaction={currentRole === 'President' || hasDelegatedRecordApproval ? handlePresidentApproveTransaction : undefined}
+                    delegationRequests={delegationRequests}
+                    isOnline={isOnline}
+                    isRefreshingDelegations={isRefreshingDelegations}
+                    onRefreshDelegations={handleRefreshDelegations}
+                    onRequestDelegation={handleRequestDelegation}
+                    onReviewDelegation={handleReviewDelegation}
+                    onRevokeDelegation={handleRevokeDelegation}
+                    membershipPayments={membershipPayments}
+                    membershipYear={new Date().getFullYear()}
+                    onUpdateUser={(updatedUser) => {
+                      const exists = users.some(u => u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase());
+                      const updated = exists
+                        ? users.map(u => (u.id === updatedUser.id || u.username.toLowerCase() === updatedUser.username.toLowerCase()) ? { ...u, ...updatedUser } : u)
+                        : [...users, updatedUser];
+                      setUsers(updated);
+                      updateStorage('bafa_users', updated);
+                      if (currentUser?.id === updatedUser.id || currentUser?.username.toLowerCase() === updatedUser.username.toLowerCase()) {
+                        const nextCurrent = { ...currentUser, ...updatedUser };
+                        setCurrentUser(nextCurrent);
+                        updateStorage('bafa_current_user', nextCurrent);
+                      }
+                      if (isOnline) {
+                        pushAllDataToCloud({ users: updated }, { silent: true, source: 'User Updated' });
+                      } else {
+                        addToSyncQueue('update', 'user', updatedUser);
+                      }
+                      showToastMessage(
+                        updatedUser.mfaEnabled
+                          ? 'Two-factor authentication (2FA) is now required for the President account.'
+                          : 'Two-factor authentication requirement disabled.',
+                        'info'
+                      );
+                    }}
+                  />
+                )}
 
-            {currentRole === 'Board_Member' && (
-              <BoardMemberView
-                resolutions={resolutions}
-                currentUser={currentUser!}
-                onAddResolution={handleAddResolution}
-              />
-            )}
+                {currentRole === 'Board_Member' && (
+                  <BoardMemberView
+                    resolutions={resolutions}
+                    currentUser={currentUser!}
+                    onAddResolution={handleAddResolution}
+                  />
+                )}
 
-            {/* Secretary View */}
-            {(currentRole === 'Secretary' || currentRole === 'Assistant_Secretary') && (
-              <SecretaryView
-                members={members}
-                users={users}
-                currentUser={currentUser!}
-                currentRole={currentRole}
-                membershipPayments={membershipPayments}
-                membershipYear={currentMembershipYear}
-            onAddMember={async (memberData, loginCredentials) => {
-                  if (loginCredentials && users.some((user) => user.username.toLowerCase() === loginCredentials.username.toLowerCase())) {
-                    showToastMessage('That username is already in use.', 'error');
-                    return { saved: false, accountCreated: false };
-                  }
-                  return handleAddMember(memberData, loginCredentials);
-                }}
-                onUpdateMember={handleUpdateMember}
-                onUpdateMemberStatus={handleUpdateMemberStatus}
-                onDeleteMember={handleDeleteMember}
-                onManageMemberLogin={handleManageMemberLogin}
-                onResetMemberPassword={handleResetPassword}
-                meetings={meetings}
-                onAddMeeting={handleAddMeeting}
-                onUpdateMeeting={handleUpdateMeeting}
-                onDeleteMeeting={handleDeleteMeeting}
-                resolutions={resolutions}
-                onAddResolution={handleAddResolution}
-                onDeleteResolution={handleDeleteResolution}
-                isOnline={isOnline}
-                onOpenReportModal={() => setShowReportModal(true)}
-              />
-            )}
+                {/* Secretary View */}
+                {(currentRole === 'Secretary' || currentRole === 'Assistant_Secretary') && (
+                  <SecretaryView
+                    members={members}
+                    users={users}
+                    currentUser={currentUser!}
+                    currentRole={currentRole}
+                    membershipPayments={membershipPayments}
+                    membershipYear={currentMembershipYear}
+                    onAddMember={async (memberData, loginCredentials) => {
+                      if (loginCredentials && users.some((user) => user.username.toLowerCase() === loginCredentials.username.toLowerCase())) {
+                        showToastMessage('That username is already in use.', 'error');
+                        return { saved: false, accountCreated: false };
+                      }
+                      return handleAddMember(memberData, loginCredentials);
+                    }}
+                    onUpdateMember={handleUpdateMember}
+                    onUpdateMemberStatus={handleUpdateMemberStatus}
+                    onDeleteMember={handleDeleteMember}
+                    onManageMemberLogin={handleManageMemberLogin}
+                    onResetMemberPassword={handleResetPassword}
+                    meetings={meetings}
+                    onAddMeeting={handleAddMeeting}
+                    onUpdateMeeting={handleUpdateMeeting}
+                    onDeleteMeeting={handleDeleteMeeting}
+                    resolutions={resolutions}
+                    onAddResolution={handleAddResolution}
+                    onDeleteResolution={handleDeleteResolution}
+                    isOnline={isOnline}
+                    onOpenReportModal={() => setShowReportModal(true)}
+                  />
+                )}
 
-            {(currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer') && (
-              <TreasurerView
-                transactions={transactions}
-                activities={activities}
-                funds={funds}
-                hogRaising={hogRaising}
-                inventory={inventory}
-                onAddTransaction={handleAddTransaction}
-                onDeleteTransaction={handleDeleteTransaction}
-                onAddFund={handleAddFund}
-                onDeleteFund={handleDeleteFund}
-                onOpenReportModal={() => setShowReportModal(true)}
-                users={users}
-                currentUser={currentUser!}
-                currentRole={currentRole}
-                members={members}
-                membershipPayments={membershipPayments}
-                membershipYearSnapshots={membershipYearSnapshots}
-                duesAmount={duesAmount}
-                onRecordMembershipPayment={handleRecordMembershipPayment}
-                onVoidMembershipPayment={handleVoidMembershipPayment}
-                onCloseMembershipYear={handleCloseMembershipYear}
-                onUpdateDuesAmount={handleUpdateDuesAmount}
-              />
-            )}
+                {(currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer') && (
+                  <TreasurerView
+                    transactions={transactions}
+                    activities={activities}
+                    funds={funds}
+                    hogRaising={hogRaising}
+                    inventory={inventory}
+                    onAddTransaction={handleAddTransaction}
+                    onDeleteTransaction={handleDeleteTransaction}
+                    onAddFund={handleAddFund}
+                    onDeleteFund={handleDeleteFund}
+                    onOpenReportModal={() => setShowReportModal(true)}
+                    users={users}
+                    currentUser={currentUser!}
+                    currentRole={currentRole}
+                    members={members}
+                    membershipPayments={membershipPayments}
+                    membershipYearSnapshots={membershipYearSnapshots}
+                    duesAmount={duesAmount}
+                    onRecordMembershipPayment={handleRecordMembershipPayment}
+                    onVoidMembershipPayment={handleVoidMembershipPayment}
+                    onCloseMembershipYear={handleCloseMembershipYear}
+                    onUpdateDuesAmount={handleUpdateDuesAmount}
+                  />
+                )}
 
-            {currentRole === 'Auditor' && (
-              <AuditorView
-                transactions={transactions}
-                hogRaising={hogRaising}
-                onAuditTransaction={handleAuditTransaction}
-                onOpenReportModal={() => setShowReportModal(true)}
-                inventory={inventory}
-                products={products}
-                onAddInventory={handleAddInventoryItem}
-                onUpdateInventory={handleUpdateInventoryItem}
-                onDeleteInventory={handleDeleteInventoryItem}
-                onPublishRentalProduct={handlePublishRentalProduct}
-                auditorName={`Auditor (${getOfficerName('Auditor')})`}
-              />
-            )}
+                {currentRole === 'Auditor' && (
+                  <AuditorView
+                    transactions={transactions}
+                    hogRaising={hogRaising}
+                    onAuditTransaction={handleAuditTransaction}
+                    onOpenReportModal={() => setShowReportModal(true)}
+                    inventory={inventory}
+                    products={products}
+                    onAddInventory={handleAddInventoryItem}
+                    onUpdateInventory={handleUpdateInventoryItem}
+                    onDeleteInventory={handleDeleteInventoryItem}
+                    onPublishRentalProduct={handlePublishRentalProduct}
+                    auditorName={`Auditor (${getOfficerName('Auditor')})`}
+                  />
+                )}
 
-            {/* PIO View */}
-            {currentRole === 'PIO' && (
-              <PioView
-                announcements={announcements}
-                activities={activities}
-                achievements={achievements}
-                onAddAnnouncement={handleAddAnnouncement}
-                onDeleteAnnouncement={handleDeleteAnnouncement}
-                onAddAchievement={handleAddAchievement}
-                onDeleteAchievement={handleDeleteAchievement}
-                onAddActivity={handleAddActivity}
-                onUpdateActivity={handleUpdateActivity}
-                onDeleteActivity={handleDeleteActivity}
-                onOpenReportModal={() => setShowReportModal(true)}
-              />
-            )}
+                {/* PIO View */}
+                {currentRole === 'PIO' && (
+                  <PioView
+                    announcements={announcements}
+                    activities={activities}
+                    achievements={achievements}
+                    onAddAnnouncement={handleAddAnnouncement}
+                    onDeleteAnnouncement={handleDeleteAnnouncement}
+                    onAddAchievement={handleAddAchievement}
+                    onDeleteAchievement={handleDeleteAchievement}
+                    onAddActivity={handleAddActivity}
+                    onUpdateActivity={handleUpdateActivity}
+                    onDeleteActivity={handleDeleteActivity}
+                    onOpenReportModal={() => setShowReportModal(true)}
+                  />
+                )}
 
-          </div>
-          )}
-
-          {officerTab === 'hog-raising' && (
-            <div id="officer-hog-raising-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900 text-left">
-              <LivestockMonitor
-                state={hogRaising}
-                funds={funds}
-                members={members}
-                meetings={meetings}
-                onAddExpense={handleAddPigExpense}
-                onUpdateExpense={handleUpdatePigExpense}
-                onDeleteExpense={handleDeletePigExpense}
-                onAddSale={handleAddHogSale}
-                onUpdateSale={handleUpdateHogSale}
-                onDeleteSale={handleDeleteHogSale}
-                onSubmitEggHarvest={handleSubmitEggHarvest}
-                onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
-                isAuditor={currentRole === 'Auditor'}
-                isPresident={currentRole === 'President'}
-                canSignEggHarvests={hasDelegatedRecordApproval}
-                onAddProduce={handleAddProduce}
-                onDeleteProduce={handleDeleteProduce}
-                isTreasurerOrOfficer={['Auditor', 'Treasurer', 'Assistant_Treasurer', 'President', 'Vice_President'].includes(currentRole || '')}
-                isTreasurer={currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer'}
-                currentUser={currentUser!}
-                isOfficerMode={true}
-                users={users}
-                closedYears={hogRaising.closedYears || [2025]}
-                onCloseDecemberBook={handleCloseDecemberBook}
-              />
-            </div>
-          )}
-
-          {officerTab === 'products' && (
-            <div id="officer-products-window" className="w-full">
-              <ProductManagementModal
-                products={products}
-                currentRole={currentRole}
-                onAddProduct={handleAddProduct}
-                onUpdateProduct={handleUpdateProduct}
-                onDeleteProduct={handleDeleteProduct}
-                onClose={() => setOfficerTab('tasks')}
-                users={users}
-              />
-            </div>
-          )}
-
-          {officerTab === 'announcements' && (
-            <div id="officer-announcements-window" className="bg-white border-2 border-[#D5CFC1] p-5 sm:p-6 rounded-3xl shadow-sm text-slate-900">
-              {/* The President (system admin) can publish and manage announcements. */}
-              {currentRole === 'President' || hasDelegatedContentPosting ? (
-                <PioView
-                  announcements={announcements}
-                  activities={activities}
-                  achievements={achievements}
-                  onAddAnnouncement={handleAddAnnouncement}
-                  onDeleteAnnouncement={handleDeleteAnnouncement}
-                  onAddAchievement={handleAddAchievement}
-                  onDeleteAchievement={handleDeleteAchievement}
-                  onAddActivity={handleAddActivity}
-                  onUpdateActivity={handleUpdateActivity}
-                  onDeleteActivity={handleDeleteActivity}
-                  postedByName={currentRole === 'President'
-                    ? `President (${currentUser?.name || 'AFA President'})`
-                    : `Vice President (${currentUser?.name || 'AFA Vice President'})`}
-                  activityOrganizerName={currentRole === 'President' ? `President (${currentUser?.name || 'AFA President'})` : `Vice President (${currentUser?.name || 'AFA Vice President'})`}
-                  postingOnly={currentRole === 'Vice_President'}
-                />
-              ) : (
-                <AnnouncementDashboard
-                  announcements={announcements}
-                  isOfficerMode={false}
-                />
-              )}
-            </div>
-          )}
-
-          {officerTab === 'member-view' && (
-            <div id="officer-member-view-window" className="bg-[#FAF8F5] text-slate-900 border border-[#D5CFC1] p-4 sm:p-6 rounded-3xl shadow-xl space-y-4">
-              <div className="bg-[#EAF4EC] border-2 border-[#1B4332]/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-[#1B4332] text-white rounded-xl shadow-xs">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-black text-[#1B4332]">My Member Dashboard & ID</h2>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOfficerTab('tasks');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="px-4 py-2 bg-[#1B4332] hover:bg-[#122e22] text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
-                  <span>Back to Officer Suite</span>
-                </button>
               </div>
+            )}
 
-              <MemberDashboard
-                currentUser={currentUser!}
-                onUpdateProfile={handleUpdateProfile}
-                onLogout={handleLogout}
-                toast={showToastMessage}
-                announcements={announcements}
-                hogRaisingState={hogRaising}
-                members={members}
-                onSubmitEggHarvest={handleSubmitEggHarvest}
-              onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
-                products={products}
-                activities={activities}
-                users={users}
-                membershipPayments={membershipPayments}
-                duesAmount={duesAmount}
+            {officerTab === 'hog-raising' && (
+              <div id="officer-hog-raising-window" className="dim-card p-3.5 sm:p-5 lg:p-6 rounded-3xl text-[#163327] text-left">
+                <LivestockMonitor
+                  state={hogRaising}
+                  funds={funds}
+                  members={members}
+                  meetings={meetings}
+                  onAddExpense={handleAddPigExpense}
+                  onUpdateExpense={handleUpdatePigExpense}
+                  onDeleteExpense={handleDeletePigExpense}
+                  onAddSale={handleAddHogSale}
+                  onUpdateSale={handleUpdateHogSale}
+                  onDeleteSale={handleDeleteHogSale}
+                  onSubmitEggHarvest={handleSubmitEggHarvest}
+                  onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
+                  isAuditor={currentRole === 'Auditor'}
+                  isPresident={currentRole === 'President'}
+                  canSignEggHarvests={hasDelegatedRecordApproval}
+                  onAddProduce={handleAddProduce}
+                  onDeleteProduce={handleDeleteProduce}
+                  isTreasurerOrOfficer={['Auditor', 'Treasurer', 'Assistant_Treasurer', 'President', 'Vice_President'].includes(currentRole || '')}
+                  isTreasurer={currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer'}
+                  currentUser={currentUser!}
+                  isOfficerMode={true}
+                  users={users}
+                  closedYears={hogRaising.closedYears || [2025]}
+                  onCloseDecemberBook={handleCloseDecemberBook}
+                />
+              </div>
+            )}
+
+            {officerTab === 'products' && (
+              <div id="officer-products-window" className="w-full">
+                <ProductManagementModal
+                  products={products}
+                  currentRole={currentRole}
+                  onAddProduct={handleAddProduct}
+                  onUpdateProduct={handleUpdateProduct}
+                  onDeleteProduct={handleDeleteProduct}
+                  onClose={() => setOfficerTab('tasks')}
+                  users={users}
+                />
+              </div>
+            )}
+
+            {officerTab === 'announcements' && (
+              <div id="officer-announcements-window" className="dim-card p-3.5 sm:p-5 lg:p-6 rounded-3xl text-[#163327]">
+                {/* President, PIO, or a Vice President with active content delegation can publish announcements & activities. */}
+                {currentRole === 'President' || currentRole === 'PIO' || hasDelegatedContentPosting ? (
+                  <PioView
+                    announcements={announcements}
+                    activities={activities}
+                    achievements={achievements}
+                    onAddAnnouncement={handleAddAnnouncement}
+                    onDeleteAnnouncement={handleDeleteAnnouncement}
+                    onAddAchievement={handleAddAchievement}
+                    onDeleteAchievement={handleDeleteAchievement}
+                    onAddActivity={handleAddActivity}
+                    onUpdateActivity={handleUpdateActivity}
+                    onDeleteActivity={handleDeleteActivity}
+                    postedByName={
+                      currentRole === 'President'
+                        ? `President (${currentUser?.name || 'AFA President'})`
+                        : currentRole === 'PIO'
+                          ? `PIO (${currentUser?.name || 'AFA PIO'})`
+                          : `Vice President (${currentUser?.name || 'AFA Vice President'})`
+                    }
+                    activityOrganizerName={
+                      currentRole === 'President'
+                        ? `President (${currentUser?.name || 'AFA President'})`
+                        : currentRole === 'PIO'
+                          ? `PIO (${currentUser?.name || 'AFA PIO'})`
+                          : `Vice President (${currentUser?.name || 'AFA Vice President'})`
+                    }
+                    postingOnly={currentRole === 'Vice_President'}
+                  />
+                ) : (
+                  <AnnouncementDashboard
+                    announcements={announcements}
+                    isOfficerMode={false}
+                  />
+                )}
+              </div>
+            )}
+
+            {officerTab === 'member-view' && (
+              <div id="officer-member-view-window" className="dim-card-warm text-[#163327] p-3.5 sm:p-5 lg:p-6 rounded-3xl space-y-4">
+                <div className="dim-card-mint rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-[#1B4332] text-[#FFF0C2] rounded-xl shadow-xs">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-display text-base sm:text-lg font-bold text-[#1B4332]">My Member Dashboard & ID</h2>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOfficerTab('tasks');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="btn-bevel-forest px-4 py-2 text-xs font-extrabold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-6 h-6 object-contain rounded-full bg-white shrink-0" />
+                    <span>Back to Officer Suite</span>
+                  </button>
+                </div>
+
+                <MemberDashboard
+                  currentUser={currentUser!}
+                  onUpdateProfile={handleUpdateProfile}
+                  onLogout={handleLogout}
+                  toast={showToastMessage}
+                  announcements={announcements}
+                  hogRaisingState={hogRaising}
+                  members={members}
+                  onSubmitEggHarvest={handleSubmitEggHarvest}
+                  onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
+                  products={products}
+                  activities={activities}
+                  users={users}
+                  membershipPayments={membershipPayments}
+                  duesAmount={duesAmount}
+                />
+              </div>
+            )}
+
+            {/* OFFLINE SYNC QUEUE MANAGEMENT SCREEN (Always available to monitor) */}
+            <div id="sync-queue-panel-window">
+              <SyncQueuePanel
+                queue={syncQueue}
+                isOnline={isOnline}
+                hasPendingCloudSync={hasPendingCloudSync}
+                onSync={handleSynchronize}
+                isSyncing={isSyncing}
+                onClearQueue={handleClearQueue}
+                onRemoveItem={handleRemoveQueueItem}
               />
             </div>
-          )}
-
-          {/* OFFLINE SYNC QUEUE MANAGEMENT SCREEN (Always available to monitor) */}
-          <div id="sync-queue-panel-window">
-            <SyncQueuePanel
-              queue={syncQueue}
-              isOnline={isOnline}
-              hasPendingCloudSync={hasPendingCloudSync}
-              onSync={handleSynchronize}
-              isSyncing={isSyncing}
-              onClearQueue={handleClearQueue}
-              onRemoveItem={handleRemoveQueueItem}
-            />
-          </div>
-        </Suspense>
+          </Suspense>
 
         </div>
       </main>
@@ -4925,7 +4967,7 @@ export default function App() {
             <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading report...</div>}>
               <PresidentReport
                 data={buildReportData({ year: new Date().getFullYear(), users })}
-            />
+              />
             </Suspense>
           </div>
         </div>
@@ -4958,6 +5000,37 @@ export default function App() {
         onCancel={() => setShowClearCacheConfirmModal(false)}
         onConfirm={executeClearLocalCache}
       />
+
+      {/* FIXED 5-TAB OFFICER MOBILE BOTTOM DOCK (<768px) */}
+      <nav
+        aria-label="Officer mobile navigation"
+        className="mobile-bottom-dock cols-5 no-print"
+      >
+        {([
+          { tab: 'tasks' as const, label: 'Suite', icon: ShieldCheck },
+          { tab: 'hog-raising' as const, label: 'IGP', icon: Briefcase },
+          { tab: 'announcements' as const, label: 'Notices', icon: Megaphone },
+          { tab: 'member-view' as const, label: 'My ID', icon: Users },
+          { tab: 'products' as const, label: 'Market', icon: ShoppingBag }
+        ]).map(({ tab, label, icon: Icon }) => {
+          const isActive = officerTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => {
+                setOfficerTab(tab);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`mobile-dock-btn ${isActive ? 'is-active' : ''}`}
+            >
+              <Icon className="w-[19px] h-[19px] shrink-0" aria-hidden="true" />
+              <span className="mobile-dock-label">{label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
     </div>
   );

@@ -9,63 +9,63 @@ export default function DashboardSkeleton({ variant = 'app' }: DashboardSkeleton
   const isGuest = variant === 'guest';
 
   return (
-    <div className="min-h-screen bg-bafa-neutral-50 text-slate-800 animate-pulse">
-      <div className="bg-white border-b-2 border-bafa-neutral-300 py-4 px-4 sm:px-6 shadow-sm">
+    <div className="min-h-screen bg-[#F3FAF5] text-[#163327]">
+      <div className="portal-sticky-header py-3 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-slate-200" />
-            <div className="space-y-2">
-              <div className="h-4 w-40 bg-slate-200 rounded-full" />
-              <div className="h-3 w-56 bg-slate-200 rounded-full" />
+            <div className="w-10 h-10 rounded-full skeleton-shimmer" />
+            <div className="space-y-1.5">
+              <div className="h-4 w-40 rounded-full skeleton-shimmer" />
+              <div className="h-3 w-52 rounded-full skeleton-shimmer hidden sm:block" />
             </div>
           </div>
-          <div className="h-10 w-28 bg-slate-200 rounded-xl" />
+          <div className="h-10 w-28 rounded-xl skeleton-shimmer" />
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <div className="bg-white border-2 border-bafa-neutral-300 rounded-3xl p-4 sm:p-6">
-          <div className="flex flex-wrap gap-2 mb-5">
-            {Array.from({ length: isGuest ? 5 : 4 }).map((_, i) => (
-              <div key={i} className="h-10 w-28 rounded-xl bg-slate-200" />
+      <div className="max-w-7xl mx-auto px-3.5 sm:px-6 py-5 sm:py-6 space-y-5 sm:space-y-6">
+        <div className="dim-card rounded-3xl p-4 sm:p-6">
+          <div className="hidden md:flex flex-wrap gap-2 mb-5">
+            {Array.from({ length: isGuest ? 6 : 5 }).map((_, i) => (
+              <div key={i} className="h-10 w-28 rounded-xl skeleton-shimmer" />
             ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-bafa-neutral-200 bg-bafa-neutral-50 p-4 space-y-3">
-                <div className="h-3 w-20 bg-slate-200 rounded-full" />
-                <div className="h-8 w-24 bg-slate-200 rounded-full" />
-                <div className="h-3 w-32 bg-slate-200 rounded-full" />
+              <div key={i} className="rounded-2xl border border-[#1B4332]/10 bg-[#FAF8F5] p-4 space-y-3">
+                <div className="h-3 w-20 rounded-full skeleton-shimmer" />
+                <div className="h-8 w-24 rounded-lg skeleton-shimmer" />
+                <div className="h-3 w-28 rounded-full skeleton-shimmer" />
               </div>
             ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
           <div className="xl:col-span-7 space-y-4">
-            <div className="bg-white border-2 border-bafa-neutral-300 rounded-3xl p-5">
-              <div className="h-6 w-48 bg-slate-200 rounded-full mb-4" />
+            <div className="dim-card rounded-3xl p-5">
+              <div className="h-6 w-48 rounded-full skeleton-shimmer mb-4" />
               <div className="space-y-3">
-                <div className="h-4 w-full bg-slate-200 rounded-full" />
-                <div className="h-4 w-11/12 bg-slate-200 rounded-full" />
-                <div className="h-4 w-10/12 bg-slate-200 rounded-full" />
+                <div className="h-4 w-full rounded-full skeleton-shimmer" />
+                <div className="h-4 w-11/12 rounded-full skeleton-shimmer" />
+                <div className="h-4 w-10/12 rounded-full skeleton-shimmer" />
               </div>
             </div>
-            <div className="bg-white border-2 border-[#D5CFC1] rounded-3xl p-5 space-y-4">
+            <div className="dim-card rounded-3xl p-5 space-y-4">
               {Array.from({ length: isMember ? 3 : 4 }).map((_, i) => (
-                <div key={i} className="h-24 rounded-2xl bg-slate-200" />
+                <div key={i} className="h-24 rounded-2xl skeleton-shimmer" />
               ))}
             </div>
           </div>
 
           <div className="xl:col-span-5">
-            <div className="bg-white border-2 border-[#D5CFC1] rounded-3xl p-5 space-y-4">
-              <div className="h-6 w-36 bg-slate-200 rounded-full" />
+            <div className="dim-card rounded-3xl p-5 space-y-4">
+              <div className="h-6 w-36 rounded-full skeleton-shimmer" />
               <div className="space-y-3">
-                <div className="h-16 rounded-2xl bg-slate-200" />
-                <div className="h-16 rounded-2xl bg-slate-200" />
-                <div className="h-16 rounded-2xl bg-slate-200" />
+                <div className="h-16 rounded-2xl skeleton-shimmer" />
+                <div className="h-16 rounded-2xl skeleton-shimmer" />
+                <div className="h-16 rounded-2xl skeleton-shimmer" />
               </div>
             </div>
           </div>

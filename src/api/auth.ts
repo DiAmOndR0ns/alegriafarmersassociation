@@ -988,6 +988,41 @@ export async function accountProvisionHandler(req: any, res: any) {
   return sendResponse(res, 200, { success: true, user: safeUser(row) });
 }
 
+export async function passwordResetRequestHandler(req: any, res: any) {
+  if (req.method && req.method !== 'POST') return errorResponse(res, 405, 'Method not allowed.');
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  const body: any = await parseRequestBody(req).catch(() => null);
+  const username = typeof body?.username === 'string' ? body.username.trim() : '';
+  const sitio = typeof body?.sitio === 'string' ? body.sitio.trim() : '';
+  const validSitios = new Set(['Sitio Tapon', 'Sitio Pundok 1', 'Sitio Pundok 2', 'Sitio Lamak']);
+  if (!username || username.length > 120 || !validSitios.has(sitio)) {
+    return errorResponse(res, 400, 'Please enter your username and select your assigned Sitio.');
+  }
+
+  // Always return a uniform non-enumerating success response so unauthenticated callers
+  // cannot probe which usernames exist.
+  const uniformMessage = 'If an account matches those details, a password reset request has been sent to the AFA officers.';
+
+  if (!isDatabaseConfigured()) {
+    return sendResponse(res, 200, { success: true, offlineMode: true, message: uniformMessage });
+  }
+
+  try {
+    await ensureDatabaseSchema(getPool());
+    await getPool().query(
+      `UPDATE users
+       SET reset_requested = TRUE
+       WHERE lower(username) = lower($1) AND is_approved IS NOT FALSE`,
+      [username]
+    );
+  } catch (error) {
+    console.error('[Auth password reset request failure]', error);
+    return errorResponse(res, 503, 'Unable to record your password reset request right now.');
+  }
+
+  return sendResponse(res, 200, { success: true, message: uniformMessage });
+}
+
 export async function requireAuthenticated(req: any, res: any): Promise<SafeUser | null> {
   try {
     const user = await getAuthenticatedUser(req);
@@ -1020,6 +1055,7 @@ const AUTH_ROUTES: ReadonlyArray<readonly [method: string, path: string, handler
   ['POST', '/api/auth/mfa/reset', mfaResetHandler],
   ['POST', '/api/auth/password/change', passwordChangeHandler],
   ['POST', '/api/auth/password/reset', passwordResetHandler],
+  ['POST', '/api/auth/password/request', passwordResetRequestHandler],
   ['POST', '/api/auth/accounts/provision', accountProvisionHandler],
 ];
 

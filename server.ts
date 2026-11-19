@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
+import bcrypt from "bcryptjs";
 import { createServer as createViteServer } from "vite";
 import { 
   getPool, 
@@ -23,6 +24,7 @@ import {
   mfaResetHandler,
   passwordChangeHandler,
   passwordResetHandler,
+  passwordResetRequestHandler,
   requireAuthenticated,
   sessionHandler,
 } from "./src/api/auth";
@@ -44,10 +46,13 @@ export async function createApp() {
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    const isProd = process.env.NODE_ENV === 'production';
+    const scriptSrc = isProd ? "script-src 'self'" : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+    const connectSrc = isProd ? "connect-src 'self'" : "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*";
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; " +
+      `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ` +
+        `img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; ${connectSrc}; ` +
         "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
     );
     if (process.env.NODE_ENV === 'production') {
@@ -67,6 +72,7 @@ export async function createApp() {
   app.post("/api/auth/bootstrap", bootstrapHandler);
   app.post("/api/auth/password/change", passwordChangeHandler);
   app.post("/api/auth/password/reset", passwordResetHandler);
+  app.post("/api/auth/password/request", passwordResetRequestHandler);
 
   // API to Check Live Cloud Database (Supabase) Status (Public Health Check)
   // `provider` tells the UI which storage mode is active: 'Supabase' (cloud sync)
@@ -191,6 +197,53 @@ export async function createApp() {
 
   // Vite middleware for development vs static serve for production
   if (process.env.NODE_ENV !== "production") {
+    let cachedLocalOfficers: any[] | null = null;
+    app.get("/api/dev/local-officers", async (_req, res) => {
+      if (isDatabaseConfigured()) {
+        return res.json({ success: false, officers: [] });
+      }
+      if (!cachedLocalOfficers) {
+        const specs = [
+          { key: 'PRESIDENT', role: 'President' },
+          { key: 'VICE_PRESIDENT', role: 'Vice_President' },
+          { key: 'SECRETARY', role: 'Secretary' },
+          { key: 'ASSISTANT_SECRETARY', role: 'Assistant_Secretary' },
+          { key: 'TREASURER', role: 'Treasurer' },
+          { key: 'ASSISTANT_TREASURER', role: 'Assistant_Treasurer' },
+          { key: 'AUDITOR', role: 'Auditor' },
+          { key: 'PIO', role: 'PIO' },
+          { key: 'BOARD_MEMBER', role: 'Board_Member' }
+        ] as const;
+
+        const nowIso = new Date().toISOString();
+        const seeded: any[] = [];
+        for (const spec of specs) {
+          const username = (process.env[`LOCAL_OFFICER_${spec.key}_USER`] || '').trim().toLowerCase();
+          const name = (process.env[`LOCAL_OFFICER_${spec.key}_NAME`] || '').trim();
+          const password = (process.env[`LOCAL_OFFICER_${spec.key}_PASS`] || '').trim();
+          const totpSecret = (process.env[`LOCAL_OFFICER_${spec.key}_TOTP`] || '').trim();
+          if (!username || !password) continue;
+          const passwordHash = await bcrypt.hash(password, 10);
+          seeded.push({
+            id: `local-officer-${spec.key.toLowerCase()}`,
+            username,
+            name: name || `AFA ${spec.role.replace('_', ' ')}`,
+            role: spec.role,
+            isApproved: true,
+            passwordHash,
+            passwordChangedAt: nowIso,
+            passwordHistory: [],
+            mustChangePassword: false,
+            joinedDate: '2026-01-01',
+            farmLocation: 'Sitio Tapon',
+            ...(spec.role === 'President' && totpSecret ? { mfaEnabled: true, totpSecret } : { mfaEnabled: false })
+          });
+        }
+        cachedLocalOfficers = seeded;
+      }
+      return res.json({ success: true, officers: cachedLocalOfficers });
+    });
+
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

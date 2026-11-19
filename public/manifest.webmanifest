@@ -1,7 +1,7 @@
 {
-  "name": "Alegria Farmers Association Portal",
-  "short_name": "AFA Portal",
-  "description": "Official digital portal for the Alegria Farmers Association.",
+  "name": "FAMS — Alegria Farmers Association Portal",
+  "short_name": "AFA FAMS",
+  "description": "Farmers Association Management System (FAMS) — Official digital portal for the Alegria Farmers Association in Barangay Alegria, Tuburan, Cebu.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

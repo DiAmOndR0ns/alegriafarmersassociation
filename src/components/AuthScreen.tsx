@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { User, OfficerRole } from '../types';
+import { User, OFFICIAL_ALEGRIA_SITIOS } from '../types';
 import { verifyPassword } from '../utils/audit';
 import {
-  hashPassword,
   validatePasswordPolicy,
   generateInitialPassword,
   getLockoutStatus,
@@ -12,21 +11,20 @@ import {
 } from '../utils/passwordPolicy';
 import { getTotpUri, verifyTotpCode } from '../utils/totp';
 import {
-  Building, Lock, Shield, Sprout, Smartphone, CheckCircle,
-  UserPlus, ArrowRight, UserCheck, MapPin, Layers, Tag, Landmark, RefreshCw,
-  User as UserIcon, HelpCircle, AlertTriangle, KeyRound, Eye, EyeOff,
-  ShieldCheck, Phone, Check, Info, FileText
+  Lock, ArrowRight, MapPin, User as UserIcon, HelpCircle,
+  KeyRound, Eye, EyeOff, ShieldCheck, UserPlus, X, Sprout
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface AuthScreenProps {
   users: User[];
   hasPresident?: boolean;
+  presidentName?: string;
   onLogin: (user: User, password: string, serverAuthenticated?: boolean) => void;
   serverAuthRequired?: boolean;
   onRegister?: (userData: Omit<User, 'id' | 'isApproved'>) => void;
   toast: (message: string, type: 'success' | 'warning' | 'info' | 'error') => void;
-  onRequestPasswordReset?: (username: string) => void;
+  onRequestPasswordReset?: (username: string, sitio: string) => void | Promise<void>;
   onLoginFailed?: (userId: string, state: { failedLoginAttempts: number; lockedUntil?: string }) => void;
   onBackToGuest?: () => void;
 }
@@ -34,6 +32,7 @@ interface AuthScreenProps {
 export default function AuthScreen({
   users,
   hasPresident,
+  presidentName,
   onLogin,
   serverAuthRequired = false,
   onRegister,
@@ -44,6 +43,7 @@ export default function AuthScreen({
 }: AuthScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [bootstrapSecret, setBootstrapSecret] = useState('');
   const [mfaCode, setMfaCode] = useState('');
   const [authChallenge, setAuthChallenge] = useState<{
@@ -62,18 +62,27 @@ export default function AuthScreen({
   const [adminUsername, setAdminUsername] = useState('admin');
   const [adminPassword, setAdminPassword] = useState('');
 
-  // Password reset request modal/form state
+  // Password reset request form state (unauthenticated text input + Sitio verification)
   const [showResetForm, setShowResetForm] = useState(false);
   const [resetUsername, setResetUsername] = useState('');
+  const [resetSitio, setResetSitio] = useState<string>('');
+  const [isSubmittingReset, setIsSubmittingReset] = useState(false);
 
-  // Keep the login language setting without exposing a language switch on this screen.
-  const { isEnglish: en } = useLanguage();
+  const { isEnglish: en, t } = useLanguage();
+
+  const resolvedPresidentName =
+    (presidentName && presidentName.trim() && presidentName !== 'AFA President' ? presidentName.trim() : '') ||
+    users.find(u => u.role?.toLowerCase() === 'president')?.name ||
+    t('Presidente sa AFA', 'the AFA President');
 
   const handleAdminSetupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!serverAuthRequired && !onRegister) return;
     if (!adminName.trim() || !adminUsername.trim() || !adminPassword.trim()) {
-      toast('Palihug kompletoha ang Admin Name, Username, ug Password.', 'error');
+      toast(
+        t('Palihug kompletoha ang Admin Name, Username, ug Password.', 'Please complete Admin Name, Username, and Password.'),
+        'error'
+      );
       return;
     }
     const policyErr = validatePasswordPolicy(adminPassword.trim(), adminUsername.trim(), 'President', []);
@@ -122,7 +131,10 @@ export default function AuthScreen({
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      toast('Palihug isulod ang imong username ug password (Please enter username and password).', 'error');
+      toast(
+        t('Palihug isulod ang imong username ug password.', 'Please enter your username and password.'),
+        'error'
+      );
       return;
     }
 
@@ -135,15 +147,11 @@ export default function AuthScreen({
         });
         const result = await response.json();
         if (!response.ok || !result?.success) {
-          toast(result?.message || 'Invalid credentials.', 'error');
+          toast(result?.message || t('Sayop nga username o password.', 'Invalid credentials.'), 'error');
           return;
         }
         if (result.challengeToken) {
           const setup = Boolean(result.mfaSetupRequired);
-          // The login response never carries a TOTP secret (it would let anyone
-          // with just the password enrol their own authenticator). For a first
-          // enrolment the setup key is fetched separately, once, with the
-          // password-verified challenge token.
           let enrollment: { secret?: string; otpauthUrl?: string } = {
             secret: result.secret,
             otpauthUrl: result.otpauthUrl
@@ -191,7 +199,6 @@ export default function AuthScreen({
       u => u.username.toLowerCase() === username.trim().toLowerCase()
     );
 
-    // Block sign-in while an account is temporarily locked after repeated failures.
     if (matchedUser) {
       const lockout = getLockoutStatus(matchedUser);
       if (lockout.locked) {
@@ -222,27 +229,29 @@ export default function AuthScreen({
         );
         return;
       }
-      toast('Invalid credentials.', 'error');
+      toast(t('Sayop nga username o password.', 'Invalid credentials.'), 'error');
       return;
     }
 
     if (!matchedUser.isApproved) {
-      const presidentName = users.find(u => u.role?.toLowerCase() === 'president')?.name || 'AFA President';
-      toast(`Ang imong account nagpaabot pa sa pag-aprobar ni Presidente ${presidentName} (Awaiting President approval).`, 'warning');
+      toast(
+        t(
+          `Ang imong account nagpaabot pa sa pag-aprobar ni ${resolvedPresidentName}.`,
+          `Your account is awaiting approval from ${resolvedPresidentName}.`
+        ),
+        'warning'
+      );
       return;
     }
 
-    // Clear the failure counter on a successful sign-in.
     if (onLoginFailed && (matchedUser.failedLoginAttempts || matchedUser.lockedUntil)) {
       onLoginFailed(matchedUser.id, { failedLoginAttempts: 0 });
     }
 
-    // If 2FA requirement is active on this account or role is President, enforce authenticator code
     const isMfaEnforced = matchedUser.role?.toLowerCase() === 'president' || Boolean(matchedUser.mfaEnabled);
     if (isMfaEnforced) {
       const activeSecret = matchedUser.totpSecret;
       if (!activeSecret) {
-        // Never fall back to a shared default secret: that would make MFA bypassable.
         toast('Two-factor authentication is enforced for this account, but no authenticator has been enrolled yet. Connect to the internet once to complete 2FA setup.', 'error');
         return;
       }
@@ -259,13 +268,13 @@ export default function AuthScreen({
     }
 
     onLogin(matchedUser, password);
-    toast(`Welcome back, ${matchedUser.name}!`, 'success');
+    toast(t(`Maayong pagbalik, ${matchedUser.name}!`, `Welcome back, ${matchedUser.name}!`), 'success');
   };
 
   const handleMfaSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!authChallenge || !/^\d{6}$/.test(mfaCode)) {
-      toast('Enter the current 6-digit authenticator code.', 'error');
+      toast(t('Isulod ang 6-digit nga authenticator code.', 'Enter the current 6-digit authenticator code.'), 'error');
       return;
     }
     if (authChallenge.token.startsWith('offline-') && pendingOfflineUser) {
@@ -316,167 +325,274 @@ export default function AuthScreen({
     }
   };
 
-  const handleResetRequestSubmit = (e: React.FormEvent) => {
+  const handleResetRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetUsername.trim()) {
-      toast('Palihug pili o isulod ang imong username.', 'error');
+      toast(t('Palihug isulod ang imong username.', 'Please enter your username.'), 'error');
+      return;
+    }
+    if (!resetSitio) {
+      toast(t('Palihug pilia ang imong Sitio para sa beripikasyon.', 'Please select your Sitio for verification.'), 'error');
       return;
     }
 
     if (onRequestPasswordReset) {
-      onRequestPasswordReset(resetUsername.trim());
-      setShowResetForm(false);
-      setResetUsername('');
+      setIsSubmittingReset(true);
+      try {
+        await onRequestPasswordReset(resetUsername.trim(), resetSitio);
+        setShowResetForm(false);
+        setResetUsername('');
+        setResetSitio('');
+      } finally {
+        setIsSubmittingReset(false);
+      }
     } else {
-      toast('Dili pa magamit ang password reset request.', 'error');
+      toast(t('Dili pa magamit ang password reset request.', 'Password reset requests are unavailable right now.'), 'error');
     }
   };
 
   return (
-    <div id="auth-screen-root" className="min-h-screen bg-bafa-50 text-bafa-800 flex flex-col items-center justify-center p-4 sm:p-6 font-sans antialiased">
-      <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-12 gap-6 lg:gap-8 items-stretch my-6">
-        <div className="md:col-span-5 flex flex-col justify-between bg-bafa-800 text-bafa-50 rounded-[28px] p-6 sm:p-7 shadow-[0_24px_60px_rgba(18,51,38,0.16)] border border-bafa-700 relative overflow-hidden">
-          <div className="absolute -bottom-16 -right-16 w-48 h-48 bg-bafa-600 rounded-full opacity-20 pointer-events-none" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(126,199,159,0.18),transparent_38%)]" />
+    <div id="auth-screen-root" className="auth-shell font-sans antialiased text-[#163327]">
+      <div className="auth-modal-panel modal-panel">
+        {/* LEFT ASIDE (Desktop 2-col split) / COMPACT SINGLE-ROW HEADER (Mobile <768px) */}
+        <aside className="login-aside">
+          <div className="sheet-grab-handle" aria-hidden="true" />
+          <div
+            className="absolute -bottom-16 -right-16 w-48 h-48 bg-[#2D6A4F] rounded-full opacity-25 pointer-events-none"
+            aria-hidden="true"
+          />
 
-          <div className="relative space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="bg-white p-1.5 rounded-full shadow-lg shrink-0 overflow-hidden border-2 border-bafa-500">
-                <img src="/afa-logo.png" alt="Alegria Farmers Association logo" className="w-16 h-16 sm:w-20 sm:h-20 object-contain block rounded-full" />
+          <div className="relative z-10 space-y-5">
+            <div className="login-aside-header">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 md:w-16 md:h-16 bg-white p-1 rounded-full shadow-md shrink-0 overflow-hidden border-2 border-[#7EC79F]">
+                  <img
+                    src="/afa-logo.png"
+                    alt="Alegria Farmers Association logo"
+                    className="w-full h-full object-contain block rounded-full"
+                  />
+                </div>
+                <div className="min-w-0 text-left">
+                  <p className="text-[11px] md:text-xs font-extrabold tracking-[0.14em] uppercase text-[#FFF0C2] truncate">
+                    AFA • TUBURAN, CEBU
+                  </p>
+                  <h1 className="font-display text-lg md:text-2xl font-bold text-white leading-tight truncate">
+                    {t('Farmer Access Portal', 'Farmer Access Portal')}
+                  </h1>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl sm:text-[2rem] font-black font-display tracking-tight text-white uppercase leading-none">AFA</h1>
-                <p className="text-[10px] text-[#D9F5E3] font-bold tracking-[0.18em] uppercase mt-1">Alegria Farmers Association</p>
-              </div>
+
+              {onBackToGuest && (
+                <button
+                  type="button"
+                  onClick={onBackToGuest}
+                  aria-label={t('Balik sa publiko nga portal', 'Back to public portal')}
+                  className="md:hidden min-w-11 min-h-11 rounded-xl bg-white/15 hover:bg-white/25 text-white flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" aria-hidden="true" />
+                </button>
+              )}
             </div>
 
-            <div className="space-y-4">
-              <h2 className="text-xl sm:text-2xl font-black font-display leading-tight text-white">
-                Farmer Access Portal
-              </h2>
+            {/* Desktop-only FAMS description & glass feature cards */}
+            <div className="login-aside-desc space-y-3 text-left">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-[#FFF0C2]/30 text-xs font-bold text-[#FFF0C2]">
+                <Sprout className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>FAMS — Farmers Association Management System</span>
+              </div>
+              <p className="text-sm text-[#E5F6EA] leading-relaxed">
+                {t(
+                  'Opisyal nga sistema sa Alegria Farmers Association para sa mga opisyales ug miyembro sa upat ka sitio.',
+                  'Official management portal for Alegria Farmers Association officers and members across all four sitios.'
+                )}
+              </p>
+            </div>
 
-              <div className="space-y-3 pt-2 text-sm text-white">
-                <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
-                  <span>
-                    <strong className="font-extrabold text-white">{en ? 'Quick sign in:' : 'Dali nga pagsulod:'}</strong>{' '}
-                    {en
-                      ? 'Enter your username and password below to access your member or officer dashboard.'
-                      : 'Isulod ang imong username ug password sa ubos aron makasulod sa dashboard sa miyembro o opisyal.'}
-                  </span>
-                </div>
-                <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
-                  <span>
-                    <strong className="font-extrabold text-white">{en ? 'Membership verification:' : 'Pagpamatuod sa pagkamiyembro:'}</strong>{' '}
-                    {en
-                      ? 'All officers and members must be verified and approved in the system before they can access it.'
-                      : 'Kinahanglan mapamatud-an ug maaprobahan sa sistema ang tanang opisyal ug miyembro sa dili pa sila makagamit niini.'}
-                  </span>
-                </div>
-                <div className="flex items-start gap-3 rounded-2xl bg-bafa-700 border border-bafa-600 p-3">
-                  <span>
-                    <strong className="font-extrabold text-white">{en ? 'Member access:' : 'Pag-access sa miyembro:'}</strong>{' '}
-                    {en
-                      ? 'Regular farmers are enrolled by the Secretary and receive their login slip.'
-                      : 'Iparehistro sa Sekretaryo ang mga mag-uuma ug hatagan sila og ilang papel sa pagsulod.'}
-                  </span>
-                </div>
+            <div className="space-y-2.5 text-left text-sm text-white">
+              <div className="glass-feature">
+                <span>
+                  <strong className="font-extrabold text-[#FFF0C2]">{t('Dali nga pagsulod:', 'Quick sign in:')}</strong>{' '}
+                  {t(
+                    'Isulod ang imong username ug password aron makasulod sa imong dashboard.',
+                    'Enter your username and password to open your member or officer dashboard.'
+                  )}
+                </span>
+              </div>
+              <div className="glass-feature">
+                <span>
+                  <strong className="font-extrabold text-[#FFF0C2]">{t('Seguridad sa account:', 'Verified access:')}</strong>{' '}
+                  {t(
+                    'Tanang miyembro ug opisyales gi-aprobahan sa asosasyon sa dili pa makagamit sa sistema.',
+                    'All officers and members are verified and approved before accessing association records.'
+                  )}
+                </span>
+              </div>
+              <div className="glass-feature">
+                <span>
+                  <strong className="font-extrabold text-[#FFF0C2]">{t('Pagparehistro:', 'Member enrollment:')}</strong>{' '}
+                  {t(
+                    'Ang mga bag-ong mag-uuma iparehistro sa Kalihim ug hatagan og login slip.',
+                    'Farmers are enrolled by the Secretary and receive their printed login slip.'
+                  )}
+                </span>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="md:col-span-7 bg-white rounded-[28px] p-5 sm:p-7 shadow-[0_24px_60px_rgba(19,39,31,0.10)] border-2 border-bafa-200 flex flex-col justify-between">
-          <div className="space-y-6">
-            <div className="flex justify-between items-center border-b border-bafa-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="text-sm font-extrabold font-display text-bafa-800 tracking-[0.08em]">
-                  {en ? 'SIGN IN' : 'SIGN IN'}
-                </span>
+          <p className="login-aside-desc relative z-10 text-xs text-[#CBE9D2] font-semibold text-left pt-6">
+            DOLE Reg. No. 2315 • Barangay Alegria, Tuburan, Cebu
+          </p>
+        </aside>
+
+        {/* RIGHT FORM PANEL */}
+        <div className="bg-white p-5 sm:p-7 md:p-8 flex flex-col justify-between min-w-0">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between border-b border-[#E3EFE6] pb-3">
+              <div>
+                <h2 className="font-display text-lg sm:text-xl font-bold text-[#1B4332]">
+                  {showResetForm
+                    ? t('Hangyo sa Bag-ong Password', 'Password Reset Request')
+                    : authChallenge
+                    ? t('Two-Factor Verification', 'Two-Factor Verification')
+                    : t('Pagsulod sa Account', 'Sign In to FAMS')}
+                </h2>
+                <p className="text-xs sm:text-sm text-[#455C50] font-medium">
+                  {showResetForm
+                    ? t('Ipadala ang hangyo ngadto sa mga opisyales sa AFA.', 'Notify AFA officers to reset your credentials.')
+                    : t('Alegria Farmers Association • FAMS', 'Alegria Farmers Association • FAMS')}
+                </p>
               </div>
             </div>
 
             {showResetForm ? (
               <div className="space-y-4 animate-fade-in text-left">
-                <div className="bg-bafa-gold-200 border border-bafa-gold-400 rounded-2xl p-4 flex gap-3 text-bafa-neutral-800">
-                  <HelpCircle className="w-5 h-5 text-bafa-gold-500 shrink-0 mt-0.5" />
-                  <div className="text-xs space-y-1">
-                    <strong className="font-extrabold block">Hangyo sa Bag-ong Password (Password Reset Request)</strong>
-                    <p className="leading-relaxed text-bafa-neutral-700">
-                      Isulat ang imong Username sa ubos. Ang imong hangyo ipadala dayon ngadto kang Presidente {users.find(u => u.role?.toLowerCase() === 'president')?.name || 'AFA President'}.
+                <div className="dim-card-warm rounded-2xl p-4 flex gap-3 text-[#18372D]">
+                  <HelpCircle className="w-5 h-5 text-[#C2410C] shrink-0 mt-0.5" aria-hidden="true" />
+                  <div className="text-sm space-y-1">
+                    <strong className="font-extrabold block text-[#1B4332]">
+                      {t('Tabang sa Nakalimtan nga Password', 'Forgot Password Assistance')}
+                    </strong>
+                    <p className="leading-relaxed text-[#354B40]">
+                      {t(
+                        `Isulat ang imong username ug pilia ang imong Sitio sa ubos. Ang imong hangyo ipahibalo ngadto kang ${resolvedPresidentName} o sa Kalihim para sa luwas nga pag-reset.`,
+                        `Enter your username and select your Sitio below. Your reset request will be queued for ${resolvedPresidentName} or the Secretary to verify and issue a new login.`
+                      )}
                     </p>
                   </div>
                 </div>
 
                 <form onSubmit={handleResetRequestSubmit} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-bafa-neutral-700 uppercase">
-                      Pilia ang imong Username o Account:
+                    <label
+                      htmlFor="reset-username"
+                      className="block text-sm font-bold text-[#1B4332]"
+                    >
+                      {t('Imong Username', 'Your Username')}
                     </label>
                     <div className="relative">
-                      <UserIcon className="absolute left-3.5 top-3.5 w-4 h-4 text-bafa-neutral-500" />
-                      <select
+                      <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#455C50] pointer-events-none" aria-hidden="true" />
+                      <input
+                        id="reset-username"
+                        name="resetUsername"
+                        type="text"
+                        autoComplete="username"
+                        required
+                        placeholder={t('Pananglitan: jdelacruz', 'e.g., jdelacruz')}
                         value={resetUsername}
                         onChange={(e) => setResetUsername(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 text-sm bg-bafa-neutral-50 border border-bafa-neutral-300 rounded-xl text-bafa-neutral-800 focus:outline-none focus:border-bafa-700 font-semibold appearance-none"
+                        className="form-input pl-10 pr-4 py-3 text-base font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="reset-sitio"
+                      className="block text-sm font-bold text-[#1B4332]"
+                    >
+                      {t('Beripikasyon sa Sitio', 'Sitio Verification')}
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#455C50] pointer-events-none" aria-hidden="true" />
+                      <select
+                        id="reset-sitio"
+                        name="resetSitio"
                         required
+                        value={resetSitio}
+                        onChange={(e) => setResetSitio(e.target.value)}
+                        className="form-control pl-10 pr-4 py-3 text-base font-semibold"
                       >
-                        <option value="">-- Pili og Username / Select --</option>
-                        {users.map(u => (
-                          <option key={u.id} value={u.username}>
-                            {u.name} ({u.username})
+                        <option value="">
+                          {t('-- Pilia ang imong Sitio --', '-- Select your Sitio --')}
+                        </option>
+                        {OFFICIAL_ALEGRIA_SITIOS.map((sitio) => (
+                          <option key={sitio} value={sitio}>
+                            {sitio}
                           </option>
                         ))}
                       </select>
                     </div>
                   </div>
 
-                  <div className="flex gap-3 pt-2">
+                  <div className="grid grid-cols-2 gap-3 pt-2">
                     <button
                       type="button"
                       onClick={() => setShowResetForm(false)}
-                      className="flex-1 py-3 bg-bafa-neutral-50 border border-bafa-neutral-300 hover:bg-bafa-neutral-100 text-bafa-neutral-700 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer text-center"
+                      className="btn-bevel-secondary py-3 px-4 rounded-xl font-extrabold text-sm cursor-pointer text-center"
                     >
-                      I-kansela (Cancel)
+                      {t('Kanselahon', 'Cancel')}
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-3 bg-bafa-coral-600 hover:bg-bafa-coral-500 text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer text-center"
+                      disabled={isSubmittingReset}
+                      className="btn-bevel-terracotta py-3 px-4 rounded-xl font-extrabold text-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
                     >
-                      <KeyRound className="w-4 h-4" />
-                      <span>Ipadala Hangyo (Send)</span>
+                      <KeyRound className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      <span>{isSubmittingReset ? t('Nagpadala...', 'Sending...') : t('Ipadala Hangyo', 'Send Request')}</span>
                     </button>
                   </div>
                 </form>
               </div>
             ) : authChallenge ? (
               <form onSubmit={handleMfaSubmit} className="space-y-4 animate-fade-in text-left">
-                <div className="rounded-2xl border border-[#B7E3C4] bg-[#EAF6EE] p-4 text-sm text-[#1B4332]">
-                  <h3 className="font-black">{authChallenge.setup ? 'Set up authenticator MFA' : 'Verify authenticator code'}</h3>
-                  <p className="mt-1 text-xs leading-relaxed">
+                <div className="dim-card-mint rounded-2xl p-4 text-sm text-[#1B4332]">
+                  <h3 className="font-extrabold text-base">
+                    {authChallenge.setup
+                      ? t('I-setup ang Authenticator 2FA', 'Set up authenticator MFA')
+                      : t('Kumpirmaha ang Authenticator Code', 'Verify authenticator code')}
+                  </h3>
+                  <p className="mt-1 text-sm leading-relaxed text-[#354B40]">
                     {authChallenge.setup
                       ? authChallenge.secret
-                        ? 'Add this account to an authenticator app, then enter the current 6-digit code to complete setup.'
+                        ? t(
+                            'Idugang kini nga account sa authenticator app ug isulod ang 6-digit code.',
+                            'Add this account to an authenticator app, then enter the current 6-digit code to complete setup.'
+                          )
                         : 'This account must first enroll an authenticator. Ask the President or Secretary to issue a fresh setup key from the officer console, then enter the current 6-digit code.'
-                      : 'Enter the current 6-digit code from your authenticator app.'}
+                      : t('Isulod ang kasamtangang 6-digit code gikan sa imong authenticator app.', 'Enter the current 6-digit code from your authenticator app.')}
                   </p>
                   {authChallenge.secret && (
                     <div className="mt-3 space-y-2 rounded-xl border border-[#D5CFC1] bg-white p-3">
-                      <p className="text-[10px] font-bold uppercase text-[#4A5F57]">
+                      <p className="text-xs font-bold uppercase text-[#455C50]">
                         {authChallenge.setup ? 'Authenticator setup key' : 'Authenticator key (manual entry)'}
                       </p>
                       <p className="select-all break-all font-mono text-sm font-bold text-[#1B4332]">{authChallenge.secret}</p>
                       {authChallenge.otpauthUrl && (
-                        <details className="text-[10px]">
+                        <details className="text-xs">
                           <summary className="cursor-pointer font-bold text-[#2D6A4F]">Manual setup URI / Details</summary>
-                          <p className="mt-1 select-all break-all font-mono text-slate-600">{authChallenge.otpauthUrl}</p>
+                          <p className="mt-1 select-all break-all font-mono text-[#455C50]">{authChallenge.otpauthUrl}</p>
                         </details>
                       )}
                     </div>
                   )}
                 </div>
-                <label className="block text-xs font-black uppercase tracking-wider text-[#4A5F57]">
-                  6-digit code
+
+                <div className="space-y-1.5">
+                  <label htmlFor="mfa-code" className="block text-sm font-bold text-[#1B4332]">
+                    {t('6-digit nga code', '6-digit code')}
+                  </label>
                   <input
+                    id="mfa-code"
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -485,75 +601,95 @@ export default function AuthScreen({
                     required
                     value={mfaCode}
                     onChange={event => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="mt-1 w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-3 font-mono text-lg tracking-[0.3em] text-[#1B4332] focus:border-emerald-600 focus:outline-none"
+                    className="form-input px-4 py-3 font-mono text-lg tracking-[0.3em]"
                   />
-                </label>
-                <div className="flex gap-3">
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => { setAuthChallenge(null); setMfaCode(''); }}
-                    className="flex-1 rounded-xl border border-[#D5CFC1] bg-white px-3 py-3 text-xs font-bold text-[#1B4332]"
+                    className="btn-bevel-secondary py-3 px-4 rounded-xl text-sm font-extrabold cursor-pointer"
                   >
-                    Cancel
+                    {t('Kanselahon', 'Cancel')}
                   </button>
-                  <button type="submit" className="flex-1 rounded-xl bg-[#1B4332] px-3 py-3 text-xs font-black text-white">
-                    {authChallenge.setup ? 'Enable MFA & Continue' : 'Verify & Sign In'}
+                  <button type="submit" className="btn-bevel-forest py-3 px-4 rounded-xl text-sm font-extrabold cursor-pointer">
+                    {authChallenge.setup ? t('I-enable ug Sulod', 'Enable & Continue') : t('Kumpirmaha', 'Verify & Sign In')}
                   </button>
                 </div>
               </form>
-            ) :
-             (
-              <div className="space-y-6 text-left">
+            ) : (
+              <div className="space-y-5 text-left">
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <label className="block text-xs font-black text-bafa-neutral-800 uppercase tracking-[0.12em]">
-                        Username
-                      </label>
-                    </div>
+                    <label
+                      htmlFor="login-username"
+                      className="block text-sm font-bold text-[#1B4332]"
+                    >
+                      {t('Username', 'Username')}
+                    </label>
                     <div className="relative">
-                      <UserIcon className="absolute left-3.5 top-3.5 w-4 h-4 text-[#4D615A]" />
+                      <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#455C50] pointer-events-none" aria-hidden="true" />
                       <input
+                        id="login-username"
+                        name="username"
                         type="text"
+                        autoComplete="username"
                         required
+                        placeholder={t('Isulod ang imong username', 'Enter your username')}
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC] font-semibold transition-all font-sans"
+                        className="form-input pl-10 pr-4 py-3 text-base font-semibold"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <label className="block text-xs font-black text-bafa-neutral-800 uppercase tracking-[0.12em]">
-                        Password
+                    <div className="flex justify-between items-center gap-2">
+                      <label
+                        htmlFor="login-password"
+                        className="block text-sm font-bold text-[#1B4332]"
+                      >
+                        {t('Password', 'Password')}
                       </label>
                       <button
                         type="button"
                         onClick={() => setShowResetForm(true)}
-                        className="text-xs font-extrabold text-[#D76B3F] hover:text-[#B85835] hover:underline cursor-pointer"
+                        className="text-sm font-bold text-[#C2410C] hover:underline cursor-pointer px-1"
                       >
-                        Forgot password?
+                        {t('Nakalimot sa password?', 'Forgot password?')}
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-[#4D615A]" />
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#455C50] pointer-events-none" aria-hidden="true" />
                       <input
-                        type="password"
+                        id="login-password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
                         required
+                        placeholder={t('Isulod ang imong password', 'Enter your password')}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 text-base bg-[#F8FAF8] border-2 border-[#D8E7D9] rounded-2xl text-[#1E352E] focus:outline-none focus:border-[#1B4332] focus:ring-4 focus:ring-[#D8F3DC] font-semibold transition-all font-sans"
+                        className="form-input pl-10 pr-12 py-3 text-base font-semibold"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(prev => !prev)}
+                        aria-label={showPassword ? t('Tagoa ang password', 'Hide password') : t('Ipakita ang password', 'Show password')}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 min-w-10 min-h-10 flex items-center justify-center rounded-lg text-[#455C50] hover:text-[#1B4332] cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                      </button>
                     </div>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white rounded-2xl font-black text-sm transition-all shadow-[0_12px_28px_rgba(27,67,50,0.25)] flex items-center justify-center gap-2 cursor-pointer mt-3"
+                    className="btn-bevel-forest w-full py-3.5 rounded-xl font-extrabold text-base flex items-center justify-center gap-2 cursor-pointer mt-2"
                   >
-                    <span>Log In</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <span>{t('Pagsulod (Log In)', 'Log In')}</span>
+                    <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
                   </button>
 
                   {!hasPresidentAccount && (
@@ -566,10 +702,10 @@ export default function AuthScreen({
                           setAdminPassword(generateInitialPassword(adminUsername || 'admin', 'President'));
                         }
                       }}
-                      className="w-full py-3 bg-[#EAF6EE] border-2 border-[#2D6A4F] text-[#1B4332] hover:bg-[#D8F3DC] rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-2.5"
+                      className="btn-bevel-secondary w-full py-3 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <UserPlus className="w-4 h-4 text-[#1B4332]" />
-                      <span>First-Time Setup: Create Admin / President Account</span>
+                      <UserPlus className="w-4 h-4 text-[#1B4332] shrink-0" aria-hidden="true" />
+                      <span>{t('Unang Setup: Paghimo og Admin / President Account', 'First-Time Setup: Create Admin / President Account')}</span>
                     </button>
                   )}
 
@@ -577,78 +713,82 @@ export default function AuthScreen({
                     <button
                       type="button"
                       onClick={onBackToGuest}
-                      className="w-full py-3 bg-[#FAF8F5] border-2 border-[#9E9785] text-[#1B4332] hover:bg-[#D8F3DC] rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-2.5"
+                      className="btn-bevel-secondary w-full py-3 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <span className="font-display">Back to Public Portal</span>
+                      <span>{t('Balik sa Publiko nga Portal', 'Back to Public Portal')}</span>
                     </button>
                   )}
                 </form>
 
                 {!hasPresidentAccount && showAdminSetup && (
-                  <form onSubmit={handleAdminSetupSubmit} className="mt-4 p-4 bg-[#EAF6EE] border-2 border-[#2D6A4F] rounded-2xl space-y-3 animate-fade-in">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-[#1B4332]" />
+                  <form onSubmit={handleAdminSetupSubmit} className="mt-4 p-4 dim-card-mint rounded-2xl space-y-3 animate-fade-in">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <h4 className="text-xs font-extrabold text-[#1B4332] uppercase tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-[#1B4332]" aria-hidden="true" />
                         <span>Initialize Admin / President Account</span>
                       </h4>
                       <button
                         type="button"
                         onClick={() => setAdminPassword(generateInitialPassword(adminUsername || 'admin', 'President'))}
-                        className="text-[11px] font-extrabold text-[#1B4332] hover:underline cursor-pointer"
+                        className="text-xs font-extrabold text-[#1B4332] hover:underline cursor-pointer"
                       >
                         Generate Strong Password
                       </button>
                     </div>
-                    <p className="text-[11px] text-[#2D5A43] leading-relaxed">
-                      Walay nakit-an nga President/Admin account sa database. Paghimo og initial Admin account aron makadugang sa mga opisyal ug makabuhat og turnover.
+                    <p className="text-xs text-[#354B40] leading-relaxed">
+                      {t(
+                        'Walay nakit-an nga President/Admin account sa database. Paghimo og initial Admin account aron makadugang sa mga opisyal ug makabuhat og turnover.',
+                        'No President/Admin account was found in the database. Create the initial administrator account to provision officers.'
+                      )}
                     </p>
                     <div className="space-y-2.5">
                       <div>
-                        <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">Admin / President Full Name</label>
+                        <label htmlFor="admin-name" className="block text-xs font-bold text-[#1B4332] mb-1">Admin / President Full Name</label>
                         <input
+                          id="admin-name"
                           type="text"
                           required
-
                           value={adminName}
                           onChange={(e) => setAdminName(e.target.value)}
-                          className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                          className="form-input px-3 py-2 text-sm font-semibold"
                         />
                       </div>
                       {serverAuthRequired && (
                         <div>
-                          <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">One-time deployment bootstrap code</label>
+                          <label htmlFor="bootstrap-secret" className="block text-xs font-bold text-[#1B4332] mb-1">One-time deployment bootstrap code</label>
                           <input
+                            id="bootstrap-secret"
                             type="password"
                             autoComplete="off"
                             required
                             value={bootstrapSecret}
                             onChange={(e) => setBootstrapSecret(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                            className="form-input px-3 py-2 text-sm font-mono font-semibold"
                           />
-                          <p className="mt-1 text-[10px] text-[#4A5F57]">Obtain this from the deployment administrator. It is not the account password.</p>
+                          <p className="mt-1 text-xs text-[#455C50]">Obtain this from the deployment administrator. It is not the account password.</p>
                         </div>
                       )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
-                          <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">Username</label>
+                          <label htmlFor="admin-username" className="block text-xs font-bold text-[#1B4332] mb-1">Username</label>
                           <input
+                            id="admin-username"
                             type="text"
                             required
-
                             value={adminUsername}
                             onChange={(e) => setAdminUsername(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                            className="form-input px-3 py-2 text-sm font-mono font-semibold"
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-black text-[#1B4332] uppercase mb-1">Password (12+ chars)</label>
+                          <label htmlFor="admin-password" className="block text-xs font-bold text-[#1B4332] mb-1">Password (12+ chars)</label>
                           <input
+                            id="admin-password"
                             type="text"
                             required
-
                             value={adminPassword}
                             onChange={(e) => setAdminPassword(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white border border-[#A7D7B5] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                            className="form-input px-3 py-2 text-sm font-mono font-semibold"
                           />
                         </div>
                       </div>
@@ -657,13 +797,13 @@ export default function AuthScreen({
                       <button
                         type="button"
                         onClick={() => setShowAdminSetup(false)}
-                        className="px-3.5 py-2 bg-white border border-[#A7D7B5] text-[#1B4332] rounded-xl text-xs font-bold cursor-pointer"
+                        className="btn-bevel-secondary px-4 py-2 rounded-xl text-xs font-bold cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black cursor-pointer shadow-sm"
+                        className="btn-bevel-forest px-4 py-2 rounded-xl text-xs font-extrabold cursor-pointer"
                       >
                         Create Admin & Sign In
                       </button>
@@ -674,10 +814,11 @@ export default function AuthScreen({
             )}
           </div>
 
-          <div className="text-center text-[10px] text-[#85947E] mt-6 border-t border-[#F0EBE1] pt-3">
-            {en
-              ? 'AFA System v1.1'
-              : 'Sistemang AFA v1.1'}
+          <div className="text-center text-xs text-[#455C50] font-semibold mt-6 border-t border-[#E3EFE6] pt-3">
+            {t(
+              'FAMS — Farmers Association Management System • AFA v1.1',
+              'FAMS — Farmers Association Management System • AFA v1.1'
+            )}
           </div>
         </div>
       </div>

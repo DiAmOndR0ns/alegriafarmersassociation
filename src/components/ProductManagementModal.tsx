@@ -47,11 +47,13 @@ export default function ProductManagementModal({
   const [isPublished, setIsPublished] = useState(true);
   const [otherCategory, setOtherCategory] = useState('');
   const hasEggCatalogProduct = products.some(isEggCatalogProduct);
+  const canManageProducts = ['President', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(currentRole);
 
   // Resolved from the officers ACTUALLY delegated in the system — no hardcoded names.
   const getOfficerTitle = (role: OfficerRole) => resolveOfficerPrefixed(users, role);
 
   const handleOpenAdd = () => {
+    if (!canManageProducts) return;
     setEditingProduct(null);
     setName('');
     setCebName('');
@@ -64,7 +66,7 @@ export default function ProductManagementModal({
     setStockStatus('In Stock');
     setFarmerName('');
     setFarmerSitio('Sitio Tapon');
-    setFarmerPhone('0912-345-6789');
+    setFarmerPhone('');
     setIsPublished(true);
     setOtherCategory('');
     setShowAddEditModal(true);
@@ -181,41 +183,46 @@ export default function ProductManagementModal({
 
   return (
     <div className="w-full text-left">
-      <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full rounded-3xl shadow-sm overflow-hidden flex flex-col text-[#1B4332]">
+      <div className="dim-card w-full rounded-3xl overflow-hidden flex flex-col text-[#163327]">
 
         {/* HEADER */}
-        <div className="p-5 bg-[#F0EDE7] border-b border-[#D5CFC1] flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700">
-              <ShoppingBag className="w-6 h-6" />
+        <div className="p-4 sm:p-5 bg-gradient-to-b from-[#FAF8F5] to-[#F3F8F4] border-b border-[#E3EFE6] flex justify-between items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-2xl bg-[#FFF0C2] border border-[#E9B34A]/50 text-[#8A5404] shrink-0">
+              <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <h2 className="text-base font-black text-[#1B4332] uppercase tracking-wider">
-              Product Catalog
-            </h2>
+            <div className="min-w-0">
+              <h2 className="font-display text-base sm:text-lg font-bold text-[#1B4332] truncate">
+                {en ? 'Product Catalog' : 'Merkado & Produkto'}
+              </h2>
+              <p className="text-xs text-[#455C50] font-medium truncate">
+                FAMS • Alegria Farmers Association
+              </p>
+            </div>
           </div>
-          <span className="text-[11px] font-black bg-[#1B4332] text-white px-3 py-1 rounded-full">
+          <span className="text-xs font-extrabold font-mono bg-[#1B4332] text-[#FFF0C2] px-3 py-1 rounded-full shrink-0">
             {filteredProducts.length} items
           </span>
         </div>
 
         {/* CONTROLS BAR */}
-        <div className="p-4 bg-[#F7F4EF] border-b border-[#D5CFC1] flex flex-col sm:flex-row justify-between items-center gap-3">
-          <div className="flex items-center gap-2 w-full sm:w-auto flex-1 max-w-md">
+        <div className="p-3.5 sm:p-4 bg-[#FAF8F5] border-b border-[#E3EFE6] flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto flex-1 max-w-lg">
             <div className="relative w-full">
-              <Search className="w-4 h-4 text-[#4A5F57] absolute left-3 top-3" />
+              <Search className="w-4 h-4 text-[#455C50] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 placeholder={en ? 'Search products...' : 'Pangitaa ang produkto...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white border border-[#D5CFC1] rounded-xl pl-9 pr-3 py-2 text-xs text-[#1B4332] placeholder-[#4A5F57] focus:outline-none focus:border-emerald-500"
+                className="form-input pl-10 pr-3 py-2 text-sm text-[#163327]"
               />
             </div>
 
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-xs text-[#1B4332] focus:outline-none focus:border-emerald-500 shrink-0"
+              className="form-control sm:w-auto px-3 py-2 text-sm text-[#163327] shrink-0"
             >
               <option value="All">{en ? 'All Categories' : 'Tanan Kategoriya'}</option>
               <option value="Produce">{en ? 'Produce' : 'Produce (Ani)'}</option>
@@ -228,26 +235,34 @@ export default function ProductManagementModal({
             </select>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            {!hasEggCatalogProduct && (
+          {canManageProducts ? (
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              {!hasEggCatalogProduct && (
+                <button
+                  type="button"
+                  onClick={handleOpenEggSetup}
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shrink-0"
+                >
+                  <Tag className="w-4 h-4" />
+                  <span>{en ? 'Set Egg Price' : 'Itakda ang Presyo sa Itlog'}</span>
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleOpenEggSetup}
-                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shrink-0"
+                onClick={handleOpenAdd}
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shrink-0"
               >
-                <Tag className="w-4 h-4" />
-                <span>{en ? 'Set Egg Price' : 'Itakda ang Presyo sa Itlog'}</span>
+                <Plus className="w-4 h-4" />
+                <span>{en ? 'Add Product' : 'Idugang ang Produkto (Add Product)'}</span>
               </button>
-            )}
-            <button
-              type="button"
-              onClick={handleOpenAdd}
-              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{en ? 'Add Product' : 'Idugang ang Produkto (Add Product)'}</span>
-            </button>
-          </div>
+            </div>
+          ) : (
+            <span className="text-xs font-bold text-[#455C50] bg-[#EAF4EC] border border-[#1B4332]/20 px-3 py-1.5 rounded-xl">
+              {en
+                ? 'View-only mode (managed by PIO, Treasurer, Auditor, or President)'
+                : 'Tan-aw ra (gidumala sa PIO, Mamahandi, Tig-audit, o Presidente)'}
+            </span>
+          )}
         </div>
 
         <p className="px-4 pt-3 text-xs font-semibold text-[#4A5F57]">
@@ -287,6 +302,7 @@ export default function ProductManagementModal({
                         )}
                       </div>
 
+                      {canManageProducts && (
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
@@ -321,6 +337,7 @@ export default function ProductManagementModal({
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                      )}
                     </div>
 
                     <p className="text-xs text-[#4A5F57] mt-2 line-clamp-2">{product.description}</p>
@@ -389,47 +406,52 @@ export default function ProductManagementModal({
           Alegria Farmers Association (AFA) • Product Registry        </div>
       </div>
 
-      {/* ADD / EDIT PRODUCT SUB-MODAL */}
+      {/* ADD / EDIT PRODUCT SUB-MODAL (Mobile Bottom-Sheet -> Desktop Dialog) */}
       {showAddEditModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-[100] animate-fade-in text-left">
-          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-3xl rounded-2xl p-4 sm:p-6 space-y-4 shadow-2xl text-[#1B4332] max-h-[92vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-[#D5CFC1] pb-3">
-              <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wider flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4 text-amber-700" />
+        <div className="modal-backdrop z-[100] animate-fade-in text-left" onClick={() => setShowAddEditModal(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="modal-panel !max-w-3xl p-4 sm:p-6 space-y-4 text-[#163327]"
+          >
+            <div className="w-11 h-1 rounded-full bg-[#1B4332]/20 mx-auto sm:hidden" aria-hidden="true" />
+            <div className="flex justify-between items-center border-b border-[#E3EFE6] pb-3">
+              <h3 className="font-display text-base sm:text-lg font-bold text-[#1B4332] flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-[#C2410C]" />
                 <span>{editingProduct ? 'I-edit ang Produkto' : 'Idugang ang Bag-ong Produkto'}</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAddEditModal(false)}
-                className="text-[#4A5F57] hover:text-[#1B4332]"
+                aria-label="Close product form"
+                className="min-w-10 min-h-10 rounded-xl flex items-center justify-center text-[#455C50] hover:bg-[#EAF6EE] hover:text-[#1B4332] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveProduct} className="space-y-3 text-sm">
               <div>
-                <label className="block text-[#4A5F57] font-bold mb-1">Pangalan sa Produkto (English Name):</label>
+                <label className="block text-[#1B4332] font-bold mb-1">Pangalan sa Produkto (English Name):</label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
+                  className="form-input px-3.5 py-2.5 text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-[#4A5F57] font-bold mb-1">Visayan / Cebuano Title:</label>
+                <label className="block text-[#1B4332] font-bold mb-1">Visayan / Cebuano Title:</label>
                 <input
                   type="text"
                   value={cebName}
                   onChange={(e) => setCebName(e.target.value)}
-                  className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
+                  className="form-input px-3.5 py-2.5 text-sm"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[#4A5F57] font-bold mb-1">Kategoriya (Category):</label>
                   {category === 'Other' || !['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops', 'Rental Assets'].includes(category) ? (

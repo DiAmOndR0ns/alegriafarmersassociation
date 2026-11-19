@@ -85,8 +85,8 @@ const getExpenseCategories = (produce: string): string[] => {
   return ['Supplies & Materials', 'Equipment', 'Maintenance & Repairs', 'Other'];
 };
 
-const inputCls = 'w-full px-3 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600 font-semibold';
-const labelCls = 'block text-[11px] font-black text-[#1B4332] uppercase mb-1';
+const inputCls = 'form-input px-3.5 py-2.5 text-sm font-semibold text-[#163327]';
+const labelCls = 'block text-xs font-extrabold text-[#1B4332] uppercase mb-1';
 const fundSourceValue = (fund: OrganizationFund) => `${fund.code} (${fund.name})`;
 
 export default function LivestockMonitor({
@@ -1584,11 +1584,18 @@ export default function LivestockMonitor({
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-[70] text-left">
-      <div role="dialog" aria-modal="true" aria-labelledby="igp-modal-title" className="bg-[#F7F4EF] border-[#D5CFC1] w-full max-w-4xl rounded-3xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4 border-b border-[#D5CFC1] pb-3">
-          <h3 id="igp-modal-title" className="text-lg font-bold text-[#1B4332]">{title}</h3>
-          <button type="button" onClick={onClose} aria-label="Close dialog" className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-lg text-[#4A5F57] hover:bg-emerald-50 hover:text-[#1B4332] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 cursor-pointer">
+    <div className="modal-backdrop z-[70] text-left animate-fade-in" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="igp-modal-title"
+        onClick={(e) => e.stopPropagation()}
+        className="modal-panel !max-w-4xl p-4 sm:p-6"
+      >
+        <div className="w-11 h-1 rounded-full bg-[#1B4332]/20 mx-auto mb-3 sm:hidden" aria-hidden="true" />
+        <div className="flex justify-between items-center mb-4 border-b border-[#E3EFE6] pb-3 gap-2">
+          <h3 id="igp-modal-title" className="font-display text-lg sm:text-xl font-bold text-[#1B4332]">{title}</h3>
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-xl text-[#455C50] hover:bg-[#EAF6EE] hover:text-[#1B4332] cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1600,17 +1607,17 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 function ModalActions({ onCancel, submitLabel }: { onCancel: () => void; submitLabel: string }) {
   return (
-    <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200">
+    <div className="grid grid-cols-2 sm:flex sm:justify-end gap-2.5 pt-3 border-t border-[#E3EFE6]">
       <button
         type="button"
         onClick={onCancel}
-        className="min-h-11 px-4 py-2 text-sm font-bold rounded-xl border-slate-300 bg-slate-100 text-[#1B4332] cursor-pointer hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 transition-colors"
+        className="btn-bevel-secondary min-h-11 px-4 py-2.5 text-sm font-extrabold rounded-xl cursor-pointer"
       >
         Cancel
       </button>
       <button
         type="submit"
-        className="min-h-11 px-5 py-2 text-sm font-bold rounded-xl bg-[#1B4332] text-white hover:bg-[#143326] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 cursor-pointer shadow-md transition-colors"
+        className="btn-bevel-forest min-h-11 px-5 py-2.5 text-sm font-extrabold rounded-xl cursor-pointer"
       >
         {submitLabel}
       </button>

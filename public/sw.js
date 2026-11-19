@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bafa-portal-v1';
+const CACHE_NAME = 'fams-afa-portal-v2';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/afa-logo.png'];
 
 self.addEventListener('install', (event) => {

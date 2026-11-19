@@ -45,24 +45,26 @@ export default function BoardMemberView({
 
   return (
     <section className="space-y-5 text-left">
-      <header className="rounded-2xl bg-[#1B4332] p-5 text-white">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-emerald-200" />
-          <h2 className="text-lg font-black">Board Policy & Resolution Desk</h2>
+      <header className="rounded-3xl bg-gradient-to-br from-[#245741] via-[#1B4332] to-[#123326] p-5 sm:p-6 text-white shadow-md border border-[#7EC79F]/20">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-white/15 text-[#FFF0C2] flex items-center justify-center shrink-0">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <h2 className="font-display text-lg sm:text-xl font-bold text-white">Board Policy & Resolution Desk</h2>
         </div>
-        <p className="mt-2 text-sm text-emerald-50">
+        <p className="mt-2 text-sm text-[#D6EFD9] leading-relaxed">
           Draft and submit policy proposals for review. The President retains final approval authority.
         </p>
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-black uppercase tracking-wide text-[#1B4332]">Association Resolutions</h3>
+          <h3 className="font-display text-base font-bold text-[#1B4332]">Association Resolutions</h3>
         </div>
         <button
           type="button"
           onClick={() => setShowForm((visible) => !visible)}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-[#1B4332] px-3.5 py-2 text-xs font-black text-white hover:bg-[#143326]"
+          className="btn-bevel-forest inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-extrabold cursor-pointer"
         >
           <Plus className="h-4 w-4" />
           Propose Policy
@@ -70,7 +72,7 @@ export default function BoardMemberView({
       </div>
 
       {showForm && (
-        <form onSubmit={submitProposal} className="space-y-3 rounded-2xl border border-[#D5CFC1] bg-[#FAF8F5] p-4">
+        <form onSubmit={submitProposal} className="dim-card-warm space-y-3.5 rounded-2xl p-4 sm:p-5">
           <label className="block text-[11px] font-black uppercase text-[#1B4332]">
             Resolution Number
             <input

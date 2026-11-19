@@ -88,21 +88,48 @@ export function useLanguage(): LanguageContextValue {
 }
 
 export function LanguageToggle({ className = '', onDark = false }: { className?: string; onDark?: boolean }) {
-  const { isEnglish, toggleLanguage } = useLanguage();
-  const nextLanguage = isEnglish ? 'Bisaya' : 'English';
+  const { isEnglish, setLanguage, t } = useLanguage();
 
   return (
-    <button
-      type="button"
-      onClick={toggleLanguage}
-      aria-label={isEnglish ? 'Switch language to Bisaya' : 'Ilisi ang pinulongan sa English'}
-      className={`min-h-11 px-4 py-2 rounded-xl border-2 font-bold text-sm transition-colors focus-visible:outline ${
-        onDark
-          ? 'border-emerald-300 text-white hover:bg-white/10'
-          : 'border-[#1B4332] text-[#1B4332] hover:bg-emerald-50'
+    <div
+      role="group"
+      aria-label={t('Pinulongan sa sistema', 'Interface language')}
+      className={`inline-flex items-center p-0.5 rounded-xl shrink-0 ${
+        onDark ? 'recessed-control-dark' : 'recessed-control'
       } ${className}`}
     >
-      {nextLanguage}
-    </button>
+      <button
+        type="button"
+        onClick={() => setLanguage('mixed')}
+        aria-pressed={!isEnglish}
+        className={`min-h-[36px] px-2.5 sm:px-3 py-1 rounded-[10px] text-xs font-extrabold transition-all cursor-pointer ${
+          !isEnglish
+            ? onDark
+              ? 'recessed-pill-dark-active'
+              : 'recessed-pill-active'
+            : onDark
+            ? 'text-[#D6EFD9] hover:text-white'
+            : 'text-[#455C50] hover:text-[#1B4332]'
+        }`}
+      >
+        CEB
+      </button>
+      <button
+        type="button"
+        onClick={() => setLanguage('en')}
+        aria-pressed={isEnglish}
+        className={`min-h-[36px] px-2.5 sm:px-3 py-1 rounded-[10px] text-xs font-extrabold transition-all cursor-pointer ${
+          isEnglish
+            ? onDark
+              ? 'recessed-pill-dark-active'
+              : 'recessed-pill-active'
+            : onDark
+            ? 'text-[#D6EFD9] hover:text-white'
+            : 'text-[#455C50] hover:text-[#1B4332]'
+        }`}
+      >
+        EN
+      </button>
+    </div>
   );
 }
