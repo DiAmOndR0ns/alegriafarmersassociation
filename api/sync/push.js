@@ -36,6 +36,7 @@ function safeImageUrl(value, maxLength = 4e5) {
   const url = value.trim().slice(0, maxLength);
   if (!url) return null;
   if (/^https?:\/\/[^\s<>"]+$/i.test(url)) return url;
+  if (/^\/assets\/[a-z0-9._/-]+\.(png|jpe?g|webp|gif)$/i.test(url) && !url.includes("..")) return url;
   if (/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(url)) return url;
   return null;
 }
@@ -2860,8 +2861,19 @@ async function handler(req, res) {
     }
     let safeState = { ...state };
     if (!isPresidentRole(user.role)) {
-      if (isSecretaryRole(user.role) && Array.isArray(safeState.users)) {
-        safeState.users = safeState.users.filter((u) => u && typeof u === "object" && u.role === "Member");
+      if (Array.isArray(safeState.users)) {
+        if (isSecretaryRole(user.role)) {
+          safeState.users = safeState.users.filter(
+            (u) => u && typeof u === "object" && (u.role === "Member" || u.id === user.id)
+          );
+        } else {
+          const ownRows = safeState.users.filter((u) => u && typeof u === "object" && u.id === user.id);
+          if (ownRows.length > 0) {
+            safeState.users = ownRows;
+          } else {
+            delete safeState.users;
+          }
+        }
       } else {
         delete safeState.users;
       }

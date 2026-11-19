@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Product, OfficerRole, User as SystemUser } from '../types';
 import { resolveOfficerPrefixed } from '../utils/officers';
 import { isEggCatalogProduct } from '../utils/eggInventory';
-import {  ShoppingBag, Plus, Edit, Trash2, Eye, EyeOff, X, Check, Search, Tag, DollarSign, Package, User, Phone, MapPin } from 'lucide-react';
+import { compressImageFile, hasAttachedImage } from '../utils/imageUpload';
+import { ShoppingBag, Plus, Edit, Trash2, Eye, EyeOff, X, Search, Tag, Package, User, Phone, MapPin, Upload, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface ProductManagementModalProps {
@@ -44,6 +45,11 @@ export default function ProductManagementModal({
   const [farmerName, setFarmerName] = useState('');
   const [farmerSitio, setFarmerSitio] = useState('');
   const [farmerPhone, setFarmerPhone] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageError, setImageError] = useState('');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [isPublished, setIsPublished] = useState(true);
   const [otherCategory, setOtherCategory] = useState('');
   const hasEggCatalogProduct = products.some(isEggCatalogProduct);
@@ -51,6 +57,31 @@ export default function ProductManagementModal({
 
   // Resolved from the officers ACTUALLY delegated in the system — no hardcoded names.
   const getOfficerTitle = (role: OfficerRole) => resolveOfficerPrefixed(users, role);
+
+  const handleProductImageFile = async (file: File) => {
+    setImageError('');
+    setIsProcessingImage(true);
+    try {
+      const compressed = await compressImageFile(file, {
+        maxWidth: 960,
+        maxHeight: 720,
+        quality: 0.82
+      });
+      setImageUrl(compressed);
+    } catch (error: any) {
+      setImageError(error?.message || (en ? 'Please select a valid image file (PNG, JPG, or WebP).' : 'Palihug pagpili og tinuod nga hulagway (PNG, JPG, o WebP).'));
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
+  const handleProductImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) {
+      void handleProductImageFile(file);
+    }
+  };
 
   const handleOpenAdd = () => {
     if (!canManageProducts) return;
@@ -67,6 +98,8 @@ export default function ProductManagementModal({
     setFarmerName('');
     setFarmerSitio('Sitio Tapon');
     setFarmerPhone('');
+    setImageUrl('');
+    setImageError('');
     setIsPublished(true);
     setOtherCategory('');
     setShowAddEditModal(true);
@@ -86,6 +119,8 @@ export default function ProductManagementModal({
     setFarmerName('AFA Poultry Project');
     setFarmerSitio('');
     setFarmerPhone('');
+    setImageUrl('');
+    setImageError('');
     setIsPublished(true);
     setOtherCategory('');
     setShowAddEditModal(true);
@@ -106,6 +141,8 @@ export default function ProductManagementModal({
     setFarmerName(p.farmerName || p.contactPerson || '');
     setFarmerSitio(p.farmerSitio || '');
     setFarmerPhone(p.farmerPhone || '');
+    setImageUrl(p.imageUrl || '');
+    setImageError('');
     setIsPublished(p.isPublished);
     setShowAddEditModal(true);
   };
@@ -113,6 +150,14 @@ export default function ProductManagementModal({
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !description.trim()) return;
+    if (!hasAttachedImage(imageUrl)) {
+      setImageError(
+        en
+          ? 'A product picture is required. Please upload or attach an image before saving.'
+          : 'Kinahanglan nga naay hulagway ang produkto. Palihug pag-upload og hulagway sa dili pa i-save.'
+      );
+      return;
+    }
 
     const finalCategory = (category === 'Other' ? otherCategory.trim() : category) || 'Other';
     if (!finalCategory) return;
@@ -135,6 +180,7 @@ export default function ProductManagementModal({
         farmerSitio,
         farmerPhone,
         contactPerson: contactStr,
+        imageUrl,
         isPublished,
         updatedBy: getOfficerTitle(currentRole),
         dateUpdated: new Date().toISOString().split('T')[0]
@@ -154,6 +200,7 @@ export default function ProductManagementModal({
         farmerSitio,
         farmerPhone,
         contactPerson: contactStr,
+        imageUrl,
         isPublished,
         updatedBy: getOfficerTitle(currentRole),
         managedBy: getOfficerTitle(currentRole),
@@ -291,6 +338,11 @@ export default function ProductManagementModal({
                   }`}
                 >
                   <div>
+                    {product.imageUrl && (
+                      <div className="product-media-frame mb-3 max-h-44">
+                        <img src={product.imageUrl} alt={product.name} loading="lazy" />
+                      </div>
+                    )}
                     <div className="flex justify-between items-start gap-2">
                       <div>
                         <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
@@ -429,7 +481,110 @@ export default function ProductManagementModal({
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="space-y-3 text-sm">
+            <form onSubmit={handleSaveProduct} className="space-y-3.5 text-sm">
+              {/* REQUIRED PRODUCT PICTURE UPLOAD */}
+              <div className="space-y-2">
+                <label className="block text-[#1B4332] font-bold">
+                  {en ? 'Product Picture (Required)' : 'Hulagway sa Produkto (Kinahanglan)'}{' '}
+                  <span className="text-[#C2410C]" aria-hidden="true">*</span>
+                </label>
+
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProductImageChange}
+                  className="hidden"
+                  aria-label={en ? 'Upload product picture' : 'Pag-upload og hulagway sa produkto'}
+                />
+
+                {imageUrl ? (
+                  <div className="dim-card rounded-2xl p-3 space-y-2.5">
+                    <div className="product-media-frame max-h-52">
+                      <img src={imageUrl} alt={name || 'Product preview'} />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[#2D6A4F] inline-flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <span>{en ? 'Picture attached' : 'Naka-attach na ang hulagway'}</span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => imageInputRef.current?.click()}
+                          className="btn-bevel-secondary px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <Upload className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>{en ? 'Replace Photo' : 'Ilisi ang Hulagway'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageUrl('');
+                            setImageError('');
+                          }}
+                          className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>{en ? 'Remove' : 'Tangtanga'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => imageInputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        imageInputRef.current?.click();
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingImage(true);
+                    }}
+                    onDragLeave={() => setIsDraggingImage(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingImage(false);
+                      const droppedFile = e.dataTransfer.files?.[0];
+                      if (droppedFile) void handleProductImageFile(droppedFile);
+                    }}
+                    className={`rounded-2xl border-2 border-dashed p-5 text-center cursor-pointer transition-all ${
+                      imageError
+                        ? 'border-rose-400 bg-rose-50/60'
+                        : isDraggingImage
+                        ? 'border-[#1B4332] bg-[#EAF6EE]'
+                        : 'border-[#B8CEBF] bg-[#FAF8F5] hover:border-[#1B4332] hover:bg-white'
+                    }`}
+                  >
+                    <div className="w-11 h-11 rounded-2xl bg-[#D6EFD9] text-[#1B4332] mx-auto mb-2 flex items-center justify-center">
+                      <Upload className="w-5 h-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-sm font-extrabold text-[#1B4332]">
+                      {isProcessingImage
+                        ? en ? 'Processing image...' : 'Nag-andam sa hulagway...'
+                        : en ? 'Click or drag & drop a product photo here' : 'Pindota o i-drag ang hulagway sa produkto diri'}
+                    </p>
+                    <p className="text-xs text-[#455C50] mt-1 font-medium">
+                      {en
+                        ? 'Required • PNG, JPG, or WebP (automatically compressed for fast loading)'
+                        : 'Kinahanglan • PNG, JPG, o WebP (awtomatikong gi-compress)'}
+                    </p>
+                  </div>
+                )}
+
+                {imageError && (
+                  <p role="alert" className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span>{imageError}</span>
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-[#1B4332] font-bold mb-1">Pangalan sa Produkto (English Name):</label>
                 <input
@@ -612,19 +767,22 @@ export default function ProductManagementModal({
                 </label>
               </div>
 
-              <div className="pt-3 flex justify-end gap-2 border-t border-[#D5CFC1]">
+              <div className="pt-3 grid grid-cols-2 sm:flex sm:justify-end gap-2.5 border-t border-[#E3EFE6]">
                 <button
                   type="button"
                   onClick={() => setShowAddEditModal(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-[#1B4332] rounded-xl font-bold cursor-pointer border border-slate-300"
+                  className="btn-bevel-secondary px-4 py-2.5 rounded-xl font-extrabold cursor-pointer"
                 >
-                  Kanselahi
+                  {en ? 'Cancel' : 'Kanselahi'}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#1B4332] hover:bg-[#143326] text-white rounded-xl font-black cursor-pointer shadow-md"
+                  disabled={isProcessingImage}
+                  className="btn-bevel-forest px-5 py-2.5 rounded-xl font-extrabold cursor-pointer disabled:opacity-60"
                 >
-                  I-save ang Produkto
+                  {isProcessingImage
+                    ? (en ? 'Processing photo...' : 'Nag-process sa hulagway...')
+                    : (en ? 'Save Product' : 'I-save ang Produkto')}
                 </button>
               </div>
             </form>

@@ -12,6 +12,7 @@ import AnnouncementDashboard from './AnnouncementDashboard';
 import LivestockMonitor from './LivestockMonitor';
 import AffiliationManager from './AffiliationManager';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
+import { compressImageFile } from '../utils/imageUpload';
 
 interface MemberDashboardProps {
   currentUser: User;
@@ -175,33 +176,29 @@ export default function MemberDashboard({
     }
   };
 
-  // Process Avatar Files
-  const processFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast('Palihug pagpili og tinuod nga hulagway (PNG/JPG).', 'error');
-      return;
-    }
-    
-    if (file.size > 2 * 1024 * 1024) {
-      toast('Sobra kadako ang hulagway. Kinahanglan ubos sa 2MB (File size exceeds 2MB limit).', 'error');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64Url = e.target?.result as string;
+  // Process Avatar Files (automatically resized & compressed so it always fits encrypted storage & cloud sync)
+  const processFile = async (file: File) => {
+    try {
+      const compressedDataUrl = await compressImageFile(file, {
+        maxWidth: 480,
+        maxHeight: 480,
+        quality: 0.82
+      });
       onUpdateProfile({
         ...currentUser,
-        avatarUrl: base64Url
+        avatarUrl: compressedDataUrl
       });
-      toast('Nabag-o na ang imong hulagway (Profile photo updated)!', 'success');
-    };
-    reader.readAsDataURL(file);
+      toast('Nabag-o ug naluwas na ang imong hulagway (Profile photo saved)!', 'success');
+    } catch (error: any) {
+      toast(error?.message || 'Palihug pagpili og tinuod nga hulagway (PNG/JPG).', 'error');
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    const selectedFile = e.target.files?.[0];
+    e.target.value = '';
+    if (selectedFile) {
+      void processFile(selectedFile);
     }
   };
 
@@ -443,7 +440,7 @@ export default function MemberDashboard({
                   />
                   <Upload className="w-4 h-4 text-[#85947E] mx-auto mb-1" />
                   <p className="text-[10px] text-[#1B4332] font-extrabold">Pindota diri para mag-upload</p>
-                  <p className="text-[8px] text-[#85947E] mt-0.5">PNG o JPG. Ubos sa 2MB.</p>
+                  <p className="text-[8px] text-[#85947E] mt-0.5">PNG, JPG, o WebP • Awtomatikong gi-compress.</p>
                 </div>
 
                 {/* Preset selectors for easier testing */}
@@ -1063,8 +1060,12 @@ export default function MemberDashboard({
                   >
                     <div className="flex items-start sm:items-center justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <div className="w-11 h-11 rounded-2xl bg-[#EAF4EC] flex items-center justify-center border border-[#D5E7D9] text-[#1B4332] shrink-0">
-                          <ShoppingBag className="w-5 h-5" />
+                        <div className="w-14 h-14 rounded-2xl bg-[#EAF4EC] flex items-center justify-center border border-[#D5E7D9] text-[#1B4332] shrink-0 overflow-hidden">
+                          {prod.imageUrl ? (
+                            <img src={prod.imageUrl} alt={prod.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <ShoppingBag className="w-5 h-5" />
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-1">

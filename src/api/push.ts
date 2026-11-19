@@ -394,10 +394,22 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
     }
     // Accounts, roles, hashes, MFA, lockout, and policy state are managed only by dedicated auth endpoints.
     let safeState: PushSyncState = { ...state };
-    // President can sync all accounts; Secretary can sync Member portal accounts
+    // President can sync all accounts; Secretary can sync Member portal accounts + own profile;
+    // any other authenticated user (including Members) may sync their own profile row (e.g. avatarUrl).
     if (!isPresidentRole(user.role)) {
-      if (isSecretaryRole(user.role) && Array.isArray(safeState.users)) {
-        safeState.users = safeState.users.filter((u: any) => u && typeof u === 'object' && u.role === 'Member');
+      if (Array.isArray(safeState.users)) {
+        if (isSecretaryRole(user.role)) {
+          safeState.users = safeState.users.filter(
+            (u: any) => u && typeof u === 'object' && (u.role === 'Member' || u.id === user.id)
+          );
+        } else {
+          const ownRows = safeState.users.filter((u: any) => u && typeof u === 'object' && u.id === user.id);
+          if (ownRows.length > 0) {
+            safeState.users = ownRows;
+          } else {
+            delete (safeState as any).users;
+          }
+        }
       } else {
         delete (safeState as any).users;
       }

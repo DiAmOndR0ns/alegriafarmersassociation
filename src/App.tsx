@@ -453,7 +453,14 @@ export default function App() {
                       merged.push(devOfficer);
                     }
                   } else if (String(merged[existingIdx].id || '').startsWith('local-officer-')) {
-                    merged[existingIdx] = { ...merged[existingIdx], ...devOfficer };
+                    const prev = merged[existingIdx];
+                    merged[existingIdx] = {
+                      ...devOfficer,
+                      ...prev,
+                      passwordHash: devOfficer.passwordHash,
+                      totpSecret: devOfficer.totpSecret ?? prev.totpSecret,
+                      mfaEnabled: devOfficer.mfaEnabled
+                    };
                   }
                 }
                 finalLocalUsers = merged;
@@ -473,7 +480,12 @@ export default function App() {
           await setSecureItem('bafa_current_user', safeCurrentUser);
         }
         if (storedCurr && !cancelled) {
-          const safeUser = { ...storedCurr };
+          const matchedStoredUser = finalLocalUsers.find((u: User) => u.id === storedCurr.id);
+          const safeUser: User = {
+            ...matchedStoredUser,
+            ...storedCurr,
+            avatarUrl: storedCurr.avatarUrl ?? matchedStoredUser?.avatarUrl
+          };
           delete safeUser.password;
           delete safeUser.passwordHash;
           delete safeUser.passwordHistory;
@@ -753,6 +765,9 @@ export default function App() {
       await setSecureItem(key, data);
     } catch (error) {
       console.error(`Unable to encrypt local storage item ${key}:`, error);
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        showToastMessage('Puno na ang local browser storage. Palihug gamit og mas gamay nga hulagway o limpyohi ang cache.', 'warning');
+      }
     }
   };
 
@@ -3831,7 +3846,8 @@ export default function App() {
   };
 
   const handleUpdateProfile = (updatedUser: User) => {
-    const owner = currentUser && users.find(u => u.id === currentUser.id);
+    const ownerFromList = currentUser ? users.find(u => u.id === currentUser.id) : undefined;
+    const owner = ownerFromList || (currentUser && currentUser.id === updatedUser.id ? currentUser : null);
     if (!owner || updatedUser.id !== owner.id) {
       showToastMessage('Profile update denied: this account does not own the requested data.', 'error');
       return;
@@ -3853,29 +3869,60 @@ export default function App() {
       affiliations: updatedUser.affiliations
     };
 
-    const updatedUsers = users.map(u => u.id === owner.id ? ownedProfile : u);
+    const updatedUsers = ownerFromList
+      ? users.map(u => u.id === owner.id ? ownedProfile : u)
+      : [ownedProfile, ...users];
     setUsers(updatedUsers);
-    updateStorage('bafa_users', updatedUsers);
+    void updateStorage('bafa_users', updatedUsers);
 
     setCurrentUser(ownedProfile);
-    updateStorage('bafa_current_user', ownedProfile);
+    void updateStorage('bafa_current_user', ownedProfile);
 
-    // Sync member list details if they are a member
-    if (ownedProfile.role === 'Member') {
-      const updatedMembers = members.map(m => (m.id === ownedProfile.id || (ownedProfile.memberIdNumber && m.memberIdNumber === ownedProfile.memberIdNumber) || m.name.toLowerCase() === ownedProfile.name.toLowerCase()) ? {
-        ...m,
-        name: ownedProfile.name,
-        farmLocation: ownedProfile.farmLocation || m.farmLocation,
-        primaryCrops: ownedProfile.primaryCrops || m.primaryCrops,
-        contactNumber: ownedProfile.contactNumber || m.contactNumber,
-        avatarUrl: ownedProfile.avatarUrl,
-        affiliations: ownedProfile.affiliations || m.affiliations
-      } : m);
+    // Sync matching member roster record (for both Members and Officers-as-Members)
+    const matchesMember = (m: Member) =>
+      (ownedProfile.memberId && m.id === ownedProfile.memberId) ||
+      m.id === ownedProfile.id ||
+      Boolean(ownedProfile.memberIdNumber && m.memberIdNumber === ownedProfile.memberIdNumber) ||
+      m.name.trim().toLowerCase() === ownedProfile.name.trim().toLowerCase() ||
+      m.name.trim().toLowerCase() === owner.name.trim().toLowerCase();
+
+    const hasMatchedMember = members.some(matchesMember);
+    const updatedMembers = hasMatchedMember
+      ? members.map(m => matchesMember(m) ? {
+          ...m,
+          name: ownedProfile.name,
+          farmLocation: ownedProfile.farmLocation || m.farmLocation,
+          primaryCrops: ownedProfile.primaryCrops || m.primaryCrops,
+          contactNumber: ownedProfile.contactNumber || m.contactNumber,
+          avatarUrl: ownedProfile.avatarUrl,
+          affiliations: ownedProfile.affiliations || m.affiliations
+        } : m)
+      : members;
+
+    if (hasMatchedMember) {
       setMembers(updatedMembers);
-      updateStorage('bafa_members', updatedMembers);
+      void updateStorage('bafa_members', updatedMembers);
     }
 
     logAction('Updated Profile', `${ownedProfile.name} modified their profile details`);
+    if (isOnline) {
+      void pushAllDataToCloud(
+        {
+          users: updatedUsers,
+          ...(hasMatchedMember ? { members: updatedMembers } : {})
+        },
+        { silent: true, source: 'Profile Updated' }
+      );
+    } else {
+      addToSyncQueue('update', 'user', {
+        id: ownedProfile.id,
+        name: ownedProfile.name,
+        avatarUrl: ownedProfile.avatarUrl,
+        farmLocation: ownedProfile.farmLocation,
+        contactNumber: ownedProfile.contactNumber,
+        primaryCrops: ownedProfile.primaryCrops
+      });
+    }
     showToastMessage('Profile details updated successfully!', 'success');
   };
 
@@ -4262,8 +4309,12 @@ export default function App() {
               </div>
               <LanguageToggle onDark />
               <div className="hidden sm:flex items-center gap-2 bg-[#0F2D24]/80 px-2.5 py-1 rounded-xl border border-[#7EC79F]/30">
-                <div className="w-7 h-7 rounded-lg bg-[#FFF0C2] text-[#163327] font-mono font-extrabold flex items-center justify-center text-xs shrink-0 uppercase">
-                  {currentUser?.name.substring(0, 2)}
+                <div className="w-7 h-7 rounded-lg bg-[#FFF0C2] text-[#163327] font-mono font-extrabold flex items-center justify-center text-xs shrink-0 uppercase overflow-hidden">
+                  {currentUser?.avatarUrl ? (
+                    <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    currentUser?.name.substring(0, 2)
+                  )}
                 </div>
                 <div className="text-left min-w-0 leading-tight">
                   <span className="block text-xs font-extrabold text-white truncate max-w-[120px] md:max-w-[160px]">{currentUser?.name}</span>
@@ -4405,8 +4456,12 @@ export default function App() {
             <LanguageToggle onDark />
             {/* Active officer chip */}
             <div className="hidden md:flex items-center gap-2 bg-[#0F2D24]/80 px-2.5 py-1 rounded-xl border border-[#7EC79F]/30 shrink-0">
-              <div className="w-7 h-7 rounded-lg bg-[#FFF0C2] text-[#163327] font-mono font-extrabold flex items-center justify-center text-xs shrink-0 uppercase">
-                {currentUser?.name.substring(0, 2)}
+              <div className="w-7 h-7 rounded-lg bg-[#FFF0C2] text-[#163327] font-mono font-extrabold flex items-center justify-center text-xs shrink-0 uppercase overflow-hidden">
+                {currentUser?.avatarUrl ? (
+                  <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  currentUser?.name.substring(0, 2)
+                )}
               </div>
               <div className="text-left min-w-0 leading-tight">
                 <span className="block text-xs font-extrabold text-white truncate max-w-[140px]">{currentUser?.name}</span>
