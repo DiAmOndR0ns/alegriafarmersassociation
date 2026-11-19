@@ -187,6 +187,8 @@ export function buildSyncPayload(params: {
 export default function App() {
   // Auth & Accounts State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const authEpochRef = useRef<number>(0);
+  const sessionRefreshAbortRef = useRef<AbortController | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [guestMode, setGuestMode] = useState<boolean>(true);
   const [showPrivacyPage, setShowPrivacyPage] = useState<boolean>(
@@ -506,11 +508,17 @@ export default function App() {
         setLogs(activeLogs);
 
         // Check authenticated session before completing hydration
+        const hydrationAuthEpoch = authEpochRef.current;
         try {
-          const sessionRes = await fetch('/api/auth/session', { credentials: 'same-origin' });
+          const sessionRes = await fetch('/api/auth/session', {
+            credentials: 'same-origin',
+            cache: 'no-store'
+          });
           if (sessionRes.ok) {
             const result = await sessionRes.json();
-            if (result?.authenticated && result.user && !cancelled) {
+            if (cancelled || authEpochRef.current !== hydrationAuthEpoch) {
+              // User explicitly logged in or logged out while hydration was in flight.
+            } else if (result?.authenticated && result.user) {
               const safeUser = { ...result.user } as User;
               delete safeUser.password;
               delete safeUser.passwordHash;
@@ -522,7 +530,7 @@ export default function App() {
               if (typeof result.hasPresident === 'boolean') {
                 setDbStatus(prev => ({ ...prev, hasPresident: result.hasPresident }));
               }
-            } else if (!result?.authenticated && (import.meta.env.PROD || result?.configured) && !cancelled) {
+            } else if (!result?.authenticated && (import.meta.env.PROD || result?.configured)) {
               // No server session: the visitor is not signed in. Stay on the guest
               // portal (guestMode defaults to true) instead of forcing the login
               // form. `dbStatus.hasPresident` is only populated after a live status
@@ -758,8 +766,12 @@ export default function App() {
         return;
       }
       if (key === 'bafa_current_user' && data && typeof data === 'object') {
+        const writeEpoch = authEpochRef.current;
         const { password: _password, passwordHash: _passwordHash, passwordHistory: _passwordHistory, ...copy } = data;
         await setSecureItem(key, copy);
+        if (authEpochRef.current !== writeEpoch) {
+          removeSecureItem('bafa_current_user');
+        }
         return;
       }
       await setSecureItem(key, data);
@@ -808,10 +820,17 @@ export default function App() {
   };
 
   const handleSessionExpired = () => {
+    authEpochRef.current += 1;
+    sessionRefreshAbortRef.current?.abort();
+    sessionRefreshAbortRef.current = null;
     setCurrentUser(null);
     removeSecureItem('bafa_current_user');
     setGuestMode(false);
-    void fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    void fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store'
+    }).catch(() => undefined);
     showToastMessage('Your session expired. Please sign in again. Your saved local changes are preserved.', 'warning');
   };
 
@@ -1348,9 +1367,23 @@ export default function App() {
   useEffect(() => {
     if (!currentUser || !isOnline || !(import.meta.env.PROD || dbStatus.configured)) return;
 
+    let cancelled = false;
+
     const refreshSession = async () => {
+      const requestEpoch = authEpochRef.current;
+      sessionRefreshAbortRef.current?.abort();
+      const controller = new AbortController();
+      sessionRefreshAbortRef.current = controller;
+
       try {
-        const response = await fetch('/api/auth/session', { credentials: 'same-origin' });
+        const response = await fetch('/api/auth/session', {
+          credentials: 'same-origin',
+          cache: 'no-store',
+          signal: controller.signal
+        });
+        if (cancelled || controller.signal.aborted || authEpochRef.current !== requestEpoch) {
+          return;
+        }
         if (response.status === 401) {
           handleSessionExpired();
           return;
@@ -1361,6 +1394,9 @@ export default function App() {
         }
 
         const result = await response.json();
+        if (cancelled || controller.signal.aborted || authEpochRef.current !== requestEpoch) {
+          return;
+        }
         if (!result?.authenticated || !result.user) {
           handleSessionExpired();
           return;
@@ -1371,8 +1407,15 @@ export default function App() {
         if (authenticatedUser.role !== 'Member') setCurrentRole(authenticatedUser.role as OfficerRole);
         setUsers(previous => [authenticatedUser, ...previous.filter(user => user.id !== authenticatedUser.id)]);
         updateStorage('bafa_current_user', authenticatedUser);
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.name === 'AbortError' || cancelled || authEpochRef.current !== requestEpoch) {
+          return;
+        }
         console.warn('[Auth Session] Could not refresh session while online.', error);
+      } finally {
+        if (sessionRefreshAbortRef.current === controller) {
+          sessionRefreshAbortRef.current = null;
+        }
       }
     };
 
@@ -1385,6 +1428,9 @@ export default function App() {
     window.addEventListener('focus', handleFocus);
 
     return () => {
+      cancelled = true;
+      sessionRefreshAbortRef.current?.abort();
+      sessionRefreshAbortRef.current = null;
       window.clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
     };
@@ -3208,6 +3254,9 @@ export default function App() {
   };
 
   const handleLogin = (user: User, password: string, serverAuthenticated = false) => {
+    authEpochRef.current += 1;
+    sessionRefreshAbortRef.current?.abort();
+    sessionRefreshAbortRef.current = null;
     if (import.meta.env.PROD || serverAuthenticated || dbStatus.configured) {
       void password;
       const { password: _p, passwordHash: _ph, passwordHistory: _hist, ...safeUser } = user;
@@ -3305,17 +3354,32 @@ export default function App() {
     showToastMessage('Your password has been updated successfully.', 'success');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const logoutEpoch = ++authEpochRef.current;
+    sessionRefreshAbortRef.current?.abort();
+    sessionRefreshAbortRef.current = null;
+
     if (currentUser) {
       logAction('Logged Out', `${currentUser.name} signed out of the system.`);
     }
     setCurrentUser(null);
     removeSecureItem('bafa_current_user');
     setGuestMode(true);
-    if (import.meta.env.PROD || dbStatus.configured) {
-      void fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
-    }
     showToastMessage('You have been signed out securely. Session ended.', 'info');
+
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store'
+      });
+    } catch {
+      // Offline or server logout unreachable; local session is already cleared.
+    }
+
+    if (authEpochRef.current === logoutEpoch) {
+      removeSecureItem('bafa_current_user');
+    }
   };
 
   const handleRegister = async (userData: Omit<User, 'id' | 'isApproved'>) => {
@@ -4976,10 +5040,14 @@ export default function App() {
             transactions={transactions}
             announcements={announcements}
             activities={activities}
+            achievements={achievements}
             inventory={inventory}
+            products={products}
             logs={logs}
             funds={funds}
             hogRaising={hogRaising}
+            delegationRequests={delegationRequests}
+            membershipPayments={membershipPayments}
             onClose={() => setShowReportModal(false)}
             onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
           />
@@ -5007,7 +5075,7 @@ export default function App() {
         </div>
       )}
 
-      {/* PRESIDENT'S LETTERHEAD REPORT (print / save as PDF) — EXECUTIVE SUMMARY ONLY:
+      {/* PRESIDENT'S LETTERHEAD REPORT (print / save as PDF) — UNIFIED EXECUTIVE SUMMARY:
           no financial statements; those are the Treasurer's exclusive export. */}
       {showPresidentReport && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
@@ -5021,7 +5089,22 @@ export default function App() {
             </button>
             <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading report...</div>}>
               <PresidentReport
-                data={buildReportData({ year: new Date().getFullYear(), users })}
+                data={buildReportData({
+                  year: new Date().getFullYear(),
+                  users,
+                  members,
+                  meetings,
+                  resolutions,
+                  transactions,
+                  announcements,
+                  activities,
+                  achievements,
+                  inventory,
+                  products,
+                  hogRaising,
+                  delegationRequests,
+                  membershipPayments,
+                })}
               />
             </Suspense>
           </div>

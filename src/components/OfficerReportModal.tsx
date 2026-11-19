@@ -1,13 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement, AssociationActivity, InventoryItem, HogRaisingState, OfficerRole, OrganizationFund, User } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement,
+  AssociationActivity, AssociationAchievement, InventoryItem, HogRaisingState,
+  OfficerRole, OrganizationFund, User, Product, AuditorReport, DelegationRequest,
+  MembershipPayment
+} from '../types';
 import { INITIAL_FUNDS } from '../initialData';
 import { resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
-import {  getSurname } from '../utils/names';
+import { getSurname } from '../utils/names';
 import { getTreasurerReportRange, getTreasurerReportRows } from '../utils/treasurerReport';
 import { getInitialFund } from '../utils/fundBalance';
+import PresidentReport, { buildReportData, buildPresidentReportPrintHtml } from './PresidentReport';
 import {
   Printer, Download, X, FileText, ShieldCheck, Coins,
-  Wallet, Database, Layers, CheckCircle2, AlertCircle
+  Wallet, Database, Layers, CheckCircle2, AlertCircle, Eye
 } from 'lucide-react';
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
@@ -29,10 +35,15 @@ interface OfficerReportModalProps {
   transactions: FinancialTransaction[];
   announcements: Announcement[];
   activities?: AssociationActivity[];
+  achievements?: AssociationAchievement[];
   inventory?: InventoryItem[];
+  products?: Product[];
   logs: SystemLog[];
   funds?: OrganizationFund[];
   hogRaising?: HogRaisingState;
+  auditorReports?: AuditorReport[];
+  delegationRequests?: DelegationRequest[];
+  membershipPayments?: MembershipPayment[];
   onClose: () => void;
   onDownloadBackup?: () => void;
 }
@@ -46,9 +57,14 @@ export default function OfficerReportModal({
   transactions,
   announcements,
   activities = [],
+  achievements = [],
   inventory = [],
+  products = [],
   funds = INITIAL_FUNDS,
   hogRaising,
+  auditorReports = [],
+  delegationRequests = [],
+  membershipPayments = [],
   onClose,
   onDownloadBackup
 }: OfficerReportModalProps) {
@@ -62,10 +78,56 @@ export default function OfficerReportModal({
   const [reportKind, setReportKind] = useState<'all' | 'income' | 'expenses' | 'livestock-sales'>('all');
   const [reportCategory, setReportCategory] = useState('all');
   const [customRemarks, setCustomRemarks] = useState<string>('');
+  const [presidentReportYear, setPresidentReportYear] = useState<number>(() => new Date().getFullYear());
+  const [customHighlightsText, setCustomHighlightsText] = useState<string>('');
+  const [customPlansText, setCustomPlansText] = useState<string>('');
+  const [presidentClosingLine, setPresidentClosingLine] = useState<string>(
+    () => `MABUHAY ANG MGA MAG-UUMA, Welcome ${new Date().getFullYear() + 1}!`
+  );
+  const [showLetterheadPreview, setShowLetterheadPreview] = useState<boolean>(false);
 
   // Every officer can export only the report for their assigned role.
   const activeReportRole = currentRole;
   const isTreasurerReport = ['Treasurer', 'Assistant_Treasurer'].includes(activeReportRole);
+
+  // Unified DOLE-letterhead President Executive Report data (single source of truth)
+  const presidentReportData = useMemo(() => {
+    const parsedHighlights = customHighlightsText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+    const parsedPlans = customPlansText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+    return buildReportData({
+      year: presidentReportYear,
+      generatedDate: reportDate,
+      users,
+      members,
+      meetings,
+      resolutions,
+      transactions,
+      announcements,
+      activities,
+      achievements,
+      inventory,
+      products,
+      hogRaising,
+      auditorReports,
+      delegationRequests,
+      membershipPayments,
+      highlights: parsedHighlights,
+      plans: parsedPlans,
+      closingLine: presidentClosingLine.trim() || undefined,
+      customRemarks: customRemarks.trim() || undefined,
+    });
+  }, [
+    presidentReportYear, reportDate, users, members, meetings, resolutions, transactions,
+    announcements, activities, achievements, inventory, products, hogRaising,
+    auditorReports, delegationRequests, membershipPayments, customHighlightsText,
+    customPlansText, presidentClosingLine, customRemarks
+  ]);
   const reportAnchorDate = reportDate || new Date().toISOString().split('T')[0];
   const treasurerReportRange = getTreasurerReportRange(reportAnchorDate, reportPeriod);
   const treasurerCategoryRows = getTreasurerReportRows(transactions, hogRaising, treasurerReportRange, reportKind);
@@ -173,6 +235,12 @@ export default function OfficerReportModal({
     };
 
     const docTitle = titleMap[activeReportRole] || 'AFA OFFICIAL OFFICER REPORT';
+
+    if (activeReportRole === 'President') {
+      printWindow.document.write(buildPresidentReportPrintHtml(presidentReportData));
+      printWindow.document.close();
+      return;
+    }
 
     if (isTreasurerReport) {
       const reportRowsHtml = treasurerReportRows.map(row => `
@@ -508,42 +576,6 @@ export default function OfficerReportModal({
                 <td>${m.attendanceCount} Members Present</td>
               </tr>
             `).join('') || '<tr><td colspan="4">No meetings logged.</td></tr>'}
-          </tbody>
-        </table>
-      `;
-    } else if (activeReportRole === 'President') {
-      // SEGREGATED PRESIDENT'S REPORT — EXECUTIVE SUMMARY ONLY.
-      // Segregation of duties: all FINANCIAL exports belong to the TREASURER'S DASHBOARD (TreasurerView);
-      // all MEMBERSHIP/LEGISLATIVE exports belong to the Secretary's export;
-      // all BULLETINS/ACTIVITIES exports belong to the PIO's export.
-      // The President's letterhead report carries highlights, plans and the officers directory only — no treasury figures.
-      contentHtml = `
-        <div class="section-title">1. EXECUTIVE OVERVIEW & STATE OF THE ASSOCIATION</div>
-        <table>
-          <tr><th>Executive Key Performance Indicator</th><th>Current Status Outcome</th></tr>
-          <tr><td>Total Registered Farmer Roster</td><td><strong>${members.length} Members (${activeMembers.length} Active, ${inactiveMembers.length} Inactive)</strong></td></tr>
-          <tr><td>Passed Legislative Resolutions</td><td>${resolutions.filter(r => r.status === 'Approved').length} Approved Resolution(s) out of ${resolutions.length} Total</td></tr>
-          <tr><td>Financial Audit Integrity Rate</td><td><strong>${auditComplianceRate}% Verified Compliance (Auditor: ${getOfficerNameByRole('Auditor')})</strong></td></tr>
-          <tr><td>Public Announcements Broadcasted</td><td>${announcements.length} Published Advisories (${announcements.filter(a => a.priority === 'High').length} High Priority)</td></tr>
-        </table>
-        <p style="font-size: 10px; color: #475569; margin-bottom: 8px;">
-          Note: Financial statements, fund allocations, and cash flow are exported EXCLUSIVELY from the <strong>Treasurer's Dashboard</strong> (Treasurer's Official Financial Report).
-          The consolidated membership roster and legislative minutes are issued under the <strong>Secretary's Official Report</strong>.
-          Community bulletins and activity logs are issued under the <strong>PIO's Official Communications Report</strong>.
-        </p>
-
-        <div class="section-title">2. EXECUTIVE OFFICERS DIRECTORY</div>
-        <table>
-          <thead>
-            <tr><th>Role</th><th>Officer Name</th><th>Designation</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>President</td><td>${getOfficerNameByRole('President')}</td><td>Chief Executive Officer</td></tr>
-            <tr><td>Vice President</td><td>${getOfficerNameByRole('Vice_President')}</td><td>Executive Vice Chairman</td></tr>
-            <tr><td>Secretary</td><td>${getOfficerNameByRole('Secretary')}</td><td>Records & Secretariat Head</td></tr>
-            <tr><td>Treasurer</td><td>${getOfficerNameByRole('Treasurer')}</td><td>General Custodian of Funds</td></tr>
-            <tr><td>Auditor</td><td>${getOfficerNameByRole('Auditor')}</td><td>Chief Financial Auditor</td></tr>
-            <tr><td>PIO</td><td>${getOfficerNameByRole('PIO')}</td><td>Public Information Officer</td></tr>
           </tbody>
         </table>
       `;
@@ -982,29 +1014,64 @@ export default function OfficerReportModal({
       csvRows.push(`Net Fund Balance (PHP),${netBalance.toFixed(2)}`);
       csvRows.push(`Approved Resolutions,${resolutions.filter(r => r.status === 'Approved').length}`);
     } else {
-      // SEGREGATED PRESIDENT'S CONSOLIDATED EXECUTIVE CSV REPORT — SUMMARY ONLY.
-      // Segregation of duties: financial exports belong to the Treasurer's CSV export;
-      // membership/legislative exports to the Secretary's; bulletins/activities to the PIO's.
-      csvRows.push('AFA PRESIDENT CONSOLIDATED EXECUTIVE SUMMARY (SEGREGATED)');
-      csvRows.push(`Date Generated,${reportDate}`);
-      csvRows.push(`President,${getOfficerNameByRole('President')}`);
+      // UNIFIED SEGREGATED PRESIDENT'S EXECUTIVE SUMMARY CSV (mirrors DOLE letterhead report).
+      const s = presidentReportData.summary;
+      csvRows.push(`AFA PRESIDENT EXECUTIVE SUMMARY REPORT (${presidentReportData.year})`);
+      csvRows.push(`Date Generated,${presidentReportData.generatedDate}`);
+      csvRows.push(`DOLE Registration No.,${presidentReportData.org.doleRegNo}`);
+      csvRows.push(`President,${csvCell(presidentReportData.president)}`);
+      csvRows.push(`Secretary,${csvCell(presidentReportData.secretary)}`);
+      csvRows.push(`Auditor,${csvCell(presidentReportData.auditor)}`);
       csvRows.push('');
-      csvRows.push('1. EXECUTIVE STATE OF THE ASSOCIATION');
-      csvRows.push(`Total Registered Farmer Members,${members.length}`);
-      csvRows.push(`Active Farmer Members,${activeMembers.length}`);
-      csvRows.push(`Approved Legislative Resolutions,${resolutions.filter(r => r.status === 'Approved').length}`);
-      csvRows.push(`Financial Audit Compliance Rate (%),${auditComplianceRate}`);
+      csvRows.push('1. EXECUTIVE KPI SNAPSHOT');
+      csvRows.push('Indicator,Outcome');
+      csvRows.push(`Registered Farmer Roster,${csvCell(`${s.totalMembers} Total (${s.activeMembers} Active, ${s.inactiveMembers} Inactive) across ${s.sitioCount} Sitio(s)`)}`);
+      csvRows.push(`RSBSA Registered Members,${s.rsbsaRegistered}`);
+      csvRows.push(`Annual Dues Compliance (${presidentReportData.year}),${csvCell(`${s.duesPaidCount} Paid (${s.duesComplianceRate}%)`)}`);
+      csvRows.push(`Meetings Held,${csvCell(`${s.meetingsHeld} Sessions (Avg. ${s.avgMeetingAttendance} attendees; ${s.approvedMinutesCount} approved minutes)`)}`);
+      csvRows.push(`Approved Legislative Resolutions,${csvCell(`${s.approvedResolutionsCount} of ${s.totalResolutionsCount}`)}`);
+      csvRows.push(`Public Advisories Broadcasted,${csvCell(`${s.announcementsPublished} (${s.highPriorityAnnouncements} High Priority)`)}`);
+      csvRows.push(`Financial Audit Compliance Rate (%),${s.auditComplianceRate}`);
+      csvRows.push(`Audited Transactions Signed Off by President,${csvCell(`${s.presidentSignedTransactionsCount} of ${s.auditedTransactionsCount}`)}`);
+      csvRows.push(`Auditor Reports Certified,${csvCell(`${s.certifiedAuditorReportsCount} of ${s.totalAuditorReportsCount}`)}`);
+      csvRows.push(`Active IGP Projects,${s.activeIgpProjectsCount}`);
+      csvRows.push(`Signed Egg Harvest Batches,${csvCell(`${s.signedEggHarvestBatches} Batches (${s.verifiedEggsTotal} verified eggs)`)}`);
+      csvRows.push(`Published Farmers Market Listings,${s.publishedMarketProducts}`);
+      csvRows.push(`Custodial Asset Readiness,${csvCell(`${s.goodConditionInventoryItems} of ${s.totalInventoryItems} Good (${s.assetReadinessRate}%)`)}`);
       csvRows.push('');
-      csvRows.push('2. EXECUTIVE OFFICERS DIRECTORY');
-      csvRows.push('Role,Officer Name,Designation');
-      csvRows.push(`President,${getOfficerNameByRole('President')},Chief Executive Officer`);
-      csvRows.push(`Vice President,${getOfficerNameByRole('Vice_President')},Executive Vice Chairman`);
-      csvRows.push(`Secretary,${getOfficerNameByRole('Secretary')},Records & Secretariat Head`);
-      csvRows.push(`Treasurer,${getOfficerNameByRole('Treasurer')},General Custodian of Funds`);
-      csvRows.push(`Auditor,${getOfficerNameByRole('Auditor')},Chief Financial Auditor`);
-      csvRows.push(`PIO,${getOfficerNameByRole('PIO')},Public Information Officer`);
+      csvRows.push(`2. HIGHLIGHTS OF PROGRAMS & ACTIVITIES (${presidentReportData.year})`);
+      if (presidentReportData.highlights.length === 0) {
+        csvRows.push('No highlights recorded for this year.');
+      } else {
+        presidentReportData.highlights.forEach((h, idx) => csvRows.push(`${idx + 1},${csvCell(h)}`));
+      }
       csvRows.push('');
-      csvRows.push('NOTE: Financial exports are issued EXCLUSIVELY by the Treasurer (Treasurer Dashboard); membership roster & legislative exports by the Secretary; bulletins & activity exports by the PIO.');
+      csvRows.push('3. APPROVED RESOLUTIONS');
+      csvRows.push('Resolution Number,Title,Date Agreed,Vote Tally');
+      presidentReportData.approvedResolutions.forEach(r => {
+        csvRows.push([csvCell(r.resolutionNumber), csvCell(r.title), csvCell(r.dateAgreed), csvCell(r.voteSummary)].join(','));
+      });
+      csvRows.push('');
+      csvRows.push('4. VICE PRESIDENT EXECUTIVE DELEGATIONS');
+      csvRows.push('Requested By,Authorized Scopes,Effective Period,Reason,Status');
+      presidentReportData.delegations.forEach(del => {
+        csvRows.push([csvCell(del.requestedBy), csvCell(del.scopesLabel), csvCell(del.effectivePeriod), csvCell(del.reason), csvCell(del.status)].join(','));
+      });
+      csvRows.push('');
+      csvRows.push(`5. PLANS & PROGRAMS FOR ${presidentReportData.year + 1}`);
+      if (presidentReportData.plans.length === 0) {
+        csvRows.push('No plans recorded for this year.');
+      } else {
+        presidentReportData.plans.forEach((p, idx) => csvRows.push(`${idx + 1},${csvCell(p)}`));
+      }
+      csvRows.push('');
+      csvRows.push('6. COMPLETE DIRECTORY OF ASSOCIATION OFFICERS');
+      csvRows.push('Position,Name,Contact Number');
+      presidentReportData.officers.forEach(o => {
+        csvRows.push([csvCell(o.position), csvCell(o.name), csvCell(o.contact || '')].join(','));
+      });
+      csvRows.push('');
+      csvRows.push('NOTE: Segregation of duties — itemized financial ledgers are issued exclusively by the Treasurer; member rosters by the Secretary; custodial inventory by the Auditor; full bulletins & activity logs by the PIO.');
     }
 
     const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvRows.join('\n'));
@@ -1307,16 +1374,50 @@ export default function OfficerReportModal({
               {activeReportRole === 'President' && (
                 <>
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
-                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Active Farmers</span>
-                    <p className="text-sm font-mono font-bold text-[#1B4332]">{activeMembers.length} / {members.length}</p>
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Active Roster / RSBSA</span>
+                    <p className="text-sm font-mono font-bold text-[#1B4332]">
+                      {presidentReportData.summary.activeMembers} / {presidentReportData.summary.totalMembers} ({presidentReportData.summary.rsbsaRegistered} RSBSA)
+                    </p>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
-                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Audit Rate</span>
-                    <p className="text-sm font-mono font-bold text-emerald-700">{auditComplianceRate}%</p>
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Dues Compliance ({presidentReportYear})</span>
+                    <p className="text-sm font-mono font-bold text-emerald-700">
+                      {presidentReportData.summary.duesComplianceRate}% ({presidentReportData.summary.duesPaidCount} Paid)
+                    </p>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
-                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Financials</span>
-                    <p className="text-[11px] font-bold text-amber-700">Treasurer's Dashboard</p>
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Resolutions &amp; Meetings</span>
+                    <p className="text-sm font-mono font-bold text-[#1B4332]">
+                      {presidentReportData.summary.approvedResolutionsCount} Res. &bull; {presidentReportData.summary.meetingsHeld} Mtgs
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Audit &amp; Pres Sign-Off</span>
+                    <p className="text-sm font-mono font-bold text-emerald-700">
+                      {presidentReportData.summary.auditComplianceRate}% ({presidentReportData.summary.presidentSignedTransactionsCount}/{presidentReportData.summary.auditedTransactionsCount})
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">IGP &amp; Verified Eggs</span>
+                    <p className="text-sm font-mono font-bold text-[#1B4332]">
+                      {presidentReportData.summary.activeIgpProjectsCount} IGP &bull; {presidentReportData.summary.verifiedEggsTotal.toLocaleString()} Eggs
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Market &amp; Assets</span>
+                    <p className="text-sm font-mono font-bold text-emerald-700">
+                      {presidentReportData.summary.publishedMarketProducts} Items &bull; {presidentReportData.summary.assetReadinessRate}% Good
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Officers Listed</span>
+                    <p className="text-sm font-mono font-bold text-[#1B4332]">
+                      {presidentReportData.officers.length} Officers
+                    </p>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-[#D5CFC1]">
+                    <span className="text-[10px] text-[#4A5F57] uppercase font-bold">Financial Ledgers</span>
+                    <p className="text-[11px] font-bold text-amber-700">Treasurer&apos;s Report Only</p>
                   </div>
                 </>
               )}
@@ -1364,20 +1465,111 @@ export default function OfficerReportModal({
               )}
             </div>
 
-            {/* REGISTERED BUDGET SOURCES CARD PREVIEW */}
-            <div className="bg-white p-3.5 rounded-xl border border-[#D5CFC1] space-y-2">
-              <span className="text-[10px] font-black uppercase text-[#4A5F57] flex items-center gap-1.5">
-                <Wallet className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Source of Funds & Budget Allocations Included in Report:</span>
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {funds.map(f => (
-                  <span key={f.id} className="text-[10px] bg-[#F7F4EF] px-2.5 py-1 rounded-lg border border-[#D5CFC1] text-[#1B4332] font-medium flex items-center gap-1">
-                    <strong className="text-emerald-700 font-mono">{f.code}</strong>: {f.name.split('/')[0]} (PHP {f.currentBalance.toLocaleString()})
-                  </span>
-                ))}
+            {/* UNIFIED PRESIDENT DOLE LETTERHEAD OPTIONS & PREVIEW */}
+            {activeReportRole === 'President' && (
+              <div className="bg-white p-4 rounded-xl border border-[#D5CFC1] space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5E0D5] pb-2.5">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">
+                      Unified DOLE Letterhead Report (5 Sections)
+                    </span>
+                    <p className="text-[11px] text-[#4A5F57] mt-0.5">
+                      Auto-populates Executive KPIs, completed activities/achievements, approved resolutions, VP delegations, upcoming plans, and all officers.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="president-report-year" className="text-[10px] font-black uppercase text-[#4A5F57]">
+                      Year:
+                    </label>
+                    <input
+                      id="president-report-year"
+                      type="number"
+                      min={2020}
+                      max={2100}
+                      value={presidentReportYear}
+                      onChange={(e) => {
+                        const nextYear = Number(e.target.value) || new Date().getFullYear();
+                        setPresidentReportYear(nextYear);
+                      }}
+                      className="w-20 px-2.5 py-1.5 rounded-lg border border-[#D5CFC1] bg-[#F7F4EF] text-xs font-mono font-bold text-[#1B4332]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLetterheadPreview(prev => !prev)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-600/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold cursor-pointer transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>{showLetterheadPreview ? 'Hide Letterhead Preview' : 'Preview DOLE Letterhead'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label htmlFor="president-extra-highlights" className="block text-[10px] font-black text-[#4A5F57] uppercase">
+                      Additional Program Highlights (1 per line, optional)
+                    </label>
+                    <textarea
+                      id="president-extra-highlights"
+                      rows={3}
+                      value={customHighlightsText}
+                      onChange={(e) => setCustomHighlightsText(e.target.value)}
+                      placeholder="Auto-filled from completed activities & achievements. Add extra narrative highlights here..."
+                      className="w-full px-3 py-2 bg-[#F7F4EF] border border-[#D5CFC1] rounded-xl text-[#1B4332] text-xs focus:outline-none focus:border-emerald-500 font-sans"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="president-extra-plans" className="block text-[10px] font-black text-[#4A5F57] uppercase">
+                      Additional Plans for {presidentReportYear + 1} (1 per line, optional)
+                    </label>
+                    <textarea
+                      id="president-extra-plans"
+                      rows={3}
+                      value={customPlansText}
+                      onChange={(e) => setCustomPlansText(e.target.value)}
+                      placeholder="Auto-seeded from upcoming activities. Add strategic priorities here..."
+                      className="w-full px-3 py-2 bg-[#F7F4EF] border border-[#D5CFC1] rounded-xl text-[#1B4332] text-xs focus:outline-none focus:border-emerald-500 font-sans"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label htmlFor="president-closing-line" className="block text-[10px] font-black text-[#4A5F57] uppercase">
+                    Closing Line (Printed below {presidentReportYear + 1} Plans)
+                  </label>
+                  <input
+                    id="president-closing-line"
+                    type="text"
+                    value={presidentClosingLine}
+                    onChange={(e) => setPresidentClosingLine(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#F7F4EF] border border-[#D5CFC1] rounded-xl text-[#1B4332] text-xs focus:outline-none focus:border-emerald-500 font-sans"
+                  />
+                </div>
+
+                {showLetterheadPreview && (
+                  <div className="mt-2 rounded-xl border border-[#D5CFC1] overflow-auto max-h-[52vh] bg-slate-200">
+                    <PresidentReport data={presidentReportData} hideToolbar />
+                  </div>
+                )}
               </div>
-            </div>
+            )}
+
+            {/* REGISTERED BUDGET SOURCES CARD PREVIEW (excluded for President under Segregation of Duties) */}
+            {activeReportRole !== 'President' && (
+              <div className="bg-white p-3.5 rounded-xl border border-[#D5CFC1] space-y-2">
+                <span className="text-[10px] font-black uppercase text-[#4A5F57] flex items-center gap-1.5">
+                  <Wallet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Source of Funds & Budget Allocations Included in Report:</span>
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {funds.map(f => (
+                    <span key={f.id} className="text-[10px] bg-[#F7F4EF] px-2.5 py-1 rounded-lg border border-[#D5CFC1] text-[#1B4332] font-medium flex items-center gap-1">
+                      <strong className="text-emerald-700 font-mono">{f.code}</strong>: {f.name.split('/')[0]} (PHP {f.currentBalance.toLocaleString()})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* CUSTOM REMARKS INPUT */}
             <div className="space-y-1.5 pt-1">

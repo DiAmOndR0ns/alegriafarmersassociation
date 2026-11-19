@@ -1,50 +1,50 @@
-/* President's report: letterhead format modeled on the AFA documents.
+/* President's report: letterhead format modeled on the AFA DOLE documents.
    Plain CSS on purpose (no Tailwind shades), so print output stays predictable. */
 .pr-root { font-family: Calibri, Carlito, "Segoe UI", Arial, sans-serif; color: #111; background: #e5e7eb; padding: 16px 0 32px; }
-.pr-toolbar { width: 210mm; max-width: 100%; margin: 0 auto 12px; display: flex; justify-content: flex-end; }
-.pr-toolbar button { font: inherit; padding: 8px 16px; border: 1px solid #111; background: #fff; cursor: pointer; }
+.pr-toolbar { width: 210mm; max-width: 100%; margin: 0 auto 12px; display: flex; justify-content: flex-end; gap: 8px; }
+.pr-toolbar button { font: inherit; padding: 8px 16px; border: 1px solid #111; background: #fff; cursor: pointer; font-weight: 600; }
 .pr-toolbar button:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 
-.pr-page { width: 210mm; max-width: 100%; min-height: 296mm; box-sizing: border-box; margin: 0 auto 12px; padding: 16mm 20mm 14mm; background: #fff; display: flex; flex-direction: column; box-shadow: 0 1px 4px rgba(0,0,0,.25); font-size: 12pt; }
+.pr-page { width: 210mm; max-width: 100%; min-height: 296mm; box-sizing: border-box; margin: 0 auto 12px; padding: 16mm 20mm 14mm; background: #fff; display: flex; flex-direction: column; box-shadow: 0 1px 4px rgba(0,0,0,.25); font-size: 11.5pt; }
 
 /* Letterhead */
 .pr-head { position: relative; text-align: center; line-height: 1.35; min-height: 26mm; }
 .pr-logo { position: absolute; left: 0; top: 0; width: 28mm; height: auto; }
-.pr-gov { font-weight: 600; font-size: 12pt; padding: 0 30mm; }
-.pr-org { margin-top: 8mm; line-height: 1.35; }
-.pr-title { margin: 9mm 0 5mm; text-align: center; font-size: 12pt; }
+.pr-gov { font-weight: 600; font-size: 11.5pt; padding: 0 30mm; }
+.pr-org { margin-top: 6mm; line-height: 1.35; font-weight: 600; }
+.pr-meta { margin-top: 3mm; font-size: 9.5pt; color: #444; text-align: center; }
+.pr-title { margin: 7mm 0 5mm; text-align: center; font-size: 12pt; text-transform: uppercase; letter-spacing: 0.4px; }
+.pr-subtitle { margin: 6mm 0 2.5mm; font-size: 11pt; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #111; padding-bottom: 1mm; }
 
 /* Body */
 .pr-body { flex: 0 0 auto; }
 .pr-list { margin: 0; padding-left: 7mm; line-height: 1.5; }
-.pr-list li { margin-bottom: 3mm; }
+.pr-list li { margin-bottom: 2.5mm; }
 .pr-roman { list-style: upper-roman; padding-left: 12mm; }
-.pr-closing { margin-top: 12mm; text-align: center; }
+.pr-closing { margin-top: 10mm; text-align: center; font-weight: 600; }
+.pr-remarks { margin-top: 6mm; padding: 3mm 4mm; border-left: 2.5px solid #111; background: #f8fafc; font-style: italic; font-size: 10.5pt; }
 .pr-empty { color: #555; font-style: italic; margin: 0; }
+.pr-seg-note { margin-top: 6mm; font-size: 9.5pt; color: #444; line-height: 1.45; border-top: 1px dotted #999; padding-top: 2.5mm; }
 
-/* Member / officer tables: borderless like the originals, light rule under headings */
-.pr-table { width: 100%; border-collapse: collapse; font-size: 11.5pt; }
-.pr-table th { text-align: left; font-weight: 400; padding: 0 0 2mm; border-bottom: 1px solid #111; }
-.pr-table td { padding: 1.1mm 2mm 1.1mm 0; vertical-align: top; }
+/* Tables: clean APA/DOLE borderless style with crisp horizontal rules */
+.pr-table { width: 100%; border-collapse: collapse; font-size: 10.5pt; margin-bottom: 4mm; }
+.pr-table th { text-align: left; font-weight: 700; padding: 1.5mm 2mm 1.8mm 0; border-top: 1.5px solid #111; border-bottom: 1px solid #111; }
+.pr-table td { padding: 1.4mm 2mm 1.4mm 0; vertical-align: top; border-bottom: 0.5px solid #e5e7eb; }
+.pr-table tbody tr:last-child td { border-bottom: 1.5px solid #111; }
 .pr-table .num { width: 9mm; text-align: right; padding-right: 3mm; }
 .pr-table .mi { width: 8mm; }
-
-/* Financial statement: label : amount */
-.pr-fund { margin-bottom: 6mm; break-inside: avoid; }
-.pr-fund h3 { margin: 0 0 2mm; font-size: 12pt; font-weight: 700; }
-.pr-sub { margin: 3mm 0 1mm 4mm; font-style: italic; }
-.pr-row { display: grid; grid-template-columns: 1fr 6mm 38mm; padding-left: 8mm; line-height: 1.55; }
-.pr-row .amt { text-align: right; font-variant-numeric: tabular-nums; }
-.pr-row.total { font-weight: 700; border-top: 1px solid #111; margin-top: 1mm; }
-.pr-note { padding-left: 8mm; font-size: 10.5pt; }
+.pr-table .col-key { width: 42%; font-weight: 600; }
+.pr-table .col-nowrap { white-space: nowrap; }
 
 /* Signature block pinned to page bottom */
-.pr-sign { margin-top: auto; padding-top: 14mm; display: flex; justify-content: space-between; align-items: flex-start; break-inside: avoid; }
-.pr-sign > div { min-width: 60mm; }
-.pr-sign .role { margin-top: 0; }
-.pr-sign .space { height: 16mm; }
-.pr-sign .name { font-weight: 600; text-transform: uppercase; }
-.pr-sign .right { text-align: center; }
+.pr-sign { margin-top: auto; padding-top: 12mm; display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; break-inside: avoid; }
+.pr-sign > div { flex: 1 1 0; min-width: 0; }
+.pr-sign .role { margin-top: 0; font-size: 10pt; }
+.pr-sign .space { height: 14mm; }
+.pr-sign .name { font-weight: 700; text-transform: uppercase; font-size: 10.5pt; }
+.pr-sign .pos { font-size: 10pt; }
+.pr-sign .center { text-align: center; }
+.pr-sign .right { text-align: right; }
 
 @page { size: A4; margin: 0; }
 @media print {
