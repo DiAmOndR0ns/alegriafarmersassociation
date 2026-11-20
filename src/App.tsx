@@ -32,7 +32,6 @@ const OfficerReportModal = lazy(() => import('./components/OfficerReportModal'))
 const PresidentReport = lazy(() => import('./components/PresidentReport'));
 const ProductManagementModal = lazy(() => import('./components/ProductManagementModal'));
 import { buildReportData } from './components/PresidentReport';
-import TreasurerFinancialReport from './components/TreasurerFinancialReport';
 import PasswordChangePrompt from './components/PasswordChangePrompt';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useDatabaseStatus } from './hooks/useDatabaseStatus';
@@ -247,7 +246,6 @@ export default function App() {
   const [officerTab, setOfficerTab] = useState<'tasks' | 'livestock' | 'announcements' | 'member-view' | 'products'>('tasks');
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showPresidentReport, setShowPresidentReport] = useState<boolean>(false);
-  const [showTreasurerFinancialReport, setShowTreasurerFinancialReport] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
   const [showClearCacheConfirmModal, setShowClearCacheConfirmModal] = useState<boolean>(false);
 
@@ -4629,18 +4627,6 @@ export default function App() {
               )}
             </button>
 
-            {(currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer') && (
-              <button
-                id="sidebar-treasurer-report-btn"
-                type="button"
-                onClick={() => setShowTreasurerFinancialReport(true)}
-                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D6EFD9] border border-transparent hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-              >
-                <FileText className="w-4.5 h-4.5 shrink-0 text-[#95D5B2]" />
-                <span className="truncate">Financial Report (PDF)</span>
-              </button>
-            )}
-
             <button
               id="sidebar-nav-logout"
               type="button"
@@ -5061,27 +5047,6 @@ export default function App() {
             onDownloadBackup={currentRole === 'President' ? handleDownloadSystemBackup : undefined}
           />
         </Suspense>
-      )}
-
-      {/* TREASURER'S OFFICIAL FINANCIAL REPORT (print / save as PDF) — SEGREGATED:
-          all financial exports belong exclusively to the Treasurer's dashboard. */}
-      {showTreasurerFinancialReport && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
-          <div className="mx-auto max-w-[210mm]">
-            <Suspense fallback={<div className="p-8 text-center text-white font-bold">Loading financial report...</div>}>
-              <TreasurerFinancialReport
-                year={new Date().getFullYear()}
-                transactions={transactions}
-                activities={activities}
-                funds={funds}
-                livestockIgp={livestockIgp}
-                inventory={inventory}
-                users={users}
-                onClose={() => setShowTreasurerFinancialReport(false)}
-              />
-            </Suspense>
-          </div>
-        </div>
       )}
 
       {/* PRESIDENT'S LETTERHEAD REPORT (print / save as PDF) — UNIFIED EXECUTIVE SUMMARY:
