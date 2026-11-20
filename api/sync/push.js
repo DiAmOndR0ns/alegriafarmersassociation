@@ -323,194 +323,194 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS opening_hog_count;`,
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS herd_breakdown;`,
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS initial_count;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_expenses (
-      id VARCHAR(100) PRIMARY KEY,
-      produce TEXT NOT NULL,
-      date VARCHAR(50),
-      expense_data JSONB,
-      category TEXT,
-      quantity NUMERIC,
-      description TEXT,
-      amount NUMERIC,
-      recorded_by TEXT,
-      fund_source TEXT,
-      stage TEXT
-    );`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS expense_data JSONB;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS category TEXT;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS quantity NUMERIC;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS description TEXT;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS amount NUMERIC;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS recorded_by TEXT;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
-    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS stage TEXT;`,
+    `CREATE TABLE IF NOT EXISTS afa_igp_expenses(
+    id VARCHAR(100) PRIMARY KEY,
+    produce TEXT NOT NULL,
+    date VARCHAR(50),
+    expense_data JSONB,
+    category TEXT,
+    quantity NUMERIC,
+    description TEXT,
+    amount NUMERIC,
+    recorded_by TEXT,
+    fund_source TEXT,
+    stage TEXT
+  ); `,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS expense_data JSONB; `,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS category TEXT; `,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS quantity NUMERIC; `,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS description TEXT; `,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS amount NUMERIC; `,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS recorded_by TEXT; `,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS fund_source TEXT; `,
+    `ALTER TABLE afa_igp_expenses ADD COLUMN IF NOT EXISTS stage TEXT; `,
     `DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
+  BEGIN
+        IF EXISTS(
+    SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'afa_igp_expenses' AND column_name = 'hog_stage'
-        ) THEN
+  ) THEN
           EXECUTE 'UPDATE afa_igp_expenses SET stage = COALESCE(NULLIF(stage, ''''), hog_stage)';
         END IF;
-      END $$;`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_harvests (
-      id VARCHAR(100) PRIMARY KEY,
-      produce TEXT,
-      date VARCHAR(50),
-      time VARCHAR(50),
-      collected_by TEXT NOT NULL,
-      egg_count INTEGER NOT NULL DEFAULT 0,
-      notes TEXT,
-      status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
-      audited_by TEXT,
-      audited_date VARCHAR(50),
-      audit_remarks TEXT,
-      signed_by TEXT,
-      signed_date VARCHAR(50),
-      signature_remarks TEXT
-    );`,
-    `CREATE TABLE IF NOT EXISTS afa_igp_sales (
-      id VARCHAR(100) PRIMARY KEY,
-      produce TEXT NOT NULL,
-      date VARCHAR(50),
-      stage TEXT,
-      quantity NUMERIC NOT NULL DEFAULT 0,
-      revenue NUMERIC NOT NULL DEFAULT 0,
-      recorded_by TEXT,
-      fund_source TEXT,
-      notes TEXT
-    );`,
-    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS stage TEXT;`,
-    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS quantity NUMERIC NOT NULL DEFAULT 0;`,
+      END $$; `,
+    `CREATE TABLE IF NOT EXISTS afa_igp_harvests(
+    id VARCHAR(100) PRIMARY KEY,
+    produce TEXT,
+    date VARCHAR(50),
+    time VARCHAR(50),
+    collected_by TEXT NOT NULL,
+    egg_count INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
+    audited_by TEXT,
+    audited_date VARCHAR(50),
+    audit_remarks TEXT,
+    signed_by TEXT,
+    signed_date VARCHAR(50),
+    signature_remarks TEXT
+  ); `,
+    `CREATE TABLE IF NOT EXISTS afa_igp_sales(
+    id VARCHAR(100) PRIMARY KEY,
+    produce TEXT NOT NULL,
+    date VARCHAR(50),
+    stage TEXT,
+    quantity NUMERIC NOT NULL DEFAULT 0,
+    revenue NUMERIC NOT NULL DEFAULT 0,
+    recorded_by TEXT,
+    fund_source TEXT,
+    notes TEXT
+  ); `,
+    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS stage TEXT; `,
+    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS quantity NUMERIC NOT NULL DEFAULT 0; `,
     `DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
+  BEGIN
+        IF EXISTS(
+    SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'hog_stage'
-        ) THEN
+  ) THEN
           EXECUTE 'UPDATE afa_igp_sales SET stage = COALESCE(NULLIF(stage, ''''), hog_stage)';
         END IF;
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
+        IF EXISTS(
+    SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'produce_count'
-        ) AND EXISTS (
-          SELECT 1 FROM information_schema.columns
+  ) AND EXISTS(
+    SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'hogs_count'
-        ) THEN
+  ) THEN
           EXECUTE 'UPDATE afa_igp_sales
             SET quantity = CASE WHEN quantity = 0 THEN COALESCE(NULLIF(produce_count, 0), hogs_count, 0) ELSE quantity END';
-        ELSIF EXISTS (
-          SELECT 1 FROM information_schema.columns
+        ELSIF EXISTS(
+    SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'produce_count'
-        ) THEN
+  ) THEN
           EXECUTE 'UPDATE afa_igp_sales SET quantity = CASE WHEN quantity = 0 THEN produce_count ELSE quantity END';
-        ELSIF EXISTS (
-          SELECT 1 FROM information_schema.columns
+        ELSIF EXISTS(
+    SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'afa_igp_sales' AND column_name = 'hogs_count'
-        ) THEN
+  ) THEN
           EXECUTE 'UPDATE afa_igp_sales SET quantity = CASE WHEN quantity = 0 THEN hogs_count ELSE quantity END';
         END IF;
-      END $$;`,
+      END $$; `,
     `DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
+  BEGIN
+        IF EXISTS(
+    SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'afa_igp_expenses' AND column_name = 'expense_data'
-        ) THEN
+  ) THEN
           EXECUTE $migration$
             UPDATE afa_igp_expenses SET
-              category = COALESCE(NULLIF(category, ''), expense_data->>'category'),
-              quantity = CASE
+  category = COALESCE(NULLIF(category, ''), expense_data ->> 'category'),
+    quantity = CASE
                 WHEN quantity IS NULL OR quantity = 0 THEN
-                  CASE WHEN COALESCE(expense_data->>'quantity', '') ~ '^[0-9]+(\\.[0-9]+)?$'
-                    THEN (expense_data->>'quantity')::numeric ELSE quantity END
+                  CASE WHEN COALESCE(expense_data ->> 'quantity', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+  THEN(expense_data ->> 'quantity')::numeric ELSE quantity END
                 ELSE quantity END,
-              description = COALESCE(NULLIF(description, ''), expense_data->>'description'),
-              amount = CASE
+    description = COALESCE(NULLIF(description, ''), expense_data ->> 'description'),
+    amount = CASE
                 WHEN amount IS NULL OR amount = 0 THEN
-                  CASE WHEN COALESCE(expense_data->>'amount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
-                    THEN (expense_data->>'amount')::numeric ELSE amount END
+                  CASE WHEN COALESCE(expense_data ->> 'amount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+  THEN(expense_data ->> 'amount')::numeric ELSE amount END
                 ELSE amount END,
-              recorded_by = COALESCE(NULLIF(recorded_by, ''), expense_data->>'recordedBy'),
-              fund_source = COALESCE(NULLIF(fund_source, ''), expense_data->>'fundSource'),
-              stage = COALESCE(NULLIF(stage, ''), expense_data->>'stage', expense_data->>'hogStage'),
-              produce = CASE
-                WHEN (COALESCE(stage, expense_data->>'stage', expense_data->>'hogStage') = 'RTL'
-                  OR COALESCE(category, expense_data->>'category') ~* '(rtl|poultry|chicken|egg)')
-                  AND COALESCE(produce, expense_data->>'produce', '') ~* '(swine|hog|baboy|^$)'
+    recorded_by = COALESCE(NULLIF(recorded_by, ''), expense_data ->> 'recordedBy'),
+    fund_source = COALESCE(NULLIF(fund_source, ''), expense_data ->> 'fundSource'),
+    stage = COALESCE(NULLIF(stage, ''), expense_data ->> 'stage', expense_data ->> 'hogStage'),
+    produce = CASE
+  WHEN(COALESCE(stage, expense_data ->> 'stage', expense_data ->> 'hogStage') = 'RTL'
+                  OR COALESCE(category, expense_data ->> 'category') ~* '(rtl|poultry|chicken|egg)')
+                  AND COALESCE(produce, expense_data ->> 'produce', '') ~* '(swine|hog|baboy|^$)'
                   THEN 'Poultry Raising (RTL)'
-                ELSE COALESCE(NULLIF(produce, ''), NULLIF(expense_data->>'produce', ''), 'Swine Raising (Baboyan)')
-              END
+                ELSE COALESCE(NULLIF(produce, ''), NULLIF(expense_data ->> 'produce', ''), 'Swine Raising (Baboyan)')
+  END
             WHERE expense_data IS NOT NULL
-          $migration$;
+  $migration$;
         END IF;
-      END $$;`,
-    `CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);`,
+      END $$; `,
+    `CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses(produce); `,
     `DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
+  BEGIN
+        IF EXISTS(
+    SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'afa_igp' AND column_name = 'expenses'
-        ) THEN
+  ) THEN
           EXECUTE $migration$
-            INSERT INTO afa_igp_expenses (
-              id, produce, date, expense_data, category, quantity, description, amount, recorded_by, fund_source, stage
-            )
-            SELECT expense->>'id',
-              CASE
-                WHEN COALESCE(expense->>'stage', expense->>'hogStage') = 'RTL'
-                  OR expense->>'category' ~* '(rtl|poultry|chicken|egg)'
+            INSERT INTO afa_igp_expenses(
+    id, produce, date, expense_data, category, quantity, description, amount, recorded_by, fund_source, stage
+  )
+            SELECT expense ->> 'id',
+    CASE
+                WHEN COALESCE(expense ->> 'stage', expense ->> 'hogStage') = 'RTL'
+                  OR expense ->> 'category' ~* '(rtl|poultry|chicken|egg)'
                   THEN 'Poultry Raising (RTL)'
                 ELSE COALESCE(
-                  NULLIF(expense->>'produce', ''),
-                  CASE WHEN expense->>'category' ~* '(calf|cattle|baka)'
+      NULLIF(expense ->> 'produce', ''),
+      CASE WHEN expense ->> 'category' ~* '(calf|cattle|baka)'
                     THEN 'Cattle Raising (Bakahan)' END,
-                  'Swine Raising (Baboyan)'
-                )
-              END,
-              expense->>'date',
-              expense,
-              expense->>'category',
-              CASE WHEN COALESCE(expense->>'quantity', '') ~ '^[0-9]+(\\.[0-9]+)?$'
-                THEN (expense->>'quantity')::numeric END,
-              expense->>'description',
-              CASE WHEN COALESCE(expense->>'amount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
-                THEN (expense->>'amount')::numeric END,
-              expense->>'recordedBy',
-              expense->>'fundSource',
-              COALESCE(expense->>'stage', expense->>'hogStage')
+      'Swine Raising (Baboyan)'
+    )
+  END,
+    expense ->> 'date',
+    expense,
+    expense ->> 'category',
+    CASE WHEN COALESCE(expense ->> 'quantity', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+  THEN(expense ->> 'quantity')::numeric END,
+    expense ->> 'description',
+    CASE WHEN COALESCE(expense ->> 'amount', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+  THEN(expense ->> 'amount')::numeric END,
+    expense ->> 'recordedBy',
+    expense ->> 'fundSource',
+    COALESCE(expense ->> 'stage', expense ->> 'hogStage')
             FROM afa_igp AS igp
             CROSS JOIN LATERAL jsonb_array_elements(
-              CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]'::jsonb END
-            ) AS item(expense)
-            WHERE NULLIF(expense->>'id', '') IS NOT NULL
-            ON CONFLICT (id) DO UPDATE SET
-              produce = CASE
+      CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]':: jsonb END
+    ) AS item(expense)
+            WHERE NULLIF(expense ->> 'id', '') IS NOT NULL
+            ON CONFLICT(id) DO UPDATE SET
+  produce = CASE
                 WHEN afa_igp_expenses.produce ~* '(swine|hog|baboy)'
                   AND EXCLUDED.produce ~* '(poultry|rtl|chicken|egg)'
                   THEN EXCLUDED.produce
                 ELSE COALESCE(NULLIF(afa_igp_expenses.produce, ''), EXCLUDED.produce)
-              END,
-              date = COALESCE(NULLIF(afa_igp_expenses.date, ''), EXCLUDED.date),
-              expense_data = COALESCE(afa_igp_expenses.expense_data, EXCLUDED.expense_data),
-              category = COALESCE(NULLIF(afa_igp_expenses.category, ''), EXCLUDED.category),
-              quantity = CASE
+  END,
+    date = COALESCE(NULLIF(afa_igp_expenses.date, ''), EXCLUDED.date),
+    expense_data = COALESCE(afa_igp_expenses.expense_data, EXCLUDED.expense_data),
+    category = COALESCE(NULLIF(afa_igp_expenses.category, ''), EXCLUDED.category),
+    quantity = CASE
                 WHEN afa_igp_expenses.quantity IS NULL OR afa_igp_expenses.quantity = 0
                   THEN EXCLUDED.quantity
                 ELSE afa_igp_expenses.quantity
-              END,
-              description = COALESCE(NULLIF(afa_igp_expenses.description, ''), EXCLUDED.description),
-              amount = CASE
+  END,
+    description = COALESCE(NULLIF(afa_igp_expenses.description, ''), EXCLUDED.description),
+    amount = CASE
                 WHEN afa_igp_expenses.amount IS NULL OR afa_igp_expenses.amount = 0
                   THEN EXCLUDED.amount
                 ELSE afa_igp_expenses.amount
-              END,
-              recorded_by = COALESCE(NULLIF(afa_igp_expenses.recorded_by, ''), EXCLUDED.recorded_by),
-              fund_source = COALESCE(NULLIF(afa_igp_expenses.fund_source, ''), EXCLUDED.fund_source),
-              stage = COALESCE(NULLIF(afa_igp_expenses.stage, ''), EXCLUDED.stage)
-          $migration$;
+  END,
+    recorded_by = COALESCE(NULLIF(afa_igp_expenses.recorded_by, ''), EXCLUDED.recorded_by),
+    fund_source = COALESCE(NULLIF(afa_igp_expenses.fund_source, ''), EXCLUDED.fund_source),
+    stage = COALESCE(NULLIF(afa_igp_expenses.stage, ''), EXCLUDED.stage)
+  $migration$;
         END IF;
-      END $$;`,
+      END $$; `,
     `DO $$
       BEGIN
         IF EXISTS (
@@ -575,181 +575,181 @@ async function runSchemaMigrations(client) {
         END IF;
       END $$;`,
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS expenses, DROP COLUMN IF EXISTS sales, DROP COLUMN IF EXISTS chore_logs;`,
-    `DROP TABLE IF EXISTS afa_igp_group_members;`,
-    `DROP TABLE IF EXISTS afa_igp_groups;`,
-    `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups;`,
-    `ALTER TABLE afa_igp_expenses DROP COLUMN IF EXISTS hog_stage;`,
-    `ALTER TABLE afa_igp_sales DROP COLUMN IF EXISTS hog_stage, DROP COLUMN IF EXISTS hogs_count, DROP COLUMN IF EXISTS produce_count;`,
-    `DROP TABLE IF EXISTS hog_raising;`,
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`,
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT;`,
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_available VARCHAR(100);`,
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS farmer_name TEXT;`,
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS farmer_sitio TEXT;`,
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS farmer_phone VARCHAR(50);`,
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS contact_person TEXT;`,
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE;`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS ceb_title TEXT;`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS date_scheduled VARCHAR(50);`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS scheduled_time VARCHAR(100);`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS time_scheduled VARCHAR(100);`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS target_audience TEXT;`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT;`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0;`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT;`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS status_reason TEXT;`,
+    `DROP TABLE IF EXISTS afa_igp_group_members; `,
+    `DROP TABLE IF EXISTS afa_igp_groups; `,
+    `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups; `,
+    `ALTER TABLE afa_igp_expenses DROP COLUMN IF EXISTS hog_stage; `,
+    `ALTER TABLE afa_igp_sales DROP COLUMN IF EXISTS hog_stage, DROP COLUMN IF EXISTS hogs_count, DROP COLUMN IF EXISTS produce_count; `,
+    `DROP TABLE IF EXISTS hog_raising; `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT; `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT; `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_available VARCHAR(100); `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS farmer_name TEXT; `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS farmer_sitio TEXT; `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS farmer_phone VARCHAR(50); `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS contact_person TEXT; `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE; `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS ceb_title TEXT; `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS date_scheduled VARCHAR(50); `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS scheduled_time VARCHAR(100); `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS time_scheduled VARCHAR(100); `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS target_audience TEXT; `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS image_url TEXT; `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS attendees_count INTEGER DEFAULT 0; `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS documented_notes TEXT; `,
+    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS status_reason TEXT; `,
     `UPDATE financial_transactions AS tx
       SET activity_id = NULL
       WHERE tx.activity_id IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM activities AS activity WHERE activity.id = tx.activity_id);`,
+        AND NOT EXISTS(SELECT 1 FROM activities AS activity WHERE activity.id = tx.activity_id); `,
     `UPDATE inventory AS item
       SET catalog_product_id = NULL
       WHERE item.catalog_product_id IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM products AS product WHERE product.id = item.catalog_product_id);`,
+        AND NOT EXISTS(SELECT 1 FROM products AS product WHERE product.id = item.catalog_product_id); `,
     `DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint
+  BEGIN
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
           WHERE conname = 'financial_transactions_activity_id_fkey'
-            AND conrelid = 'financial_transactions'::regclass
-        ) THEN
+            AND conrelid = 'financial_transactions':: regclass
+  ) THEN
           ALTER TABLE financial_transactions
             ADD CONSTRAINT financial_transactions_activity_id_fkey
-            FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE SET NULL
+            FOREIGN KEY(activity_id) REFERENCES activities(id) ON DELETE SET NULL
             DEFERRABLE INITIALLY DEFERRED NOT VALID;
         END IF;
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
           WHERE conname = 'inventory_catalog_product_id_fkey'
-            AND conrelid = 'inventory'::regclass
-        ) THEN
+            AND conrelid = 'inventory':: regclass
+  ) THEN
           ALTER TABLE inventory
             ADD CONSTRAINT inventory_catalog_product_id_fkey
-            FOREIGN KEY (catalog_product_id) REFERENCES products(id) ON DELETE SET NULL
+            FOREIGN KEY(catalog_product_id) REFERENCES products(id) ON DELETE SET NULL
             DEFERRABLE INITIALLY DEFERRED NOT VALID;
         END IF;
-      END $$;`,
-    `ALTER TABLE financial_transactions VALIDATE CONSTRAINT financial_transactions_activity_id_fkey;`,
-    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_catalog_product_id_fkey;`,
-    `CREATE INDEX IF NOT EXISTS financial_transactions_activity_id_idx ON financial_transactions (activity_id);`,
-    `CREATE INDEX IF NOT EXISTS inventory_catalog_product_id_idx ON inventory (catalog_product_id);`,
-    `CREATE TABLE IF NOT EXISTS achievements (
-      id VARCHAR(100) PRIMARY KEY,
-      year VARCHAR(20) NOT NULL,
-      title TEXT NOT NULL,
-      ceb_title TEXT,
-      description TEXT NOT NULL,
-      icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
-    );`,
-    `CREATE TABLE IF NOT EXISTS organization_funds (
-      id VARCHAR(100) PRIMARY KEY,
-      name TEXT NOT NULL,
-      code VARCHAR(50) NOT NULL,
-      current_balance NUMERIC DEFAULT 0,
-      description TEXT,
-      custodian TEXT,
-      last_updated VARCHAR(50)
-    );`,
-    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT;`,
-    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT;`,
-    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;`,
+      END $$; `,
+    `ALTER TABLE financial_transactions VALIDATE CONSTRAINT financial_transactions_activity_id_fkey; `,
+    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_catalog_product_id_fkey; `,
+    `CREATE INDEX IF NOT EXISTS financial_transactions_activity_id_idx ON financial_transactions(activity_id); `,
+    `CREATE INDEX IF NOT EXISTS inventory_catalog_product_id_idx ON inventory(catalog_product_id); `,
+    `CREATE TABLE IF NOT EXISTS achievements(
+    id VARCHAR(100) PRIMARY KEY,
+    year VARCHAR(20) NOT NULL,
+    title TEXT NOT NULL,
+    ceb_title TEXT,
+    description TEXT NOT NULL,
+    icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+  ); `,
+    `CREATE TABLE IF NOT EXISTS organization_funds(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    current_balance NUMERIC DEFAULT 0,
+    description TEXT,
+    custodian TEXT,
+    last_updated VARCHAR(50)
+  ); `,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS category TEXT; `,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS source_origin TEXT; `,
+    `ALTER TABLE organization_funds ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0; `,
     // Legacy databases still carry allocated_amount; newer ones only have initial_fund.
     // Guard the backfill so a missing legacy column cannot fail the whole migration.
     `DO $$
-     BEGIN
-       IF EXISTS (SELECT 1 FROM information_schema.columns
+  BEGIN
+       IF EXISTS(SELECT 1 FROM information_schema.columns
                    WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
          UPDATE organization_funds SET initial_fund = allocated_amount
-          WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+  WHERE(initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
        END IF;
-     END $$;`,
-    `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key;`,
+     END $$; `,
+    `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key; `,
     // Formal Auditor Reports (Proposal Requirement)
-    `CREATE TABLE IF NOT EXISTS auditor_reports (
-      id VARCHAR(100) PRIMARY KEY,
-      report_period VARCHAR(100) NOT NULL,
-      report_type VARCHAR(50) NOT NULL,
-      total_income NUMERIC DEFAULT 0,
-      total_expenses NUMERIC DEFAULT 0,
-      net_surplus NUMERIC DEFAULT 0,
-      findings TEXT,
-      recommendations TEXT,
-      prepared_by TEXT NOT NULL,
-      certified_by TEXT,
-      status VARCHAR(50) DEFAULT 'Submitted',
-      date_submitted VARCHAR(50),
-      date_certified VARCHAR(50)
-    );`,
+    `CREATE TABLE IF NOT EXISTS auditor_reports(
+    id VARCHAR(100) PRIMARY KEY,
+    report_period VARCHAR(100) NOT NULL,
+    report_type VARCHAR(50) NOT NULL,
+    total_income NUMERIC DEFAULT 0,
+    total_expenses NUMERIC DEFAULT 0,
+    net_surplus NUMERIC DEFAULT 0,
+    findings TEXT,
+    recommendations TEXT,
+    prepared_by TEXT NOT NULL,
+    certified_by TEXT,
+    status VARCHAR(50) DEFAULT 'Submitted',
+    date_submitted VARCHAR(50),
+    date_certified VARCHAR(50)
+  ); `,
     // Executive Delegation Requests (Proposal Requirement: President to VP delegation)
-    `CREATE TABLE IF NOT EXISTS delegation_requests (
-      id VARCHAR(100) PRIMARY KEY,
-      requested_by TEXT NOT NULL,
-      reason TEXT NOT NULL,
-      scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
-      requested_date VARCHAR(50) NOT NULL,
-      effective_start VARCHAR(50),
-      effective_end VARCHAR(50),
-      status VARCHAR(50) DEFAULT 'Pending',
-      reviewed_by TEXT,
-      reviewed_date VARCHAR(50),
-      remarks TEXT
-    );`,
-    `ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb;`,
+    `CREATE TABLE IF NOT EXISTS delegation_requests(
+    id VARCHAR(100) PRIMARY KEY,
+    requested_by TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    scopes JSONB NOT NULL DEFAULT '[]':: jsonb,
+    requested_date VARCHAR(50) NOT NULL,
+    effective_start VARCHAR(50),
+    effective_end VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'Pending',
+    reviewed_by TEXT,
+    reviewed_date VARCHAR(50),
+    remarks TEXT
+  ); `,
+    `ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]':: jsonb; `,
     // Annual membership dues. One row per member per membership year; the roster
     // and the printed year-end list are derived from these receipts, not from a
     // hand-toggled Active/Inactive flag.
-    `CREATE TABLE IF NOT EXISTS membership_payments (
-      id VARCHAR(100) PRIMARY KEY,
-      member_id VARCHAR(100) NOT NULL,
-      member_name TEXT NOT NULL,
-      member_id_number VARCHAR(100),
-      year INTEGER NOT NULL,
-      amount NUMERIC DEFAULT 0,
-      date_paid VARCHAR(50),
-      method VARCHAR(50) DEFAULT 'Cash',
-      reference_no VARCHAR(100),
-      status VARCHAR(50) DEFAULT 'Pending',
-      recorded_by TEXT,
-      recorded_at VARCHAR(50),
-      verified_by TEXT,
-      verified_date VARCHAR(50),
-      voided_by TEXT,
-      voided_date VARCHAR(50),
-      void_reason TEXT,
-      notes TEXT,
-      transaction_id VARCHAR(100)
-    );`,
-    `CREATE INDEX IF NOT EXISTS membership_payments_year_idx ON membership_payments (year);`,
-    `CREATE INDEX IF NOT EXISTS membership_payments_member_idx ON membership_payments (member_id);`,
+    `CREATE TABLE IF NOT EXISTS membership_payments(
+    id VARCHAR(100) PRIMARY KEY,
+    member_id VARCHAR(100) NOT NULL,
+    member_name TEXT NOT NULL,
+    member_id_number VARCHAR(100),
+    year INTEGER NOT NULL,
+    amount NUMERIC DEFAULT 0,
+    date_paid VARCHAR(50),
+    method VARCHAR(50) DEFAULT 'Cash',
+    reference_no VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'Pending',
+    recorded_by TEXT,
+    recorded_at VARCHAR(50),
+    verified_by TEXT,
+    verified_date VARCHAR(50),
+    voided_by TEXT,
+    voided_date VARCHAR(50),
+    void_reason TEXT,
+    notes TEXT,
+    transaction_id VARCHAR(100)
+  ); `,
+    `CREATE INDEX IF NOT EXISTS membership_payments_year_idx ON membership_payments(year); `,
+    `CREATE INDEX IF NOT EXISTS membership_payments_member_idx ON membership_payments(member_id); `,
     // One live receipt per member per year; voided rows are kept for the audit trail.
     `CREATE UNIQUE INDEX IF NOT EXISTS membership_payments_one_live_per_year_idx
-       ON membership_payments (member_id, year) WHERE status <> 'Voided';`,
+       ON membership_payments(member_id, year) WHERE status <> 'Voided'; `,
     // Immutable roster snapshot written when an officer closes a membership year.
-    `CREATE TABLE IF NOT EXISTS membership_year_snapshots (
-      year INTEGER PRIMARY KEY,
-      closed_by TEXT,
-      closed_at VARCHAR(50),
-      dues_amount NUMERIC DEFAULT 0,
-      total_members INTEGER DEFAULT 0,
-      paid_members INTEGER DEFAULT 0,
-      unpaid_members INTEGER DEFAULT 0,
-      total_collected NUMERIC DEFAULT 0,
-      listed_members JSONB DEFAULT '[]'::jsonb,
-      unpaid_member_ids JSONB DEFAULT '[]'::jsonb,
-      remarks TEXT
-    );`,
+    `CREATE TABLE IF NOT EXISTS membership_year_snapshots(
+    year INTEGER PRIMARY KEY,
+    closed_by TEXT,
+    closed_at VARCHAR(50),
+    dues_amount NUMERIC DEFAULT 0,
+    total_members INTEGER DEFAULT 0,
+    paid_members INTEGER DEFAULT 0,
+    unpaid_members INTEGER DEFAULT 0,
+    total_collected NUMERIC DEFAULT 0,
+    listed_members JSONB DEFAULT '[]':: jsonb,
+    unpaid_member_ids JSONB DEFAULT '[]':: jsonb,
+    remarks TEXT
+  ); `,
     `DO $$
       DECLARE queue_has_rows BOOLEAN;
-      BEGIN
+  BEGIN
         IF to_regclass('public.sync_queue') IS NOT NULL THEN
           EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.sync_queue LIMIT 1)' INTO queue_has_rows;
           IF NOT queue_has_rows THEN
             EXECUTE 'DROP TABLE public.sync_queue';
-          ELSE
+  ELSE
             RAISE NOTICE 'Preserving non-empty legacy sync_queue table';
           END IF;
         END IF;
-      END $$;`
+      END $$; `
   ];
   const failures = [];
   for (const stmt of statements) {
@@ -762,9 +762,9 @@ async function runSchemaMigrations(client) {
     }
   }
   if (failures.length > 0) {
-    const details = failures.map(({ statement, error }) => `- ${error}: ${statement}`).join("\n");
-    throw new Error(`Schema migration failed for ${failures.length} statement(s):
-${details}`);
+    const details = failures.map(({ statement, error }) => `- ${error}: ${statement} `).join("\n");
+    throw new Error(`Schema migration failed for ${failures.length} statement(s): 
+${details} `);
   }
 }
 async function initDatabaseSchema(pool) {
@@ -772,137 +772,137 @@ async function initDatabaseSchema(pool) {
   try {
     await client.query("BEGIN");
     await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id VARCHAR(100) PRIMARY KEY,
-        username VARCHAR(100) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        name TEXT NOT NULL,
-        role VARCHAR(50) NOT NULL,
-        is_approved BOOLEAN DEFAULT TRUE,
-        joined_date VARCHAR(50),
-        farm_location TEXT,
-        primary_crops TEXT[],
-        contact_number VARCHAR(50),
-        status VARCHAR(50),
-        avatar_url TEXT,
-        member_id_number VARCHAR(100),
-        rsbsa_number VARCHAR(100),
-        is_rsbsa_registered BOOLEAN DEFAULT FALSE,
-        password_history JSONB DEFAULT '[]'::jsonb,
-        password_changed_at TIMESTAMPTZ,
-        must_change_password BOOLEAN DEFAULT FALSE,
-        failed_login_attempts INTEGER DEFAULT 0,
-        locked_until TIMESTAMPTZ,
-        total_failed_logins INTEGER DEFAULT 0,
-        reset_requested BOOLEAN DEFAULT FALSE
-        ,totp_secret TEXT
-        ,pending_totp_secret TEXT
-        ,mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE
-        ,totp_last_used_step BIGINT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS users(
+    id VARCHAR(100) PRIMARY KEY,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    name TEXT NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    is_approved BOOLEAN DEFAULT TRUE,
+    joined_date VARCHAR(50),
+    farm_location TEXT,
+    primary_crops TEXT[],
+    contact_number VARCHAR(50),
+    status VARCHAR(50),
+    avatar_url TEXT,
+    member_id_number VARCHAR(100),
+    rsbsa_number VARCHAR(100),
+    is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+    password_history JSONB DEFAULT '[]':: jsonb,
+    password_changed_at TIMESTAMPTZ,
+    must_change_password BOOLEAN DEFAULT FALSE,
+    failed_login_attempts INTEGER DEFAULT 0,
+    locked_until TIMESTAMPTZ,
+    total_failed_logins INTEGER DEFAULT 0,
+    reset_requested BOOLEAN DEFAULT FALSE
+    , totp_secret TEXT
+    , pending_totp_secret TEXT
+    , mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE
+    , totp_last_used_step BIGINT
+  );
+  `);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_unique_named_role_idx
-      ON users (lower(replace(role, ' ', '_')))
-      WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`);
+      ON users(lower(replace(role, ' ', '_')))
+      WHERE lower(replace(role, ' ', '_')) NOT IN('member', 'board_member'); `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS members (
-        id VARCHAR(100) PRIMARY KEY,
-        name TEXT NOT NULL,
-        farm_location TEXT,
-        primary_crops TEXT[],
-        contact_number VARCHAR(50),
-        status VARCHAR(50) DEFAULT 'Active',
-        joined_date VARCHAR(50),
-        member_id_number VARCHAR(100),
-        rsbsa_number VARCHAR(100),
-        is_rsbsa_registered BOOLEAN DEFAULT FALSE,
-        avatar_url TEXT,
-        gender VARCHAR(20),
-        birth_date VARCHAR(50)
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS members(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    farm_location TEXT,
+    primary_crops TEXT[],
+    contact_number VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'Active',
+    joined_date VARCHAR(50),
+    member_id_number VARCHAR(100),
+    rsbsa_number VARCHAR(100),
+    is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+    avatar_url TEXT,
+    gender VARCHAR(20),
+    birth_date VARCHAR(50)
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS meetings (
-        id VARCHAR(100) PRIMARY KEY,
-        title TEXT NOT NULL,
-        date VARCHAR(50),
-        location TEXT,
-        attendance_count INTEGER DEFAULT 0,
-        agenda TEXT,
-        minutes TEXT,
-        officer_in_charge TEXT,
-        attendance_record JSONB,
-        minutes_approval_status VARCHAR(50),
-        approved_by TEXT,
-        approved_date VARCHAR(50),
-        approval_remarks TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS meetings(
+    id VARCHAR(100) PRIMARY KEY,
+    title TEXT NOT NULL,
+    date VARCHAR(50),
+    location TEXT,
+    attendance_count INTEGER DEFAULT 0,
+    agenda TEXT,
+    minutes TEXT,
+    officer_in_charge TEXT,
+    attendance_record JSONB,
+    minutes_approval_status VARCHAR(50),
+    approved_by TEXT,
+    approved_date VARCHAR(50),
+    approval_remarks TEXT
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS resolutions (
-        id VARCHAR(100) PRIMARY KEY,
-        resolution_number VARCHAR(100) NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT,
-        date_agreed VARCHAR(50),
-        moved_by TEXT,
-        seconded_by TEXT,
-        vote_in_favor INTEGER DEFAULT 0,
-        vote_against INTEGER DEFAULT 0,
-        vote_abstain INTEGER DEFAULT 0,
-        status VARCHAR(50)
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS resolutions(
+    id VARCHAR(100) PRIMARY KEY,
+    resolution_number VARCHAR(100) NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    date_agreed VARCHAR(50),
+    moved_by TEXT,
+    seconded_by TEXT,
+    vote_in_favor INTEGER DEFAULT 0,
+    vote_against INTEGER DEFAULT 0,
+    vote_abstain INTEGER DEFAULT 0,
+    status VARCHAR(50)
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS financial_transactions (
-        id VARCHAR(100) PRIMARY KEY,
-        type VARCHAR(50) NOT NULL,
-        category VARCHAR(100) NOT NULL,
-        amount NUMERIC NOT NULL,
-        date VARCHAR(50),
-        description TEXT,
-        recorded_by TEXT,
-        activity_id VARCHAR(100),
-        fund_source TEXT,
-        purpose TEXT,
-        liquidation_deadline VARCHAR(50),
-        audited_status VARCHAR(50) DEFAULT 'Unaudited',
-        audited_by TEXT,
-        audited_date VARCHAR(50),
-        audit_notes TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS financial_transactions(
+    id VARCHAR(100) PRIMARY KEY,
+    type VARCHAR(50) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    amount NUMERIC NOT NULL,
+    date VARCHAR(50),
+    description TEXT,
+    recorded_by TEXT,
+    activity_id VARCHAR(100),
+    fund_source TEXT,
+    purpose TEXT,
+    liquidation_deadline VARCHAR(50),
+    audited_status VARCHAR(50) DEFAULT 'Unaudited',
+    audited_by TEXT,
+    audited_date VARCHAR(50),
+    audit_notes TEXT
+  );
+  `);
     await client.query(`
       ALTER TABLE financial_transactions
         ADD COLUMN IF NOT EXISTS president_approval_status VARCHAR(50),
-        ADD COLUMN IF NOT EXISTS president_approved_by TEXT,
-        ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS president_approved_by TEXT,
+      ADD COLUMN IF NOT EXISTS president_approved_date VARCHAR(50),
         ADD COLUMN IF NOT EXISTS president_approval_remarks TEXT;
-    `);
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS announcements (
-        id VARCHAR(100) PRIMARY KEY,
-        title TEXT NOT NULL,
-        category VARCHAR(100),
-        content TEXT,
-        date_posted VARCHAR(50),
-        priority VARCHAR(50),
-        posted_by TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS announcements(
+    id VARCHAR(100) PRIMARY KEY,
+    title TEXT NOT NULL,
+    category VARCHAR(100),
+    content TEXT,
+    date_posted VARCHAR(50),
+    priority VARCHAR(50),
+    posted_by TEXT
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS system_logs (
-        id VARCHAR(100) PRIMARY KEY,
-        timestamp VARCHAR(100),
-        user_name TEXT,
-        role VARCHAR(50),
-        action TEXT,
-        details TEXT,
-        sync_status VARCHAR(50),
-        hash TEXT,
-        previous_hash TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS system_logs(
+    id VARCHAR(100) PRIMARY KEY,
+    timestamp VARCHAR(100),
+    user_name TEXT,
+    role VARCHAR(50),
+    action TEXT,
+    details TEXT,
+    sync_status VARCHAR(50),
+    hash TEXT,
+    previous_hash TEXT
+  );
+  `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS afa_igp (
         id VARCHAR(100) PRIMARY KEY,
@@ -919,232 +919,232 @@ async function initDatabaseSchema(pool) {
       );
     `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_expenses (
-        id VARCHAR(100) PRIMARY KEY,
-        produce TEXT NOT NULL,
-        date VARCHAR(50),
-        expense_data JSONB,
-        category TEXT,
-        quantity NUMERIC,
-        description TEXT,
-        amount NUMERIC,
-        recorded_by TEXT,
-        fund_source TEXT,
-        stage TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS afa_igp_expenses(
+    id VARCHAR(100) PRIMARY KEY,
+    produce TEXT NOT NULL,
+    date VARCHAR(50),
+    expense_data JSONB,
+    category TEXT,
+    quantity NUMERIC,
+    description TEXT,
+    amount NUMERIC,
+    recorded_by TEXT,
+    fund_source TEXT,
+    stage TEXT
+  );
+  `);
     await client.query("CREATE INDEX IF NOT EXISTS afa_igp_expenses_produce_idx ON afa_igp_expenses (produce);");
     await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_harvests (
-        id VARCHAR(100) PRIMARY KEY,
-        produce TEXT,
-        date VARCHAR(50),
-        time VARCHAR(50),
-        collected_by TEXT NOT NULL,
-        egg_count INTEGER NOT NULL DEFAULT 0,
-        notes TEXT,
-        status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
-        audited_by TEXT,
-        audited_date VARCHAR(50),
-        audit_remarks TEXT,
-        signed_by TEXT,
-        signed_date VARCHAR(50),
-        signature_remarks TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS afa_igp_harvests(
+    id VARCHAR(100) PRIMARY KEY,
+    produce TEXT,
+    date VARCHAR(50),
+    time VARCHAR(50),
+    collected_by TEXT NOT NULL,
+    egg_count INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
+    audited_by TEXT,
+    audited_date VARCHAR(50),
+    audit_remarks TEXT,
+    signed_by TEXT,
+    signed_date VARCHAR(50),
+    signature_remarks TEXT
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS afa_igp_sales (
-        id VARCHAR(100) PRIMARY KEY,
-        produce TEXT NOT NULL,
-        date VARCHAR(50),
-        stage TEXT,
-        quantity NUMERIC NOT NULL DEFAULT 0,
-        revenue NUMERIC NOT NULL DEFAULT 0,
-        recorded_by TEXT,
-        fund_source TEXT,
-        notes TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS afa_igp_sales(
+    id VARCHAR(100) PRIMARY KEY,
+    produce TEXT NOT NULL,
+    date VARCHAR(50),
+    stage TEXT,
+    quantity NUMERIC NOT NULL DEFAULT 0,
+    revenue NUMERIC NOT NULL DEFAULT 0,
+    recorded_by TEXT,
+    fund_source TEXT,
+    notes TEXT
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS products (
-        id VARCHAR(100) PRIMARY KEY,
-        name TEXT NOT NULL,
-        ceb_name TEXT,
-        category VARCHAR(100),
-        description TEXT,
-        unit VARCHAR(50),
-        price NUMERIC,
-        quantity_available VARCHAR(100),
-        stock_status VARCHAR(50),
-        farmer_name TEXT,
-        farmer_sitio TEXT,
-        farmer_phone VARCHAR(50),
-        contact_person TEXT,
-        image_url TEXT,
-        is_published BOOLEAN DEFAULT TRUE,
-        updated_by TEXT,
-        managed_by TEXT,
-        date_updated VARCHAR(50)
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS products(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    ceb_name TEXT,
+    category VARCHAR(100),
+    description TEXT,
+    unit VARCHAR(50),
+    price NUMERIC,
+    quantity_available VARCHAR(100),
+    stock_status VARCHAR(50),
+    farmer_name TEXT,
+    farmer_sitio TEXT,
+    farmer_phone VARCHAR(50),
+    contact_person TEXT,
+    image_url TEXT,
+    is_published BOOLEAN DEFAULT TRUE,
+    updated_by TEXT,
+    managed_by TEXT,
+    date_updated VARCHAR(50)
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS inventory (
-        id VARCHAR(100) PRIMARY KEY,
-        name TEXT NOT NULL,
-        category VARCHAR(100),
-        quantity INTEGER DEFAULT 0,
-        damaged_quantity INTEGER DEFAULT 0,
-        unit VARCHAR(50),
-        item_condition VARCHAR(50),
-        location TEXT,
-        notes TEXT,
-        catalog_product_id VARCHAR(100),
-        recorded_by TEXT,
-        date_recorded VARCHAR(50),
-        last_updated VARCHAR(50)
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS inventory(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    category VARCHAR(100),
+    quantity INTEGER DEFAULT 0,
+    damaged_quantity INTEGER DEFAULT 0,
+    unit VARCHAR(50),
+    item_condition VARCHAR(50),
+    location TEXT,
+    notes TEXT,
+    catalog_product_id VARCHAR(100),
+    recorded_by TEXT,
+    date_recorded VARCHAR(50),
+    last_updated VARCHAR(50)
+  );
+  `);
     await client.query(`
       ALTER TABLE inventory
         ADD COLUMN IF NOT EXISTS damaged_quantity INTEGER DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100);
-    `);
+    ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100);
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS activities (
-        id VARCHAR(100) PRIMARY KEY,
-        title TEXT NOT NULL,
-        ceb_title TEXT,
-        category VARCHAR(100),
-        scheduled_date VARCHAR(50),
-        date_scheduled VARCHAR(50),
-        scheduled_time VARCHAR(100),
-        time_scheduled VARCHAR(100),
-        location TEXT,
-        description TEXT,
-        organizer TEXT,
-        status VARCHAR(50),
-        status_reason TEXT,
-        documented_notes TEXT,
-        attendees_count INTEGER DEFAULT 0,
-        target_audience TEXT,
-        image_url TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS activities(
+    id VARCHAR(100) PRIMARY KEY,
+    title TEXT NOT NULL,
+    ceb_title TEXT,
+    category VARCHAR(100),
+    scheduled_date VARCHAR(50),
+    date_scheduled VARCHAR(50),
+    scheduled_time VARCHAR(100),
+    time_scheduled VARCHAR(100),
+    location TEXT,
+    description TEXT,
+    organizer TEXT,
+    status VARCHAR(50),
+    status_reason TEXT,
+    documented_notes TEXT,
+    attendees_count INTEGER DEFAULT 0,
+    target_audience TEXT,
+    image_url TEXT
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS achievements (
-        id VARCHAR(100) PRIMARY KEY,
-        year VARCHAR(20) NOT NULL,
-        title TEXT NOT NULL,
-        ceb_title TEXT,
-        description TEXT NOT NULL,
-        icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS achievements(
+    id VARCHAR(100) PRIMARY KEY,
+    year VARCHAR(20) NOT NULL,
+    title TEXT NOT NULL,
+    ceb_title TEXT,
+    description TEXT NOT NULL,
+    icon VARCHAR(50) NOT NULL DEFAULT 'Trophy'
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS organization_funds (
-        id VARCHAR(100) PRIMARY KEY,
-        name TEXT NOT NULL,
-        code VARCHAR(50) NOT NULL,
-        initial_fund NUMERIC DEFAULT 0,
-        current_balance NUMERIC DEFAULT 0,
-        description TEXT,
-        custodian TEXT,
-        last_updated VARCHAR(50)
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS organization_funds(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    initial_fund NUMERIC DEFAULT 0,
+    current_balance NUMERIC DEFAULT 0,
+    description TEXT,
+    custodian TEXT,
+    last_updated VARCHAR(50)
+  );
+  `);
     await client.query(`
       ALTER TABLE organization_funds
         ADD COLUMN IF NOT EXISTS category TEXT,
-        ADD COLUMN IF NOT EXISTS source_origin TEXT,
-        ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
-    `);
+    ADD COLUMN IF NOT EXISTS source_origin TEXT,
+      ADD COLUMN IF NOT EXISTS initial_fund NUMERIC DEFAULT 0;
+  `);
     await client.query(`
       DO $$
-      BEGIN
-        IF EXISTS (SELECT 1 FROM information_schema.columns
+  BEGIN
+        IF EXISTS(SELECT 1 FROM information_schema.columns
                     WHERE table_schema = 'public' AND table_name = 'organization_funds' AND column_name = 'allocated_amount') THEN
           UPDATE organization_funds SET initial_fund = allocated_amount
-           WHERE (initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
+  WHERE(initial_fund IS NULL OR initial_fund = 0) AND allocated_amount IS NOT NULL AND allocated_amount <> 0;
         END IF;
       END $$;
-    `);
+  `);
     await client.query(`
       ALTER TABLE organization_funds
         DROP CONSTRAINT IF EXISTS organization_funds_code_key;
-    `);
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS auditor_reports (
-        id VARCHAR(100) PRIMARY KEY,
-        report_period VARCHAR(100) NOT NULL,
-        report_type VARCHAR(50) NOT NULL,
-        total_income NUMERIC DEFAULT 0,
-        total_expenses NUMERIC DEFAULT 0,
-        net_surplus NUMERIC DEFAULT 0,
-        findings TEXT,
-        recommendations TEXT,
-        prepared_by TEXT NOT NULL,
-        certified_by TEXT,
-        status VARCHAR(50) DEFAULT 'Submitted',
-        date_submitted VARCHAR(50),
-        date_certified VARCHAR(50)
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS auditor_reports(
+    id VARCHAR(100) PRIMARY KEY,
+    report_period VARCHAR(100) NOT NULL,
+    report_type VARCHAR(50) NOT NULL,
+    total_income NUMERIC DEFAULT 0,
+    total_expenses NUMERIC DEFAULT 0,
+    net_surplus NUMERIC DEFAULT 0,
+    findings TEXT,
+    recommendations TEXT,
+    prepared_by TEXT NOT NULL,
+    certified_by TEXT,
+    status VARCHAR(50) DEFAULT 'Submitted',
+    date_submitted VARCHAR(50),
+    date_certified VARCHAR(50)
+  );
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS delegation_requests (
-        id VARCHAR(100) PRIMARY KEY,
-        requested_by TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
-        requested_date VARCHAR(50) NOT NULL,
-        effective_start VARCHAR(50),
-        effective_end VARCHAR(50),
-        status VARCHAR(50) DEFAULT 'Pending',
-        reviewed_by TEXT,
-        reviewed_date VARCHAR(50),
-        remarks TEXT
-      );
-    `);
-    await client.query(`ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb`);
+      CREATE TABLE IF NOT EXISTS delegation_requests(
+    id VARCHAR(100) PRIMARY KEY,
+    requested_by TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    scopes JSONB NOT NULL DEFAULT '[]':: jsonb,
+    requested_date VARCHAR(50) NOT NULL,
+    effective_start VARCHAR(50),
+    effective_end VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'Pending',
+    reviewed_by TEXT,
+    reviewed_date VARCHAR(50),
+    remarks TEXT
+  );
+  `);
+    await client.query(`ALTER TABLE delegation_requests ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]':: jsonb`);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS membership_payments (
-        id VARCHAR(100) PRIMARY KEY,
-        member_id VARCHAR(100) NOT NULL,
-        member_name TEXT NOT NULL,
-        member_id_number VARCHAR(100),
-        year INTEGER NOT NULL,
-        amount NUMERIC DEFAULT 0,
-        date_paid VARCHAR(50),
-        method VARCHAR(50) DEFAULT 'Cash',
-        reference_no VARCHAR(100),
-        status VARCHAR(50) DEFAULT 'Pending',
-        recorded_by TEXT,
-        recorded_at VARCHAR(50),
-        verified_by TEXT,
-        verified_date VARCHAR(50),
-        voided_by TEXT,
-        voided_date VARCHAR(50),
-        void_reason TEXT,
-        notes TEXT,
-        transaction_id VARCHAR(100)
-      );
-      CREATE INDEX IF NOT EXISTS membership_payments_year_idx ON membership_payments (year);
-      CREATE INDEX IF NOT EXISTS membership_payments_member_idx ON membership_payments (member_id);
-    `);
+      CREATE TABLE IF NOT EXISTS membership_payments(
+    id VARCHAR(100) PRIMARY KEY,
+    member_id VARCHAR(100) NOT NULL,
+    member_name TEXT NOT NULL,
+    member_id_number VARCHAR(100),
+    year INTEGER NOT NULL,
+    amount NUMERIC DEFAULT 0,
+    date_paid VARCHAR(50),
+    method VARCHAR(50) DEFAULT 'Cash',
+    reference_no VARCHAR(100),
+    status VARCHAR(50) DEFAULT 'Pending',
+    recorded_by TEXT,
+    recorded_at VARCHAR(50),
+    verified_by TEXT,
+    verified_date VARCHAR(50),
+    voided_by TEXT,
+    voided_date VARCHAR(50),
+    void_reason TEXT,
+    notes TEXT,
+    transaction_id VARCHAR(100)
+  );
+      CREATE INDEX IF NOT EXISTS membership_payments_year_idx ON membership_payments(year);
+      CREATE INDEX IF NOT EXISTS membership_payments_member_idx ON membership_payments(member_id);
+  `);
     await client.query(`
-      CREATE TABLE IF NOT EXISTS membership_year_snapshots (
-        year INTEGER PRIMARY KEY,
-        closed_by TEXT,
-        closed_at VARCHAR(50),
-        dues_amount NUMERIC DEFAULT 0,
-        total_members INTEGER DEFAULT 0,
-        paid_members INTEGER DEFAULT 0,
-        unpaid_members INTEGER DEFAULT 0,
-        total_collected NUMERIC DEFAULT 0,
-        listed_members JSONB DEFAULT '[]'::jsonb,
-        unpaid_member_ids JSONB DEFAULT '[]'::jsonb,
-        remarks TEXT
-      );
-    `);
+      CREATE TABLE IF NOT EXISTS membership_year_snapshots(
+    year INTEGER PRIMARY KEY,
+    closed_by TEXT,
+    closed_at VARCHAR(50),
+    dues_amount NUMERIC DEFAULT 0,
+    total_members INTEGER DEFAULT 0,
+    paid_members INTEGER DEFAULT 0,
+    unpaid_members INTEGER DEFAULT 0,
+    total_collected NUMERIC DEFAULT 0,
+    listed_members JSONB DEFAULT '[]':: jsonb,
+    unpaid_member_ids JSONB DEFAULT '[]':: jsonb,
+    remarks TEXT
+  );
+  `);
     await client.query("COMMIT");
     console.log("[DB DEBUG] Database schema initialized successfully");
   } catch (err) {
@@ -1240,11 +1240,11 @@ async function saveEntity(client, rows, mapping) {
   const activeRows = rows.filter((row) => row?.id && !mapping.deletedIds.has(row.id));
   if (activeRows.length === 0) return;
   const columns = ["id", ...mapping.fields.map(([column]) => column)];
-  const placeholders = columns.map((_, index) => `$${index + 1}`);
+  const placeholders = columns.map((_, index) => `$${index + 1} `);
   const updates = columns.slice(1).map(
-    (column) => mapping.table === "users" && column === "password" ? `password = CASE WHEN EXCLUDED.password IS NOT NULL AND EXCLUDED.password != '' THEN EXCLUDED.password ELSE users.password END` : `${column} = EXCLUDED.${column}`
+    (column) => mapping.table === "users" && column === "password" ? `password = CASE WHEN EXCLUDED.password IS NOT NULL AND EXCLUDED.password != '' THEN EXCLUDED.password ELSE users.password END` : `${column} = EXCLUDED.${column} `
   );
-  const query = `INSERT INTO ${mapping.table} (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) ON CONFLICT (id) DO UPDATE SET ${updates.join(", ")}`;
+  const query = `INSERT INTO ${mapping.table} (${columns.join(", ")}) VALUES(${placeholders.join(", ")}) ON CONFLICT(id) DO UPDATE SET ${updates.join(", ")} `;
   for (const row of activeRows) {
     const values = [row.id, ...mapping.fields.map(([, , transform]) => transform(row, row))];
     await client.query(query, values);
@@ -1262,22 +1262,22 @@ async function saveIgpExpenseSegments(client, expenses, defaultProduce) {
     const produce = typeof expense.produce === "string" && expense.produce.trim() ? expense.produce.trim() : inferredProduce || defaultProduce || "Swine Raising (Baboyan)";
     ids.push(expense.id);
     await client.query(`
-      INSERT INTO afa_igp_expenses (
-        id, produce, date, category, quantity, description, amount, recorded_by, fund_source, stage, expense_data
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (id) DO UPDATE SET
-        produce = EXCLUDED.produce,
-        date = EXCLUDED.date,
-        category = EXCLUDED.category,
-        quantity = EXCLUDED.quantity,
-        description = EXCLUDED.description,
-        amount = EXCLUDED.amount,
-        recorded_by = EXCLUDED.recorded_by,
-        fund_source = EXCLUDED.fund_source,
-        stage = EXCLUDED.stage,
-        expense_data = EXCLUDED.expense_data;
-    `, [
+      INSERT INTO afa_igp_expenses(
+                                              id, produce, date, category, quantity, description, amount, recorded_by, fund_source, stage, expense_data
+                                            )
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT(id) DO UPDATE SET
+  produce = EXCLUDED.produce,
+    date = EXCLUDED.date,
+    category = EXCLUDED.category,
+    quantity = EXCLUDED.quantity,
+    description = EXCLUDED.description,
+    amount = EXCLUDED.amount,
+    recorded_by = EXCLUDED.recorded_by,
+    fund_source = EXCLUDED.fund_source,
+    stage = EXCLUDED.stage,
+    expense_data = EXCLUDED.expense_data;
+  `, [
       expense.id,
       produce,
       expense.date || null,
@@ -1305,20 +1305,20 @@ async function saveIgpSales(client, sales) {
     const produce = cleanText(sale.produce, 200) || "Unspecified";
     ids.push(sale.id);
     await client.query(`
-      INSERT INTO afa_igp_sales (
-        id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (id) DO UPDATE SET
-        produce = EXCLUDED.produce,
-        date = EXCLUDED.date,
-        stage = EXCLUDED.stage,
-        quantity = EXCLUDED.quantity,
-        revenue = EXCLUDED.revenue,
-        recorded_by = EXCLUDED.recorded_by,
-        fund_source = EXCLUDED.fund_source,
-        notes = EXCLUDED.notes;
-    `, [
+      INSERT INTO afa_igp_sales(
+    id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes
+  )
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT(id) DO UPDATE SET
+  produce = EXCLUDED.produce,
+    date = EXCLUDED.date,
+    stage = EXCLUDED.stage,
+    quantity = EXCLUDED.quantity,
+    revenue = EXCLUDED.revenue,
+    recorded_by = EXCLUDED.recorded_by,
+    fund_source = EXCLUDED.fund_source,
+    notes = EXCLUDED.notes;
+  `, [
       sale.id,
       produce,
       cleanDateString(sale.date, 50),
@@ -1374,26 +1374,26 @@ async function saveIgpHarvests(client, harvests, replace = true) {
     if (!collectedBy) throw new Error(`Cannot sync IGP harvest ${harvest.id} without a collector`);
     ids.push(harvest.id);
     await client.query(`
-      INSERT INTO afa_igp_harvests (
-        id, produce, date, time, collected_by, egg_count, notes, status,
-        audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      ON CONFLICT (id) DO UPDATE SET
-        produce = EXCLUDED.produce,
-        date = EXCLUDED.date,
-        time = EXCLUDED.time,
-        collected_by = EXCLUDED.collected_by,
-        egg_count = EXCLUDED.egg_count,
-        notes = EXCLUDED.notes,
-        status = EXCLUDED.status,
-        audited_by = EXCLUDED.audited_by,
-        audited_date = EXCLUDED.audited_date,
-        audit_remarks = EXCLUDED.audit_remarks,
-        signed_by = EXCLUDED.signed_by,
-        signed_date = EXCLUDED.signed_date,
-        signature_remarks = EXCLUDED.signature_remarks;
-    `, [
+      INSERT INTO afa_igp_harvests(
+    id, produce, date, time, collected_by, egg_count, notes, status,
+    audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
+  )
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ON CONFLICT(id) DO UPDATE SET
+  produce = EXCLUDED.produce,
+    date = EXCLUDED.date,
+    time = EXCLUDED.time,
+    collected_by = EXCLUDED.collected_by,
+    egg_count = EXCLUDED.egg_count,
+    notes = EXCLUDED.notes,
+    status = EXCLUDED.status,
+    audited_by = EXCLUDED.audited_by,
+    audited_date = EXCLUDED.audited_date,
+    audit_remarks = EXCLUDED.audit_remarks,
+    signed_by = EXCLUDED.signed_by,
+    signed_date = EXCLUDED.signed_date,
+    signature_remarks = EXCLUDED.signature_remarks;
+  `, [
       harvest.id,
       cleanText(harvest.produce, 200),
       cleanDateString(harvest.date, 50),
@@ -1535,7 +1535,7 @@ async function saveFullStateToPostgres(pool, state) {
         if (tbl === "delegation_requests") deletedDelegationIds.add(state.deleteItem.id);
         if (tbl === "membership_payments") deletedMembershipPaymentIds.add(state.deleteItem.id);
         if (tbl === "members") await client.query("DELETE FROM membership_payments WHERE member_id = $1", [state.deleteItem.id]);
-        console.log(`[DB DELETE] Single deleted ${tbl} ID: ${state.deleteItem.id}`);
+        console.log(`[DB DELETE] Single deleted ${tbl} ID: ${state.deleteItem.id} `);
       }
     }
     if (state.users && Array.isArray(state.users)) {
@@ -1560,23 +1560,23 @@ async function saveFullStateToPostgres(pool, state) {
           continue;
         }
         await client.query(`
-          INSERT INTO users (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-          ON CONFLICT (id) DO UPDATE SET
-            username = EXCLUDED.username,
-            name = EXCLUDED.name,
-            role = CASE WHEN $17::boolean THEN EXCLUDED.role ELSE users.role END,
-            joined_date = EXCLUDED.joined_date,
-            farm_location = EXCLUDED.farm_location,
-            primary_crops = EXCLUDED.primary_crops,
-            contact_number = EXCLUDED.contact_number,
-            status = EXCLUDED.status,
-            avatar_url = EXCLUDED.avatar_url,
-            member_id_number = EXCLUDED.member_id_number,
-            rsbsa_number = EXCLUDED.rsbsa_number,
-            is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
-            mfa_enabled = COALESCE(users.mfa_enabled, EXCLUDED.mfa_enabled);
-        `, [
+          INSERT INTO users(id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          ON CONFLICT(id) DO UPDATE SET
+  username = EXCLUDED.username,
+    name = EXCLUDED.name,
+    role = CASE WHEN $17::boolean THEN EXCLUDED.role ELSE users.role END,
+      joined_date = EXCLUDED.joined_date,
+      farm_location = EXCLUDED.farm_location,
+      primary_crops = EXCLUDED.primary_crops,
+      contact_number = EXCLUDED.contact_number,
+      status = EXCLUDED.status,
+      avatar_url = EXCLUDED.avatar_url,
+      member_id_number = EXCLUDED.member_id_number,
+      rsbsa_number = EXCLUDED.rsbsa_number,
+      is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
+      mfa_enabled = COALESCE(users.mfa_enabled, EXCLUDED.mfa_enabled);
+  `, [
           resolvedId,
           cleanUsername,
           "",
@@ -1607,22 +1607,22 @@ async function saveFullStateToPostgres(pool, state) {
         const memberName = cleanText(m.name, 200);
         if (!memberName) continue;
         await client.query(`
-          INSERT INTO members (id, name, farm_location, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            farm_location = EXCLUDED.farm_location,
-            primary_crops = EXCLUDED.primary_crops,
-            contact_number = EXCLUDED.contact_number,
-            status = EXCLUDED.status,
-            joined_date = EXCLUDED.joined_date,
-            member_id_number = EXCLUDED.member_id_number,
-            rsbsa_number = EXCLUDED.rsbsa_number,
-            is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
-            avatar_url = EXCLUDED.avatar_url,
-            gender = EXCLUDED.gender,
-            birth_date = EXCLUDED.birth_date;
-        `, [
+          INSERT INTO members(id, name, farm_location, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT(id) DO UPDATE SET
+  name = EXCLUDED.name,
+    farm_location = EXCLUDED.farm_location,
+    primary_crops = EXCLUDED.primary_crops,
+    contact_number = EXCLUDED.contact_number,
+    status = EXCLUDED.status,
+    joined_date = EXCLUDED.joined_date,
+    member_id_number = EXCLUDED.member_id_number,
+    rsbsa_number = EXCLUDED.rsbsa_number,
+    is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
+    avatar_url = EXCLUDED.avatar_url,
+    gender = EXCLUDED.gender,
+    birth_date = EXCLUDED.birth_date;
+  `, [
           m.id,
           memberName,
           cleanText(m.farmLocation, 200),
@@ -1646,12 +1646,12 @@ async function saveFullStateToPostgres(pool, state) {
         if (!tx?.id || deletedTxIds.has(tx.id)) continue;
         await client.query(`
           UPDATE financial_transactions SET
-            audited_status = COALESCE($2, audited_status),
-            audited_by = COALESCE($3, audited_by),
-            audited_date = COALESCE($4, audited_date),
-            audit_notes = COALESCE($5, audit_notes)
+  audited_status = COALESCE($2, audited_status),
+    audited_by = COALESCE($3, audited_by),
+    audited_date = COALESCE($4, audited_date),
+    audit_notes = COALESCE($5, audit_notes)
           WHERE id = $1;
-        `, [
+  `, [
           tx.id,
           tx.auditedStatus || null,
           tx.auditedBy || null,
@@ -1665,12 +1665,12 @@ async function saveFullStateToPostgres(pool, state) {
         if (!tx?.id || deletedTxIds.has(tx.id)) continue;
         await client.query(`
           UPDATE financial_transactions SET
-            president_approval_status = COALESCE($2, president_approval_status),
-            president_approved_by = COALESCE($3, president_approved_by),
-            president_approved_date = COALESCE($4, president_approved_date),
-            president_approval_remarks = COALESCE($5, president_approval_remarks)
+  president_approval_status = COALESCE($2, president_approval_status),
+    president_approved_by = COALESCE($3, president_approved_by),
+    president_approved_date = COALESCE($4, president_approved_date),
+    president_approval_remarks = COALESCE($5, president_approval_remarks)
           WHERE id = $1 AND audited_status = 'Audited';
-        `, [
+  `, [
           tx.id,
           tx.presidentApprovalStatus || null,
           tx.presidentApprovedBy || null,
@@ -1704,23 +1704,23 @@ async function saveFullStateToPostgres(pool, state) {
         }
         await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, purpose, liquidation_deadline, audited_status, audited_by, audited_date, audit_notes)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-          ON CONFLICT (id) DO UPDATE SET
-            type = EXCLUDED.type,
-            category = EXCLUDED.category,
-            amount = EXCLUDED.amount,
-            date = EXCLUDED.date,
-            description = EXCLUDED.description,
-            recorded_by = EXCLUDED.recorded_by,
-            activity_id = EXCLUDED.activity_id,
-            fund_source = EXCLUDED.fund_source,
-            purpose = COALESCE(EXCLUDED.purpose, financial_transactions.purpose),
-            liquidation_deadline = COALESCE(EXCLUDED.liquidation_deadline, financial_transactions.liquidation_deadline),
-            audited_status = EXCLUDED.audited_status,
-            audited_by = EXCLUDED.audited_by,
-            audited_date = EXCLUDED.audited_date,
-            audit_notes = EXCLUDED.audit_notes;
-        `, [
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          ON CONFLICT(id) DO UPDATE SET
+  type = EXCLUDED.type,
+    category = EXCLUDED.category,
+    amount = EXCLUDED.amount,
+    date = EXCLUDED.date,
+    description = EXCLUDED.description,
+    recorded_by = EXCLUDED.recorded_by,
+    activity_id = EXCLUDED.activity_id,
+    fund_source = EXCLUDED.fund_source,
+    purpose = COALESCE(EXCLUDED.purpose, financial_transactions.purpose),
+    liquidation_deadline = COALESCE(EXCLUDED.liquidation_deadline, financial_transactions.liquidation_deadline),
+    audited_status = EXCLUDED.audited_status,
+    audited_by = EXCLUDED.audited_by,
+    audited_date = EXCLUDED.audited_date,
+    audit_notes = EXCLUDED.audit_notes;
+  `, [
           tx.id,
           txType === "income" ? "income" : "expense",
           cleanText(tx.category, 100) || "Uncategorized",
@@ -1749,21 +1749,21 @@ async function saveFullStateToPostgres(pool, state) {
         if (!meetingTitle) continue;
         await client.query(`
           INSERT INTO meetings (id, title, date, location, attendance_count, agenda, minutes, officer_in_charge, attendance_record, minutes_approval_status, approved_by, approved_date, approval_remarks)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT (id) DO UPDATE SET
-            title = EXCLUDED.title,
-            date = EXCLUDED.date,
-            location = EXCLUDED.location,
-            attendance_count = EXCLUDED.attendance_count,
-            agenda = EXCLUDED.agenda,
-            minutes = EXCLUDED.minutes,
-            officer_in_charge = EXCLUDED.officer_in_charge,
-            attendance_record = EXCLUDED.attendance_record,
-            minutes_approval_status = COALESCE(EXCLUDED.minutes_approval_status, meetings.minutes_approval_status),
-            approved_by = COALESCE(EXCLUDED.approved_by, meetings.approved_by),
-            approved_date = COALESCE(EXCLUDED.approved_date, meetings.approved_date),
-            approval_remarks = COALESCE(EXCLUDED.approval_remarks, meetings.approval_remarks);
-        `, [
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT(id) DO UPDATE SET
+  title = EXCLUDED.title,
+    date = EXCLUDED.date,
+    location = EXCLUDED.location,
+    attendance_count = EXCLUDED.attendance_count,
+    agenda = EXCLUDED.agenda,
+    minutes = EXCLUDED.minutes,
+    officer_in_charge = EXCLUDED.officer_in_charge,
+    attendance_record = EXCLUDED.attendance_record,
+    minutes_approval_status = COALESCE(EXCLUDED.minutes_approval_status, meetings.minutes_approval_status),
+    approved_by = COALESCE(EXCLUDED.approved_by, meetings.approved_by),
+    approved_date = COALESCE(EXCLUDED.approved_date, meetings.approved_date),
+    approval_remarks = COALESCE(EXCLUDED.approval_remarks, meetings.approval_remarks);
+  `, [
           mt.id,
           meetingTitle,
           cleanDateString(mt.date, 50),
@@ -1850,18 +1850,18 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Saving", logList.length, "system logs...");
       for (const lg of logList) {
         await client.query(`
-          INSERT INTO system_logs (id, timestamp, user_name, role, action, details, sync_status, hash, previous_hash)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          ON CONFLICT (id) DO UPDATE SET
-            timestamp = EXCLUDED.timestamp,
-            user_name = EXCLUDED.user_name,
-            role = EXCLUDED.role,
-            action = EXCLUDED.action,
-            details = EXCLUDED.details,
-            sync_status = EXCLUDED.sync_status,
-            hash = EXCLUDED.hash,
-            previous_hash = EXCLUDED.previous_hash;
-        `, [
+          INSERT INTO system_logs(id, timestamp, user_name, role, action, details, sync_status, hash, previous_hash)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          ON CONFLICT(id) DO UPDATE SET
+  timestamp = EXCLUDED.timestamp,
+    user_name = EXCLUDED.user_name,
+    role = EXCLUDED.role,
+    action = EXCLUDED.action,
+    details = EXCLUDED.details,
+    sync_status = EXCLUDED.sync_status,
+    hash = EXCLUDED.hash,
+    previous_hash = EXCLUDED.previous_hash;
+  `, [
           lg.id,
           cleanDateString(lg.timestamp, 100),
           cleanText(lg.user || lg.userName, 200) || "Officer",
@@ -1881,27 +1881,27 @@ async function saveFullStateToPostgres(pool, state) {
       for (const p of activeProducts) {
         if (!p || typeof p.id !== "string" || !p.id || !cleanText(p.name, 300)) continue;
         await client.query(`
-          INSERT INTO products (id, name, ceb_name, category, description, unit, price, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-          ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            ceb_name = EXCLUDED.ceb_name,
-            category = EXCLUDED.category,
-            description = EXCLUDED.description,
-            unit = EXCLUDED.unit,
-            price = EXCLUDED.price,
-            quantity_available = EXCLUDED.quantity_available,
-            stock_status = EXCLUDED.stock_status,
-            farmer_name = EXCLUDED.farmer_name,
-            farmer_sitio = EXCLUDED.farmer_sitio,
-            farmer_phone = EXCLUDED.farmer_phone,
-            contact_person = EXCLUDED.contact_person,
-            image_url = EXCLUDED.image_url,
-            is_published = EXCLUDED.is_published,
-            updated_by = EXCLUDED.updated_by,
-            managed_by = EXCLUDED.managed_by,
-            date_updated = EXCLUDED.date_updated;
-        `, [
+          INSERT INTO products(id, name, ceb_name, category, description, unit, price, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          ON CONFLICT(id) DO UPDATE SET
+  name = EXCLUDED.name,
+    ceb_name = EXCLUDED.ceb_name,
+    category = EXCLUDED.category,
+    description = EXCLUDED.description,
+    unit = EXCLUDED.unit,
+    price = EXCLUDED.price,
+    quantity_available = EXCLUDED.quantity_available,
+    stock_status = EXCLUDED.stock_status,
+    farmer_name = EXCLUDED.farmer_name,
+    farmer_sitio = EXCLUDED.farmer_sitio,
+    farmer_phone = EXCLUDED.farmer_phone,
+    contact_person = EXCLUDED.contact_person,
+    image_url = EXCLUDED.image_url,
+    is_published = EXCLUDED.is_published,
+    updated_by = EXCLUDED.updated_by,
+    managed_by = EXCLUDED.managed_by,
+    date_updated = EXCLUDED.date_updated;
+  `, [
           p.id,
           cleanText(p.name, 300) || "Unnamed product",
           cleanText(p.cebName, 300),
@@ -1931,20 +1931,20 @@ async function saveFullStateToPostgres(pool, state) {
         if (!r || typeof r.id !== "string" || !r.id) continue;
         if (!cleanText(r.resolutionNumber, 100) || !cleanText(r.title, 300)) continue;
         await client.query(`
-          INSERT INTO resolutions (id, resolution_number, title, description, date_agreed, moved_by, seconded_by, vote_in_favor, vote_against, vote_abstain, status)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          ON CONFLICT (id) DO UPDATE SET
-            resolution_number = EXCLUDED.resolution_number,
-            title = EXCLUDED.title,
-            description = EXCLUDED.description,
-            date_agreed = EXCLUDED.date_agreed,
-            moved_by = EXCLUDED.moved_by,
-            seconded_by = EXCLUDED.seconded_by,
-            vote_in_favor = EXCLUDED.vote_in_favor,
-            vote_against = EXCLUDED.vote_against,
-            vote_abstain = EXCLUDED.vote_abstain,
-            status = EXCLUDED.status;
-        `, [
+          INSERT INTO resolutions(id, resolution_number, title, description, date_agreed, moved_by, seconded_by, vote_in_favor, vote_against, vote_abstain, status)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT(id) DO UPDATE SET
+  resolution_number = EXCLUDED.resolution_number,
+    title = EXCLUDED.title,
+    description = EXCLUDED.description,
+    date_agreed = EXCLUDED.date_agreed,
+    moved_by = EXCLUDED.moved_by,
+    seconded_by = EXCLUDED.seconded_by,
+    vote_in_favor = EXCLUDED.vote_in_favor,
+    vote_against = EXCLUDED.vote_against,
+    vote_abstain = EXCLUDED.vote_abstain,
+    status = EXCLUDED.status;
+  `, [
           r.id,
           cleanText(r.resolutionNumber, 100),
           cleanText(r.title, 300),
@@ -1968,16 +1968,16 @@ async function saveFullStateToPostgres(pool, state) {
         const announcementTitle = cleanText(a.title, 300);
         if (!announcementTitle) continue;
         await client.query(`
-          INSERT INTO announcements (id, title, category, content, date_posted, priority, posted_by)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT (id) DO UPDATE SET
-            title = EXCLUDED.title,
-            category = EXCLUDED.category,
-            content = EXCLUDED.content,
-            date_posted = EXCLUDED.date_posted,
-            priority = EXCLUDED.priority,
-            posted_by = EXCLUDED.posted_by;
-        `, [
+          INSERT INTO announcements(id, title, category, content, date_posted, priority, posted_by)
+  VALUES($1, $2, $3, $4, $5, $6, $7)
+          ON CONFLICT(id) DO UPDATE SET
+  title = EXCLUDED.title,
+    category = EXCLUDED.category,
+    content = EXCLUDED.content,
+    date_posted = EXCLUDED.date_posted,
+    priority = EXCLUDED.priority,
+    posted_by = EXCLUDED.posted_by;
+  `, [
           a.id,
           announcementTitle,
           cleanText(a.category, 100),
@@ -1997,26 +1997,26 @@ async function saveFullStateToPostgres(pool, state) {
         const activityTitle = cleanText(act.title, 300);
         if (!activityTitle) continue;
         await client.query(`
-          INSERT INTO activities (id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, status_reason, documented_notes, attendees_count, target_audience, image_url)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-          ON CONFLICT (id) DO UPDATE SET
-            title = EXCLUDED.title,
-            ceb_title = EXCLUDED.ceb_title,
-            category = EXCLUDED.category,
-            scheduled_date = EXCLUDED.scheduled_date,
-            date_scheduled = EXCLUDED.date_scheduled,
-            scheduled_time = EXCLUDED.scheduled_time,
-            time_scheduled = EXCLUDED.time_scheduled,
-            location = EXCLUDED.location,
-            description = EXCLUDED.description,
-            organizer = EXCLUDED.organizer,
-            status = EXCLUDED.status,
-            status_reason = EXCLUDED.status_reason,
-            documented_notes = EXCLUDED.documented_notes,
-            attendees_count = EXCLUDED.attendees_count,
-            target_audience = EXCLUDED.target_audience,
-            image_url = EXCLUDED.image_url;
-        `, [
+          INSERT INTO activities(id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, status_reason, documented_notes, attendees_count, target_audience, image_url)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          ON CONFLICT(id) DO UPDATE SET
+  title = EXCLUDED.title,
+    ceb_title = EXCLUDED.ceb_title,
+    category = EXCLUDED.category,
+    scheduled_date = EXCLUDED.scheduled_date,
+    date_scheduled = EXCLUDED.date_scheduled,
+    scheduled_time = EXCLUDED.scheduled_time,
+    time_scheduled = EXCLUDED.time_scheduled,
+    location = EXCLUDED.location,
+    description = EXCLUDED.description,
+    organizer = EXCLUDED.organizer,
+    status = EXCLUDED.status,
+    status_reason = EXCLUDED.status_reason,
+    documented_notes = EXCLUDED.documented_notes,
+    attendees_count = EXCLUDED.attendees_count,
+    target_audience = EXCLUDED.target_audience,
+    image_url = EXCLUDED.image_url;
+  `, [
           act.id,
           activityTitle,
           cleanText(act.cebTitle, 300),
@@ -2048,19 +2048,19 @@ async function saveFullStateToPostgres(pool, state) {
         if (!fundName) continue;
         const fundCode = (cleanText(f.code, 50) || fundName).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 50) || "FUND";
         await client.query(`
-          INSERT INTO organization_funds (id, name, code, initial_fund, current_balance, description, custodian, last_updated, category, source_origin)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            code = EXCLUDED.code,
-            initial_fund = EXCLUDED.initial_fund,
-            current_balance = EXCLUDED.current_balance,
-            description = EXCLUDED.description,
-            custodian = EXCLUDED.custodian,
-            last_updated = EXCLUDED.last_updated,
-            category = EXCLUDED.category,
-            source_origin = EXCLUDED.source_origin;
-        `, [
+          INSERT INTO organization_funds(id, name, code, initial_fund, current_balance, description, custodian, last_updated, category, source_origin)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT(id) DO UPDATE SET
+  name = EXCLUDED.name,
+    code = EXCLUDED.code,
+    initial_fund = EXCLUDED.initial_fund,
+    current_balance = EXCLUDED.current_balance,
+    description = EXCLUDED.description,
+    custodian = EXCLUDED.custodian,
+    last_updated = EXCLUDED.last_updated,
+    category = EXCLUDED.category,
+    source_origin = EXCLUDED.source_origin;
+  `, [
           f.id,
           fundName,
           fundCode,
@@ -2079,22 +2079,22 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Saving", state.auditorReports.length, "auditor reports...");
       for (const ar of state.auditorReports) {
         await client.query(`
-          INSERT INTO auditor_reports (id, report_period, report_type, total_income, total_expenses, net_surplus, findings, recommendations, prepared_by, certified_by, status, date_submitted, date_certified)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT (id) DO UPDATE SET
-            report_period = EXCLUDED.report_period,
-            report_type = EXCLUDED.report_type,
-            total_income = EXCLUDED.total_income,
-            total_expenses = EXCLUDED.total_expenses,
-            net_surplus = EXCLUDED.net_surplus,
-            findings = EXCLUDED.findings,
-            recommendations = EXCLUDED.recommendations,
-            prepared_by = EXCLUDED.prepared_by,
-            certified_by = EXCLUDED.certified_by,
-            status = EXCLUDED.status,
-            date_submitted = EXCLUDED.date_submitted,
-            date_certified = EXCLUDED.date_certified;
-        `, [
+          INSERT INTO auditor_reports(id, report_period, report_type, total_income, total_expenses, net_surplus, findings, recommendations, prepared_by, certified_by, status, date_submitted, date_certified)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT(id) DO UPDATE SET
+  report_period = EXCLUDED.report_period,
+    report_type = EXCLUDED.report_type,
+    total_income = EXCLUDED.total_income,
+    total_expenses = EXCLUDED.total_expenses,
+    net_surplus = EXCLUDED.net_surplus,
+    findings = EXCLUDED.findings,
+    recommendations = EXCLUDED.recommendations,
+    prepared_by = EXCLUDED.prepared_by,
+    certified_by = EXCLUDED.certified_by,
+    status = EXCLUDED.status,
+    date_submitted = EXCLUDED.date_submitted,
+    date_certified = EXCLUDED.date_certified;
+  `, [
           ar.id,
           cleanText(ar.reportPeriod, 100) || "Unscheduled",
           cleanText(ar.reportType, 50) || "General",
@@ -2121,28 +2121,28 @@ async function saveFullStateToPostgres(pool, state) {
         const year = Math.floor(cleanNumber(p.year));
         if (!year || year < 2e3 || year > 2100) continue;
         await client.query(`
-          INSERT INTO membership_payments (id, member_id, member_name, member_id_number, year, amount, date_paid, method, reference_no, status, recorded_by, recorded_at, verified_by, verified_date, voided_by, voided_date, void_reason, notes, transaction_id)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-          ON CONFLICT (id) DO UPDATE SET
-            member_id = EXCLUDED.member_id,
-            member_name = EXCLUDED.member_name,
-            member_id_number = EXCLUDED.member_id_number,
-            year = EXCLUDED.year,
-            amount = EXCLUDED.amount,
-            date_paid = EXCLUDED.date_paid,
-            method = EXCLUDED.method,
-            reference_no = EXCLUDED.reference_no,
-            status = EXCLUDED.status,
-            recorded_by = EXCLUDED.recorded_by,
-            recorded_at = EXCLUDED.recorded_at,
-            verified_by = EXCLUDED.verified_by,
-            verified_date = EXCLUDED.verified_date,
-            voided_by = EXCLUDED.voided_by,
-            voided_date = EXCLUDED.voided_date,
-            void_reason = EXCLUDED.void_reason,
-            notes = EXCLUDED.notes,
-            transaction_id = EXCLUDED.transaction_id;
-        `, [
+          INSERT INTO membership_payments(id, member_id, member_name, member_id_number, year, amount, date_paid, method, reference_no, status, recorded_by, recorded_at, verified_by, verified_date, voided_by, voided_date, void_reason, notes, transaction_id)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          ON CONFLICT(id) DO UPDATE SET
+  member_id = EXCLUDED.member_id,
+    member_name = EXCLUDED.member_name,
+    member_id_number = EXCLUDED.member_id_number,
+    year = EXCLUDED.year,
+    amount = EXCLUDED.amount,
+    date_paid = EXCLUDED.date_paid,
+    method = EXCLUDED.method,
+    reference_no = EXCLUDED.reference_no,
+    status = EXCLUDED.status,
+    recorded_by = EXCLUDED.recorded_by,
+    recorded_at = EXCLUDED.recorded_at,
+    verified_by = EXCLUDED.verified_by,
+    verified_date = EXCLUDED.verified_date,
+    voided_by = EXCLUDED.voided_by,
+    voided_date = EXCLUDED.voided_date,
+    void_reason = EXCLUDED.void_reason,
+    notes = EXCLUDED.notes,
+    transaction_id = EXCLUDED.transaction_id;
+  `, [
           p.id,
           cleanText(p.memberId, 100),
           cleanText(p.memberName, 200) || "Member",
@@ -2170,10 +2170,10 @@ async function saveFullStateToPostgres(pool, state) {
         const year = Math.floor(cleanNumber(snap.year));
         if (!year || year < 2e3 || year > 2100) continue;
         await client.query(`
-          INSERT INTO membership_year_snapshots (year, closed_by, closed_at, dues_amount, total_members, paid_members, unpaid_members, total_collected, listed_members, unpaid_member_ids, remarks)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          ON CONFLICT (year) DO NOTHING;
-        `, [
+          INSERT INTO membership_year_snapshots(year, closed_by, closed_at, dues_amount, total_members, paid_members, unpaid_members, total_collected, listed_members, unpaid_member_ids, remarks)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT(year) DO NOTHING;
+  `, [
           year,
           cleanText(snap.closedBy, 200),
           cleanDateString(snap.closedAt, 50),
