@@ -11,6 +11,7 @@ import { getSurname } from '../utils/names';
 import { getTreasurerReportRange, getTreasurerReportRows } from '../utils/treasurerReport';
 import { getInitialFund } from '../utils/fundBalance';
 import PresidentReport, { buildReportData, buildPresidentReportPrintHtml } from './PresidentReport';
+import AuditorOfficialReport, { buildAuditorReportData, buildAuditorReportPrintHtml } from './AuditorReport';
 import {
   Printer, Download, X, FileText, ShieldCheck, Coins,
   Wallet, Database, Layers, CheckCircle2, AlertCircle, Eye
@@ -128,6 +129,20 @@ export default function OfficerReportModal({
     auditorReports, delegationRequests, membershipPayments, customHighlightsText,
     customPlansText, presidentClosingLine, customRemarks
   ]);
+
+  const auditorReportData = useMemo(() => {
+    const parsedYear = Number(String(reportDate || '').slice(0, 4)) || new Date().getFullYear();
+    return buildAuditorReportData({
+      year: parsedYear,
+      generatedDate: reportDate,
+      users,
+      transactions,
+      funds,
+      inventory,
+      livestockIgp,
+      customRemarks: customRemarks.trim() || undefined,
+    });
+  }, [reportDate, users, transactions, funds, inventory, livestockIgp, customRemarks]);
   const reportAnchorDate = reportDate || new Date().toISOString().split('T')[0];
   const treasurerReportRange = getTreasurerReportRange(reportAnchorDate, reportPeriod);
   const treasurerCategoryRows = getTreasurerReportRows(transactions, livestockIgp, treasurerReportRange, reportKind);
@@ -238,6 +253,12 @@ export default function OfficerReportModal({
 
     if (activeReportRole === 'President') {
       printWindow.document.write(buildPresidentReportPrintHtml(presidentReportData));
+      printWindow.document.close();
+      return;
+    }
+
+    if (activeReportRole === 'Auditor') {
+      printWindow.document.write(buildAuditorReportPrintHtml(auditorReportData));
       printWindow.document.close();
       return;
     }
@@ -426,102 +447,6 @@ export default function OfficerReportModal({
                 <td>${t.auditedStatus || 'Unaudited'}</td>
               </tr>
             `).join('')}
-          </tbody>
-        </table>
-      `;
-    } else if (activeReportRole === 'Auditor') {
-      contentHtml = `
-        <div class="section-title">1. AUDIT EVALUATION & COMPLIANCE SUMMARY</div>
-        <table>
-          <tr><th>Audit Metric</th><th>Evaluation Outcome</th><th>Audit Verification Standard</th></tr>
-          <tr><td>Total Transactions Examined</td><td><strong>${transactions.length} Record(s)</strong></td><td>100% Comprehensive Ledger Examination</td></tr>
-          <tr><td>Verified & Audited OK</td><td style="color: green; font-weight: bold;">${auditedCount} Transaction(s)</td><td>Supported by official receipts & disbursement vouchers</td></tr>
-          <tr><td>Flagged Discrepancy Items</td><td style="color: red; font-weight: bold;">${flaggedCount} Item(s)</td><td>Requires receipt clarification / officer justification</td></tr>
-          <tr><td>Pending Audit Verification</td><td>${unauditedCount} Item(s)</td><td>Queued for forthcoming regular committee audit</td></tr>
-          <tr><td>Overall Audit Compliance Rate</td><td><strong>${auditComplianceRate}%</strong></td><td>Cooperative Development Authority (CDA) Standard Compliant</td></tr>
-        </table>
-
-        <div class="section-title">2. BUDGET SOURCE & ALLOCATION RESTRICTION COMPLIANCE AUDIT</div>
-        <p style="font-size: 10px; color: #475569; margin-bottom: 8px;">
-          Auditor's evaluation verifying that all funds were drawn strictly from their designated budget source allocations:
-        </p>
-        <table>
-          <thead>
-            <tr>
-              <th>Fund Account / Source</th>
-              <th>Sponsoring Body / Origin</th>
-              <th>Authorized Expenditure Scope</th>
-              <th>Compliance Finding</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${funds.map(f => `
-              <tr>
-                <td><strong>${f.name} (${f.code})</strong></td>
-                <td>${f.code.includes('DOLE') ? 'DOLE Integrated Livelihood Program' : f.code.includes('SLP') ? 'DSWD Sustainable Livelihood Program' : f.code.includes('ATI') ? 'Agricultural Training Institute' : f.code.includes('DISP') ? 'AFA Statutory 5% Reserve' : 'Cooperative Capital'}</td>
-                <td>${f.description}</td>
-                <td style="color: green; font-weight: bold;">✓ VERIFIED & IN COMPLIANCE</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-
-        <div class="section-title">3. ASSOCIATION INVENTORY & CUSTODIAL NOTES REGISTRY</div>
-        <p style="font-size: 10px; color: #475569; margin-bottom: 8px;">
-          Since the association has no Property Custodian, the Auditor keeps the official notes of all association inventory (equipment, tools, rental assets, supplies):
-        </p>
-        <table>
-          <tr><th>Inventory Metric</th><th>Count</th></tr>
-          <tr><td>Total Registered Inventory Items</td><td>${inventory.length} Item(s)</td></tr>
-          <tr><td>Good Condition</td><td style="color: green; font-weight: bold;">${inventoryGood} Item(s)</td></tr>
-          <tr><td>Needs Repair</td><td style="color: orange; font-weight: bold;">${inventoryNeedsRepair} Item(s)</td></tr>
-          <tr><td>Damaged / Lost</td><td style="color: red; font-weight: bold;">${inventoryDamagedLost} Item(s)</td></tr>
-        </table>
-
-        <div class="section-title">4. DETAILED INVENTORY REGISTRY (AUDITOR'S CUSTODY)</div>
-        <table>
-          <thead>
-            <tr><th>Item Name</th><th>Category</th><th>Quantity</th><th>Condition</th><th>Location</th><th>Custodial Notes</th><th>Recorded By</th><th>Last Updated</th></tr>
-          </thead>
-          <tbody>
-            ${inventory.map(i => `
-              <tr>
-                <td><strong>${i.name}</strong></td>
-                <td>${i.category}</td>
-                <td>${i.quantity} ${i.unit}</td>
-                <td>${i.condition}</td>
-                <td>${i.location || '—'}</td>
-                <td>${i.notes || '—'}</td>
-                <td>${i.recordedBy}</td>
-                <td>${i.lastUpdated}</td>
-              </tr>
-            `).join('') || '<tr><td colspan="8">No inventory items recorded.</td></tr>'}
-          </tbody>
-        </table>
-
-        <div class="section-title">5. FLAGGED ITEMS & ACTION REQUIRED (WITH BUDGET SOURCE CHARGED)</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Category</th>
-              <th>Budget Source Charged</th>
-              <th>Description</th>
-              <th>Amount</th>
-              <th>Audit Notes / Discrepancy Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${transactions.filter(t => t.auditedStatus === 'Flagged').map(t => `
-              <tr style="background-color: #fef2f2;">
-                <td>${t.date}</td>
-                <td>${t.category}</td>
-                <td><strong>${t.fundSource || 'General Operational Fund (GF-SLP)'}</strong></td>
-                <td>${t.description}</td>
-                <td class="expense">PHP ${t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                <td>${t.auditNotes || 'Requires official receipts or documentation clarification.'}</td>
-              </tr>
-            `).join('') || '<tr><td colspan="6" style="color: green; text-align: center;">No flagged financial items found. All audited records meet co-op standards.</td></tr>'}
           </tbody>
         </table>
       `;
@@ -871,60 +796,104 @@ export default function OfficerReportModal({
         ].join(','));
       });
     } else if (activeReportRole === 'Auditor') {
-      csvRows.push('AFA OFFICIAL AUDITOR INSPECTION REPORT');
-      csvRows.push(`Date Generated,${reportDate}`);
-      csvRows.push(`Auditor,${getOfficerNameByRole('Auditor')}`);
+      const a = auditorReportData;
+      csvRows.push('AFA OFFICIAL AUDITOR OVERSIGHT & CUSTODIAL INSPECTION REPORT (DOLE REG. NO. 2315)');
+      csvRows.push(`Date Generated,${csvCell(a.generatedDate)}`);
+      csvRows.push(`Fiscal Year,${a.year}`);
+      csvRows.push(`Auditor,${csvCell(a.auditor)}`);
+      csvRows.push(`Audit Opinion,${csvCell(a.opinion.label)}`);
+      csvRows.push(`Audit Summary,${csvCell(a.opinion.summary)}`);
       csvRows.push('');
-      csvRows.push('1. AUDIT METRICS');
-      csvRows.push(`Total Evaluated,${transactions.length}`);
-      csvRows.push(`Audited OK,${auditedCount}`);
-      csvRows.push(`Flagged Discrepancies,${flaggedCount}`);
-      csvRows.push(`Compliance Rate (%),${auditComplianceRate}`);
+      csvRows.push('1. AUDIT VERIFICATION COVERAGE SUMMARY');
+      csvRows.push(`Total Transactions Examined,${a.coverage.totalTransactions}`);
+      csvRows.push(`Audited OK,${a.coverage.auditedCount}`);
+      csvRows.push(`Flagged Discrepancies,${a.coverage.flaggedCount}`);
+      csvRows.push(`Pending Unaudited Backlog,${a.coverage.unauditedCount}`);
+      csvRows.push(`Audit Coverage Rate (%),${a.coverage.coverageRate}`);
+      csvRows.push(`Audited Value (PHP),${a.coverage.auditedVolume.toFixed(2)}`);
+      csvRows.push(`Flagged Value (PHP),${a.coverage.flaggedVolume.toFixed(2)}`);
+      csvRows.push(`Unaudited Value (PHP),${a.coverage.unauditedVolume.toFixed(2)}`);
       csvRows.push('');
-      csvRows.push('2. BUDGET SOURCE COMPLIANCE AUDIT (WHERE BUDGET WAS TAKEN FROM)');
-      csvRows.push('Fund Code,Fund Account Name,Compliance Status,Authorized Purpose');
-      funds.forEach(f => {
+      csvRows.push('2. FUND SOURCE COMPLIANCE AUDIT');
+      csvRows.push('Fund Code,Fund Account Name,Audited,Unaudited,Flagged,Compliance Finding,Authorized Scope');
+      a.fundCompliance.forEach(f => {
         csvRows.push([
-          `"${f.code}"`,
-          `"${f.name.replace(/"/g, '""')}"`,
-          'VERIFIED COMPLIANT',
-          `"${f.description.replace(/"/g, '""')}"`
+          csvCell(f.code),
+          csvCell(f.name),
+          f.auditedCount,
+          f.unauditedCount,
+          f.flaggedCount,
+          csvCell(f.status),
+          csvCell(f.description)
         ].join(','));
       });
       csvRows.push('');
-      csvRows.push('3. ASSOCIATION INVENTORY & CUSTODIAL NOTES REGISTRY (AUDITOR CUSTODY)');
-      csvRows.push(`Total Inventory Items,${inventory.length}`);
-      csvRows.push(`Good Condition,${inventoryGood}`);
-      csvRows.push(`Needs Repair,${inventoryNeedsRepair}`);
-      csvRows.push(`Damaged / Lost,${inventoryDamagedLost}`);
-      csvRows.push('');
-      csvRows.push('DETAILED INVENTORY REGISTRY');
-      csvRows.push('Item Name,Category,Quantity,Unit,Condition,Location,Custodial Notes,Recorded By,Last Updated');
-      inventory.forEach(i => {
+      csvRows.push('3A. FLAGGED TRANSACTIONS REQUIRING ACTION');
+      csvRows.push('ID,Date,Category,Fund Source,Description,Amount (PHP),Audit Notes');
+      a.flaggedTransactions.forEach(t => {
         csvRows.push([
-          `"${i.name.replace(/"/g, '""')}"`,
-          `"${(i.category || '').replace(/"/g, '""')}"`,
-          i.quantity.toString(),
-          `"${(i.unit || '').replace(/"/g, '""')}"`,
-          i.condition,
-          `"${(i.location || '').replace(/"/g, '""')}"`,
-          `"${(i.notes || '').replace(/"/g, '""')}"`,
-          `"${(i.recordedBy || '').replace(/"/g, '""')}"`,
-          i.lastUpdated
-        ].join(','));
-      });
-      csvRows.push('');
-      csvRows.push('4. FLAGGED TRANSACTIONS REQUIRING ATTENTION');
-      csvRows.push('ID,Date,Category,Budget Source Charged,Description,Amount (PHP),Audit Notes');
-      transactions.filter(t => t.auditedStatus === 'Flagged').forEach(t => {
-        csvRows.push([
-          t.id,
-          t.date,
-          `"${t.category.replace(/"/g, '""')}"`,
-          `"${(t.fundSource || 'General Operational Fund (GF-SLP)').replace(/"/g, '""')}"`,
-          `"${t.description.replace(/"/g, '""')}"`,
+          csvCell(t.id),
+          csvCell(t.date),
+          csvCell(t.category),
+          csvCell(t.fundSource),
+          csvCell(t.description),
           t.amount.toFixed(2),
-          `"${(t.auditNotes || '').replace(/"/g, '""')}"`
+          csvCell(t.auditNotes)
+        ].join(','));
+      });
+      csvRows.push('');
+      csvRows.push('3B. UNAUDITED TRANSACTIONS BACKLOG');
+      csvRows.push('ID,Date,Type,Category,Fund Source,Description,Amount (PHP),Recorded By');
+      a.unauditedTransactions.forEach(t => {
+        csvRows.push([
+          csvCell(t.id),
+          csvCell(t.date),
+          csvCell(t.type),
+          csvCell(t.category),
+          csvCell(t.fundSource),
+          csvCell(t.description),
+          t.amount.toFixed(2),
+          csvCell(t.recordedBy)
+        ].join(','));
+      });
+      csvRows.push('');
+      csvRows.push('4A. EGG HARVEST VERIFICATION AUDIT');
+      csvRows.push(`Total Submissions,${a.harvestAudit.totalBatches}`);
+      csvRows.push(`Audited,${a.harvestAudit.auditedCount}`);
+      csvRows.push(`President Signed,${a.harvestAudit.signedCount}`);
+      csvRows.push(`Pending Audit,${a.harvestAudit.pendingAuditCount}`);
+      csvRows.push(`Returned,${a.harvestAudit.returnedCount}`);
+      csvRows.push(`Total Verified Eggs,${a.harvestAudit.verifiedEggTotal}`);
+      csvRows.push('');
+      csvRows.push('4B. LIVESTOCK HEADCOUNT VERIFICATION SNAPSHOT');
+      csvRows.push('IGP Project,Stage,Head Count');
+      a.livestockSnapshot.forEach(row => {
+        csvRows.push([csvCell(row.produce), csvCell(row.stage), row.headCount].join(','));
+      });
+      csvRows.push('');
+      csvRows.push('5. ASSOCIATION PROPERTY & CUSTODIAL INVENTORY REGISTRY (AUDITOR CUSTODY)');
+      csvRows.push(`Total Registered Items,${a.inventorySummary.totalItems}`);
+      csvRows.push(`Good Condition,${a.inventorySummary.goodCount}`);
+      csvRows.push(`Needs Repair,${a.inventorySummary.needsRepairCount}`);
+      csvRows.push(`Damaged / Lost,${a.inventorySummary.damagedLostCount}`);
+      csvRows.push(`Total Units,${a.inventorySummary.totalUnits}`);
+      csvRows.push(`Damaged Units,${a.inventorySummary.totalDamagedUnits}`);
+      csvRows.push(`Available Units,${a.inventorySummary.totalAvailableUnits}`);
+      csvRows.push('');
+      csvRows.push('Item Name,Category,Total Qty,Damaged Qty,Available Qty,Unit,Condition,Location,Custodial Notes,Recorded By,Last Updated');
+      a.inventoryRows.forEach(i => {
+        csvRows.push([
+          csvCell(i.name),
+          csvCell(i.category),
+          i.quantity,
+          i.damagedQuantity,
+          i.availableQuantity,
+          csvCell(i.unit),
+          csvCell(i.condition),
+          csvCell(i.location),
+          csvCell(i.notes),
+          csvCell(i.recordedBy),
+          csvCell(i.lastUpdated)
         ].join(','));
       });
     } else if (activeReportRole === 'Secretary' || activeReportRole === 'Assistant_Secretary') {
@@ -1554,8 +1523,37 @@ export default function OfficerReportModal({
               </div>
             )}
 
-            {/* REGISTERED BUDGET SOURCES CARD PREVIEW (excluded for President under Segregation of Duties) */}
-            {activeReportRole !== 'President' && (
+            {/* AUDITOR DOLE-LETTERHEAD REPORT PREVIEW */}
+            {activeReportRole === 'Auditor' && (
+              <div className="bg-white p-4 rounded-xl border border-[#D5CFC1] space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">
+                      Official DOLE-Letterhead Auditor Report
+                    </span>
+                    <p className="text-xs font-bold text-[#1B4332] mt-0.5">
+                      Finding: {auditorReportData.opinion.label}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLetterheadPreview((prev) => !prev)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#D5CFC1] bg-[#F7F4EF] hover:bg-[#EDE7DC] text-[#1B4332] text-xs font-bold cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>{showLetterheadPreview ? 'Hide Letterhead Preview' : 'Show Letterhead Preview'}</span>
+                  </button>
+                </div>
+                {showLetterheadPreview && (
+                  <div className="mt-2 rounded-xl border border-[#D5CFC1] overflow-auto max-h-[52vh] bg-slate-200">
+                    <AuditorOfficialReport data={auditorReportData} hideToolbar />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* REGISTERED BUDGET SOURCES CARD PREVIEW (excluded for President & Auditor under Segregation of Duties) */}
+            {activeReportRole !== 'President' && activeReportRole !== 'Auditor' && (
               <div className="bg-white p-3.5 rounded-xl border border-[#D5CFC1] space-y-2">
                 <span className="text-[10px] font-black uppercase text-[#4A5F57] flex items-center gap-1.5">
                   <Wallet className="w-3.5 h-3.5 text-emerald-700" />
