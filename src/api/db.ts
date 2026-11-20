@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { EggHarvestLog, IgpLivestockInventory, IgpSale } from '../types';
+import { deriveIgpLivestockInventory } from '../utils/igpInventory';
 import type { MembershipPayment, MembershipYearSnapshot } from '../types';
 import { getInitialFund } from '../utils/fundBalance';
 import { cleanDateString, cleanNumber, cleanText, cleanTextList, safeImageUrl } from './sanitize';
@@ -2535,9 +2536,27 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             }
           ]
         : undefined;
-      const livestockInventory = Array.isArray(state.livestockIgp.livestockInventory)
+      const explicitInventory = Array.isArray(state.livestockIgp.livestockInventory)
         ? state.livestockIgp.livestockInventory
         : legacyInventory;
+      const derivedInventory = Array.isArray(state.livestockIgp.expenses)
+        ? deriveIgpLivestockInventory(
+            state.livestockIgp.expenses,
+            Array.isArray(state.livestockIgp.sales) ? state.livestockIgp.sales : [],
+            state.livestockIgp.produces?.[0]
+          )
+        : [];
+      const livestockInventory = (() => {
+        if (!explicitInventory && derivedInventory.length === 0) return undefined;
+        const byProduce = new Map<string, IgpLivestockInventory>();
+        for (const item of explicitInventory || []) {
+          if (item?.produce) byProduce.set(item.produce, item);
+        }
+        for (const item of derivedInventory) {
+          if (item?.produce) byProduce.set(item.produce, item);
+        }
+        return Array.from(byProduce.values());
+      })();
       const eggHarvests = Array.isArray(state.livestockIgp.eggHarvests)
         ? state.livestockIgp.eggHarvests
         : Array.isArray(state.livestockIgp.choreLogs)

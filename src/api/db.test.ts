@@ -575,6 +575,67 @@ it('writes IGP sales and harvests to their normalized tables', async () => {
   ]);
   expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_livestocks'))).toBe(true);
 });
+
+it('derives and uploads afa_igp_livestocks rows from stock-purchase expenses even when livestockInventory is empty', async () => {
+  const queries: Array<{ sql: string; values?: unknown[] }> = [];
+  const pool = {
+    connect: async () => ({
+      query: async (sql: string, values?: unknown[]) => {
+        queries.push({ sql, values });
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => undefined
+    })
+  };
+
+  await saveFullStateToPostgres(pool as any, {
+    livestockIgp: {
+      produces: ['Swine Raising (Baboyan)', 'RTL Chickens'],
+      livestockInventory: [],
+      expenses: [
+        {
+          id: 'exp-swine-1',
+          produce: 'Swine Raising (Baboyan)',
+          stage: 'Fattening',
+          category: 'Piglets / Stock',
+          quantity: 12,
+          description: 'Initial stock',
+          amount: 42000,
+          date: '2026-03-10',
+          recordedBy: 'Treasurer'
+        },
+        {
+          id: 'exp-rtl-1',
+          produce: 'RTL Chickens',
+          stage: 'RTL',
+          category: 'RTL Pullets Stock',
+          quantity: 40,
+          description: 'RTL pullets',
+          amount: 20000,
+          date: '2026-03-11',
+          recordedBy: 'Treasurer'
+        }
+      ],
+      sales: [
+        {
+          id: 'sale-swine-1',
+          produce: 'Swine Raising (Baboyan)',
+          stage: 'Fattening',
+          quantity: 2,
+          revenue: 15000,
+          date: '2026-04-10',
+          recordedBy: 'Treasurer'
+        }
+      ]
+    }
+  });
+
+  const livestockInserts = queries.filter(query => query.sql.includes('INSERT INTO afa_igp_livestocks'));
+  expect(livestockInserts.map(query => query.values)).toEqual([
+    ['Swine Raising (Baboyan)', 'Fattening', 10],
+    ['RTL Chickens', 'RTL', 40]
+  ]);
+});
 });
 
 async function callStatusHandler() {

@@ -34,6 +34,60 @@ function stageDelta(
   return added - sold;
 }
 
+export function deriveIgpLivestockInventory(
+  expenses: IgpExpense[] = [],
+  sales: IgpSale[] = [],
+  defaultProduce?: string
+): IgpLivestockInventory[] {
+  const counts = new Map<string, Map<string, number>>();
+
+  const ensureStage = (produce: string, stage: string) => {
+    let stageMap = counts.get(produce);
+    if (!stageMap) {
+      stageMap = new Map<string, number>();
+      counts.set(produce, stageMap);
+    }
+    if (!stageMap.has(stage)) {
+      stageMap.set(stage, 0);
+    }
+    return stageMap;
+  };
+
+  for (const expense of expenses) {
+    if (!expense?.quantity || !isIgpStockPurchaseCategory(expense.category || '')) continue;
+    const produce = projectOf(expense, defaultProduce).trim();
+    if (!produce) continue;
+    const stage = String(expense.stage || 'General').trim() || 'General';
+    const qty = integerCount(expense.quantity);
+    if (qty <= 0) continue;
+    const stageMap = ensureStage(produce, stage);
+    stageMap.set(stage, (stageMap.get(stage) || 0) + qty);
+  }
+
+  for (const sale of sales) {
+    const qty = integerCount(sale?.quantity);
+    if (qty <= 0) continue;
+    const stage = String(sale?.stage || 'General').trim() || 'General';
+    // Egg sales deduct from egg harvest inventory, not from live poultry headcount.
+    if (stage.toLowerCase() === 'eggs') continue;
+    const produce = projectOf(sale, defaultProduce).trim();
+    if (!produce) continue;
+    const stageMap = counts.get(produce);
+    if (!stageMap) continue;
+    const matchedStage = Array.from(stageMap.keys()).find(
+      (key) => key.toLowerCase() === stage.toLowerCase()
+    );
+    if (matchedStage) {
+      stageMap.set(matchedStage, Math.max(0, (stageMap.get(matchedStage) || 0) - qty));
+    }
+  }
+
+  return Array.from(counts.entries()).map(([produce, stageMap]) => ({
+    produce,
+    stageBreakdown: Object.fromEntries(stageMap.entries())
+  }));
+}
+
 export function getIgpInventoryStageCount(
   produce: string,
   stages: string[],
@@ -44,9 +98,16 @@ export function getIgpInventoryStageCount(
 ) {
   const projectInventory = inventory.find((item) => item.produce === produce);
   const breakdown = projectInventory?.stageBreakdown || {};
+  const hasOpeningBaseline = projectInventory?.openingCount !== undefined;
   return stages.reduce((total, stage) => {
-    const baseline = Object.entries(breakdown)
-      .find(([name]) => name.toLowerCase() === stage.toLowerCase())?.[1];
+    const matchedEntry = Object.entries(breakdown)
+      .find(([name]) => name.toLowerCase() === stage.toLowerCase());
+    if (matchedEntry && !hasOpeningBaseline) {
+      // Normalized afa_igp_livestocks rows store the reconciled live headcount
+      // (already includes stock-purchase expenses minus livestock sales).
+      return total + Math.max(0, signedCount(matchedEntry[1]));
+    }
+    const baseline = matchedEntry?.[1];
     const delta = stageDelta(
       produce,
       (value) => value?.toLowerCase() === stage.toLowerCase(),

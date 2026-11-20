@@ -43,6 +43,7 @@ import { LanguageToggle } from './i18n/LanguageContext';
 import { clearSecureItems, getSecureItem, migrateSecureItems, removeSecureItem, setSecureItem } from './utils/secureStorage';
 import { runNightlyBackupCheck } from './utils/backupSystem';
 import { computeFundBalances, getInitialFund } from './utils/fundBalance';
+import { deriveIgpLivestockInventory } from './utils/igpInventory';
 import { getAvailableInventoryQuantity, getRentalStockStatus } from './utils/inventory';
 import { getActiveDelegationScopes } from './utils/delegation';
 import {
@@ -2280,9 +2281,11 @@ export default function App() {
       id: `igp-exp-${Date.now()}`,
       recordedBy: officerLabel
     };
+    const updatedExpenses = [newExp, ...livestockIgp.expenses];
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
-      expenses: [newExp, ...livestockIgp.expenses]
+      expenses: updatedExpenses,
+      livestockInventory: deriveIgpLivestockInventory(updatedExpenses, livestockIgp.sales || [], livestockIgp.produces?.[0])
     };
     setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
@@ -2320,9 +2323,11 @@ export default function App() {
       id: `igp-sale-${Date.now()}`,
       recordedBy: officerLabel
     };
+    const updatedSales = [newSale, ...livestockIgp.sales];
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
-      sales: [newSale, ...livestockIgp.sales]
+      sales: updatedSales,
+      livestockInventory: deriveIgpLivestockInventory(livestockIgp.expenses || [], updatedSales, livestockIgp.produces?.[0])
     };
     setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
@@ -2353,7 +2358,8 @@ export default function App() {
     const updatedExpenses = (livestockIgp.expenses || []).map((e) => (e.id === updatedExp.id ? updatedExp : e));
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
-      expenses: updatedExpenses
+      expenses: updatedExpenses,
+      livestockInventory: deriveIgpLivestockInventory(updatedExpenses, livestockIgp.sales || [], livestockIgp.produces?.[0])
     };
     setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
@@ -2372,7 +2378,8 @@ export default function App() {
     const updatedExpenses = (livestockIgp.expenses || []).filter((e) => e.id !== expenseId);
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
-      expenses: updatedExpenses
+      expenses: updatedExpenses,
+      livestockInventory: deriveIgpLivestockInventory(updatedExpenses, livestockIgp.sales || [], livestockIgp.produces?.[0])
     };
     setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
@@ -2390,7 +2397,8 @@ export default function App() {
     const updatedSales = (livestockIgp.sales || []).map((s) => (s.id === updatedSale.id ? updatedSale : s));
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
-      sales: updatedSales
+      sales: updatedSales,
+      livestockInventory: deriveIgpLivestockInventory(livestockIgp.expenses || [], updatedSales, livestockIgp.produces?.[0])
     };
     setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
@@ -2409,7 +2417,8 @@ export default function App() {
     const updatedSales = (livestockIgp.sales || []).filter((s) => s.id !== saleId);
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
-      sales: updatedSales
+      sales: updatedSales,
+      livestockInventory: deriveIgpLivestockInventory(livestockIgp.expenses || [], updatedSales, livestockIgp.produces?.[0])
     };
     setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
