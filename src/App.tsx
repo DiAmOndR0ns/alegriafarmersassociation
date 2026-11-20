@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import {
   OfficerRole, Member, Meeting, Resolution,
-  FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, HogRaisingState,
+  FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, LivestockIgpState,
   IgpExpense, IgpSale, EggHarvestLog, Product, PublicProduct, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem,
   PasswordResetResult, DelegationRequest, DelegationScope,
   MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot
@@ -9,7 +9,7 @@ import {
 import type { PublicSummary } from './components/GuestPortal';
 import {
   INITIAL_MEMBERS, INITIAL_MEETINGS, INITIAL_RESOLUTIONS,
-  INITIAL_TRANSACTIONS, INITIAL_ANNOUNCEMENTS, INITIAL_LOGS, INITIAL_HOG_RAISING,
+  INITIAL_TRANSACTIONS, INITIAL_ANNOUNCEMENTS, INITIAL_LOGS, INITIAL_LIVESTOCK_IGP,
   INITIAL_ACTIVITIES, INITIAL_FUNDS
 } from './initialData';
 import OfflineIndicator from './components/OfflineIndicator';
@@ -108,7 +108,7 @@ const SYNC_ENTITY_KEYS = [
  *
  * 1. A change that names an entity sends ONLY that entity. Filling the rest of
  *    the payload from the app snapshot made a Secretary's member save ship
- *    `financialTransactions`, `funds` and `hogRaising` as well. The server
+ *    `financialTransactions`, `funds` and `livestockIgp` as well. The server
  *    answers 403 for financial fields from a non-Treasurer and discards the
  *    whole request, so the member, announcement or activity was never stored.
  *
@@ -122,7 +122,7 @@ const SYNC_ENTITY_KEYS = [
 export function buildSyncPayload(params: {
   overrides?: Record<string, any>;
   options?: { scope?: 'eggHarvests' | 'roleUpdate' | 'presidentApproval' | 'auditorReview' };
-  snapshot: { hogRaising: any; transactions: unknown; funds: unknown } & Record<string, any>;
+  snapshot: { livestockIgp: any; transactions: unknown; funds: unknown } & Record<string, any>;
   deletedIds: StoredDeletedIds | Record<string, unknown>;
   canWriteFinancials: boolean;
 }): Record<string, unknown> {
@@ -130,7 +130,7 @@ export function buildSyncPayload(params: {
   const scope = options?.scope;
 
   if (scope === 'eggHarvests') {
-    return { eggHarvests: overrides?.eggHarvests || snapshot.hogRaising.eggHarvests || [] };
+    return { eggHarvests: overrides?.eggHarvests || snapshot.livestockIgp.eggHarvests || [] };
   }
   if (scope === 'roleUpdate') {
     return { roleUpdate: overrides?.roleUpdate };
@@ -162,7 +162,7 @@ export function buildSyncPayload(params: {
       payload.membershipYearSnapshots = overrides!.membershipYearSnapshots;
     }
     if (canWriteFinancials && overrides!.funds !== undefined) payload.funds = overrides!.funds;
-    if (canWriteFinancials && overrides!.hogRaising !== undefined) payload.hogRaising = overrides!.hogRaising;
+    if (canWriteFinancials && overrides!.livestockIgp !== undefined) payload.livestockIgp = overrides!.livestockIgp;
     if (overrides!.systemLogs !== undefined) payload.systemLogs = overrides!.systemLogs;
     payload.deletedIds = deletedIds;
     return payload;
@@ -176,7 +176,7 @@ export function buildSyncPayload(params: {
   if (canWriteFinancials) {
     snapshotPayload.financialTransactions = snapshot.transactions;
     snapshotPayload.funds = snapshot.funds;
-    snapshotPayload.hogRaising = snapshot.hogRaising;
+    snapshotPayload.livestockIgp = snapshot.livestockIgp;
     snapshotPayload.membershipPayments = snapshot.membershipPayments;
     snapshotPayload.membershipYearSnapshots = snapshot.membershipYearSnapshots;
   }
@@ -243,7 +243,7 @@ export default function App() {
 
   // Officer Role State
   const [currentRole, setCurrentRole] = useState<OfficerRole>('President');
-  const [officerTab, setOfficerTab] = useState<'tasks' | 'hog-raising' | 'announcements' | 'member-view' | 'products'>('tasks');
+  const [officerTab, setOfficerTab] = useState<'tasks' | 'livestock' | 'announcements' | 'member-view' | 'products'>('tasks');
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showPresidentReport, setShowPresidentReport] = useState<boolean>(false);
   const [showTreasurerFinancialReport, setShowTreasurerFinancialReport] = useState<boolean>(false);
@@ -256,7 +256,7 @@ export default function App() {
   const [resolutions, setResolutions] = useState<Resolution[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [hogRaising, setHogRaising] = useState<HogRaisingState>(INITIAL_HOG_RAISING);
+  const [livestockIgp, setLivestockIgp] = useState<LivestockIgpState>(INITIAL_LIVESTOCK_IGP);
   const [products, setProducts] = useState<Product[]>([]);
   const [activities, setActivities] = useState<AssociationActivity[]>([]);
   const [achievements, setAchievements] = useState<AssociationAchievement[]>([]);
@@ -291,7 +291,7 @@ export default function App() {
     products: [] as Product[],
     activities: [] as AssociationActivity[],
     achievements: [] as AssociationAchievement[],
-    hogRaising: INITIAL_HOG_RAISING,
+    livestockIgp: INITIAL_LIVESTOCK_IGP,
     funds: [] as OrganizationFund[],
     inventory: [] as InventoryItem[],
     membershipPayments: [] as MembershipPayment[],
@@ -311,14 +311,14 @@ export default function App() {
       products,
       activities,
       achievements,
-      hogRaising,
+      livestockIgp,
       funds,
       inventory,
       membershipPayments,
       membershipYearSnapshots,
       logs
     };
-  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, achievements, hogRaising, funds, inventory, membershipPayments, membershipYearSnapshots, logs]);
+  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, achievements, livestockIgp, funds, inventory, membershipPayments, membershipYearSnapshots, logs]);
 
   // Feedback State (Toasts)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' | 'error' } | null>(null);
@@ -341,13 +341,13 @@ export default function App() {
         clearSecureItems(['bafa_hog_raising']);
         await migrateSecureItems(storageKeys);
         if (cancelled) return;
-        const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedHogRaising, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests, storedMembershipPayments, storedMembershipYearSnapshots, storedDuesAmount] = await Promise.all([
+        const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedLivestockIgp, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests, storedMembershipPayments, storedMembershipYearSnapshots, storedDuesAmount] = await Promise.all([
           getSecureItem<Member[]>('bafa_members'),
           getSecureItem<Meeting[]>('bafa_meetings'),
           getSecureItem<Resolution[]>('bafa_resolutions'),
           getSecureItem<FinancialTransaction[]>('bafa_transactions'),
           getSecureItem<Announcement[]>('bafa_announcements'),
-          getSecureItem<HogRaisingState>('bafa_afa_igp'),
+          getSecureItem<LivestockIgpState>('bafa_afa_igp'),
           getSecureItem<Product[]>('bafa_products'),
           getSecureItem<AssociationActivity[]>('bafa_activities'),
           getSecureItem<AssociationAchievement[]>('bafa_achievements'),
@@ -382,14 +382,14 @@ export default function App() {
           setActivities([]);
           setAchievements([]);
           setFunds([]);
-          setHogRaising(INITIAL_HOG_RAISING);
+          setLivestockIgp(INITIAL_LIVESTOCK_IGP);
         } else {
           setMembers(storedMembers || INITIAL_MEMBERS);
           setMeetings(storedMeetings || INITIAL_MEETINGS);
           setResolutions(storedResolutions || INITIAL_RESOLUTIONS);
           setTransactions(storedTransactions || INITIAL_TRANSACTIONS);
           setAnnouncements(storedAnnouncements || INITIAL_ANNOUNCEMENTS);
-          setHogRaising(storedHogRaising || INITIAL_HOG_RAISING);
+          setLivestockIgp(storedLivestockIgp || INITIAL_LIVESTOCK_IGP);
           const legacySeedProductIds = new Set(['prod-chairs-rental', 'prod-sacks-rental', 'prod-coffee', 'prod-corn', 'prod-coconut']);
           const localProducts = Array.isArray(storedProducts)
             ? storedProducts.filter(product => !legacySeedProductIds.has(product.id))
@@ -635,10 +635,10 @@ export default function App() {
               const syncedMembershipYearSnapshots: MembershipYearSnapshot[] = Array.isArray(res.data.membershipYearSnapshots)
                 ? res.data.membershipYearSnapshots as MembershipYearSnapshot[]
                 : (storedMembershipYearSnapshots || []);
-              const hasPendingHogChanges = storedPendingCloudSync || hasQueuedEntity('hog_expense', 'hog_sale', 'hog_chore', 'egg_harvest');
-              const syncedHogRaising = hasPendingHogChanges && storedHogRaising
-                ? storedHogRaising
-                : res.data.hogRaising || storedHogRaising || INITIAL_HOG_RAISING;
+              const hasPendingLivestockChanges = storedPendingCloudSync || hasQueuedEntity('livestock_expense', 'livestock_sale', 'livestock_harvest', 'egg_harvest');
+              const syncedLivestockIgp = hasPendingLivestockChanges && storedLivestockIgp
+                ? storedLivestockIgp
+                : res.data.livestockIgp || storedLivestockIgp || INITIAL_LIVESTOCK_IGP;
 
               if (Array.isArray(res.data.members) || hasPendingLocalChanges) { setMembers(syncedMembers); updateStorage('bafa_members', syncedMembers); }
               if (Array.isArray(res.data.meetings) || hasPendingLocalChanges) { setMeetings(syncedMeetings); updateStorage('bafa_meetings', syncedMeetings); }
@@ -657,7 +657,7 @@ export default function App() {
               if (Array.isArray(res.data.inventory) || hasPendingLocalChanges) { setInventory(syncedInventory); updateStorage('bafa_inventory', syncedInventory); }
               if (Array.isArray(res.data.membershipPayments) || hasPendingLocalChanges) { setMembershipPayments(syncedMembershipPayments); updateStorage('bafa_membership_payments', syncedMembershipPayments); }
               if (Array.isArray(res.data.membershipYearSnapshots)) { setMembershipYearSnapshots(syncedMembershipYearSnapshots); updateStorage('bafa_membership_year_snapshots', syncedMembershipYearSnapshots); }
-              if (res.data.hogRaising || hasPendingLocalChanges) { setHogRaising(syncedHogRaising); updateStorage('bafa_afa_igp', syncedHogRaising); }
+              if (res.data.livestockIgp || hasPendingLocalChanges) { setLivestockIgp(syncedLivestockIgp); updateStorage('bafa_afa_igp', syncedLivestockIgp); }
               const cleanUsers = Array.isArray(res.data.users) ? res.data.users
                 .filter((u: any) => !delUsers.has(u.id))
                 .map((user: User) => {
@@ -714,7 +714,7 @@ export default function App() {
                   inventory: syncedInventory,
                   membershipPayments: syncedMembershipPayments,
                   membershipYearSnapshots: syncedMembershipYearSnapshots,
-                  hogRaising: syncedHogRaising,
+                  livestockIgp: syncedLivestockIgp,
                   systemLogs: activeLogs,
                   deletedIds: bootDeletedIds
                 }, { silent: true, source: 'Boot Sync' });
@@ -732,7 +732,7 @@ export default function App() {
         setResolutions(INITIAL_RESOLUTIONS);
         setTransactions(INITIAL_TRANSACTIONS);
         setAnnouncements(INITIAL_ANNOUNCEMENTS);
-        setHogRaising(INITIAL_HOG_RAISING);
+        setLivestockIgp(INITIAL_LIVESTOCK_IGP);
         setAchievements([]);
         setFunds(INITIAL_FUNDS);
         setInventory([]);
@@ -1010,7 +1010,7 @@ export default function App() {
   // Sync Queue handler
   const addToSyncQueue = (
     action: 'create' | 'update' | 'delete',
-    entityType: 'user' | 'officer' | 'member' | 'meeting' | 'resolution' | 'transaction' | 'announcement' | 'hog_expense' | 'hog_sale' | 'hog_chore' | 'product' | 'activity' | string,
+    entityType: 'user' | 'officer' | 'member' | 'meeting' | 'resolution' | 'transaction' | 'announcement' | 'livestock_expense' | 'livestock_sale' | 'livestock_harvest' | 'product' | 'activity' | string,
     payload: any
   ) => {
     const queueItem: SyncQueueItem = {
@@ -1049,7 +1049,7 @@ export default function App() {
       products?: Product[];
       activities?: AssociationActivity[];
       achievements?: AssociationAchievement[];
-      hogRaising?: HogRaisingState;
+      livestockIgp?: LivestockIgpState;
       eggHarvests?: EggHarvestLog[];
       funds?: OrganizationFund[];
       inventory?: InventoryItem[];
@@ -1065,7 +1065,7 @@ export default function App() {
     const scopedWrite = options?.scope === 'eggHarvests' || options?.scope === 'roleUpdate' || options?.scope === 'presidentApproval' || options?.scope === 'auditorReview';
     // A push that carries an explicit entity override is a PARTIAL write and must
     // stay that way. Filling the untouched entities from the app snapshot made a
-    // Secretary's member save ship `financialTransactions`/`funds`/`hogRaising`
+    // Secretary's member save ship `financialTransactions`/`funds`/`livestockIgp`
     // too, and `/api/sync/push` rejects a non-Treasurer for those fields with a
     // 403 that discards the whole request - the member was never stored. See
     // `buildSyncPayload`, which owns that decision.
@@ -1142,7 +1142,7 @@ export default function App() {
           products: overrides?.products ?? appDataRef.current.products,
           activities: overrides?.activities ?? appDataRef.current.activities,
           achievements: overrides?.achievements ?? appDataRef.current.achievements,
-          hogRaising: overrides?.hogRaising ?? appDataRef.current.hogRaising,
+          livestockIgp: overrides?.livestockIgp ?? appDataRef.current.livestockIgp,
           funds: overrides?.funds ?? appDataRef.current.funds,
           inventory: overrides?.inventory ?? appDataRef.current.inventory,
           membershipPayments: overrides?.membershipPayments ?? appDataRef.current.membershipPayments,
@@ -2280,11 +2280,11 @@ export default function App() {
       id: `igp-exp-${Date.now()}`,
       recordedBy: officerLabel
     };
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
-      expenses: [newExp, ...hogRaising.expenses]
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
+      expenses: [newExp, ...livestockIgp.expenses]
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     const projectLabel = expData.produce || 'AFA IGP';
@@ -2303,9 +2303,9 @@ export default function App() {
     if (isOnline) {
       logAction('Recorded IGP Expense', `Logged PHP ${newExp.amount.toLocaleString()} expense for ${projectLabel} ("${newExp.category}"${stageLabel})`);
       showToastMessage(`${projectLabel} expense recorded and linked to general ledger.`);
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Expense' });
+      pushAllDataToCloud({ livestockIgp: updatedState }, { silent: true, source: 'IGP Expense' });
     } else {
-      addToSyncQueue('create', 'hog_expense', newExp);
+      addToSyncQueue('create', 'livestock_expense', newExp);
     }
   };
 
@@ -2320,11 +2320,11 @@ export default function App() {
       id: `igp-sale-${Date.now()}`,
       recordedBy: officerLabel
     };
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
-      sales: [newSale, ...hogRaising.sales]
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
+      sales: [newSale, ...livestockIgp.sales]
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     const projectLabel = saleData.produce || 'AFA IGP';
@@ -2343,83 +2343,83 @@ export default function App() {
     if (isOnline) {
       logAction('Recorded IGP Revenue', `Recorded PHP ${newSale.revenue.toLocaleString()} revenue for ${projectLabel}${stageLabel}`);
       showToastMessage(`${projectLabel} revenue of PHP ${newSale.revenue.toLocaleString()} recorded and linked to general ledger.`);
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Revenue' });
+      pushAllDataToCloud({ livestockIgp: updatedState }, { silent: true, source: 'IGP Revenue' });
     } else {
-      addToSyncQueue('create', 'hog_sale', newSale);
+      addToSyncQueue('create', 'livestock_sale', newSale);
     }
   };
 
   const handleUpdatePigExpense = (updatedExp: IgpExpense) => {
-    const updatedExpenses = (hogRaising.expenses || []).map((e) => (e.id === updatedExp.id ? updatedExp : e));
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
+    const updatedExpenses = (livestockIgp.expenses || []).map((e) => (e.id === updatedExp.id ? updatedExp : e));
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
       expenses: updatedExpenses
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
       logAction('Updated IGP Expense', `Updated ${updatedExp.produce || 'IGP'} expense for "${updatedExp.category}" (PHP ${updatedExp.amount.toLocaleString()})`);
       showToastMessage('IGP expense updated successfully.');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Expense Update' });
+      pushAllDataToCloud({ livestockIgp: updatedState }, { silent: true, source: 'IGP Expense Update' });
     } else {
-      addToSyncQueue('update', 'hog_expense', updatedExp);
+      addToSyncQueue('update', 'livestock_expense', updatedExp);
     }
   };
 
   const handleDeletePigExpense = (expenseId: string) => {
-    const target = (hogRaising.expenses || []).find((e) => e.id === expenseId);
-    const updatedExpenses = (hogRaising.expenses || []).filter((e) => e.id !== expenseId);
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
+    const target = (livestockIgp.expenses || []).find((e) => e.id === expenseId);
+    const updatedExpenses = (livestockIgp.expenses || []).filter((e) => e.id !== expenseId);
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
       expenses: updatedExpenses
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
       logAction('Deleted IGP Expense', `Removed ${target?.produce || 'IGP'} expense for "${target?.category || expenseId}" (PHP ${(target?.amount || 0).toLocaleString()})`);
       showToastMessage('IGP expense deleted.', 'info');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Expense Deletion' });
+      pushAllDataToCloud({ livestockIgp: updatedState }, { silent: true, source: 'IGP Expense Deletion' });
     } else {
-      addToSyncQueue('delete', 'hog_expense', { id: expenseId });
+      addToSyncQueue('delete', 'livestock_expense', { id: expenseId });
     }
   };
 
   const handleUpdateHogSale = (updatedSale: IgpSale) => {
-    const updatedSales = (hogRaising.sales || []).map((s) => (s.id === updatedSale.id ? updatedSale : s));
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
+    const updatedSales = (livestockIgp.sales || []).map((s) => (s.id === updatedSale.id ? updatedSale : s));
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
       sales: updatedSales
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
       logAction('Updated IGP Revenue', `Updated ${updatedSale.produce || 'IGP'} revenue record (PHP ${updatedSale.revenue.toLocaleString()})`);
       showToastMessage('IGP revenue record updated successfully.');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Revenue Update' });
+      pushAllDataToCloud({ livestockIgp: updatedState }, { silent: true, source: 'IGP Revenue Update' });
     } else {
-      addToSyncQueue('update', 'hog_sale', updatedSale);
+      addToSyncQueue('update', 'livestock_sale', updatedSale);
     }
   };
 
   const handleDeleteHogSale = (saleId: string) => {
-    const target = (hogRaising.sales || []).find((s) => s.id === saleId);
-    const updatedSales = (hogRaising.sales || []).filter((s) => s.id !== saleId);
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
+    const target = (livestockIgp.sales || []).find((s) => s.id === saleId);
+    const updatedSales = (livestockIgp.sales || []).filter((s) => s.id !== saleId);
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
       sales: updatedSales
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
       logAction('Deleted IGP Revenue', `Removed ${target?.produce || 'IGP'} revenue record (PHP ${(target?.revenue || 0).toLocaleString()})`);
       showToastMessage('IGP revenue record deleted.', 'info');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'IGP Revenue Deletion' });
+      pushAllDataToCloud({ livestockIgp: updatedState }, { silent: true, source: 'IGP Revenue Deletion' });
     } else {
-      addToSyncQueue('delete', 'hog_sale', { id: saleId });
+      addToSyncQueue('delete', 'livestock_sale', { id: saleId });
     }
   };
 
@@ -2746,11 +2746,11 @@ export default function App() {
       id: `egg-${Date.now()}`,
       status: 'Pending Audit'
     };
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
-      eggHarvests: [newHarvest, ...(hogRaising.eggHarvests || [])]
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
+      eggHarvests: [newHarvest, ...(livestockIgp.eggHarvests || [])]
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
@@ -2763,7 +2763,7 @@ export default function App() {
   };
 
   const handleUpdateEggHarvestStatus = (harvestId: string, action: 'audit' | 'sign' | 'return', remarks?: string) => {
-    const updatedHarvests = (hogRaising.eggHarvests || []).map((h) => {
+    const updatedHarvests = (livestockIgp.eggHarvests || []).map((h) => {
       if (h.id !== harvestId) return h;
       if (action === 'audit') {
         return {
@@ -2789,8 +2789,8 @@ export default function App() {
         auditRemarks: remarks || 'Returned for correction'
       };
     });
-    const updatedState: HogRaisingState = { ...hogRaising, eggHarvests: updatedHarvests };
-    setHogRaising(updatedState);
+    const updatedState: LivestockIgpState = { ...livestockIgp, eggHarvests: updatedHarvests };
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     const target = updatedHarvests.find((h) => h.id === harvestId);
@@ -2809,51 +2809,51 @@ export default function App() {
   const handleAddProduce = (produceName: string) => {
     const cleanName = produceName.trim();
     if (!cleanName) return;
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
-      produces: Array.from(new Set([...(hogRaising.produces || []), cleanName]))
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
+      produces: Array.from(new Set([...(livestockIgp.produces || []), cleanName]))
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
       logAction('Added AFA IGP Project', `Added current IGP project: "${cleanName}"`);
       showToastMessage(`Successfully added IGP project: "${cleanName}"`, 'success');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Added AFA IGP Project' });
+      pushAllDataToCloud({ livestockIgp: { produces: updatedState.produces } as unknown as LivestockIgpState }, { silent: true, source: 'Added AFA IGP Project' });
     }
   };
 
   const handleDeleteProduce = (produceName: string) => {
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
-      produces: (hogRaising.produces || []).filter(p => p !== produceName)
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
+      produces: (livestockIgp.produces || []).filter(p => p !== produceName)
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
       logAction('Removed AFA IGP Project', `Removed IGP project from active list: "${produceName}"`);
       showToastMessage(`Removed IGP project: "${produceName}"`, 'info');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true, source: 'Removed AFA IGP Project' });
+      pushAllDataToCloud({ livestockIgp: { produces: updatedState.produces } as unknown as LivestockIgpState }, { silent: true, source: 'Removed AFA IGP Project' });
     }
   };
 
   const handleCloseDecemberBook = (year: number) => {
-    const closedList = hogRaising.closedYears || [2025];
+    const closedList = livestockIgp.closedYears || [2025];
     if (closedList.includes(year)) return;
-    const updatedState: HogRaisingState = {
-      ...hogRaising,
+    const updatedState: LivestockIgpState = {
+      ...livestockIgp,
       closedYears: [...closedList, year]
     };
-    setHogRaising(updatedState);
+    setLivestockIgp(updatedState);
     updateStorage('bafa_afa_igp', updatedState);
 
     if (isOnline) {
-      logAction('Closed Financial Book', `Officially closed and sealed the Hog Raising IGP financial book for December ${year}.`);
+      logAction('Closed Financial Book', `Officially closed and sealed the Livestock IGP financial book for December ${year}.`);
       showToastMessage(`Successfully closed and locked the financial books for ${year}!`, 'success');
-      pushAllDataToCloud({ hogRaising: updatedState }, { silent: true });
+      pushAllDataToCloud({ livestockIgp: updatedState }, { silent: true });
     } else {
-      addToSyncQueue('update', 'hog_expense', { id: `close-book-${year}`, year });
+      addToSyncQueue('update', 'livestock_expense', { id: `close-book-${year}`, year });
     }
   };
 
@@ -3200,9 +3200,9 @@ export default function App() {
         ? data.membershipYearSnapshots as MembershipYearSnapshot[]
         : local.membershipYearSnapshots;
       const nextLogs = reconcile(data.logs ?? data.systemLogs, local.logs);
-      const nextHogRaising = hasPendingLocalChanges || !data.hogRaising
-        ? local.hogRaising
-        : data.hogRaising as HogRaisingState;
+      const nextLivestockIgp = hasPendingLocalChanges || !data.livestockIgp
+        ? local.livestockIgp
+        : data.livestockIgp as LivestockIgpState;
 
       setUsers(nextUsers);
       updateStorage('bafa_users', nextUsers);
@@ -3236,9 +3236,9 @@ export default function App() {
       updateStorage('bafa_membership_year_snapshots', nextMembershipYearSnapshots);
       setLogs(nextLogs);
       updateStorage('bafa_logs', nextLogs);
-      if (data.hogRaising) {
-        setHogRaising(nextHogRaising);
-        updateStorage('bafa_afa_igp', nextHogRaising);
+      if (data.livestockIgp) {
+        setLivestockIgp(nextLivestockIgp);
+        updateStorage('bafa_afa_igp', nextLivestockIgp);
       }
       setDbStatus(previous => ({
         ...previous,
@@ -3953,14 +3953,14 @@ export default function App() {
     const hasMatchedMember = members.some(matchesMember);
     const updatedMembers = hasMatchedMember
       ? members.map(m => matchesMember(m) ? {
-          ...m,
-          name: ownedProfile.name,
-          farmLocation: ownedProfile.farmLocation || m.farmLocation,
-          primaryCrops: ownedProfile.primaryCrops || m.primaryCrops,
-          contactNumber: ownedProfile.contactNumber || m.contactNumber,
-          avatarUrl: ownedProfile.avatarUrl,
-          affiliations: ownedProfile.affiliations || m.affiliations
-        } : m)
+        ...m,
+        name: ownedProfile.name,
+        farmLocation: ownedProfile.farmLocation || m.farmLocation,
+        primaryCrops: ownedProfile.primaryCrops || m.primaryCrops,
+        contactNumber: ownedProfile.contactNumber || m.contactNumber,
+        avatarUrl: ownedProfile.avatarUrl,
+        affiliations: ownedProfile.affiliations || m.affiliations
+      } : m)
       : members;
 
     if (hasMatchedMember) {
@@ -4169,10 +4169,10 @@ export default function App() {
         await updateStorage('bafa_inventory', data.inventory);
       }
 
-      // 11. IGP / Hog Raising
-      const igp = data.hogRaising || data.afa_igp;
+      // 11. IGP / Livestock
+      const igp = data.livestockIgp || data.afa_igp;
       if (igp && typeof igp === 'object') {
-        setHogRaising(igp);
+        setLivestockIgp(igp);
         await updateStorage('bafa_afa_igp', igp);
       }
 
@@ -4210,7 +4210,7 @@ export default function App() {
         achievements: data.achievements || achievements,
         funds: data.funds || data.organizationFunds || funds,
         inventory: data.inventory || inventory,
-        hogRaising: igp || hogRaising,
+        livestockIgp: igp || livestockIgp,
         systemLogs: data.logs || data.systemLogs || logs,
       };
 
@@ -4243,7 +4243,7 @@ export default function App() {
         resolutions,
         transactions,
         announcements,
-        hogRaising,
+        livestockIgp,
         products,
         activities,
         logs,
@@ -4291,7 +4291,7 @@ export default function App() {
             onEnterLogin={() => setGuestMode(false)}
             onOpenPrivacy={openPrivacyInApp}
             members={members}
-            hogRaising={hogRaising}
+            livestockIgp={livestockIgp}
             products={products}
             announcements={announcements}
             activities={activities}
@@ -4325,12 +4325,12 @@ export default function App() {
         {toast && (
           <div className="fixed bottom-6 right-6 z-50">
             <div className={`flex items-center gap-2 px-4.5 py-3 rounded-2xl shadow-2xl border-2 text-sm font-extrabold max-w-sm ${toast.type === 'success'
-                ? 'bg-bafa-700 text-bafa-100 border-bafa-600'
-                : toast.type === 'warning'
-                  ? 'bg-amber-900 text-amber-100 border-amber-600'
-                  : toast.type === 'error'
-                    ? 'bg-rose-950 text-rose-100 border-rose-600'
-                    : 'bg-[#F7F4EF] text-[#1B4332] border-[#D5CFC1]'
+              ? 'bg-bafa-700 text-bafa-100 border-bafa-600'
+              : toast.type === 'warning'
+                ? 'bg-amber-900 text-amber-100 border-amber-600'
+                : toast.type === 'error'
+                  ? 'bg-rose-950 text-rose-100 border-rose-600'
+                  : 'bg-[#F7F4EF] text-[#1B4332] border-[#D5CFC1]'
               }`}>
               {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-300 shrink-0" />}
               {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0" />}
@@ -4424,7 +4424,7 @@ export default function App() {
               onLogout={handleLogout}
               toast={showToastMessage}
               announcements={announcements}
-              hogRaisingState={hogRaising}
+              livestockIgpState={livestockIgp}
               members={members}
               onSubmitEggHarvest={handleSubmitEggHarvest}
               onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
@@ -4440,12 +4440,12 @@ export default function App() {
         {toast && (
           <div className="fixed bottom-20 md:bottom-6 right-4 left-4 sm:left-auto z-50 flex justify-center sm:justify-end pointer-events-none">
             <div className={`pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl border text-sm font-extrabold max-w-sm ${toast.type === 'success'
-                ? 'bg-[#1B4332] text-[#D8F3DC] border-[#7EC79F]/40'
-                : toast.type === 'warning'
-                  ? 'bg-amber-900 text-amber-100 border-amber-500'
-                  : toast.type === 'error'
-                    ? 'bg-rose-950 text-rose-100 border-rose-500'
-                    : 'bg-white text-[#1B4332] border-[#1B4332]/20'
+              ? 'bg-[#1B4332] text-[#D8F3DC] border-[#7EC79F]/40'
+              : toast.type === 'warning'
+                ? 'bg-amber-900 text-amber-100 border-amber-500'
+                : toast.type === 'error'
+                  ? 'bg-rose-950 text-rose-100 border-rose-500'
+                  : 'bg-white text-[#1B4332] border-[#1B4332]/20'
               }`}>
               {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-[#F4C76D] shrink-0" />}
               {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0" />}
@@ -4464,12 +4464,12 @@ export default function App() {
       {toast && (
         <div className="fixed bottom-20 md:bottom-6 right-4 left-4 sm:left-auto z-50 flex justify-center sm:justify-end pointer-events-none">
           <div className={`pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl border text-sm font-extrabold max-w-sm ${toast.type === 'success'
-              ? 'bg-[#1B4332] text-[#D8F3DC] border-[#7EC79F]/40'
-              : toast.type === 'warning'
-                ? 'bg-amber-900 text-amber-100 border-amber-500'
-                : toast.type === 'error'
-                  ? 'bg-rose-950 text-rose-100 border-rose-500'
-                  : 'bg-white text-[#1B4332] border-[#1B4332]/20'
+            ? 'bg-[#1B4332] text-[#D8F3DC] border-[#7EC79F]/40'
+            : toast.type === 'warning'
+              ? 'bg-amber-900 text-amber-100 border-amber-500'
+              : toast.type === 'error'
+                ? 'bg-rose-950 text-rose-100 border-rose-500'
+                : 'bg-white text-[#1B4332] border-[#1B4332]/20'
             }`}>
             {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-[#F4C76D] shrink-0" />}
             {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0" />}
@@ -4576,7 +4576,7 @@ export default function App() {
             <p className="px-3 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-[#95D5B2]">Main Views</p>
             {([
               { tab: 'tasks' as const, label: getPrimaryRoleDashboardLabel(currentRole), icon: ShieldCheck },
-              { tab: 'hog-raising' as const, label: 'IGP Tracker', icon: Briefcase },
+              { tab: 'livestock' as const, label: 'IGP Tracker', icon: Briefcase },
               { tab: 'announcements' as const, label: 'Announcements Board', icon: Megaphone },
               { tab: 'member-view' as const, label: 'Member Portal & ID', icon: Users },
               { tab: 'products' as const, label: 'Products Catalog', icon: ShoppingBag }
@@ -4593,8 +4593,8 @@ export default function App() {
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left transition-all cursor-pointer border ${isActive
-                      ? 'bg-[#D6EFD9] text-[#1B4332] border-[#7EC79F] shadow-md'
-                      : 'bg-transparent text-[#D6EFD9] border-transparent hover:bg-white/10 hover:text-white'
+                    ? 'bg-[#D6EFD9] text-[#1B4332] border-[#7EC79F] shadow-md'
+                    : 'bg-transparent text-[#D6EFD9] border-transparent hover:bg-white/10 hover:text-white'
                     }`}
                 >
                   <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-[#1B4332]' : 'text-[#95D5B2]'}`} />
@@ -4666,7 +4666,7 @@ export default function App() {
             <div className="grid grid-cols-5 gap-1.5">
               {([
                 { id: 'officer-tasks-tab-btn', tab: 'tasks' as const, label: getPrimaryRoleDashboardLabel(currentRole), icon: ShieldCheck },
-                { id: 'officer-hog-raising-tab-btn', tab: 'hog-raising' as const, label: 'IGP Tracker', icon: Briefcase },
+                { id: 'officer-livestock-tab-btn', tab: 'livestock' as const, label: 'IGP Tracker', icon: Briefcase },
                 { id: 'officer-announcements-tab-btn', tab: 'announcements' as const, label: 'Notices', icon: Megaphone },
                 { id: 'officer-member-view-tab-btn', tab: 'member-view' as const, label: 'My Member ID', icon: Users },
                 { id: 'officer-products-tab-btn', tab: 'products' as const, label: 'Market', icon: ShoppingBag }
@@ -4684,8 +4684,8 @@ export default function App() {
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     className={`px-3 py-2.5 text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 rounded-xl border cursor-pointer min-w-0 ${isActive
-                        ? 'bg-[#D6EFD9] border-[#1B4332]/30 text-[#1B4332] shadow-xs'
-                        : 'border-transparent text-[#455C50] hover:text-[#1B4332] hover:bg-[#FAF8F5]'
+                      ? 'bg-[#D6EFD9] border-[#1B4332]/30 text-[#1B4332] shadow-xs'
+                      : 'border-transparent text-[#455C50] hover:text-[#1B4332] hover:bg-[#FAF8F5]'
                       }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -4727,7 +4727,7 @@ export default function App() {
                     onRestoreBackup={currentRole === 'President' ? handleRestoreSystemBackup : undefined}
                     onVerifyAdminPassword={handleVerifyAdminPassword}
                     activities={activities}
-                    hogRaising={hogRaising}
+                    livestockIgp={livestockIgp}
                     funds={funds}
                     onApproveMeetingMinutes={handleApproveMeetingMinutes}
                     onReturnMeetingMinutes={handleReturnMeetingMinutes}
@@ -4815,7 +4815,7 @@ export default function App() {
                     transactions={transactions}
                     activities={activities}
                     funds={funds}
-                    hogRaising={hogRaising}
+                    livestockIgp={livestockIgp}
                     inventory={inventory}
                     onAddTransaction={handleAddTransaction}
                     onDeleteTransaction={handleDeleteTransaction}
@@ -4839,7 +4839,7 @@ export default function App() {
                 {currentRole === 'Auditor' && (
                   <AuditorView
                     transactions={transactions}
-                    hogRaising={hogRaising}
+                    livestockIgp={livestockIgp}
                     onAuditTransaction={handleAuditTransaction}
                     onOpenReportModal={() => setShowReportModal(true)}
                     inventory={inventory}
@@ -4872,10 +4872,10 @@ export default function App() {
               </div>
             )}
 
-            {officerTab === 'hog-raising' && (
-              <div id="officer-hog-raising-window" className="dim-card p-3.5 sm:p-5 lg:p-6 rounded-3xl text-[#163327] text-left">
+            {officerTab === 'livestock' && (
+              <div id="officer-livestock-window" className="dim-card p-3.5 sm:p-5 lg:p-6 rounded-3xl text-[#163327] text-left">
                 <LivestockMonitor
-                  state={hogRaising}
+                  state={livestockIgp}
                   funds={funds}
                   members={members}
                   meetings={meetings}
@@ -4897,7 +4897,7 @@ export default function App() {
                   currentUser={currentUser!}
                   isOfficerMode={true}
                   users={users}
-                  closedYears={hogRaising.closedYears || [2025]}
+                  closedYears={livestockIgp.closedYears || [2025]}
                   onCloseDecemberBook={handleCloseDecemberBook}
                 />
               </div>
@@ -4987,7 +4987,7 @@ export default function App() {
                   onLogout={handleLogout}
                   toast={showToastMessage}
                   announcements={announcements}
-                  hogRaisingState={hogRaising}
+                  livestockIgpState={livestockIgp}
                   members={members}
                   onSubmitEggHarvest={handleSubmitEggHarvest}
                   onUpdateEggHarvestStatus={handleUpdateEggHarvestStatus}
@@ -5045,7 +5045,7 @@ export default function App() {
             products={products}
             logs={logs}
             funds={funds}
-            hogRaising={hogRaising}
+            livestockIgp={livestockIgp}
             delegationRequests={delegationRequests}
             membershipPayments={membershipPayments}
             onClose={() => setShowReportModal(false)}
@@ -5065,7 +5065,7 @@ export default function App() {
                 transactions={transactions}
                 activities={activities}
                 funds={funds}
-                hogRaising={hogRaising}
+                livestockIgp={livestockIgp}
                 inventory={inventory}
                 users={users}
                 onClose={() => setShowTreasurerFinancialReport(false)}
@@ -5101,7 +5101,7 @@ export default function App() {
                   achievements,
                   inventory,
                   products,
-                  hogRaising,
+                  livestockIgp,
                   delegationRequests,
                   membershipPayments,
                 })}
@@ -5146,7 +5146,7 @@ export default function App() {
       >
         {([
           { tab: 'tasks' as const, label: 'Suite', icon: ShieldCheck },
-          { tab: 'hog-raising' as const, label: 'IGP', icon: Briefcase },
+          { tab: 'livestock' as const, label: 'IGP', icon: Briefcase },
           { tab: 'announcements' as const, label: 'Notices', icon: Megaphone },
           { tab: 'member-view' as const, label: 'My ID', icon: Users },
           { tab: 'products' as const, label: 'Market', icon: ShoppingBag }

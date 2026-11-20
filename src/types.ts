@@ -259,7 +259,7 @@ export interface SyncQueueItem {
   id: string;
   timestamp: string;
   action: 'create' | 'update' | 'delete';
-  entityType: 'user' | 'officer' | 'member' | 'meeting' | 'resolution' | 'transaction' | 'announcement' | 'hog_expense' | 'hog_sale' | 'hog_chore' | 'egg_harvest' | 'product' | 'activity' | 'membership_payment' | string;
+  entityType: 'user' | 'officer' | 'member' | 'meeting' | 'resolution' | 'transaction' | 'announcement' | 'livestock_expense' | 'livestock_sale' | 'livestock_harvest' | 'egg_harvest' | 'product' | 'activity' | 'membership_payment' | string;
   payload: any;
 }
 
@@ -288,7 +288,7 @@ export interface IgpLivestockInventory {
 
 export interface IgpExpense {
   id: string;
-  produce?: string; // e.g., "Hog Raising", "Poultry Raising"
+  produce?: string; // e.g., "Livestock", "Poultry Raising"
   stage?: IgpStage;
   category: 'Piglets' | 'Feeds' | 'Breeding / AI Service' | 'Vitamins/Medicines' | 'Farrowing & Pen Care' | 'Other' | string;
   quantity?: number;
@@ -301,7 +301,7 @@ export interface IgpExpense {
 
 export interface IgpSale {
   id: string;
-  produce?: string; // e.g., "Hog Raising", "Poultry Raising"
+  produce?: string; // e.g., "Livestock", "Poultry Raising"
   stage?: IgpStage;
   date: string;
   quantity: number;
@@ -352,9 +352,9 @@ export interface OrganizationFund {
   lastUpdated: string;
 }
 
-export interface HogRaisingState {
+export interface LivestockIgpState {
   livestockInventory?: IgpLivestockInventory[];
-  produces?: string[]; // Dynamic list of produce projects, e.g. ["Hog Raising", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"]
+  produces?: string[]; // Dynamic list of produce projects, e.g. ["Livestock", "Chairs Rental (Abang sa Lingkoranan)", "Sacks Rental (Abang sa Sako)", "Poultry Raising"]
   expenses: IgpExpense[];
   sales: IgpSale[];
   /** @deprecated Legacy chore-log field — superseded by the eggHarvests collection. */

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  HogRaisingState, IgpStage, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund
+  LivestockIgpState, IgpStage, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund
 } from '../types';
 import {
   Briefcase, Plus, Trash2, Printer, Calculator, Lock, ArrowDownRight, ArrowUpRight,
@@ -11,7 +11,7 @@ import { getAvailableEggCount } from '../utils/eggInventory';
 import { getIgpInventoryStageCount, getIgpInventoryTotal, isIgpStockPurchaseCategory } from '../utils/igpInventory';
 
 interface LivestockMonitorProps {
-  state: HogRaisingState;
+  state: LivestockIgpState;
   funds?: OrganizationFund[];
   members: Member[];
   meetings?: Meeting[];
@@ -1598,7 +1598,7 @@ export default function LivestockMonitor({
         onClose={() => setShowDividends(false)}
         members={members}
         meetings={meetings}
-        hogRaisingState={state}
+        livestockIgpState={state}
         users={users}
       />
 

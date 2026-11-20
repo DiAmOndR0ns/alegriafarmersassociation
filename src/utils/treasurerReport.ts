@@ -1,4 +1,4 @@
-import { FinancialTransaction, HogRaisingState } from '../types';
+import { FinancialTransaction, LivestockIgpState } from '../types';
 
 export type TreasurerReportPeriod = 'day' | 'week' | 'month';
 export type TreasurerReportKind = 'all' | 'income' | 'expenses' | 'livestock-sales';
@@ -56,7 +56,7 @@ const isLinkedIgpLedgerEntry = (transaction: FinancialTransaction) =>
 
 export function getTreasurerReportRows(
   transactions: FinancialTransaction[],
-  hogRaising: HogRaisingState | undefined,
+  livestockIgp: LivestockIgpState | undefined,
   range: TreasurerReportRange,
   kind: TreasurerReportKind,
   category = 'all'
@@ -82,7 +82,7 @@ export function getTreasurerReportRows(
   }
 
   if (kind === 'all' || kind === 'expenses') {
-    (hogRaising?.expenses || []).forEach(expense => {
+    (livestockIgp?.expenses || []).forEach(expense => {
       if (expense.date < range.start || expense.date > range.end) return;
       rows.push({
         id: expense.id,
@@ -98,7 +98,7 @@ export function getTreasurerReportRows(
   }
 
   if (kind === 'all' || kind === 'livestock-sales') {
-    (hogRaising?.sales || []).forEach(sale => {
+    (livestockIgp?.sales || []).forEach(sale => {
       if (sale.date < range.start || sale.date > range.end) return;
       rows.push({
         id: sale.id,

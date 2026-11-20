@@ -148,7 +148,7 @@ describe('separateEggHarvestsFromFinancialState', () => {
   it('keeps harvest workflow updates from a delegated Vice President', () => {
     const safe = separateEggHarvestsFromFinancialState(
       {
-        hogRaising: {
+        livestockIgp: {
           eggHarvests: [{ id: 'harvest-1', status: 'Signed' }]
         }
       },

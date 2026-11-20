@@ -549,7 +549,7 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
       CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]':: jsonb END
     ) AS item(expense)
             WHERE NULLIF(expense ->> 'id', '') IS NOT NULL
-            ON CONFLICT(id) DO UPDATE SET
+            ON CONFLICT (id) DO UPDATE SET
   produce = CASE
                 WHEN afa_igp_expenses.produce ~* '(swine|hog|baboy)'
                   AND EXCLUDED.produce ~* '(poultry|rtl|chicken|egg)'
@@ -1896,7 +1896,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       announcements,
       logs,
       systemLogs: logs,
-      hogRaising: hogState,
+      livestockIgp: hogState,
       products,
       inventory,
       activities,
@@ -1934,7 +1934,7 @@ async function saveEntity(
       ? `password = CASE WHEN EXCLUDED.password IS NOT NULL AND EXCLUDED.password != '' THEN EXCLUDED.password ELSE users.password END`
       : `${ column } = EXCLUDED.${ column } `
   );
-  const query = `INSERT INTO ${ mapping.table } (${ columns.join(', ') }) VALUES(${ placeholders.join(', ') }) ON CONFLICT(id) DO UPDATE SET ${ updates.join(', ') } `;
+  const query = `INSERT INTO ${ mapping.table } (${ columns.join(', ') }) VALUES(${ placeholders.join(', ') }) ON CONFLICT (id) DO UPDATE SET ${ updates.join(', ') } `;
 
   for (const row of activeRows) {
     const values = [row.id, ...mapping.fields.map(([, , transform]) => transform(row, row))];
@@ -1971,7 +1971,7 @@ async function saveIgpExpenseSegments(
                                               id, produce, date, category, quantity, description, amount, recorded_by, fund_source, stage, expense_data
                                             )
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT(id) DO UPDATE SET
+      ON CONFLICT (id) DO UPDATE SET
   produce = EXCLUDED.produce,
     date = EXCLUDED.date,
     category = EXCLUDED.category,
@@ -2020,7 +2020,7 @@ async function saveIgpSales(
     id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes
   )
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT(id) DO UPDATE SET
+      ON CONFLICT (id) DO UPDATE SET
   produce = EXCLUDED.produce,
     date = EXCLUDED.date,
     stage = EXCLUDED.stage,
@@ -2101,7 +2101,7 @@ async function saveIgpHarvests(
     audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
   )
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      ON CONFLICT(id) DO UPDATE SET
+      ON CONFLICT (id) DO UPDATE SET
   produce = EXCLUDED.produce,
     date = EXCLUDED.date,
     time = EXCLUDED.time,
@@ -2309,7 +2309,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO users(id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops, contact_number, status, avatar_url, member_id_number, rsbsa_number, is_rsbsa_registered, mfa_enabled)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   username = EXCLUDED.username,
     name = EXCLUDED.name,
     role = CASE WHEN $17::boolean THEN EXCLUDED.role ELSE users.role END,
@@ -2348,7 +2348,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO members(id, name, farm_location, primary_crops, contact_number, status, joined_date, member_id_number, rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
     farm_location = EXCLUDED.farm_location,
     primary_crops = EXCLUDED.primary_crops,
@@ -2444,7 +2444,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, purpose, liquidation_deadline, audited_status, audited_by, audited_date, audit_notes)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   type = EXCLUDED.type,
     category = EXCLUDED.category,
     amount = EXCLUDED.amount,
@@ -2482,7 +2482,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO meetings (id, title, date, location, attendance_count, agenda, minutes, officer_in_charge, attendance_record, minutes_approval_status, approved_by, approved_date, approval_remarks)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,
     date = EXCLUDED.date,
     location = EXCLUDED.location,
@@ -2508,9 +2508,9 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     }
 
     // 5. AFA IGP State (reformatted afa_igp + normalized afa_igp_livestocks & afa_igp_harvests)
-    if (state.hogRaising) {
+    if (state.livestockIgp) {
       console.log('[DB DEBUG] Saving AFA IGP state...');
-      const legacyBreakdown = state.hogRaising.herdBreakdown;
+      const legacyBreakdown = state.livestockIgp.herdBreakdown;
       const legacyInventory = legacyBreakdown && typeof legacyBreakdown === 'object'
         ? [
             {
@@ -2535,13 +2535,13 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             }
           ]
         : undefined;
-      const livestockInventory = Array.isArray(state.hogRaising.livestockInventory)
-        ? state.hogRaising.livestockInventory
+      const livestockInventory = Array.isArray(state.livestockIgp.livestockInventory)
+        ? state.livestockIgp.livestockInventory
         : legacyInventory;
-      const eggHarvests = Array.isArray(state.hogRaising.eggHarvests)
-        ? state.hogRaising.eggHarvests
-        : Array.isArray(state.hogRaising.choreLogs)
-          ? state.hogRaising.choreLogs
+      const eggHarvests = Array.isArray(state.livestockIgp.eggHarvests)
+        ? state.livestockIgp.eggHarvests
+        : Array.isArray(state.livestockIgp.choreLogs)
+          ? state.livestockIgp.choreLogs
           : undefined;
 
       await client.query(`
@@ -2549,31 +2549,31 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         VALUES ($1, $2, $3)
         ON CONFLICT (id) DO UPDATE SET
           produces = EXCLUDED.produces,
-          closed_years = EXCLUDED.closed_years;
+          closed_years = COALESCE(EXCLUDED.closed_years, afa_igp.closed_years);
       `, [
         'main_state',
-        state.hogRaising.produces || [],
-        state.hogRaising.closedYears || []
+        state.livestockIgp.produces || [],
+        Array.isArray(state.livestockIgp.closedYears) ? state.livestockIgp.closedYears : null
       ]);
       await client.query("DELETE FROM afa_igp WHERE id != 'main_state'");
       if (livestockInventory) {
         await saveIgpLivestock(client, livestockInventory);
       }
-      if (Array.isArray(state.hogRaising.expenses)) {
+      if (Array.isArray(state.livestockIgp.expenses)) {
         await saveIgpExpenseSegments(
           client,
-          state.hogRaising.expenses,
-          state.hogRaising.produces?.[0]
+          state.livestockIgp.expenses,
+          state.livestockIgp.produces?.[0]
         );
       }
-      if (Array.isArray(state.hogRaising.sales)) {
-        await saveIgpSales(client, state.hogRaising.sales);
+      if (Array.isArray(state.livestockIgp.sales)) {
+        await saveIgpSales(client, state.livestockIgp.sales);
       }
       if (eggHarvests) await saveIgpHarvests(client, eggHarvests);
       console.log('[DB DEBUG] AFA IGP state saved');
     }
 
-    if (Array.isArray(state.eggHarvests) && !state.hogRaising) {
+    if (Array.isArray(state.eggHarvests) && !state.livestockIgp) {
       let eggHarvests = state.eggHarvests;
       if (state.appendEggHarvests) {
         const existing = await client.query('SELECT id FROM afa_igp_harvests');
@@ -2591,7 +2591,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO system_logs(id, timestamp, user_name, role, action, details, sync_status, hash, previous_hash)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   timestamp = EXCLUDED.timestamp,
     user_name = EXCLUDED.user_name,
     role = EXCLUDED.role,
@@ -2620,7 +2620,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO products(id, name, ceb_name, category, description, unit, price, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
     ceb_name = EXCLUDED.ceb_name,
     category = EXCLUDED.category,
@@ -2659,7 +2659,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO resolutions(id, resolution_number, title, description, date_agreed, moved_by, seconded_by, vote_in_favor, vote_against, vote_abstain, status)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   resolution_number = EXCLUDED.resolution_number,
     title = EXCLUDED.title,
     description = EXCLUDED.description,
@@ -2691,7 +2691,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO announcements(id, title, category, content, date_posted, priority, posted_by)
   VALUES($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,
     category = EXCLUDED.category,
     content = EXCLUDED.content,
@@ -2717,7 +2717,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO activities(id, title, ceb_title, category, scheduled_date, date_scheduled, scheduled_time, time_scheduled, location, description, organizer, status, status_reason, documented_notes, attendees_count, target_audience, image_url)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,
     ceb_title = EXCLUDED.ceb_title,
     category = EXCLUDED.category,
@@ -2763,7 +2763,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO organization_funds(id, name, code, initial_fund, current_balance, description, custodian, last_updated, category, source_origin)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
     code = EXCLUDED.code,
     initial_fund = EXCLUDED.initial_fund,
@@ -2790,7 +2790,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO auditor_reports(id, report_period, report_type, total_income, total_expenses, net_surplus, findings, recommendations, prepared_by, certified_by, status, date_submitted, date_certified)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   report_period = EXCLUDED.report_period,
     report_type = EXCLUDED.report_type,
     total_income = EXCLUDED.total_income,
@@ -2827,7 +2827,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`
           INSERT INTO membership_payments(id, member_id, member_name, member_id_number, year, amount, date_paid, method, reference_no, status, recorded_by, recorded_at, verified_by, verified_date, voided_by, voided_date, void_reason, notes, transaction_id)
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT (id) DO UPDATE SET
   member_id = EXCLUDED.member_id,
     member_name = EXCLUDED.member_name,
     member_id_number = EXCLUDED.member_id_number,

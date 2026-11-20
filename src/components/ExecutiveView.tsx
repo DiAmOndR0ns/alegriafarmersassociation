@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
-import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, HogRaisingState, OrganizationFund, PasswordResetResult, DelegationRequest, DelegationScope, MembershipPayment } from '../types';
+import { Member, Meeting, Resolution, FinancialTransaction, SystemLog, OfficerRole, User, AssociationActivity, LivestockIgpState, OrganizationFund, PasswordResetResult, DelegationRequest, DelegationScope, MembershipPayment } from '../types';
 import { getDerivedMemberStatus } from '../utils/membership';
 import {
   ShieldCheck, Users, Coins, BookOpen, FileCheck, Activity, Check, X,
@@ -49,7 +49,7 @@ interface ExecutiveViewProps {
   onRestoreBackup?: (backupData: any) => Promise<boolean | void> | boolean | void;
   onVerifyAdminPassword?: (password: string, totpCode?: string) => Promise<'verified' | 'mfa-required' | 'invalid'>;
   activities?: AssociationActivity[];
-  hogRaising?: HogRaisingState;
+  livestockIgp?: LivestockIgpState;
   funds?: OrganizationFund[];
   // President approval workflow: Secretary Minutes of Meeting (Secretary drafts → President approves)
   onApproveMeetingMinutes?: (id: string, remarks?: string) => void;
@@ -97,7 +97,7 @@ export default function ExecutiveView({
   onRestoreBackup,
   onVerifyAdminPassword,
   activities = [],
-  hogRaising,
+  livestockIgp,
   funds = [],
   onApproveMeetingMinutes,
   onReturnMeetingMinutes,
@@ -474,12 +474,12 @@ export default function ExecutiveView({
     if (monthIndex < 0 || monthIndex > 11) return;
     monthlyAnalytics[monthIndex][transaction.type === 'income' ? 'income' : 'expenses'] += Number(transaction.amount) || 0;
   });
-  (hogRaising?.sales || []).forEach(sale => {
+  (livestockIgp?.sales || []).forEach(sale => {
     if (!sale.date?.startsWith(String(analyticsYear))) return;
     const monthIndex = Number(sale.date.slice(5, 7)) - 1;
     if (monthIndex >= 0 && monthIndex < 12) monthlyAnalytics[monthIndex].income += Number(sale.revenue) || 0;
   });
-  (hogRaising?.expenses || []).forEach(expense => {
+  (livestockIgp?.expenses || []).forEach(expense => {
     if (!expense.date?.startsWith(String(analyticsYear))) return;
     const monthIndex = Number(expense.date.slice(5, 7)) - 1;
     if (monthIndex >= 0 && monthIndex < 12) monthlyAnalytics[monthIndex].expenses += Number(expense.amount) || 0;
@@ -506,7 +506,7 @@ export default function ExecutiveView({
     .slice(0, 8);
 
   const livestockExpenseTotals = new Map<string, number>();
-  (hogRaising?.expenses || []).filter(expense => expense.date?.startsWith(String(analyticsYear))).forEach(expense => {
+  (livestockIgp?.expenses || []).filter(expense => expense.date?.startsWith(String(analyticsYear))).forEach(expense => {
     const label = `${expense.produce || 'Livestock'} · ${expense.category}`;
     livestockExpenseTotals.set(label, (livestockExpenseTotals.get(label) || 0) + (Number(expense.amount) || 0));
   });

@@ -6,7 +6,7 @@ import {
   Sprout, Home, Copy, CalendarPlus, MessageSquare, Compass
 } from 'lucide-react';
 import {
-  HogRaisingState, Member, PublicProduct, Announcement,
+  LivestockIgpState, Member, PublicProduct, Announcement,
   AssociationActivity, AssociationAchievement, User
 } from '../types';
 import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
@@ -30,7 +30,7 @@ interface GuestPortalProps {
   onEnterLogin: () => void;
   onOpenPrivacy?: () => void;
   members: Member[];
-  hogRaising: HogRaisingState;
+  livestockIgp: LivestockIgpState;
   products?: PublicProduct[];
   announcements?: Announcement[];
   activities?: AssociationActivity[];
@@ -61,31 +61,31 @@ const isPoultryProject = (produce: string) => /poultry|rtl|manok|chicken/i.test(
 
 export const UPCOMING_HARVEST_TAG = 'Upcoming Harvest';
 
-export const getPublishedProducts = (products: PublicProduct[], hogRaising?: HogRaisingState) => {
+export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: LivestockIgpState) => {
   const eggProduct = products.find(isEggCatalogProduct);
   const publishedProducts = products.filter(product =>
     product.isPublished && (!eggProduct || product.id !== eggProduct.id) && !isEggCatalogProduct(product)
   );
 
-  if (!eggProduct || !hogRaising) {
+  if (!eggProduct || !livestockIgp) {
     return products.filter(product => product.isPublished);
   }
 
   const eggProjects = new Set([
     'Poultry Raising (RTL)',
-    ...(hogRaising.produces || []).filter(isPoultryProject),
-    ...(hogRaising.eggHarvests || [])
+    ...(livestockIgp.produces || []).filter(isPoultryProject),
+    ...(livestockIgp.eggHarvests || [])
       .map(harvest => harvest.produce || 'Poultry Raising (RTL)')
       .filter(isPoultryProject),
-    ...(hogRaising.sales || [])
+    ...(livestockIgp.sales || [])
       .filter(sale => sale.stage === 'Eggs' || sale.stage === 'General' || sale.stage === undefined)
       .map(sale => sale.produce || 'Poultry Raising (RTL)')
       .filter(isPoultryProject)
   ]);
   const availableEggs = [...eggProjects].reduce(
     (total, produce) => total + getAvailableEggCount(
-      hogRaising.eggHarvests || [],
-      hogRaising.sales || [],
+      livestockIgp.eggHarvests || [],
+      livestockIgp.sales || [],
       produce
     ),
     0
@@ -246,7 +246,7 @@ export default function GuestPortal({
   onEnterLogin,
   onOpenPrivacy,
   members,
-  hogRaising,
+  livestockIgp,
   products = [],
   announcements = [],
   activities = [],
@@ -273,7 +273,7 @@ export default function GuestPortal({
   const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(!initialSummary && announcements.length === 0 && activities.length === 0 && members.length === 0);
   const [displayAchievements, setDisplayAchievements] = useState<AssociationAchievement[]>(initialAchievements);
   const [displayProducts, setDisplayProducts] = useState<PublicProduct[]>(() =>
-    getPublishedProducts(initialProductsSource, hogRaising)
+    getPublishedProducts(initialProductsSource, livestockIgp)
   );
   const [displayAnnouncements, setDisplayAnnouncements] = useState<Announcement[]>(
     initialSummary?.announcements ?? announcements
@@ -327,8 +327,8 @@ export default function GuestPortal({
 
   useEffect(() => {
     const mergedSource = cachedProducts || portalMemoryCache.products || products;
-    setDisplayProducts(getPublishedProducts(mergedSource, hogRaising));
-  }, [products, hogRaising, cachedProducts]);
+    setDisplayProducts(getPublishedProducts(mergedSource, livestockIgp));
+  }, [products, livestockIgp, cachedProducts]);
 
   useEffect(() => {
     let active = true;
@@ -343,7 +343,7 @@ export default function GuestPortal({
           result.products.forEach((product: PublicProduct) => refreshedProducts.set(product.id, product));
           const list = [...refreshedProducts.values()];
           portalMemoryCache.products = list;
-          setDisplayProducts(getPublishedProducts(list, hogRaising));
+          setDisplayProducts(getPublishedProducts(list, livestockIgp));
           onPublicDataLoaded?.({ products: list });
         }
       })

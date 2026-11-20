@@ -1,4 +1,4 @@
-import { Member, Meeting, Resolution, FinancialTransaction, Announcement, SystemLog, HogRaisingState, AssociationActivity, User, OrganizationFund, AuditorReport, DelegationRequest } from './types';
+import { Member, Meeting, Resolution, FinancialTransaction, Announcement, SystemLog, LivestockIgpState, AssociationActivity, User, OrganizationFund, AuditorReport, DelegationRequest } from './types';
 
 // No hardcoded officer credentials — officers are provisioned by the Admin account.
 export const OFFICIAL_OFFICERS: User[] = [];
@@ -15,7 +15,7 @@ export const INITIAL_ACTIVITIES: AssociationActivity[] = [];
 export const INITIAL_AUDITOR_REPORTS: AuditorReport[] = [];
 export const INITIAL_DELEGATIONS: DelegationRequest[] = [];
 
-export const INITIAL_HOG_RAISING: HogRaisingState = {
+export const INITIAL_LIVESTOCK_IGP: LivestockIgpState = {
   livestockInventory: [],
   produces: [],
   expenses: [],

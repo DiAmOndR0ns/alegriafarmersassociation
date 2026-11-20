@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, AlertTriangle, CheckCircle, FileText, Filter, ShieldCheck, Wallet, Package, Plus, Trash2, Pencil, Boxes, Minus, Search, Wrench, ShoppingBag } from 'lucide-react';
-import { FinancialTransaction, HogRaisingState, InventoryItem, Product } from '../types';
+import { FinancialTransaction, LivestockIgpState, InventoryItem, Product } from '../types';
 import { getAvailableEggCount } from '../utils/eggInventory';
 import { getAvailableInventoryQuantity, getInventoryConditionForCounts, getInventoryDamagedQuantity, getRentalStockStatus } from '../utils/inventory';
 
 interface AuditorViewProps {
   transactions: FinancialTransaction[];
-  hogRaising: HogRaisingState;
+  livestockIgp: LivestockIgpState;
   onAuditTransaction: (id: string, status: 'Audited' | 'Flagged', notes: string) => void;
   onOpenReportModal?: () => void;
   inventory?: InventoryItem[];
@@ -20,7 +20,7 @@ interface AuditorViewProps {
 
 export default function AuditorView({
   transactions,
-  hogRaising,
+  livestockIgp,
   onAuditTransaction,
   onOpenReportModal,
   inventory = [],
@@ -187,8 +187,8 @@ export default function AuditorView({
     setRentalListingItem(null);
   };
   const availableEggCount = getAvailableEggCount(
-    hogRaising.eggHarvests || [],
-    hogRaising.sales || [],
+    livestockIgp.eggHarvests || [],
+    livestockIgp.sales || [],
     'Poultry Raising (RTL)'
   );
 

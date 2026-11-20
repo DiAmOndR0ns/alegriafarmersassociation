@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AssociationActivity, FinancialTransaction, HogRaisingState, OrganizationFund } from '../types';
+import { AssociationActivity, FinancialTransaction, LivestockIgpState, OrganizationFund } from '../types';
 import { getTreasurerAnalytics } from './treasurerAnalytics';
 
 const activity: AssociationActivity = {
@@ -45,7 +45,7 @@ const transaction = (
   ...extra
 });
 
-const livestock: HogRaisingState = {
+const livestock: LivestockIgpState = {
   expenses: [{
     id: 'feed-cost',
     produce: 'Poultry Raising',

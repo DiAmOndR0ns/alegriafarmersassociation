@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Announcement, HogRaisingState, EggHarvestLog, Member, Product, AssociationActivity, MemberAffiliation, MembershipPayment } from '../types';
+import { User, Announcement, LivestockIgpState, EggHarvestLog, Member, Product, AssociationActivity, MemberAffiliation, MembershipPayment } from '../types';
 import { resolveOfficerName } from '../utils/officers';
 import { DEFAULT_MEMBERSHIP_DUES, getMembershipStanding, hasPaymentForYear } from '../utils/membership';
 import { 
@@ -20,7 +20,7 @@ interface MemberDashboardProps {
   onUpdateProfile: (updatedUser: User) => void;
   toast: (message: string, type: 'success' | 'warning' | 'info' | 'error') => void;
   announcements?: Announcement[];
-  hogRaisingState: HogRaisingState;
+  livestockIgpState: LivestockIgpState;
   members: Member[];
   onSubmitEggHarvest: (harvest: Omit<EggHarvestLog, 'id' | 'status'>) => void;
   onUpdateEggHarvestStatus?: (id: string, action: 'audit' | 'sign' | 'return', remarks?: string) => void;
@@ -46,7 +46,7 @@ const CROPS_AND_LIVESTOCK = [
   'Tuburan Coffee',
   'Vegetables',
   'Cassava',
-  'Hog Raising',
+  'Livestock',
   'Poultry Raising',
   'Goat Raising'
 ];
@@ -64,7 +64,7 @@ export default function MemberDashboard({
   onUpdateProfile,
   toast,
   announcements = [],
-  hogRaisingState,
+  livestockIgpState,
   members,
   onSubmitEggHarvest,
   onUpdateEggHarvestStatus,
@@ -100,11 +100,11 @@ export default function MemberDashboard({
   const [affiliations, setAffiliations] = useState<MemberAffiliation[]>(currentUser.affiliations || []);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'announcements' | 'hog-raising' | 'products' | 'activities'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'announcements' | 'livestock' | 'products' | 'activities'>('profile');
   const isMemberPortalMode = currentUser.role === 'Member';
 
   useEffect(() => {
-    if (!isMemberPortalMode && (activeTab === 'announcements' || activeTab === 'hog-raising' || activeTab === 'products')) {
+    if (!isMemberPortalMode && (activeTab === 'announcements' || activeTab === 'livestock' || activeTab === 'products')) {
       setActiveTab('profile');
     }
   }, [activeTab, isMemberPortalMode]);
@@ -314,9 +314,9 @@ export default function MemberDashboard({
           {isMemberPortalMode && (
             <button
               type="button"
-              onClick={() => setActiveTab('hog-raising')}
+              onClick={() => setActiveTab('livestock')}
               className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeTab === 'hog-raising'
+                activeTab === 'livestock'
                   ? 'bg-[#1B4332] text-white shadow-sm'
                   : 'text-[#1B4332] hover:bg-[#EAF4EC]'
               }`}
@@ -1008,10 +1008,10 @@ export default function MemberDashboard({
         </div>
       )}
 
-      {activeTab === 'hog-raising' && (
-        <div id="member-hog-raising-panel" className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print">
+      {activeTab === 'livestock' && (
+        <div id="member-livestock-panel" className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print">
           <LivestockMonitor
-            state={hogRaisingState}
+            state={livestockIgpState}
             members={members}
             onAddExpense={() => {}}
             onAddSale={() => {}}
@@ -1022,7 +1022,7 @@ export default function MemberDashboard({
             currentUser={currentUser}
             isOfficerMode={false}
             users={users}
-            closedYears={hogRaisingState.closedYears || [2025]}
+            closedYears={livestockIgpState.closedYears || [2025]}
           />
         </div>
       )}
@@ -1377,7 +1377,7 @@ export default function MemberDashboard({
           {([
             { id: 'profile' as const, label: 'Profile', icon: UserIcon, badge: 0 },
             { id: 'announcements' as const, label: 'Pahibalo', icon: Megaphone, badge: unreadAnnouncementsCount },
-            { id: 'hog-raising' as const, label: 'IGP', icon: Sprout, badge: 0 },
+            { id: 'livestock' as const, label: 'IGP', icon: Sprout, badge: 0 },
             { id: 'products' as const, label: 'Merkado', icon: ShoppingBag, badge: 0 },
             { id: 'activities' as const, label: 'Kalihokan', icon: Calendar, badge: 0 }
           ]).map(({ id, label, icon: Icon, badge }) => {

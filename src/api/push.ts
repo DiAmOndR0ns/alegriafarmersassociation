@@ -33,7 +33,7 @@ export interface PushSyncState {
   membershipPayments?: unknown[];
   membershipYearSnapshots?: unknown[];
   eggHarvests?: unknown[];
-  hogRaising?: Record<string, unknown>;
+  livestockIgp?: Record<string, unknown>;
   systemLogs?: unknown[];
   logs?: unknown[];
   deleteItem?: { entity?: string; id?: string };
@@ -271,18 +271,18 @@ export function separateEggHarvestsFromFinancialState(
   hasDelegatedApproval = false
 ): PushSyncState {
   const safeState: PushSyncState = { ...state };
-  const hogRaising = safeState.hogRaising;
+  const livestockIgp = safeState.livestockIgp;
   const eggHarvests = Array.isArray(safeState.eggHarvests)
     ? safeState.eggHarvests
-    : Array.isArray(hogRaising?.eggHarvests)
-      ? hogRaising.eggHarvests
+    : Array.isArray(livestockIgp?.eggHarvests)
+      ? livestockIgp.eggHarvests
       : [];
   const normalizedRole = role.trim().toLowerCase().replace(/\s+/g, '_');
   const isMember = normalizedRole === 'member';
   const mayUpdateEggWorkflow = normalizedRole === 'auditor' || normalizedRole === 'president' ||
     (normalizedRole === 'vice_president' && hasDelegatedApproval);
 
-  for (const key of ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'hogRaising']) {
+  for (const key of ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'livestockIgp']) {
     delete safeState[key];
   }
   if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
@@ -587,7 +587,29 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       const delegatedRecordApproval = isVicePresident && delegationScopes.has('record_approval');
       const presidentApproval = extractPresidentFinancialApproval(state, user.role, delegatedRecordApproval);
       const auditorReview = extractAuditorReview(state, user.role);
+      const isOfficer = normalizedPushRole !== 'member';
+      const incomingIgp = state.livestockIgp && typeof state.livestockIgp === 'object'
+        ? state.livestockIgp as Record<string, unknown>
+        : null;
+      const incomingIgpKeys = incomingIgp ? Object.keys(incomingIgp) : [];
+      const isIgpProducesOnly = Boolean(
+        isOfficer &&
+        incomingIgp &&
+        incomingIgpKeys.length === 1 &&
+        incomingIgpKeys[0] === 'produces' &&
+        Array.isArray(incomingIgp.produces)
+      );
       safeState = separateEggHarvestsFromFinancialState(safeState, user.role, user.name, delegatedRecordApproval);
+      if (isIgpProducesOnly && incomingIgp) {
+        const cleanProduces = Array.from(
+          new Set(
+            (incomingIgp.produces as unknown[])
+              .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+              .map(p => p.trim().slice(0, 200))
+          )
+        );
+        safeState.livestockIgp = { produces: cleanProduces };
+      }
       if (presidentApproval) {
         safeState.financialTransactions = presidentApproval;
         safeState.presidentApprovalOnly = true;
@@ -596,8 +618,12 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
         safeState.auditorReviewOnly = true;
       }
       const allowedFinancialWrite = Boolean(presidentApproval || auditorReview);
-      const stripped = ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'hogRaising']
-        .filter((key) => key in state && !(allowedFinancialWrite && key === 'financialTransactions'));
+      const stripped = ['transactions', 'financialTransactions', 'funds', 'organizationFunds', 'livestockIgp']
+        .filter((key) =>
+          key in state &&
+          !(allowedFinancialWrite && key === 'financialTransactions') &&
+          !(isIgpProducesOnly && key === 'livestockIgp')
+        );
       if (stripped.length > 0) {
         console.warn(`[Cloud DB Push] Ignoring financial fields from role "${user.role}": ${stripped.join(', ')}`);
         // Never report success for a write that was silently discarded.

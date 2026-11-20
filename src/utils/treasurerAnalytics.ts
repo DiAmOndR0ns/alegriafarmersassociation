@@ -1,4 +1,4 @@
-import { AssociationActivity, FinancialTransaction, HogRaisingState, OrganizationFund } from '../types';
+import { AssociationActivity, FinancialTransaction, LivestockIgpState, OrganizationFund } from '../types';
 import { getInitialFund } from './fundBalance';
 
 export interface TreasurerAnalyticsMonth {
@@ -42,7 +42,7 @@ const isInSelectedYear = (date: string | undefined, year: string) =>
 
 export function getTreasurerAnalytics(
   transactions: FinancialTransaction[],
-  hogRaising: HogRaisingState | undefined,
+  livestockIgp: LivestockIgpState | undefined,
   activities: AssociationActivity[],
   funds: OrganizationFund[],
   year = 'all'
@@ -138,7 +138,7 @@ export function getTreasurerAnalytics(
     recordFundSource(transaction.fundSource, isIncome, amount);
   });
 
-  (hogRaising?.sales || []).forEach(sale => {
+  (livestockIgp?.sales || []).forEach(sale => {
     if (!isInSelectedYear(sale.date, year)) return;
     const amount = Number(sale.revenue) || 0;
     getMonth(sale.date).income += amount;
@@ -146,7 +146,7 @@ export function getTreasurerAnalytics(
     igpIncome += amount;
   });
 
-  (hogRaising?.expenses || []).forEach(expense => {
+  (livestockIgp?.expenses || []).forEach(expense => {
     if (!isInSelectedYear(expense.date, year)) return;
     const amount = Number(expense.amount) || 0;
     getMonth(expense.date).expenses += amount;

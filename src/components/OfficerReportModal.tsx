@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement,
-  AssociationActivity, AssociationAchievement, InventoryItem, HogRaisingState,
+  AssociationActivity, AssociationAchievement, InventoryItem, LivestockIgpState,
   OfficerRole, OrganizationFund, User, Product, AuditorReport, DelegationRequest,
   MembershipPayment
 } from '../types';
@@ -40,7 +40,7 @@ interface OfficerReportModalProps {
   products?: Product[];
   logs: SystemLog[];
   funds?: OrganizationFund[];
-  hogRaising?: HogRaisingState;
+  livestockIgp?: LivestockIgpState;
   auditorReports?: AuditorReport[];
   delegationRequests?: DelegationRequest[];
   membershipPayments?: MembershipPayment[];
@@ -61,7 +61,7 @@ export default function OfficerReportModal({
   inventory = [],
   products = [],
   funds = INITIAL_FUNDS,
-  hogRaising,
+  livestockIgp,
   auditorReports = [],
   delegationRequests = [],
   membershipPayments = [],
@@ -113,7 +113,7 @@ export default function OfficerReportModal({
       achievements,
       inventory,
       products,
-      hogRaising,
+      livestockIgp,
       auditorReports,
       delegationRequests,
       membershipPayments,
@@ -124,13 +124,13 @@ export default function OfficerReportModal({
     });
   }, [
     presidentReportYear, reportDate, users, members, meetings, resolutions, transactions,
-    announcements, activities, achievements, inventory, products, hogRaising,
+    announcements, activities, achievements, inventory, products, livestockIgp,
     auditorReports, delegationRequests, membershipPayments, customHighlightsText,
     customPlansText, presidentClosingLine, customRemarks
   ]);
   const reportAnchorDate = reportDate || new Date().toISOString().split('T')[0];
   const treasurerReportRange = getTreasurerReportRange(reportAnchorDate, reportPeriod);
-  const treasurerCategoryRows = getTreasurerReportRows(transactions, hogRaising, treasurerReportRange, reportKind);
+  const treasurerCategoryRows = getTreasurerReportRows(transactions, livestockIgp, treasurerReportRange, reportKind);
   const treasurerCategories = Array.from(new Set(treasurerCategoryRows.map(row => row.category))).sort((a, b) => a.localeCompare(b));
   const treasurerReportRows = treasurerCategoryRows.filter(row => reportCategory === 'all' || row.category === reportCategory);
   const treasurerReportTotal = treasurerReportRows.reduce((sum, row) => sum + row.amount, 0);
@@ -166,9 +166,9 @@ export default function OfficerReportModal({
   const unauditedCount = transactions.filter(t => !t.auditedStatus || t.auditedStatus === 'Unaudited').length;
   const auditComplianceRate = transactions.length > 0 ? ((auditedCount / transactions.length) * 100).toFixed(1) : '100.0';
 
-  const hogExpensesTotal = (hogRaising?.expenses || []).reduce((sum, e) => sum + e.amount, 0);
-  const hogSalesTotal = (hogRaising?.sales || []).reduce((sum, s) => sum + s.revenue, 0);
-  const hogNet = hogSalesTotal - hogExpensesTotal;
+  const livestockExpensesTotal = (livestockIgp?.expenses || []).reduce((sum, e) => sum + e.amount, 0);
+  const livestockSalesTotal = (livestockIgp?.sales || []).reduce((sum, s) => sum + s.revenue, 0);
+  const livestockNet = livestockSalesTotal - livestockExpensesTotal;
 
   // Calculations for Members
   const activeMembers = members.filter(m => m.status === 'Active');

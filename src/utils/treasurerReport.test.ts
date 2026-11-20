@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FinancialTransaction, HogRaisingState } from '../types';
+import { FinancialTransaction, LivestockIgpState } from '../types';
 import { getTreasurerReportRange, getTreasurerReportRows } from './treasurerReport';
 
 const transactions: FinancialTransaction[] = [
@@ -17,7 +17,7 @@ const transactions: FinancialTransaction[] = [
   }
 ];
 
-const livestock: HogRaisingState = {
+const livestock: LivestockIgpState = {
   expenses: [{
     id: 'livestock-expense', produce: 'Poultry', category: 'Feed', description: 'Feed costs',
     amount: 80, date: '2026-05-05', recordedBy: 'Treasurer', fundSource: 'GENERAL (General Fund)'

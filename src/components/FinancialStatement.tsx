@@ -1,5 +1,5 @@
 import React from 'react';
-import { AssociationActivity, FinancialTransaction, HogRaisingState, InventoryItem, OrganizationFund, User } from '../types';
+import { AssociationActivity, FinancialTransaction, LivestockIgpState, InventoryItem, OrganizationFund, User } from '../types';
 import { resolveOfficerName } from '../utils/officers';
 import { getInitialFund } from '../utils/fundBalance';
 
@@ -7,7 +7,7 @@ interface FinancialStatementProps {
   transactions?: FinancialTransaction[];
   activities?: AssociationActivity[];
   funds?: OrganizationFund[];
-  hogRaising?: HogRaisingState;
+  livestockIgp?: LivestockIgpState;
   inventory?: InventoryItem[];
   users?: User[];
   year?: number;
@@ -54,7 +54,7 @@ export default function FinancialStatement({
   transactions = [],
   activities = [],
   funds = [],
-  hogRaising,
+  livestockIgp,
   inventory = [],
   users = [],
   year: yearProp,
@@ -95,14 +95,14 @@ export default function FinancialStatement({
     activityTotals.set(activityId, totals);
   });
 
-  const hogExpenses = (hogRaising?.expenses || []).filter((expense) => expense.date?.startsWith(String(year))).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-  const hogSales = (hogRaising?.sales || []).filter((sale) => sale.date?.startsWith(String(year))).reduce((sum, sale) => sum + Number(sale.revenue || 0), 0);
-  const hogNet = hogSales - hogExpenses;
+  const livestockExpenses = (livestockIgp?.expenses || []).filter((expense) => expense.date?.startsWith(String(year))).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const livestockSales = (livestockIgp?.sales || []).filter((sale) => sale.date?.startsWith(String(year))).reduce((sum, sale) => sum + Number(sale.revenue || 0), 0);
+  const livestockNet = livestockSales - livestockExpenses;
 
   const inventoryCount = inventory.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-  const totalIncomeWithHog = totalIncome + hogSales;
-  const totalExpenseWithHog = totalExpense + hogExpenses;
-  const netPosition = netSurplus + hogNet;
+  const totalIncomeWithLivestock = totalIncome + livestockSales;
+  const totalExpenseWithLivestock = totalExpense + livestockExpenses;
+  const netPosition = netSurplus + livestockNet;
 
   return (
     <main className="document financial-statement-root">
@@ -178,14 +178,14 @@ export default function FinancialStatement({
           ) : Object.entries(incomeCategoryTotals).map(([category, amount]) => (
             <Line key={category} label={category} value={peso(amount)} indent />
           ))}
-          {hogSales > 0 && (
+          {livestockSales > 0 && (
             <>
-              <div className="subheading">Hog Raising IGP (Fiscal Year {year})</div>
-              <Line label="IGP Sales" value={peso(hogSales)} indent />
+              <div className="subheading">Livestock IGP (Fiscal Year {year})</div>
+              <Line label="IGP Sales" value={peso(livestockSales)} indent />
             </>
           )}
           <div className="rule" />
-          <Line label="TOTAL INCOME / RECEIPTS" value={peso(totalIncomeWithHog)} bold />
+          <Line label="TOTAL INCOME / RECEIPTS" value={peso(totalIncomeWithLivestock)} bold />
         </Section>
 
         <Section title="III. EXPENDITURES">
@@ -194,14 +194,14 @@ export default function FinancialStatement({
           ) : Object.entries(expenseCategoryTotals).map(([category, amount]) => (
             <Line key={category} label={category} value={peso(amount)} indent />
           ))}
-          {hogExpenses > 0 && (
+          {livestockExpenses > 0 && (
             <>
-              <div className="subheading">Hog Raising IGP (Fiscal Year {year})</div>
-              <Line label="IGP Expenses (feeds, stock, medication)" value={peso(hogExpenses)} indent />
+              <div className="subheading">Livestock IGP (Fiscal Year {year})</div>
+              <Line label="IGP Expenses (feeds, stock, medication)" value={peso(livestockExpenses)} indent />
             </>
           )}
           <div className="rule" />
-          <Line label="TOTAL EXPENDITURES" value={peso(totalExpenseWithHog)} bold />
+          <Line label="TOTAL EXPENDITURES" value={peso(totalExpenseWithLivestock)} bold />
         </Section>
 
         <Section title="IV. FINANCIAL SUMMARY BY ACTIVITY">
@@ -218,8 +218,8 @@ export default function FinancialStatement({
         </Section>
 
         <Section title="V. NET FINANCIAL POSITION">
-          <Line label="Total Income / Receipts" value={peso(totalIncomeWithHog)} indent />
-          <Line label="Less: Total Expenditures" value={`(${peso(totalExpenseWithHog)})`} indent />
+          <Line label="Total Income / Receipts" value={peso(totalIncomeWithLivestock)} indent />
+          <Line label="Less: Total Expenditures" value={`(${peso(totalExpenseWithLivestock)})`} indent />
           <div className="rule" />
           <Line label="NET SURPLUS / (DEFICIT)" value={peso(netPosition)} bold />
         </Section>

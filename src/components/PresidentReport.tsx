@@ -13,7 +13,7 @@ import type {
   AssociationAchievement,
   InventoryItem,
   Product,
-  HogRaisingState,
+  LivestockIgpState,
   AuditorReport,
   DelegationRequest,
   DelegationScope,
@@ -663,7 +663,7 @@ export interface BuildPresidentReportInput {
   achievements?: AssociationAchievement[];
   inventory?: InventoryItem[];
   products?: Product[];
-  hogRaising?: HogRaisingState;
+  livestockIgp?: LivestockIgpState;
   auditorReports?: AuditorReport[];
   delegationRequests?: DelegationRequest[];
   membershipPayments?: MembershipPayment[];
@@ -689,7 +689,7 @@ export function buildReportData(input: BuildPresidentReportInput): ReportData {
     achievements = [],
     inventory = [],
     products = [],
-    hogRaising,
+    livestockIgp,
     auditorReports = [],
     delegationRequests = [],
     membershipPayments = [],
@@ -774,8 +774,8 @@ export function buildReportData(input: BuildPresidentReportInput): ReportData {
   const certifiedAuditorReportsCount = auditorReports.filter((r) => r.status === "Certified").length;
 
   // IGP, Market & Custodial Assets metrics
-  const activeIgpProjectsCount = hogRaising?.produces?.length ?? (hogRaising?.livestockInventory?.length ?? 0);
-  const eggHarvests = hogRaising?.eggHarvests ?? hogRaising?.choreLogs ?? [];
+  const activeIgpProjectsCount = livestockIgp?.produces?.length ?? (livestockIgp?.livestockInventory?.length ?? 0);
+  const eggHarvests = livestockIgp?.eggHarvests ?? livestockIgp?.choreLogs ?? [];
   const signedHarvests = eggHarvests.filter((h) => h.status === "Signed");
   const verifiedEggsTotal = signedHarvests.reduce((sum, h) => sum + (Number(h.eggCount) || 0), 0);
   const publishedMarketProducts = products.filter((p) => p.isPublished !== false).length;

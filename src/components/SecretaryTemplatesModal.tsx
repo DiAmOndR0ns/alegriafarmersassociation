@@ -40,7 +40,7 @@ export default function SecretaryTemplatesModal({
   const [resNumber, setResNumber] = useState(`Res. No. 2026-00${resolutions.length + 1}`);
   const [resTitle, setResTitle] = useState('A RESOLUTION REQUESTING FINANCIAL AND LIVELIHOOD ASSISTANCE UNDER THE SUSTAINABLE LIVELIHOOD PROGRAM (SLP)');
   const [resWhereas1, setResWhereas1] = useState('WHEREAS, the Alegria Farmers Association (AFA) is a duly registered rural workers organization composed of smallholder farmers residing in Barangay Alegria, Tuburan, Cebu;');
-  const [resWhereas2, setResWhereas2] = useState('WHEREAS, the association actively engages in agriculture, livestock rearing, and communal hog raising to uplift the socio-economic condition of its members;');
+  const [resWhereas2, setResWhereas2] = useState('WHEREAS, the association actively engages in agriculture, livestock rearing, and communal livestock to uplift the socio-economic condition of its members;');
   const [resWhereas3, setResWhereas3] = useState('WHEREAS, there is an urgent need to augment the revolving working capital for organic feeds, livestock dispersal, and post-harvest facilities;');
   const [resResolved, setResResolved] = useState(`NOW THEREFORE, on motion of Hon. ${resolveOfficerName(users, 'Vice_President' as OfficerRole)}, duly seconded by Hon. Maria Alcoser, BE IT RESOLVED, as it is hereby resolved, to formally submit this request and authorize the Association President to sign all necessary documents.`);
   const [resMovedBy, setResMovedBy] = useState(resolveOfficerName(users, 'Vice_President' as OfficerRole));
@@ -54,7 +54,7 @@ export default function SecretaryTemplatesModal({
   const [reqOffice, setReqOffice] = useState('Office of the Municipal Mayor & Municipal Agriculture Office (MAO)');
   const [reqAddress, setReqAddress] = useState('Municipality of Tuburan, Cebu Province');
   const [reqSubject, setReqSubject] = useState('Request for Allocation of 100 Bags Organic Fertilizer & High-Yield Hybrid Corn Seeds');
-  const [reqItems, setReqItems] = useState('1. 100 Bags of Certified Organic Fertilizer (50kg/bag)\n2. 50 Bags of Hybrid Yellow Corn Seedlings (Pioneer/Dekalb)\n3. 1 Unit Communal Knapsack Sprayer with Solar Charging Battery\n4. Veterinary Dewormer and Multi-Vitamins for Hog Raising IGP');
+  const [reqItems, setReqItems] = useState('1. 100 Bags of Certified Organic Fertilizer (50kg/bag)\n2. 50 Bags of Hybrid Yellow Corn Seedlings (Pioneer/Dekalb)\n3. 1 Unit Communal Knapsack Sprayer with Solar Charging Battery\n4. Veterinary Dewormer and Multi-Vitamins for Livestock IGP');
   const [reqJustification, setReqJustification] = useState('Our 42 registered smallholder farmers across the 4 official sitios in Barangay Alegria (Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak) are preparing for the upcoming wet cropping season and need certified farm inputs to sustain food productivity.');
 
   if (!isOpen) return null;
@@ -124,7 +124,7 @@ export default function SecretaryTemplatesModal({
             Estimated Project Cost: PHP ${Number(loiEstimatedCost.replace(/,/g, '')).toLocaleString('en-US')}.00
           </div>
           <p>
-            Our association has maintained an exemplary track record in communal agriculture, having established functional group rotation systems for livestock rearing (Hog Raising IGP), corn production, and high-value coffee propagation. This program will significantly elevate rural productivity, bolster food self-sufficiency, and provide resilient household incomes for our agrarian families.
+            Our association has maintained an exemplary track record in communal agriculture, having established functional group rotation systems for livestock rearing (Livestock IGP), corn production, and high-value coffee propagation. This program will significantly elevate rural productivity, bolster food self-sufficiency, and provide resilient household incomes for our agrarian families.
           </p>
           <p>
             Attached herewith are our Board Resolution, Association Profile, Certificate of Registration, and Roster of Beneficiary Members for your appraisal. We express our earnest commitment to comply with all documentary, counter-parting, and monitoring guidelines.

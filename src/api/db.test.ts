@@ -301,7 +301,7 @@ describe('IGP expense persistence', () => {
     };
 
     await saveFullStateToPostgres(pool as any, {
-      hogRaising: {
+      livestockIgp: {
         produces: ['Swine Raising (Baboyan)', 'Poultry Raising (RTL)'],
         expenses: [{
           id: 'rtl-expense-1',
@@ -405,7 +405,7 @@ describe('IGP expense persistence', () => {
 
     const result = await fetchAllDataFromPostgres(pool as any);
 
-    expect(result.hogRaising.expenses).toEqual([{
+    expect(result.livestockIgp.expenses).toEqual([{
       id: 'orphaned-rtl-expense',
       produce: 'Poultry Raising (RTL)',
       date: '2026-11-17',
@@ -468,11 +468,11 @@ describe('IGP expense persistence', () => {
 
 const result = await fetchAllDataFromPostgres(pool as any);
 
-expect(result.hogRaising.livestockInventory).toEqual([
+expect(result.livestockIgp.livestockInventory).toEqual([
       { produce: 'Swine Raising (Baboyan)', stageBreakdown: { Fattening: 5, Gestation: 2 } },
   { produce: 'Goat Raising', stageBreakdown: { Breeding: 4, Growing: 8 } }
 ]);
-expect(result.hogRaising.sales).toEqual([{
+expect(result.livestockIgp.sales).toEqual([{
   id: 'legacy-sale',
   produce: 'Normalized project',
   date: '2026-02-01',
@@ -489,18 +489,18 @@ expect(result.hogRaising.sales).toEqual([{
   revenue: 5,
   recordedBy: 'Legacy'
 }]);
-expect(result.hogRaising.eggHarvests[0]).toMatchObject({
+expect(result.livestockIgp.eggHarvests[0]).toMatchObject({
   id: 'legacy-harvest',
   collectedBy: 'Normalized',
   eggCount: 5,
   status: 'Audited'
 });
-expect(result.hogRaising.eggHarvests[1]).toMatchObject({
+expect(result.livestockIgp.eggHarvests[1]).toMatchObject({
   id: 'json-only-harvest',
   collectedBy: 'Legacy',
   eggCount: 1
 });
-expect(result.hogRaising.expenses).toEqual([{
+expect(result.livestockIgp.expenses).toEqual([{
   id: 'legacy-expense',
   produce: 'Poultry Raising (RTL)',
   amount: 20
@@ -540,7 +540,7 @@ it('writes IGP sales and harvests to their normalized tables', async () => {
   };
 
   await saveFullStateToPostgres(pool as any, {
-    hogRaising: {
+    livestockIgp: {
       produces: ['Poultry Raising (RTL)'],
       livestockInventory: [
           { produce: 'Swine Raising (Baboyan)', stageBreakdown: { Fattening: 5, Gestation: 3 } },
@@ -557,7 +557,7 @@ it('writes IGP sales and harvests to their normalized tables', async () => {
   const harvestInsert = queries.find(query => query.sql.includes('INSERT INTO afa_igp_harvests'));
   const livestockInserts = queries.filter(query => query.sql.includes('INSERT INTO afa_igp_livestocks'));
   expect(igpInsert?.sql).toContain('INSERT INTO afa_igp (id, produces, closed_years)');
-  expect(igpInsert?.values).toEqual(['main_state', ['Poultry Raising (RTL)'], []]);
+  expect(igpInsert?.values).toEqual(['main_state', ['Poultry Raising (RTL)'], null]);
   expect(salesInsert?.values).toEqual([
     sale.id, sale.produce, sale.date, sale.stage, sale.quantity,
     sale.revenue, sale.recordedBy, sale.fundSource, sale.notes

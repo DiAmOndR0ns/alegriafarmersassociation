@@ -98,8 +98,8 @@ describe("PresidentReport rendering", () => {
       achievements: [
         { id: "ach1", year: "2026", title: "DOLE Livelihood Award", description: "Recognized for sustainable poultry IGP", icon: "Trophy" },
       ],
-      hogRaising: {
-        produces: ["Hog Raising", "Poultry Raising"],
+      livestockIgp: {
+        produces: ["Livestock", "Poultry Raising"],
         expenses: [],
         sales: [],
         eggHarvests: [

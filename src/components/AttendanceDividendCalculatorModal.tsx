@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Member, Meeting, HogRaisingState, User, MembershipPayment } from '../types';
+import { Member, Meeting, LivestockIgpState, User, MembershipPayment } from '../types';
 import { resolveOfficerName } from '../utils/officers';
 import { getDerivedMemberStatus } from '../utils/membership';
 import { 
@@ -12,7 +12,7 @@ interface AttendanceDividendCalculatorModalProps {
   onClose: () => void;
   members: Member[];
   meetings: Meeting[];
-  hogRaisingState: HogRaisingState;
+  livestockIgpState: LivestockIgpState;
   currentUser?: User;
   users?: User[];
   /** Only members with settled dues for the year can receive a dividend. */
@@ -25,7 +25,7 @@ export default function AttendanceDividendCalculatorModal({
   onClose,
   members,
   meetings,
-  hogRaisingState,
+  livestockIgpState,
   currentUser,
   users = [],
   membershipPayments = [],
@@ -37,14 +37,14 @@ export default function AttendanceDividendCalculatorModal({
 
   // Filter financial data
   const expenses = useMemo(() => {
-    if (selectedProduce === 'all') return hogRaisingState.expenses;
-    return hogRaisingState.expenses.filter(e => (e.produce || 'Hog Raising') === selectedProduce);
-  }, [hogRaisingState.expenses, selectedProduce]);
+    if (selectedProduce === 'all') return livestockIgpState.expenses;
+    return livestockIgpState.expenses.filter(e => (e.produce || 'Livestock') === selectedProduce);
+  }, [livestockIgpState.expenses, selectedProduce]);
 
   const sales = useMemo(() => {
-    if (selectedProduce === 'all') return hogRaisingState.sales;
-    return hogRaisingState.sales.filter(s => (s.produce || 'Hog Raising') === selectedProduce);
-  }, [hogRaisingState.sales, selectedProduce]);
+    if (selectedProduce === 'all') return livestockIgpState.sales;
+    return livestockIgpState.sales.filter(s => (s.produce || 'Livestock') === selectedProduce);
+  }, [livestockIgpState.sales, selectedProduce]);
 
   const dividendYear = membershipYear ?? new Date().getFullYear();
   const isActiveMember = (member: Member) =>

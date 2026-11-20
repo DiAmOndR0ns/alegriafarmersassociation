@@ -11,7 +11,7 @@ import { buildSyncPayload } from './App';
  * entire request, so nothing the Secretary saved ever reached the database.
  */
 
-const FINANCIAL_KEYS = ['financialTransactions', 'funds', 'hogRaising'];
+const FINANCIAL_KEYS = ['financialTransactions', 'funds', 'livestockIgp'];
 
 function snapshot(overrides: Record<string, any> = {}) {
   return {
@@ -24,7 +24,7 @@ function snapshot(overrides: Record<string, any> = {}) {
     products: [{ id: 'p1' }],
     activities: [{ id: 'act-old' }],
     achievements: [{ id: 'ach1' }],
-    hogRaising: { eggHarvests: [{ id: 'e1' }] },
+    livestockIgp: { eggHarvests: [{ id: 'e1' }] },
     funds: [{ id: 'f1' }],
     inventory: [{ id: 'i1' }],
     logs: [{ id: 'l1' }],
@@ -128,7 +128,7 @@ describe('full snapshots respect the role', () => {
     const payload = buildSyncPayload({ ...base, canWriteFinancials: true, snapshot: snapshot() });
     expect(payload.financialTransactions).toEqual([{ id: 't1' }]);
     expect(payload.funds).toEqual([{ id: 'f1' }]);
-    expect(payload.hogRaising).toEqual({ eggHarvests: [{ id: 'e1' }] });
+    expect(payload.livestockIgp).toEqual({ eggHarvests: [{ id: 'e1' }] });
   });
 });
 

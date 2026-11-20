@@ -227,7 +227,7 @@ export default function SecretaryView({
     'Tuburan Coffee',
     'Vegetables',
     'Cassava',
-    'Hog Raising',
+    'Livestock',
     'Poultry Raising',
     'Goat Raising'
   ];

@@ -16,7 +16,7 @@
  * no hardcoded officer names. All figures come from the system ledger.
  */
 import { useEffect, useRef } from 'react';
-import { AssociationActivity, FinancialTransaction, HogRaisingState, InventoryItem, OfficerRole, OrganizationFund, User } from '../types';
+import { AssociationActivity, FinancialTransaction, LivestockIgpState, InventoryItem, OfficerRole, OrganizationFund, User } from '../types';
 import { resolveOfficerName } from '../utils/officers';
 import { getInitialFund } from '../utils/fundBalance';
 
@@ -26,7 +26,7 @@ interface TreasurerFinancialReportProps {
   transactions: FinancialTransaction[];
   activities?: AssociationActivity[];
   funds: OrganizationFund[];
-  hogRaising?: HogRaisingState;
+  livestockIgp?: LivestockIgpState;
   inventory?: InventoryItem[];
   users?: User[];
   onClose?: () => void;
@@ -61,7 +61,7 @@ export default function TreasurerFinancialReport({
   transactions,
   activities = [],
   funds,
-  hogRaising,
+  livestockIgp,
   inventory = [],
   users = [],
   onClose
@@ -106,14 +106,14 @@ export default function TreasurerFinancialReport({
     activityTotals.set(activityId, totals);
   });
 
-  // Hog Raising IGP (fiscal year)
-  const hogExpenses = (hogRaising?.expenses || [])
+  // Livestock IGP (fiscal year)
+  const livestockExpenses = (livestockIgp?.expenses || [])
     .filter(e => e.date?.startsWith(String(year)))
     .reduce((s, e) => s + e.amount, 0);
-  const hogSales = (hogRaising?.sales || [])
+  const livestockSales = (livestockIgp?.sales || [])
     .filter(s => s.date?.startsWith(String(year)))
     .reduce((s, e) => s + e.revenue, 0);
-  const hogNet = hogSales - hogExpenses;
+  const livestockNet = livestockSales - livestockExpenses;
 
   // Property & Equipment inventory (Auditor custody, reported by Treasurer)
   const inventoryCount = inventory.reduce((s, i) => s + (i.quantity || 0), 0);
@@ -218,10 +218,10 @@ export default function TreasurerFinancialReport({
           ) : Object.entries(incomeCategoryTotals).map(([cat, amt]) => (
             <Line key={cat} label={cat} value={peso(amt)} indent />
           ))}
-          <div className="subheading">Hog Raising IGP (Fiscal Year {year})</div>
-          <Line label="IGP Sales" value={peso(hogSales)} indent />
+          <div className="subheading">Livestock IGP (Fiscal Year {year})</div>
+          <Line label="IGP Sales" value={peso(livestockSales)} indent />
           <div className="rule" />
-          <Line label="TOTAL INCOME / RECEIPTS" value={peso(totalIncome + hogSales)} bold />
+          <Line label="TOTAL INCOME / RECEIPTS" value={peso(totalIncome + livestockSales)} bold />
         </Section>
 
         <Section title="III. EXPENDITURES">
@@ -230,10 +230,10 @@ export default function TreasurerFinancialReport({
           ) : Object.entries(expenseCategoryTotals).map(([cat, amt]) => (
             <Line key={cat} label={cat} value={peso(amt)} indent />
           ))}
-          <div className="subheading">Hog Raising IGP (Fiscal Year {year})</div>
-          <Line label="IGP Expenses (feeds, stock, medication)" value={peso(hogExpenses)} indent />
+          <div className="subheading">Livestock IGP (Fiscal Year {year})</div>
+          <Line label="IGP Expenses (feeds, stock, medication)" value={peso(livestockExpenses)} indent />
           <div className="rule" />
-          <Line label="TOTAL EXPENDITURES" value={peso(totalExpense + hogExpenses)} bold />
+          <Line label="TOTAL EXPENDITURES" value={peso(totalExpense + livestockExpenses)} bold />
         </Section>
 
         <Section title="IV. FINANCIAL SUMMARY BY ACTIVITY">
@@ -250,10 +250,10 @@ export default function TreasurerFinancialReport({
         </Section>
 
         <Section title="V. NET FINANCIAL POSITION">
-          <Line label="Total Income / Receipts" value={peso(totalIncome + hogSales)} indent />
-          <Line label="Less: Total Expenditures" value={`(${peso(totalExpense + hogExpenses)})`} indent />
+          <Line label="Total Income / Receipts" value={peso(totalIncome + livestockSales)} indent />
+          <Line label="Less: Total Expenditures" value={`(${peso(totalExpense + livestockExpenses)})`} indent />
           <div className="rule" />
-          <Line label="NET SURPLUS / (DEFICIT)" value={peso(netBalance + hogNet)} bold />
+          <Line label="NET SURPLUS / (DEFICIT)" value={peso(netBalance + livestockNet)} bold />
           <Line label="Total Allocated Capital, All Funds" value={peso(totalAllocated)} indent />
         </Section>
 

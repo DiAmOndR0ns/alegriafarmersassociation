@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  FinancialTransaction, OrganizationFund, HogRaisingState, User, OfficerRole, InventoryItem, AssociationActivity,
+  FinancialTransaction, OrganizationFund, LivestockIgpState, User, OfficerRole, InventoryItem, AssociationActivity,
   Member, MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot
 } from '../types';
 import {
@@ -14,7 +14,7 @@ import {
 import { resolveOfficerPrefixed } from '../utils/officers';
 import { isActivityOpenForExpenses } from '../utils/activityExpenses';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
-import { INITIAL_FUNDS, INITIAL_HOG_RAISING } from '../initialData';
+import { INITIAL_FUNDS, INITIAL_LIVESTOCK_IGP } from '../initialData';
 import FinancialStatement from './FinancialStatement';
 import { getTreasurerAnalytics } from '../utils/treasurerAnalytics';
 import { getInitialFund } from '../utils/fundBalance';
@@ -38,7 +38,7 @@ interface TreasurerViewProps {
   transactions: FinancialTransaction[];
   activities?: AssociationActivity[];
   funds?: OrganizationFund[];
-  hogRaising?: HogRaisingState;
+  livestockIgp?: LivestockIgpState;
   inventory?: InventoryItem[];
   onAddTransaction: (tx: Omit<FinancialTransaction, 'id' | 'auditedStatus'>) => void;
   onDeleteTransaction?: (id: string) => void;
@@ -77,7 +77,7 @@ export default function TreasurerView({
   transactions,
   activities = [],
   funds = INITIAL_FUNDS,
-  hogRaising = INITIAL_HOG_RAISING,
+  livestockIgp = INITIAL_LIVESTOCK_IGP,
   inventory = [],
   onAddTransaction,
   onDeleteTransaction,
@@ -191,14 +191,14 @@ export default function TreasurerView({
     transactions.forEach(transaction => {
       if (transaction.date && transaction.date.length >= 4) yearsSet.add(transaction.date.substring(0, 4));
     });
-    (hogRaising?.expenses || []).forEach(e => {
+    (livestockIgp?.expenses || []).forEach(e => {
       if (e.date && e.date.length >= 4) yearsSet.add(e.date.substring(0, 4));
     });
-    (hogRaising?.sales || []).forEach(s => {
+    (livestockIgp?.sales || []).forEach(s => {
       if (s.date && s.date.length >= 4) yearsSet.add(s.date.substring(0, 4));
     });
     return Array.from(yearsSet).sort().reverse();
-  }, [transactions, hogRaising]);
+  }, [transactions, livestockIgp]);
 
   // Dues ledger view for the selected membership year: one row per member with
   // their standing and the receipt that put them there (if any).
@@ -226,8 +226,8 @@ export default function TreasurerView({
   useEffect(() => { setDuesPaymentAmount(String(duesAmount)); }, [duesAmount]);
 
   const treasurerAnalytics = useMemo(
-    () => getTreasurerAnalytics(transactions, hogRaising, activities, funds, chartYear),
-    [transactions, hogRaising, activities, funds, chartYear]
+    () => getTreasurerAnalytics(transactions, livestockIgp, activities, funds, chartYear),
+    [transactions, livestockIgp, activities, funds, chartYear]
   );
   const currentRegisteredFundBalance = funds.reduce((total, fund) => total + (Number(fund.currentBalance) || 0), 0);
 
@@ -1716,7 +1716,7 @@ export default function TreasurerView({
               transactions={transactions}
               activities={activities}
               funds={funds}
-              hogRaising={hogRaising}
+              livestockIgp={livestockIgp}
               inventory={inventory}
               users={users}
               year={new Date().getFullYear()}

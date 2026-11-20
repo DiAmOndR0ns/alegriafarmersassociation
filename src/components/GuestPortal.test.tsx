@@ -8,7 +8,7 @@ import GuestPortal, {
   UPCOMING_HARVEST_TAG
 } from './GuestPortal';
 import AuthScreen from './AuthScreen';
-import { EggHarvestLog, HogRaisingState, PublicProduct } from '../types';
+import { EggHarvestLog, LivestockIgpState, PublicProduct } from '../types';
 
 const makeProduct = (id: string, name: string, isPublished: boolean): PublicProduct => ({
   id,
@@ -21,7 +21,7 @@ const makeProduct = (id: string, name: string, isPublished: boolean): PublicProd
   isPublished
 });
 
-const makeEggState = (eggCount: number, status: EggHarvestLog['status'] = 'Signed', eggsSold = 0): HogRaisingState => ({
+const makeEggState = (eggCount: number, status: EggHarvestLog['status'] = 'Signed', eggsSold = 0): LivestockIgpState => ({
   expenses: [],
   sales: eggsSold > 0 ? [{
     id: 'egg-sale',
@@ -128,7 +128,7 @@ describe('GuestPortal product catalog', () => {
       <GuestPortal
         onEnterLogin={() => {}}
         members={[]}
-        hogRaising={{ expenses: [], sales: [] }}
+        livestockIgp={{ expenses: [], sales: [] }}
         cachedSummary={{
           success: true,
           totalMembers: 42,

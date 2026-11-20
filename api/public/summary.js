@@ -464,7 +464,7 @@ async function runSchemaMigrations(client) {
       CASE WHEN jsonb_typeof(igp.expenses) = 'array' THEN igp.expenses ELSE '[]':: jsonb END
     ) AS item(expense)
             WHERE NULLIF(expense ->> 'id', '') IS NOT NULL
-            ON CONFLICT(id) DO UPDATE SET
+            ON CONFLICT (id) DO UPDATE SET
   produce = CASE
                 WHEN afa_igp_expenses.produce ~* '(swine|hog|baboy)'
                   AND EXCLUDED.produce ~* '(poultry|rtl|chicken|egg)'
