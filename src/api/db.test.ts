@@ -102,13 +102,13 @@ describe('Supabase-only configuration', () => {
 });
 
 describe('database table statistics', () => {
-  it('counts all 21 application tables', async () => {
+  it('counts all 20 application tables', async () => {
     const tableNames = [
       'users', 'members', 'meetings', 'resolutions', 'financial_transactions',
       'announcements', 'system_logs', 'afa_igp', 'afa_igp_livestocks', 'afa_igp_expenses',
       'afa_igp_harvests', 'afa_igp_sales',
       'products', 'inventory', 'activities', 'achievements', 'organization_funds',
-      'auditor_reports', 'delegation_requests',
+      'delegation_requests',
       'membership_payments', 'membership_year_snapshots'
     ];
     const row = Object.fromEntries(tableNames.map(name => [name, '1']));
@@ -121,11 +121,11 @@ describe('database table statistics', () => {
 
     const stats = await getTableStats(pool as any);
 
-    expect(Object.keys(stats.tableCounts)).toHaveLength(21);
+    expect(Object.keys(stats.tableCounts)).toHaveLength(20);
     expect(stats.tableCounts.inventory).toBe(1);
     expect(stats.tableCounts.achievements).toBe(1);
     expect(stats.tableCounts.membership_payments).toBe(1);
-    expect(stats.totalRecords).toBe(21);
+    expect(stats.totalRecords).toBe(20);
   });
 });
 

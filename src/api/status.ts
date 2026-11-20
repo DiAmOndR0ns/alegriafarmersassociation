@@ -54,7 +54,6 @@ const APP_TABLES = [
   'activities',
   'achievements',
   'organization_funds',
-  'auditor_reports',
   'delegation_requests',
   'membership_payments',
   'membership_year_snapshots'

@@ -735,22 +735,8 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
      END $$; `,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key; `,
 
-    // Formal Auditor Reports (Proposal Requirement)
-    `CREATE TABLE IF NOT EXISTS auditor_reports(
-    id VARCHAR(100) PRIMARY KEY,
-    report_period VARCHAR(100) NOT NULL,
-    report_type VARCHAR(50) NOT NULL,
-    total_income NUMERIC DEFAULT 0,
-    total_expenses NUMERIC DEFAULT 0,
-    net_surplus NUMERIC DEFAULT 0,
-    findings TEXT,
-    recommendations TEXT,
-    prepared_by TEXT NOT NULL,
-    certified_by TEXT,
-    status VARCHAR(50) DEFAULT 'Submitted',
-    date_submitted VARCHAR(50),
-    date_certified VARCHAR(50)
-  ); `,
+    // Drop legacy unused auditor_reports table (superseded by live AuditorReport + per-transaction auditing)
+    `DROP TABLE IF EXISTS auditor_reports;`,
 
     // Executive Delegation Requests (Proposal Requirement: President to VP delegation)
     `CREATE TABLE IF NOT EXISTS delegation_requests(
@@ -1182,24 +1168,8 @@ export async function initDatabaseSchema(pool: pg.Pool) {
         DROP CONSTRAINT IF EXISTS organization_funds_code_key;
   `);
 
-    // 13. Auditor Reports
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS auditor_reports(
-    id VARCHAR(100) PRIMARY KEY,
-    report_period VARCHAR(100) NOT NULL,
-    report_type VARCHAR(50) NOT NULL,
-    total_income NUMERIC DEFAULT 0,
-    total_expenses NUMERIC DEFAULT 0,
-    net_surplus NUMERIC DEFAULT 0,
-    findings TEXT,
-    recommendations TEXT,
-    prepared_by TEXT NOT NULL,
-    certified_by TEXT,
-    status VARCHAR(50) DEFAULT 'Submitted',
-    date_submitted VARCHAR(50),
-    date_certified VARCHAR(50)
-  );
-  `);
+    // 13. Drop legacy unused auditor_reports table
+    await client.query(`DROP TABLE IF EXISTS auditor_reports;`);
 
     // 14. Delegation Requests
     await client.query(`
@@ -1297,7 +1267,6 @@ export async function getTableStats(pool: pg.Pool): Promise<{
                                 (SELECT count(*) FROM activities) as activities,
                                   (SELECT count(*) FROM achievements) as achievements,
                                     (SELECT count(*) FROM organization_funds) as organization_funds,
-                                      (SELECT count(*) FROM auditor_reports) as auditor_reports,
                                         (SELECT count(*) FROM delegation_requests) as delegation_requests,
                                           (SELECT count(*) FROM membership_payments) as membership_payments,
                                             (SELECT count(*) FROM membership_year_snapshots) as membership_year_snapshots
@@ -1321,7 +1290,6 @@ export async function getTableStats(pool: pg.Pool): Promise<{
       activities: Number(row.activities || 0),
       achievements: Number(row.achievements || 0),
       organization_funds: Number(row.organization_funds || 0),
-      auditor_reports: Number(row.auditor_reports || 0),
       delegation_requests: Number(row.delegation_requests || 0),
       membership_payments: Number(row.membership_payments || 0),
       membership_year_snapshots: Number(row.membership_year_snapshots || 0),
@@ -1356,8 +1324,6 @@ export const ENTITY_TABLE_MAP: Readonly<Record<string, string>> = {
   fund: 'organization_funds', funds: 'organization_funds',
   organizationfund: 'organization_funds', organizationfunds: 'organization_funds',
   organization_fund: 'organization_funds', organization_funds: 'organization_funds',
-  auditorreport: 'auditor_reports', auditorreports: 'auditor_reports',
-  auditor_report: 'auditor_reports', auditor_reports: 'auditor_reports',
   delegationrequest: 'delegation_requests', delegationrequests: 'delegation_requests',
   delegation_request: 'delegation_requests', delegation_requests: 'delegation_requests',
   membershippayment: 'membership_payments', membershippayments: 'membership_payments',
@@ -1528,26 +1494,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const achievementsRes = await client.query('SELECT * FROM achievements ORDER BY year DESC, title ASC');
     const fundsRes = await client.query('SELECT * FROM organization_funds ORDER BY name ASC');
 
-    let auditorReports: any[] = [];
     let delegationRequests: any[] = [];
-    try {
-      const audRes = await client.query('SELECT * FROM auditor_reports ORDER BY date_submitted DESC');
-      auditorReports = audRes.rows.map(r => ({
-        id: r.id,
-        reportPeriod: r.report_period,
-        reportType: r.report_type,
-        totalIncome: Number(r.total_income || 0),
-        totalExpenses: Number(r.total_expenses || 0),
-        netSurplus: Number(r.net_surplus || 0),
-        findings: r.findings,
-        recommendations: r.recommendations,
-        preparedBy: r.prepared_by,
-        certifiedBy: r.certified_by,
-        status: r.status,
-        dateSubmitted: r.date_submitted,
-        dateCertified: r.date_certified
-      }));
-    } catch {}
 
     try {
       const delRes = await client.query('SELECT * FROM delegation_requests ORDER BY requested_date DESC');
@@ -1904,7 +1851,6 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       achievements,
       funds,
       organizationFunds: funds,
-      auditorReports,
       delegationRequests,
       membershipPayments,
       membershipYearSnapshots
@@ -2172,7 +2118,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     const deletedActivityIds = new Set<string>();
     const deletedAchievementIds = new Set<string>();
     const deletedFundIds = new Set<string>();
-    const deletedAuditorIds = new Set<string>();
     const deletedDelegationIds = new Set<string>();
     const deletedMembershipPaymentIds = new Set<string>();
 
@@ -2235,11 +2180,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query('DELETE FROM organization_funds WHERE id = ANY($1)', [funds]);
         console.log('[DB DELETE] Batch deleted funds:', funds);
       }
-      const auds = d.auditorReports || d.auditor_reports;
-      if (Array.isArray(auds) && auds.length > 0) {
-        auds.forEach((id: string) => deletedAuditorIds.add(id));
-        await client.query('DELETE FROM auditor_reports WHERE id = ANY($1)', [auds]);
-      }
       const dels = d.delegationRequests || d.delegation_requests;
       if (Array.isArray(dels) && dels.length > 0) {
         dels.forEach((id: string) => deletedDelegationIds.add(id));
@@ -2273,7 +2213,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         if (tbl === 'activities') deletedActivityIds.add(state.deleteItem.id);
         if (tbl === 'achievements') deletedAchievementIds.add(state.deleteItem.id);
         if (tbl === 'organization_funds') deletedFundIds.add(state.deleteItem.id);
-        if (tbl === 'auditor_reports') deletedAuditorIds.add(state.deleteItem.id);
         if (tbl === 'delegation_requests') deletedDelegationIds.add(state.deleteItem.id);
         if (tbl === 'membership_payments') deletedMembershipPaymentIds.add(state.deleteItem.id);
         if (tbl === 'members') await client.query('DELETE FROM membership_payments WHERE member_id = $1', [state.deleteItem.id]);
@@ -2809,38 +2748,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       console.log('[DB DEBUG] Organization funds saved');
     }
 
-    // 12. Auditor Reports
-    if (state.auditorReports && Array.isArray(state.auditorReports)) {
-      console.log('[DB DEBUG] Saving', state.auditorReports.length, 'auditor reports...');
-      for (const ar of state.auditorReports) {
-        await client.query(`
-          INSERT INTO auditor_reports(id, report_period, report_type, total_income, total_expenses, net_surplus, findings, recommendations, prepared_by, certified_by, status, date_submitted, date_certified)
-  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT (id) DO UPDATE SET
-  report_period = EXCLUDED.report_period,
-    report_type = EXCLUDED.report_type,
-    total_income = EXCLUDED.total_income,
-    total_expenses = EXCLUDED.total_expenses,
-    net_surplus = EXCLUDED.net_surplus,
-    findings = EXCLUDED.findings,
-    recommendations = EXCLUDED.recommendations,
-    prepared_by = EXCLUDED.prepared_by,
-    certified_by = EXCLUDED.certified_by,
-    status = EXCLUDED.status,
-    date_submitted = EXCLUDED.date_submitted,
-    date_certified = EXCLUDED.date_certified;
-  `, [
-          ar.id, cleanText(ar.reportPeriod, 100) || 'Unscheduled', cleanText(ar.reportType, 50) || 'General',
-          cleanNumber(ar.totalIncome), cleanNumber(ar.totalExpenses), cleanNumber(ar.netSurplus),
-          cleanText(ar.findings, 20000) || '', cleanText(ar.recommendations, 20000) || '',
-          cleanText(ar.preparedBy, 200) || 'Auditor', cleanText(ar.certifiedBy, 200),
-          cleanText(ar.status, 50) || 'Submitted', cleanDateString(ar.dateSubmitted, 50), cleanDateString(ar.dateCertified, 50)
-        ]);
-      }
-      console.log('[DB DEBUG] Auditor reports saved');
-    }
-
-    // 13. Membership dues ledger. Receipts are upserted; removing one is done by
+    // 12. Membership dues ledger. Receipts are upserted; removing one is done by
     // marking it Voided, so the audit trail survives a correction.
     if (state.membershipPayments && Array.isArray(state.membershipPayments)) {
       const activePayments = state.membershipPayments.filter((p: any) =>
@@ -2982,14 +2890,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ['custodian', 'custodian', (r) => r.custodian || ''], ['last_updated', 'lastUpdated', (r) => r.lastUpdated || new Date().toISOString().split('T')[0]],
         ['category', 'category', (r) => r.category || null], ['source_origin', 'source', (r) => r.source || null]
       ] },
-      { table: 'auditor_reports', deletedIds: deletedAuditorIds, fields: [
-        ['report_period', 'reportPeriod', (r) => r.reportPeriod], ['report_type', 'reportType', (r) => r.reportType],
-        ['total_income', 'totalIncome', (r) => r.totalIncome || 0], ['total_expenses', 'totalExpenses', (r) => r.totalExpenses || 0],
-        ['net_surplus', 'netSurplus', (r) => r.netSurplus || 0], ['findings', 'findings', (r) => r.findings || ''],
-        ['recommendations', 'recommendations', (r) => r.recommendations || ''], ['prepared_by', 'preparedBy', (r) => r.preparedBy],
-        ['certified_by', 'certifiedBy', (r) => r.certifiedBy || null], ['status', 'status', (r) => r.status || 'Submitted'],
-        ['date_submitted', 'dateSubmitted', (r) => r.dateSubmitted], ['date_certified', 'dateCertified', (r) => r.dateCertified || null]
-      ] },
       { table: 'delegation_requests', deletedIds: deletedDelegationIds, fields: [
         ['requested_by', 'requestedBy', (r) => r.requestedBy], ['reason', 'reason', (r) => r.reason],
         ['scopes', 'scopes', (r) => JSON.stringify(Array.isArray(r.scopes) ? r.scopes : [])], ['requested_date', 'requestedDate', (r) => r.requestedDate],
@@ -3003,7 +2903,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const stateKeyByTable: Record<string, string[]> = {
         system_logs: ['systemLogs', 'logs'],
         organization_funds: ['organizationFunds', 'funds'],
-        auditor_reports: ['auditorReports'],
         delegation_requests: ['delegationRequests']
       };
       const stateKeys = stateKeyByTable[mapping.table] || [mapping.table];

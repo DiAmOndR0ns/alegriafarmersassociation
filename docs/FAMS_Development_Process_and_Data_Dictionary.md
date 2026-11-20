@@ -283,29 +283,6 @@ Table 11 presents the data dictionary for the Organization Funds (organization_f
 Table 12 presents the data dictionary for the Financial Transactions (financial_transactions) entity. It captures all association income and expense records, enforcing a multi-tier internal control chain from Treasurer encoding to Auditor review (audited_status, audited_by) and final Presidential sign-off (president_approval_status, president_approved_by), while linking activity expenses directly to activities(id).
 
 **Table 13**  
-*Data Dictionary for Auditor Reports (auditor_reports)*
-
-| Field Name | Data Type | Description | Allowed Values | Example Values |
-| :--- | :--- | :--- | :--- | :--- |
-| id | VARCHAR(100) | Primary key uniquely identifying an auditor report | Non-empty unique string | aud_2026_q1 |
-| report_period | VARCHAR(100) | Reporting timeframe covered by the audit | Month, Quarter, or Year string | Q1 2026 (Jan-Mar) |
-| report_type | VARCHAR(50) | Frequency classification of the audit report | Monthly, Quarterly, Annual, Special | Quarterly |
-| total_income | NUMERIC | Aggregated verified income for the period (PHP) | Non-negative decimal | 42800.00 |
-| total_expenses | NUMERIC | Aggregated verified expenses for the period (PHP) | Non-negative decimal | 21350.00 |
-| net_surplus | NUMERIC | Calculated net surplus or deficit (income - expenses) | Decimal number | 21450.00 |
-| findings | TEXT | Audit observations and discrepancy notes | Any text | All 28 vouchers matched ledger totals |
-| recommendations | TEXT | Actionable fiscal control recommendations | Any text | Maintain 7-day liquidation rule |
-| prepared_by | TEXT | Auditor who prepared and submitted the report | Officer name | Ramon V. Cruz |
-| certified_by | TEXT | President who certified the submitted report | Officer name or NULL | Elena M. Villarin |
-| status | VARCHAR(50) | Certification status of the auditor report | Submitted, Certified, Returned | Certified |
-| date_submitted | VARCHAR(50) | Date the Auditor submitted the report | ISO date (YYYY-MM-DD) | 2026-04-02 |
-| date_certified | VARCHAR(50) | Date the President certified the report | ISO date or NULL | 2026-04-04 |
-
-*Note.* Summarizes audited records from financial_transactions for periodic executive certification.
-
-Table 13 presents the data dictionary for the Auditor Reports (auditor_reports) entity. It stores formal periodic financial audit statements prepared by the Auditor, including total income, total expenses, net surplus, audit findings, recommendations, and Presidential certification dates.
-
-**Table 14**  
 *Data Dictionary for Activities and Events (activities)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
@@ -330,9 +307,9 @@ Table 13 presents the data dictionary for the Auditor Reports (auditor_reports) 
 
 *Note.* Referenced by financial_transactions(activity_id) via enforced PostgreSQL foreign key.
 
-Table 14 presents the data dictionary for the Activities and Events (activities) entity. It powers both the bilingual (English/Cebuano) public calendar with tear-off date leaves and .ics calendar export, as well as internal post-activity documentation and activity-linked financial budgeting.
+Table 13 presents the data dictionary for the Activities and Events (activities) entity. It powers both the bilingual (English/Cebuano) public calendar with tear-off date leaves and .ics calendar export, as well as internal post-activity documentation and activity-linked financial budgeting.
 
-**Table 15**  
+**Table 14**  
 *Data Dictionary for Announcements (announcements)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
@@ -347,9 +324,9 @@ Table 14 presents the data dictionary for the Activities and Events (activities)
 
 *Note.* Published by authorized officers (President, Secretary, PIO) to the Guest and Member Portals.
 
-Table 15 presents the data dictionary for the Announcements (announcements) entity. It enables officers to broadcast official advisories, government assistance schedules, and assembly notices with priority indicators to both association members and the general public.
+Table 14 presents the data dictionary for the Announcements (announcements) entity. It enables officers to broadcast official advisories, government assistance schedules, and assembly notices with priority indicators to both association members and the general public.
 
-**Table 16**  
+**Table 15**  
 *Data Dictionary for Association Achievements (achievements)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
@@ -363,9 +340,9 @@ Table 15 presents the data dictionary for the Announcements (announcements) enti
 
 *Note.* Displayed on the public Guest Portal heritage and milestones showcase.
 
-Table 16 presents the data dictionary for the Association Achievements (achievements) entity. It stores bilingual historical milestones, accreditations, and awards of the Alegria Farmers Association for transparent public presentation on the Guest Portal.
+Table 15 presents the data dictionary for the Association Achievements (achievements) entity. It stores bilingual historical milestones, accreditations, and awards of the Alegria Farmers Association for transparent public presentation on the Guest Portal.
 
-**Table 17**  
+**Table 16**  
 *Data Dictionary for Farmers' Market Products (products)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
@@ -391,9 +368,9 @@ Table 16 presents the data dictionary for the Association Achievements (achievem
 
 *Note.* Referenced by inventory(catalog_product_id) via enforced PostgreSQL FK; image_url is mandatory during catalog creation.
 
-Table 17 presents the data dictionary for the Farmers' Market Products (products) entity. It powers the public digital storefront—allowing community buyers to browse bilingual product listings with mandatory compressed product photos, check real-time availability (including verified IGP egg harvests), and contact farmers directly via Call or SMS.
+Table 16 presents the data dictionary for the Farmers' Market Products (products) entity. It powers the public digital storefront—allowing community buyers to browse bilingual product listings with mandatory compressed product photos, check real-time availability (including verified IGP egg harvests), and contact farmers directly via Call or SMS.
 
-**Table 18**  
+**Table 17**  
 *Data Dictionary for Custodial Assets and Inventory (inventory)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
@@ -414,91 +391,88 @@ Table 17 presents the data dictionary for the Farmers' Market Products (products
 
 *Note.* Enforced PostgreSQL foreign key on catalog_product_id referencing products(id) ON DELETE SET NULL.
 
-Table 18 presents the data dictionary for the Custodial Assets and Inventory (inventory) entity. It tracks association-owned equipment, tools, and rental items—including both usable and damaged counts—and enforces a relational foreign key (catalog_product_id) when custodial assets such as monoblock chairs are published for rental in the Farmers' Market.
+Table 17 presents the data dictionary for the Custodial Assets and Inventory (inventory) entity. It tracks association-owned equipment, tools, and rental items—including both usable and damaged counts—and enforces a relational foreign key (catalog_product_id) when custodial assets such as monoblock chairs are published for rental in the Farmers' Market.
 
-**Table 19**  
+**Table 18**  
 *Data Dictionary for IGP Root Registry (afa_igp)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
 | :--- | :--- | :--- | :--- | :--- |
-| id | VARCHAR(100) | Primary key identifying the IGP configuration record | Non-empty unique string | default |
-| produces | TEXT[] | Master array of active IGP produce lines | Array of produce names | {Hog Raising, Poultry (Eggs)} |
-| expenses | JSONB | Legacy JSONB backup of IGP expenses | JSON array or NULL | [] |
-| sales | JSONB | Legacy JSONB backup of IGP sales | JSON array or NULL | [] |
-| chore_logs | JSONB | Logged livestock feeding and maintenance chores | JSON array of objects | [{"date":"2026-03-10","task":"Feeding"}] |
+| id | VARCHAR(100) | Primary key identifying the singleton IGP configuration record | Non-empty unique string | main_state |
+| produces | TEXT[] | Master array of active IGP produce lines | Array of produce names | {Swine Raising (Baboyan), RTL Chickens} |
 | closed_years | INT[] | Array of finalized IGP accounting years | Array of 4-digit integers | {2024, 2025} |
 
 *Note.* Serves as the parent registry enumerating active produce lines tracked in normalized IGP child tables.
 
-Table 19 presents the data dictionary for the IGP Root Registry (afa_igp) entity. It stores the association's master list of active Income-Generating Project (IGP) produce lines, farm chore logs, and closed IGP accounting years, coordinating the normalized livestock, harvest, expense, and sales tables.
+Table 18 presents the data dictionary for the IGP Root Registry (afa_igp) entity. Reformatted to remove redundant JSONB fields, it stores the association's master list of active Income-Generating Project (IGP) produce lines and closed IGP accounting years, coordinating the normalized livestock, harvest, expense, and sales tables.
 
-**Table 20**  
-*Data Dictionary for IGP Livestock Inventory (afa_igp_livestock)*
+**Table 19**  
+*Data Dictionary for IGP Livestock Inventory (afa_igp_livestocks)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
 | :--- | :--- | :--- | :--- | :--- |
-| produce | TEXT | Primary key naming the specific IGP livestock line | Unique produce string | Hog Raising |
-| opening_count | INTEGER | Baseline headcount of animals at period opening | Non-negative integer | 24 |
-| stage_breakdown | JSONB | Current headcount broken down by growth stage | JSON object {stage: count} | {"Piglet":8,"Grower":10,"Finisher":6} |
+| produce | TEXT | Composite primary key (1 of 2) naming the specific IGP livestock line | Non-empty produce string | Swine Raising (Baboyan) |
+| stage | TEXT | Composite primary key (2 of 2) identifying the livestock growth or production stage | Fattening, Gestation, Lactating, Dispersal, RTL, General | Fattening |
+| head_count | INTEGER | Current reconciled live headcount for the produce and stage | Non-negative integer (DEFAULT 0) | 12 |
 
-*Note.* Referenced logically by afa_igp_expenses, afa_igp_sales, and afa_igp_harvests via the produce key.
+*Note.* Composite PRIMARY KEY (produce, stage). Automatically reconciled from stock-purchase afa_igp_expenses minus non-egg afa_igp_sales; referenced logically by afa_igp_expenses, afa_igp_sales, and afa_igp_harvests.
 
-Table 20 presents the data dictionary for the IGP Livestock Inventory (afa_igp_livestock) entity. Using the produce name as its primary key, it monitors opening animal counts and dynamic growth-stage distributions (such as piglets, growers, finishers, or laying hens) across association livelihood projects.
+Table 19 presents the data dictionary for the IGP Livestock Inventory (afa_igp_livestocks) entity. Normalized with a composite primary key (produce, stage) and no JSONB or opening-count columns, it stores live headcounts per project and growth stage across all association livestock enterprises.
 
-**Table 21**  
+**Table 20**  
 *Data Dictionary for IGP Expenses (afa_igp_expenses)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
 | :--- | :--- | :--- | :--- | :--- |
 | id | VARCHAR(100) | Primary key uniquely identifying an IGP expense | Non-empty unique string | igp_exp_041 |
-| produce | TEXT | IGP produce line incurring the expense (indexed) | Valid produce name | Hog Raising |
+| produce | TEXT | IGP produce line incurring the expense (indexed) | Valid produce name | Swine Raising (Baboyan) |
 | date | VARCHAR(50) | Date the expense was incurred | ISO date (YYYY-MM-DD) | 2026-03-08 |
 | expense_data | JSONB | Extended structured receipt metadata | JSON object or NULL | {"supplier":"Tuburan Agri"} |
-| category | TEXT | Operational cost category | Feeds, Medicine, Utilities, Maintenance | Feeds |
-| quantity | NUMERIC | Quantity of input items purchased | Non-negative decimal | 5 |
-| description | TEXT | Itemized description of the purchased inputs | Any text | 5 sacks grower hog feeds |
+| category | TEXT | Operational cost or stock purchase category | Feeds, Piglets / Stock, RTL Pullets Stock, Animal Stock, Medicine | Feeds |
+| quantity | NUMERIC | Quantity of input items or livestock heads purchased | Non-negative decimal | 5 |
+| description | TEXT | Itemized description of the purchased inputs or stock | Any text | 5 sacks grower feeds |
 | amount | NUMERIC | Total expenditure amount in PHP | Non-negative decimal | 8250.00 |
 | recorded_by | TEXT | Officer who recorded the IGP expenditure | Officer name | Jose R. Mendoza |
 | fund_source | TEXT | Funding source in organization_funds | Valid fund name/id | IGP Revolving Fund |
-| stage | TEXT | Livestock growth stage tied to the cost | Piglet, Grower, Finisher, Layer | Grower |
+| stage | TEXT | Livestock growth stage tied to the cost | Fattening, Gestation, Lactating, Dispersal, RTL, General | Fattening |
 
-*Note.* Indexed on produce (afa_igp_expenses_produce_idx); logically linked to organization_funds via fund_source.
+*Note.* Indexed on produce (afa_igp_expenses_produce_idx); stock-purchase expenses reconcile afa_igp_livestocks(head_count) and link logically to organization_funds via fund_source.
 
-Table 21 presents the data dictionary for the IGP Expenses (afa_igp_expenses) entity. It itemizes livelihood operating costs—such as feeds, veterinary supplies, and maintenance—categorized by produce line, livestock growth stage, and organizational funding source to support accurate project profitability analysis.
+Table 20 presents the data dictionary for the IGP Expenses (afa_igp_expenses) entity. It itemizes livelihood operating costs and livestock stock purchases—categorized by produce line, growth stage, and organizational funding source—to support project profitability analysis and automatic livestock inventory reconciliation.
 
-**Table 22**  
+**Table 21**  
 *Data Dictionary for IGP Sales (afa_igp_sales)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
 | :--- | :--- | :--- | :--- | :--- |
 | id | VARCHAR(100) | Primary key uniquely identifying an IGP sale record | Non-empty unique string | igp_sal_019 |
-| produce | TEXT | IGP produce line generating the sale revenue | Valid produce name | Poultry (Eggs) |
+| produce | TEXT | IGP produce line generating the sale revenue | Valid produce name | RTL Chickens |
 | date | VARCHAR(50) | Date the sale transaction occurred | ISO date (YYYY-MM-DD) | 2026-03-09 |
-| stage | TEXT | Produce stage or product grade sold | Tray (Large), Finisher, Live Weight | Tray (Large) |
-| quantity | NUMERIC | Number of units or heads sold | Non-negative decimal | 12 |
+| stage | TEXT | Produce stage or product grade sold | Fattening, Dispersal, RTL, Eggs, General | Eggs |
+| quantity | NUMERIC | Number of units, eggs, or heads sold | Non-negative decimal | 120 |
 | revenue | NUMERIC | Gross sales proceeds received in PHP | Non-negative decimal | 2880.00 |
 | recorded_by | TEXT | Officer who encoded the IGP sale | Officer name | Jose R. Mendoza |
 | fund_source | TEXT | Destination fund account in organization_funds | Valid fund name/id | IGP Revolving Fund |
 | notes | TEXT | Buyer details or sale remarks | Any text or NULL | Sold to Barangay Alegria market |
 
-*Note.* Logically linked to afa_igp_livestock(produce) and organization_funds via fund_source.
+*Note.* Logically linked to afa_igp_livestocks(produce, stage) and organization_funds via fund_source.
 
-Table 22 presents the data dictionary for the IGP Sales (afa_igp_sales) entity. It records quantities sold and gross revenue generated from association livelihood projects, linking proceeds back to their respective produce lines and organizational fund ledgers.
+Table 21 presents the data dictionary for the IGP Sales (afa_igp_sales) entity. It records quantities sold and gross revenue generated from association livelihood projects, deducting non-egg livestock sales from afa_igp_livestocks and egg sales from verified harvest stock.
 
-**Table 23**  
-*Data Dictionary for IGP Egg Harvests (afa_igp_harvests)*
+**Table 22**  
+*Data Dictionary for IGP Livestock & Egg Harvests (afa_igp_harvests)*
 
 | Field Name | Data Type | Description | Allowed Values | Example Values |
 | :--- | :--- | :--- | :--- | :--- |
 | id | VARCHAR(100) | Primary key uniquely identifying a harvest log | Non-empty unique string | har_2026_055 |
-| produce | TEXT | IGP poultry produce line for the harvest | Valid produce name | Poultry (Eggs) |
-| date | VARCHAR(50) | Date the eggs were collected | ISO date (YYYY-MM-DD) | 2026-03-10 |
+| produce | TEXT | IGP produce line for the harvest | Valid produce name | RTL Chickens |
+| date | VARCHAR(50) | Date the harvest was collected | ISO date (YYYY-MM-DD) | 2026-03-10 |
 | time | VARCHAR(50) | Collection time of day | Time string (HH:MM AM/PM) | 06:30 AM |
-| collected_by | TEXT | Caregiver or officer who collected the harvest | Person name | Pedro A. Gomez |
-| egg_count | INTEGER | Total count of whole eggs harvested (<=100,000) | Integer (0 to 100,000) | 420 |
-| notes | TEXT | Observations on shell quality or flock health | Any text or NULL | Clean shells, zero breakage |
-| status | VARCHAR(50) | Three-stage harvest verification status | Pending Audit, Audited, Signed | Signed |
-| audited_by | TEXT | Auditor who physically verified the egg count | Officer name or NULL | Ramon V. Cruz |
+| collected_by | TEXT | Member or officer who collected the harvest | Person name | Pedro A. Gomez |
+| egg_count | INTEGER | Total count of harvested units/eggs (<=100,000) | Integer (0 to 100,000) | 420 |
+| notes | TEXT | Observations on harvest quality or flock health | Any text or NULL | Clean shells, zero breakage |
+| status | VARCHAR(50) | Three-stage harvest verification status | Pending Audit, Audited, Signed, Returned | Signed |
+| audited_by | TEXT | Auditor who physically verified the harvest count | Officer name or NULL | Ramon V. Cruz |
 | audited_date | VARCHAR(50) | Date the harvest count was audited | ISO date or NULL | 2026-03-10 |
 | audit_remarks | TEXT | Verification comments from the Auditor | Any text or NULL | Count matched 14 full trays |
 | signed_by | TEXT | President who signed off verified harvest stock | Officer name or NULL | Elena M. Villarin |
@@ -507,4 +481,4 @@ Table 22 presents the data dictionary for the IGP Sales (afa_igp_sales) entity. 
 
 *Note.* Signed harvests automatically update verified egg availability displayed in products(quantity_available).
 
-Table 23 presents the data dictionary for the IGP Egg Harvests (afa_igp_harvests) entity. It tracks daily poultry egg collections through a strict three-stage verification pipeline—Collection, Auditor Verification, and Presidential Sign-Off—ensuring that only verified egg stock is reflected on the public Farmers' Market catalog.
+Table 22 presents the data dictionary for the IGP Livestock & Egg Harvests (afa_igp_harvests) entity. It records livestock and poultry harvests through a strict three-stage verification pipeline—Collection, Auditor Verification, and Presidential Sign-Off—ensuring that only verified harvest stock is reflected on the public Farmers' Market catalog.

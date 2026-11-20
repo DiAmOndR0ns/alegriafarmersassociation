@@ -380,22 +380,6 @@ export interface DatabaseStatus {
   hasPresident?: boolean;
 }
 
-export interface AuditorReport {
-  id: string;
-  reportPeriod: string;
-  reportType: string;
-  totalIncome: number;
-  totalExpenses: number;
-  netSurplus: number;
-  findings: string;
-  recommendations: string;
-  preparedBy: string;
-  certifiedBy?: string;
-  status: 'Draft' | 'Submitted' | 'Certified' | 'Returned';
-  dateSubmitted: string;
-  dateCertified?: string;
-}
-
 export type DelegationScope = 'password_change' | 'record_approval' | 'announcements_activities';
 
 export interface DelegationRequest {

@@ -796,22 +796,8 @@ async function runSchemaMigrations(client) {
        END IF;
      END $$; `,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key; `,
-    // Formal Auditor Reports (Proposal Requirement)
-    `CREATE TABLE IF NOT EXISTS auditor_reports(
-    id VARCHAR(100) PRIMARY KEY,
-    report_period VARCHAR(100) NOT NULL,
-    report_type VARCHAR(50) NOT NULL,
-    total_income NUMERIC DEFAULT 0,
-    total_expenses NUMERIC DEFAULT 0,
-    net_surplus NUMERIC DEFAULT 0,
-    findings TEXT,
-    recommendations TEXT,
-    prepared_by TEXT NOT NULL,
-    certified_by TEXT,
-    status VARCHAR(50) DEFAULT 'Submitted',
-    date_submitted VARCHAR(50),
-    date_certified VARCHAR(50)
-  ); `,
+    // Drop legacy unused auditor_reports table (superseded by live AuditorReport + per-transaction auditing)
+    `DROP TABLE IF EXISTS auditor_reports;`,
     // Executive Delegation Requests (Proposal Requirement: President to VP delegation)
     `CREATE TABLE IF NOT EXISTS delegation_requests(
     id VARCHAR(100) PRIMARY KEY,
@@ -1204,23 +1190,7 @@ async function initDatabaseSchema(pool) {
       ALTER TABLE organization_funds
         DROP CONSTRAINT IF EXISTS organization_funds_code_key;
   `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS auditor_reports(
-    id VARCHAR(100) PRIMARY KEY,
-    report_period VARCHAR(100) NOT NULL,
-    report_type VARCHAR(50) NOT NULL,
-    total_income NUMERIC DEFAULT 0,
-    total_expenses NUMERIC DEFAULT 0,
-    net_surplus NUMERIC DEFAULT 0,
-    findings TEXT,
-    recommendations TEXT,
-    prepared_by TEXT NOT NULL,
-    certified_by TEXT,
-    status VARCHAR(50) DEFAULT 'Submitted',
-    date_submitted VARCHAR(50),
-    date_certified VARCHAR(50)
-  );
-  `);
+    await client.query(`DROP TABLE IF EXISTS auditor_reports;`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS delegation_requests(
     id VARCHAR(100) PRIMARY KEY,
@@ -1321,10 +1291,6 @@ var ENTITY_TABLE_MAP = {
   organizationfunds: "organization_funds",
   organization_fund: "organization_funds",
   organization_funds: "organization_funds",
-  auditorreport: "auditor_reports",
-  auditorreports: "auditor_reports",
-  auditor_report: "auditor_reports",
-  auditor_reports: "auditor_reports",
   delegationrequest: "delegation_requests",
   delegationrequests: "delegation_requests",
   delegation_request: "delegation_requests",
@@ -1575,7 +1541,6 @@ async function saveFullStateToPostgres(pool, state) {
     const deletedActivityIds = /* @__PURE__ */ new Set();
     const deletedAchievementIds = /* @__PURE__ */ new Set();
     const deletedFundIds = /* @__PURE__ */ new Set();
-    const deletedAuditorIds = /* @__PURE__ */ new Set();
     const deletedDelegationIds = /* @__PURE__ */ new Set();
     const deletedMembershipPaymentIds = /* @__PURE__ */ new Set();
     if (state.deletedIds && typeof state.deletedIds === "object") {
@@ -1636,11 +1601,6 @@ async function saveFullStateToPostgres(pool, state) {
         await client.query("DELETE FROM organization_funds WHERE id = ANY($1)", [funds]);
         console.log("[DB DELETE] Batch deleted funds:", funds);
       }
-      const auds = d.auditorReports || d.auditor_reports;
-      if (Array.isArray(auds) && auds.length > 0) {
-        auds.forEach((id) => deletedAuditorIds.add(id));
-        await client.query("DELETE FROM auditor_reports WHERE id = ANY($1)", [auds]);
-      }
       const dels = d.delegationRequests || d.delegation_requests;
       if (Array.isArray(dels) && dels.length > 0) {
         dels.forEach((id) => deletedDelegationIds.add(id));
@@ -1670,7 +1630,6 @@ async function saveFullStateToPostgres(pool, state) {
         if (tbl === "activities") deletedActivityIds.add(state.deleteItem.id);
         if (tbl === "achievements") deletedAchievementIds.add(state.deleteItem.id);
         if (tbl === "organization_funds") deletedFundIds.add(state.deleteItem.id);
-        if (tbl === "auditor_reports") deletedAuditorIds.add(state.deleteItem.id);
         if (tbl === "delegation_requests") deletedDelegationIds.add(state.deleteItem.id);
         if (tbl === "membership_payments") deletedMembershipPaymentIds.add(state.deleteItem.id);
         if (tbl === "members") await client.query("DELETE FROM membership_payments WHERE member_id = $1", [state.deleteItem.id]);
@@ -2230,43 +2189,6 @@ async function saveFullStateToPostgres(pool, state) {
       }
       console.log("[DB DEBUG] Organization funds saved");
     }
-    if (state.auditorReports && Array.isArray(state.auditorReports)) {
-      console.log("[DB DEBUG] Saving", state.auditorReports.length, "auditor reports...");
-      for (const ar of state.auditorReports) {
-        await client.query(`
-          INSERT INTO auditor_reports(id, report_period, report_type, total_income, total_expenses, net_surplus, findings, recommendations, prepared_by, certified_by, status, date_submitted, date_certified)
-  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT (id) DO UPDATE SET
-  report_period = EXCLUDED.report_period,
-    report_type = EXCLUDED.report_type,
-    total_income = EXCLUDED.total_income,
-    total_expenses = EXCLUDED.total_expenses,
-    net_surplus = EXCLUDED.net_surplus,
-    findings = EXCLUDED.findings,
-    recommendations = EXCLUDED.recommendations,
-    prepared_by = EXCLUDED.prepared_by,
-    certified_by = EXCLUDED.certified_by,
-    status = EXCLUDED.status,
-    date_submitted = EXCLUDED.date_submitted,
-    date_certified = EXCLUDED.date_certified;
-  `, [
-          ar.id,
-          cleanText(ar.reportPeriod, 100) || "Unscheduled",
-          cleanText(ar.reportType, 50) || "General",
-          cleanNumber(ar.totalIncome),
-          cleanNumber(ar.totalExpenses),
-          cleanNumber(ar.netSurplus),
-          cleanText(ar.findings, 2e4) || "",
-          cleanText(ar.recommendations, 2e4) || "",
-          cleanText(ar.preparedBy, 200) || "Auditor",
-          cleanText(ar.certifiedBy, 200),
-          cleanText(ar.status, 50) || "Submitted",
-          cleanDateString(ar.dateSubmitted, 50),
-          cleanDateString(ar.dateCertified, 50)
-        ]);
-      }
-      console.log("[DB DEBUG] Auditor reports saved");
-    }
     if (state.membershipPayments && Array.isArray(state.membershipPayments)) {
       const activePayments = state.membershipPayments.filter(
         (p) => p && typeof p.id === "string" && !deletedMembershipPaymentIds.has(p.id)
@@ -2472,20 +2394,6 @@ async function saveFullStateToPostgres(pool, state) {
         ["category", "category", (r) => r.category || null],
         ["source_origin", "source", (r) => r.source || null]
       ] },
-      { table: "auditor_reports", deletedIds: deletedAuditorIds, fields: [
-        ["report_period", "reportPeriod", (r) => r.reportPeriod],
-        ["report_type", "reportType", (r) => r.reportType],
-        ["total_income", "totalIncome", (r) => r.totalIncome || 0],
-        ["total_expenses", "totalExpenses", (r) => r.totalExpenses || 0],
-        ["net_surplus", "netSurplus", (r) => r.netSurplus || 0],
-        ["findings", "findings", (r) => r.findings || ""],
-        ["recommendations", "recommendations", (r) => r.recommendations || ""],
-        ["prepared_by", "preparedBy", (r) => r.preparedBy],
-        ["certified_by", "certifiedBy", (r) => r.certifiedBy || null],
-        ["status", "status", (r) => r.status || "Submitted"],
-        ["date_submitted", "dateSubmitted", (r) => r.dateSubmitted],
-        ["date_certified", "dateCertified", (r) => r.dateCertified || null]
-      ] },
       { table: "delegation_requests", deletedIds: deletedDelegationIds, fields: [
         ["requested_by", "requestedBy", (r) => r.requestedBy],
         ["reason", "reason", (r) => r.reason],
@@ -2503,7 +2411,6 @@ async function saveFullStateToPostgres(pool, state) {
       const stateKeyByTable = {
         system_logs: ["systemLogs", "logs"],
         organization_funds: ["organizationFunds", "funds"],
-        auditor_reports: ["auditorReports"],
         delegation_requests: ["delegationRequests"]
       };
       const stateKeys = stateKeyByTable[mapping.table] || [mapping.table];

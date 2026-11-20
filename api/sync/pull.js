@@ -644,22 +644,8 @@ async function runSchemaMigrations(client) {
        END IF;
      END $$; `,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key; `,
-    // Formal Auditor Reports (Proposal Requirement)
-    `CREATE TABLE IF NOT EXISTS auditor_reports(
-    id VARCHAR(100) PRIMARY KEY,
-    report_period VARCHAR(100) NOT NULL,
-    report_type VARCHAR(50) NOT NULL,
-    total_income NUMERIC DEFAULT 0,
-    total_expenses NUMERIC DEFAULT 0,
-    net_surplus NUMERIC DEFAULT 0,
-    findings TEXT,
-    recommendations TEXT,
-    prepared_by TEXT NOT NULL,
-    certified_by TEXT,
-    status VARCHAR(50) DEFAULT 'Submitted',
-    date_submitted VARCHAR(50),
-    date_certified VARCHAR(50)
-  ); `,
+    // Drop legacy unused auditor_reports table (superseded by live AuditorReport + per-transaction auditing)
+    `DROP TABLE IF EXISTS auditor_reports;`,
     // Executive Delegation Requests (Proposal Requirement: President to VP delegation)
     `CREATE TABLE IF NOT EXISTS delegation_requests(
     id VARCHAR(100) PRIMARY KEY,
@@ -1052,23 +1038,7 @@ async function initDatabaseSchema(pool) {
       ALTER TABLE organization_funds
         DROP CONSTRAINT IF EXISTS organization_funds_code_key;
   `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS auditor_reports(
-    id VARCHAR(100) PRIMARY KEY,
-    report_period VARCHAR(100) NOT NULL,
-    report_type VARCHAR(50) NOT NULL,
-    total_income NUMERIC DEFAULT 0,
-    total_expenses NUMERIC DEFAULT 0,
-    net_surplus NUMERIC DEFAULT 0,
-    findings TEXT,
-    recommendations TEXT,
-    prepared_by TEXT NOT NULL,
-    certified_by TEXT,
-    status VARCHAR(50) DEFAULT 'Submitted',
-    date_submitted VARCHAR(50),
-    date_certified VARCHAR(50)
-  );
-  `);
+    await client.query(`DROP TABLE IF EXISTS auditor_reports;`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS delegation_requests(
     id VARCHAR(100) PRIMARY KEY,
@@ -1230,27 +1200,7 @@ async function fetchAllDataFromPostgres(pool) {
     const activitiesRes = await client.query("SELECT * FROM activities ORDER BY scheduled_date DESC");
     const achievementsRes = await client.query("SELECT * FROM achievements ORDER BY year DESC, title ASC");
     const fundsRes = await client.query("SELECT * FROM organization_funds ORDER BY name ASC");
-    let auditorReports = [];
     let delegationRequests = [];
-    try {
-      const audRes = await client.query("SELECT * FROM auditor_reports ORDER BY date_submitted DESC");
-      auditorReports = audRes.rows.map((r) => ({
-        id: r.id,
-        reportPeriod: r.report_period,
-        reportType: r.report_type,
-        totalIncome: Number(r.total_income || 0),
-        totalExpenses: Number(r.total_expenses || 0),
-        netSurplus: Number(r.net_surplus || 0),
-        findings: r.findings,
-        recommendations: r.recommendations,
-        preparedBy: r.prepared_by,
-        certifiedBy: r.certified_by,
-        status: r.status,
-        dateSubmitted: r.date_submitted,
-        dateCertified: r.date_certified
-      }));
-    } catch {
-    }
     try {
       const delRes = await client.query("SELECT * FROM delegation_requests ORDER BY requested_date DESC");
       delegationRequests = delRes.rows.map((r) => ({
@@ -1580,7 +1530,6 @@ async function fetchAllDataFromPostgres(pool) {
       achievements,
       funds,
       organizationFunds: funds,
-      auditorReports,
       delegationRequests,
       membershipPayments,
       membershipYearSnapshots

@@ -810,22 +810,8 @@ async function runSchemaMigrations(client) {
        END IF;
      END $$; `,
     `ALTER TABLE organization_funds DROP CONSTRAINT IF EXISTS organization_funds_code_key; `,
-    // Formal Auditor Reports (Proposal Requirement)
-    `CREATE TABLE IF NOT EXISTS auditor_reports(
-    id VARCHAR(100) PRIMARY KEY,
-    report_period VARCHAR(100) NOT NULL,
-    report_type VARCHAR(50) NOT NULL,
-    total_income NUMERIC DEFAULT 0,
-    total_expenses NUMERIC DEFAULT 0,
-    net_surplus NUMERIC DEFAULT 0,
-    findings TEXT,
-    recommendations TEXT,
-    prepared_by TEXT NOT NULL,
-    certified_by TEXT,
-    status VARCHAR(50) DEFAULT 'Submitted',
-    date_submitted VARCHAR(50),
-    date_certified VARCHAR(50)
-  ); `,
+    // Drop legacy unused auditor_reports table (superseded by live AuditorReport + per-transaction auditing)
+    `DROP TABLE IF EXISTS auditor_reports;`,
     // Executive Delegation Requests (Proposal Requirement: President to VP delegation)
     `CREATE TABLE IF NOT EXISTS delegation_requests(
     id VARCHAR(100) PRIMARY KEY,
@@ -1218,23 +1204,7 @@ async function initDatabaseSchema(pool) {
       ALTER TABLE organization_funds
         DROP CONSTRAINT IF EXISTS organization_funds_code_key;
   `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS auditor_reports(
-    id VARCHAR(100) PRIMARY KEY,
-    report_period VARCHAR(100) NOT NULL,
-    report_type VARCHAR(50) NOT NULL,
-    total_income NUMERIC DEFAULT 0,
-    total_expenses NUMERIC DEFAULT 0,
-    net_surplus NUMERIC DEFAULT 0,
-    findings TEXT,
-    recommendations TEXT,
-    prepared_by TEXT NOT NULL,
-    certified_by TEXT,
-    status VARCHAR(50) DEFAULT 'Submitted',
-    date_submitted VARCHAR(50),
-    date_certified VARCHAR(50)
-  );
-  `);
+    await client.query(`DROP TABLE IF EXISTS auditor_reports;`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS delegation_requests(
     id VARCHAR(100) PRIMARY KEY,

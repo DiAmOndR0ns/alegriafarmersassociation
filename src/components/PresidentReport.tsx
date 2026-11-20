@@ -14,7 +14,6 @@ import type {
   InventoryItem,
   Product,
   LivestockIgpState,
-  AuditorReport,
   DelegationRequest,
   DelegationScope,
   MembershipPayment,
@@ -53,8 +52,6 @@ export interface ExecutiveSummaryMetrics {
   auditComplianceRate: string;
   auditedTransactionsCount: number;
   presidentSignedTransactionsCount: number;
-  certifiedAuditorReportsCount: number;
-  totalAuditorReportsCount: number;
   activeIgpProjectsCount: number;
   signedEggHarvestBatches: number;
   verifiedEggsTotal: number;
@@ -244,10 +241,6 @@ function ExecutiveOverview({ d }: { d: ReportData }) {
           <tr>
             <td className="col-key">Financial Audit &amp; Executive Sign-Off</td>
             <td>{s.auditComplianceRate}% Audited ({s.presidentSignedTransactionsCount} of {s.auditedTransactionsCount} audited records signed off by President)</td>
-          </tr>
-          <tr>
-            <td className="col-key">Auditor Reports Certified</td>
-            <td>{s.certifiedAuditorReportsCount} Certified out of {s.totalAuditorReportsCount} Submitted</td>
           </tr>
         </tbody>
       </table>
@@ -501,7 +494,6 @@ export function buildPresidentReportPrintHtml(d: ReportData): string {
         <tr><td class="col-key">Legislative Resolutions</td><td>${s.approvedResolutionsCount} Approved out of ${s.totalResolutionsCount} Recorded</td></tr>
         <tr><td class="col-key">Public Advisories Broadcasted</td><td>${s.announcementsPublished} Announcement(s) (${s.highPriorityAnnouncements} High Priority)</td></tr>
         <tr><td class="col-key">Financial Audit &amp; Executive Sign-Off</td><td>${escapeHtml(s.auditComplianceRate)}% Audited (${s.presidentSignedTransactionsCount} of ${s.auditedTransactionsCount} audited records signed off by President)</td></tr>
-        <tr><td class="col-key">Auditor Reports Certified</td><td>${s.certifiedAuditorReportsCount} Certified out of ${s.totalAuditorReportsCount} Submitted</td></tr>
       </tbody>
     </table>
 
@@ -664,7 +656,6 @@ export interface BuildPresidentReportInput {
   inventory?: InventoryItem[];
   products?: Product[];
   livestockIgp?: LivestockIgpState;
-  auditorReports?: AuditorReport[];
   delegationRequests?: DelegationRequest[];
   membershipPayments?: MembershipPayment[];
   highlights?: string[];
@@ -690,7 +681,6 @@ export function buildReportData(input: BuildPresidentReportInput): ReportData {
     inventory = [],
     products = [],
     livestockIgp,
-    auditorReports = [],
     delegationRequests = [],
     membershipPayments = [],
     highlights = [],
@@ -771,7 +761,6 @@ export function buildReportData(input: BuildPresidentReportInput): ReportData {
     ? ((auditedTxs.length / transactions.length) * 100).toFixed(1)
     : "100.0";
   const presidentSignedTransactionsCount = auditedTxs.filter((t) => t.presidentApprovalStatus === "Approved").length;
-  const certifiedAuditorReportsCount = auditorReports.filter((r) => r.status === "Certified").length;
 
   // IGP, Market & Custodial Assets metrics
   const activeIgpProjectsCount = livestockIgp?.produces?.length ?? (livestockIgp?.livestockInventory?.length ?? 0);
@@ -840,8 +829,6 @@ export function buildReportData(input: BuildPresidentReportInput): ReportData {
       auditComplianceRate,
       auditedTransactionsCount: auditedTxs.length,
       presidentSignedTransactionsCount,
-      certifiedAuditorReportsCount,
-      totalAuditorReportsCount: auditorReports.length,
       activeIgpProjectsCount,
       signedEggHarvestBatches: signedHarvests.length,
       verifiedEggsTotal,

@@ -28,7 +28,6 @@ export interface PushSyncState {
   achievements?: unknown[];
   funds?: unknown[];
   organizationFunds?: unknown[];
-  auditorReports?: unknown[];
   delegationRequests?: unknown[];
   membershipPayments?: unknown[];
   membershipYearSnapshots?: unknown[];

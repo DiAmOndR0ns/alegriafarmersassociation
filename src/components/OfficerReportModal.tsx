@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Member, Meeting, Resolution, FinancialTransaction, SystemLog, Announcement,
   AssociationActivity, AssociationAchievement, InventoryItem, LivestockIgpState,
-  OfficerRole, OrganizationFund, User, Product, AuditorReport, DelegationRequest,
+  OfficerRole, OrganizationFund, User, Product, DelegationRequest,
   MembershipPayment
 } from '../types';
 import { INITIAL_FUNDS } from '../initialData';
@@ -42,7 +42,6 @@ interface OfficerReportModalProps {
   logs: SystemLog[];
   funds?: OrganizationFund[];
   livestockIgp?: LivestockIgpState;
-  auditorReports?: AuditorReport[];
   delegationRequests?: DelegationRequest[];
   membershipPayments?: MembershipPayment[];
   onClose: () => void;
@@ -63,7 +62,6 @@ export default function OfficerReportModal({
   products = [],
   funds = INITIAL_FUNDS,
   livestockIgp,
-  auditorReports = [],
   delegationRequests = [],
   membershipPayments = [],
   onClose,
@@ -115,7 +113,6 @@ export default function OfficerReportModal({
       inventory,
       products,
       livestockIgp,
-      auditorReports,
       delegationRequests,
       membershipPayments,
       highlights: parsedHighlights,
@@ -126,7 +123,7 @@ export default function OfficerReportModal({
   }, [
     presidentReportYear, reportDate, users, members, meetings, resolutions, transactions,
     announcements, activities, achievements, inventory, products, livestockIgp,
-    auditorReports, delegationRequests, membershipPayments, customHighlightsText,
+    delegationRequests, membershipPayments, customHighlightsText,
     customPlansText, presidentClosingLine, customRemarks
   ]);
 
@@ -1002,7 +999,6 @@ export default function OfficerReportModal({
       csvRows.push(`Public Advisories Broadcasted,${csvCell(`${s.announcementsPublished} (${s.highPriorityAnnouncements} High Priority)`)}`);
       csvRows.push(`Financial Audit Compliance Rate (%),${s.auditComplianceRate}`);
       csvRows.push(`Audited Transactions Signed Off by President,${csvCell(`${s.presidentSignedTransactionsCount} of ${s.auditedTransactionsCount}`)}`);
-      csvRows.push(`Auditor Reports Certified,${csvCell(`${s.certifiedAuditorReportsCount} of ${s.totalAuditorReportsCount}`)}`);
       csvRows.push(`Active IGP Projects,${s.activeIgpProjectsCount}`);
       csvRows.push(`Signed Egg Harvest Batches,${csvCell(`${s.signedEggHarvestBatches} Batches (${s.verifiedEggsTotal} verified eggs)`)}`);
       csvRows.push(`Published Farmers Market Listings,${s.publishedMarketProducts}`);
