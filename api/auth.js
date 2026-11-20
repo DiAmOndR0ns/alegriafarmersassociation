@@ -320,6 +320,86 @@ async function runSchemaMigrations(client) {
       PRIMARY KEY (produce, stage)
     );`,
     `DO $$
+      DECLARE
+        has_stage BOOLEAN;
+        has_head_count BOOLEAN;
+        has_stage_breakdown BOOLEAN;
+        has_opening_count BOOLEAN;
+        has_initial_count BOOLEAN;
+      BEGIN
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_livestocks' AND column_name = 'stage'
+        ) INTO has_stage;
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'afa_igp_livestocks' AND column_name = 'head_count'
+        ) INTO has_head_count;
+
+        IF NOT has_stage OR NOT has_head_count THEN
+          SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'afa_igp_livestocks' AND column_name = 'stage_breakdown'
+          ) INTO has_stage_breakdown;
+          SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'afa_igp_livestocks' AND column_name = 'opening_count'
+          ) INTO has_opening_count;
+          SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'afa_igp_livestocks' AND column_name = 'initial_count'
+          ) INTO has_initial_count;
+
+          CREATE TABLE IF NOT EXISTS afa_igp_livestocks_migrated (
+            produce TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            head_count INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (produce, stage)
+          );
+
+          IF has_stage_breakdown THEN
+            EXECUTE $m$
+              INSERT INTO afa_igp_livestocks_migrated (produce, stage, head_count)
+              SELECT l.produce, kv.key,
+                CASE WHEN COALESCE(kv.value, '') ~ '^[0-9]+$' THEN kv.value::integer ELSE 0 END
+              FROM afa_igp_livestocks AS l
+              CROSS JOIN LATERAL jsonb_each_text(
+                CASE WHEN jsonb_typeof(l.stage_breakdown) = 'object' THEN l.stage_breakdown ELSE '{}'::jsonb END
+              ) AS kv(key, value)
+              WHERE NULLIF(trim(l.produce), '') IS NOT NULL AND NULLIF(trim(kv.key), '') IS NOT NULL
+              ON CONFLICT (produce, stage) DO NOTHING;
+            $m$;
+          END IF;
+
+          IF has_opening_count THEN
+            EXECUTE $m$
+              INSERT INTO afa_igp_livestocks_migrated (produce, stage, head_count)
+              SELECT l.produce, 'General',
+                CASE WHEN COALESCE(l.opening_count::text, '') ~ '^[0-9]+$' THEN l.opening_count ELSE 0 END
+              FROM afa_igp_livestocks AS l
+              WHERE NULLIF(trim(l.produce), '') IS NOT NULL
+                AND COALESCE(l.opening_count, 0) > 0
+                AND NOT EXISTS (SELECT 1 FROM afa_igp_livestocks_migrated m WHERE m.produce = l.produce)
+              ON CONFLICT (produce, stage) DO NOTHING;
+            $m$;
+          ELSIF has_initial_count THEN
+            EXECUTE $m$
+              INSERT INTO afa_igp_livestocks_migrated (produce, stage, head_count)
+              SELECT l.produce, 'General',
+                CASE WHEN COALESCE(l.initial_count::text, '') ~ '^[0-9]+$' THEN l.initial_count ELSE 0 END
+              FROM afa_igp_livestocks AS l
+              WHERE NULLIF(trim(l.produce), '') IS NOT NULL
+                AND COALESCE(l.initial_count, 0) > 0
+                AND NOT EXISTS (SELECT 1 FROM afa_igp_livestocks_migrated m WHERE m.produce = l.produce)
+              ON CONFLICT (produce, stage) DO NOTHING;
+            $m$;
+          END IF;
+
+          DROP TABLE afa_igp_livestocks;
+          ALTER TABLE afa_igp_livestocks_migrated RENAME TO afa_igp_livestocks;
+        END IF;
+      END $$;`,
+    `DO $$
       BEGIN
         IF EXISTS (
           SELECT 1 FROM information_schema.columns
