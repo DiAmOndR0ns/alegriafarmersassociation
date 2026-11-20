@@ -635,6 +635,9 @@ it('derives and uploads afa_igp_livestocks rows from stock-purchase expenses eve
     ['Swine Raising (Baboyan)', 'Fattening', 10],
     ['RTL Chickens', 'RTL', 40]
   ]);
+  const livestockDelete = queries.find(query => query.sql.includes('DELETE FROM afa_igp_livestocks'));
+  expect(livestockDelete?.sql).not.toContain('\\x00');
+  expect(JSON.stringify(livestockDelete?.values || [])).not.toContain('\\u0000');
 });
 });
 

@@ -2050,7 +2050,8 @@ async function saveIgpLivestock(
   client: pg.PoolClient,
   livestock: IgpLivestockInventory[]
 ) {
-  const activePairs: string[] = [];
+  const activeProduces: string[] = [];
+  const activeStages: string[] = [];
   for (const inventory of livestock) {
     const produce = cleanText(inventory?.produce, 200);
     if (!produce) throw new Error('Cannot sync IGP livestock inventory without a produce name');
@@ -2059,7 +2060,8 @@ async function saveIgpLivestock(
       const cleanStage = cleanText(stage, 100);
       if (!cleanStage) throw new Error(`Cannot sync IGP inventory for ${produce} with a blank stage`);
       const headCount = Math.max(0, Math.floor(cleanNumber(count)));
-      activePairs.push(`${produce}\u0000${cleanStage}`);
+      activeProduces.push(produce);
+      activeStages.push(cleanStage);
       await client.query(`
         INSERT INTO afa_igp_livestocks (produce, stage, head_count)
         VALUES ($1, $2, $3)
@@ -2073,12 +2075,17 @@ async function saveIgpLivestock(
     }
   }
 
-  if (activePairs.length === 0) {
+  if (activeProduces.length === 0) {
     await client.query('DELETE FROM afa_igp_livestocks');
   } else {
     await client.query(
-      "DELETE FROM afa_igp_livestocks WHERE NOT ((produce || E'\\x00' || stage) = ANY($1::text[]))",
-      [activePairs]
+      `DELETE FROM afa_igp_livestocks AS t
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM unnest($1::varchar[], $2::varchar[]) AS active(produce, stage)
+         WHERE active.produce = t.produce AND active.stage = t.stage
+       )`,
+      [activeProduces, activeStages]
     );
   }
 }
