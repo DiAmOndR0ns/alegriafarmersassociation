@@ -4,6 +4,58 @@ import { randomUUID } from "node:crypto";
 // src/api/db.ts
 import pg from "pg";
 
+// src/utils/igpInventory.ts
+var STOCK_CATEGORIES = ["Piglets / Stock", "Calves / Cattle Stock", "RTL Pullets Stock"];
+var isIgpStockPurchaseCategory = (category) => STOCK_CATEGORIES.includes(category) || /\b(?:stock|animal purchase|livestock purchase)\b/i.test(category);
+var integerCount = (value) => Math.max(0, Math.floor(Number(value) || 0));
+function projectOf(record, defaultProduce) {
+  return record.produce || defaultProduce || "";
+}
+function deriveIgpLivestockInventory(expenses = [], sales = [], defaultProduce) {
+  const counts = /* @__PURE__ */ new Map();
+  const ensureStage = (produce, stage) => {
+    let stageMap = counts.get(produce);
+    if (!stageMap) {
+      stageMap = /* @__PURE__ */ new Map();
+      counts.set(produce, stageMap);
+    }
+    if (!stageMap.has(stage)) {
+      stageMap.set(stage, 0);
+    }
+    return stageMap;
+  };
+  for (const expense of expenses) {
+    if (!expense?.quantity || !isIgpStockPurchaseCategory(expense.category || "")) continue;
+    const produce = projectOf(expense, defaultProduce).trim();
+    if (!produce) continue;
+    const stage = String(expense.stage || "General").trim() || "General";
+    const qty = integerCount(expense.quantity);
+    if (qty <= 0) continue;
+    const stageMap = ensureStage(produce, stage);
+    stageMap.set(stage, (stageMap.get(stage) || 0) + qty);
+  }
+  for (const sale of sales) {
+    const qty = integerCount(sale?.quantity);
+    if (qty <= 0) continue;
+    const stage = String(sale?.stage || "General").trim() || "General";
+    if (stage.toLowerCase() === "eggs") continue;
+    const produce = projectOf(sale, defaultProduce).trim();
+    if (!produce) continue;
+    const stageMap = counts.get(produce);
+    if (!stageMap) continue;
+    const matchedStage = Array.from(stageMap.keys()).find(
+      (key) => key.toLowerCase() === stage.toLowerCase()
+    );
+    if (matchedStage) {
+      stageMap.set(matchedStage, Math.max(0, (stageMap.get(matchedStage) || 0) - qty));
+    }
+  }
+  return Array.from(counts.entries()).map(([produce, stageMap]) => ({
+    produce,
+    stageBreakdown: Object.fromEntries(stageMap.entries())
+  }));
+}
+
 // src/utils/fundBalance.ts
 function getInitialFund(fund) {
   const initial = Number(fund.initialFund);
@@ -1886,7 +1938,23 @@ async function saveFullStateToPostgres(pool, state) {
           stageBreakdown: { RTL: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.rtlCount))) }
         }
       ] : void 0;
-      const livestockInventory = Array.isArray(state.livestockIgp.livestockInventory) ? state.livestockIgp.livestockInventory : legacyInventory;
+      const explicitInventory = Array.isArray(state.livestockIgp.livestockInventory) ? state.livestockIgp.livestockInventory : legacyInventory;
+      const derivedInventory = Array.isArray(state.livestockIgp.expenses) ? deriveIgpLivestockInventory(
+        state.livestockIgp.expenses,
+        Array.isArray(state.livestockIgp.sales) ? state.livestockIgp.sales : [],
+        state.livestockIgp.produces?.[0]
+      ) : [];
+      const livestockInventory = (() => {
+        if (!explicitInventory && derivedInventory.length === 0) return void 0;
+        const byProduce = /* @__PURE__ */ new Map();
+        for (const item of explicitInventory || []) {
+          if (item?.produce) byProduce.set(item.produce, item);
+        }
+        for (const item of derivedInventory) {
+          if (item?.produce) byProduce.set(item.produce, item);
+        }
+        return Array.from(byProduce.values());
+      })();
       const eggHarvests = Array.isArray(state.livestockIgp.eggHarvests) ? state.livestockIgp.eggHarvests : Array.isArray(state.livestockIgp.choreLogs) ? state.livestockIgp.choreLogs : void 0;
       await client.query(`
         INSERT INTO afa_igp (id, produces, closed_years)
