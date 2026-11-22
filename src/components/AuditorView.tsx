@@ -1,33 +1,40 @@
 import React, { useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, AlertTriangle, CheckCircle, FileText, Filter, ShieldCheck, Wallet, Package, Plus, Trash2, Pencil, Boxes, Minus, Search, Wrench, ShoppingBag } from 'lucide-react';
-import { FinancialTransaction, LivestockIgpState, InventoryItem, Product } from '../types';
+import { ArrowDownRight, ArrowUpRight, AlertTriangle, CheckCircle, FileText, Filter, ShieldCheck, Wallet, Package, Pencil, Boxes, Search, Wrench, ShoppingBag, PackageMinus, XCircle } from 'lucide-react';
+import { FinancialTransaction, LivestockIgpState, InventoryItem, InventoryAssetType, Product, AssociationActivity, Meeting } from '../types';
 import { getAvailableEggCount } from '../utils/eggInventory';
-import { getAvailableInventoryQuantity, getInventoryConditionForCounts, getInventoryDamagedQuantity, getRentalStockStatus } from '../utils/inventory';
+import {
+  getAvailableInventoryQuantity,
+  getInventoryAssetType,
+  getInventoryConditionForCounts,
+  getInventoryDamagedQuantity,
+  getInventoryLostQuantity,
+  getInventoryUsedQuantity,
+} from '../utils/inventory';
 
 interface AuditorViewProps {
   transactions: FinancialTransaction[];
+  activities?: AssociationActivity[];
+  meetings?: Meeting[];
   livestockIgp: LivestockIgpState;
   onAuditTransaction: (id: string, status: 'Audited' | 'Flagged', notes: string) => void;
   onOpenReportModal?: () => void;
   inventory?: InventoryItem[];
   products?: Product[];
-  onAddInventory?: (item: Omit<InventoryItem, 'id' | 'dateRecorded' | 'lastUpdated'>) => void;
   onUpdateInventory?: (item: InventoryItem) => void;
-  onDeleteInventory?: (id: string) => void;
   onPublishRentalProduct?: (item: InventoryItem, listing: { price: number; unit: string; description: string }) => void;
   auditorName?: string;
 }
 
 export default function AuditorView({
   transactions,
+  activities = [],
+  meetings = [],
   livestockIgp,
   onAuditTransaction,
   onOpenReportModal,
   inventory = [],
   products = [],
-  onAddInventory,
   onUpdateInventory,
-  onDeleteInventory,
   onPublishRentalProduct,
   auditorName = 'AFA Auditor'
 }: AuditorViewProps) {
@@ -37,16 +44,14 @@ export default function AuditorView({
   const [auditStatus, setAuditStatus] = useState<'Audited' | 'Flagged'>('Audited');
   const [auditNotes, setAuditNotes] = useState('');
 
-  // Inventory registry state (custodial duty of the Auditor — no Property Custodian exists)
+  // Inventory inspection state (Auditor inspects Treasurer-purchased assets; no manual add/delete)
   const [inventoryTab, setInventoryTab] = useState<'audit' | 'inventory' | 'eggs'>('audit');
+  const [assetTypeTab, setAssetTypeTab] = useState<InventoryAssetType>('rental');
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
-  const [invName, setInvName] = useState('');
-  const [invCategory, setInvCategory] = useState<InventoryItem['category']>('IGP Equipment');
-  const [invQuantity, setInvQuantity] = useState(1);
-  const [invUnit, setInvUnit] = useState('pieces');
-  const [invCondition, setInvCondition] = useState<InventoryItem['condition']>('Good');
   const [invDamagedQuantity, setInvDamagedQuantity] = useState(0);
+  const [invLostQuantity, setInvLostQuantity] = useState(0);
+  const [invUsedQuantity, setInvUsedQuantity] = useState(0);
   const [invLocation, setInvLocation] = useState('');
   const [invNotes, setInvNotes] = useState('');
   const [inventoryError, setInventoryError] = useState('');
@@ -74,28 +79,23 @@ export default function AuditorView({
     setAuditNotes('');
   };
 
-  const openAddInventory = () => {
-    setEditingInventoryItem(null);
-    setInvName('');
-    setInvCategory('IGP Equipment');
-    setInvQuantity(1);
-    setInvDamagedQuantity(0);
-    setInvUnit('pieces');
-    setInvCondition('Good');
-    setInvLocation('');
-    setInvNotes('');
-    setInventoryError('');
-    setShowInventoryModal(true);
+  const resolveAcquisitionLink = (activityId?: string, meetingId?: string): string | null => {
+    if (activityId) {
+      const act = activities.find(a => a.id === activityId);
+      return act ? `Event: ${act.title} (${act.scheduledDate})` : `Event ID: ${activityId}`;
+    }
+    if (meetingId) {
+      const mt = meetings.find(m => m.id === meetingId);
+      return mt ? `Meeting: ${mt.title} (${mt.date})` : `Meeting ID: ${meetingId}`;
+    }
+    return null;
   };
 
   const openEditInventory = (item: InventoryItem) => {
     setEditingInventoryItem(item);
-    setInvName(item.name);
-    setInvCategory(item.category);
-    setInvQuantity(item.quantity);
     setInvDamagedQuantity(getInventoryDamagedQuantity(item));
-    setInvUnit(item.unit);
-    setInvCondition(item.condition as InventoryItem['condition']);
+    setInvLostQuantity(getInventoryLostQuantity(item));
+    setInvUsedQuantity(getInventoryUsedQuantity(item));
     setInvLocation(item.location || '');
     setInvNotes(item.notes || '');
     setInventoryError('');
@@ -104,48 +104,40 @@ export default function AuditorView({
 
   const handleSaveInventory = (e: React.FormEvent) => {
     e.preventDefault();
-    const quantity = Number(invQuantity);
+    if (!editingInventoryItem) return;
+    const quantity = Math.max(0, Math.floor(Number(editingInventoryItem.quantity) || 0));
     const damagedQuantity = Number(invDamagedQuantity);
-    if (!invName.trim()) return;
-    if (!Number.isInteger(quantity) || quantity < 0
-      || !Number.isInteger(damagedQuantity) || damagedQuantity < 0
-      || damagedQuantity > quantity) {
-      setInventoryError('Enter whole-number counts. Damaged quantity cannot exceed the total quantity.');
+    const lostQuantity = Number(invLostQuantity);
+    const isRentalAsset = getInventoryAssetType(editingInventoryItem) === 'rental';
+    const usedQuantity = isRentalAsset ? 0 : Number(invUsedQuantity);
+    if (
+      !Number.isInteger(damagedQuantity) || damagedQuantity < 0
+      || !Number.isInteger(lostQuantity) || lostQuantity < 0
+      || !Number.isInteger(usedQuantity) || usedQuantity < 0
+      || damagedQuantity + lostQuantity + usedQuantity > quantity
+    ) {
+      setInventoryError('Enter whole-number counts. Damaged + Lost + Used/Consumed cannot exceed the purchased quantity.');
       return;
     }
-    const condition = invCondition === 'Lost'
-      ? 'Lost'
-      : getInventoryConditionForCounts(quantity, damagedQuantity);
-    if (editingInventoryItem) {
-      onUpdateInventory?.({
-        ...editingInventoryItem,
-        name: invName.trim(),
-        category: invCategory,
-        quantity,
-        damagedQuantity,
-        unit: invUnit.trim() || 'pieces',
-        condition,
-        location: invLocation.trim() || undefined,
-        notes: invNotes.trim() || undefined,
-        lastUpdated: new Date().toISOString().split('T')[0]
-      });
-    } else {
-      onAddInventory?.({
-        name: invName.trim(),
-        category: invCategory,
-        quantity,
-        damagedQuantity,
-        unit: invUnit.trim() || 'pieces',
-        condition,
-        location: invLocation.trim() || undefined,
-        notes: invNotes.trim() || undefined,
-        recordedBy: auditorName
-      });
-    }
+    const condition = getInventoryConditionForCounts(quantity, damagedQuantity, lostQuantity);
+    onUpdateInventory?.({
+      ...editingInventoryItem,
+      damagedQuantity,
+      lostQuantity,
+      usedQuantity,
+      condition,
+      location: invLocation.trim() || undefined,
+      notes: invNotes.trim() || undefined,
+      lastUpdated: new Date().toISOString().split('T')[0]
+    });
     setShowInventoryModal(false);
   };
 
-  const filteredInventory = inventory.filter(item => {
+  const rentalInventory = inventory.filter(item => getInventoryAssetType(item) === 'rental');
+  const usableInventory = inventory.filter(item => getInventoryAssetType(item) === 'usable');
+  const activeTypeInventory = assetTypeTab === 'rental' ? rentalInventory : usableInventory;
+
+  const filteredInventory = activeTypeInventory.filter(item => {
     const search = inventorySearch.trim().toLowerCase();
     const matchesSearch = !search || [item.name, item.category, item.location || '', item.notes || '']
       .some(value => value.toLowerCase().includes(search));
@@ -154,17 +146,28 @@ export default function AuditorView({
       || (inventoryConditionFilter === 'Available' ? getAvailableInventoryQuantity(item) > 0 : item.condition === inventoryConditionFilter);
     return matchesSearch && matchesCategory && matchesCondition;
   });
-  const inventoryUnits = inventory.reduce((sum, item) => sum + Math.max(0, Math.floor(Number(item.quantity) || 0)), 0);
-  const damagedUnits = inventory.reduce((sum, item) => sum + getInventoryDamagedQuantity(item), 0);
-  const availableUnits = inventory.reduce((sum, item) => sum + getAvailableInventoryQuantity(item), 0);
-  const inventoryCategories = [...new Set(inventory.map(item => item.category))].sort();
+  const inventoryUnits = activeTypeInventory.reduce((sum, item) => sum + Math.max(0, Math.floor(Number(item.quantity) || 0)), 0);
+  const damagedUnits = activeTypeInventory.reduce((sum, item) => sum + getInventoryDamagedQuantity(item), 0);
+  const lostUnits = activeTypeInventory.reduce((sum, item) => sum + getInventoryLostQuantity(item), 0);
+  const usedUnits = activeTypeInventory.reduce((sum, item) => sum + getInventoryUsedQuantity(item), 0);
+  const availableUnits = activeTypeInventory.reduce((sum, item) => sum + getAvailableInventoryQuantity(item), 0);
+  const inventoryCategories = [...new Set(activeTypeInventory.map(item => item.category))].sort();
 
-  const saveInventoryCounts = (item: InventoryItem, quantity: number, damagedQuantity: number) => {
+  const saveInspectionCounts = (
+    item: InventoryItem,
+    damagedQuantity: number,
+    lostQuantity: number,
+    usedQuantity: number
+  ) => {
+    const total = Math.max(0, Math.floor(Number(item.quantity) || 0));
+    if (damagedQuantity < 0 || lostQuantity < 0 || usedQuantity < 0) return;
+    if (damagedQuantity + lostQuantity + usedQuantity > total) return;
     onUpdateInventory?.({
       ...item,
-      quantity,
       damagedQuantity,
-      condition: item.condition === 'Lost' ? 'Lost' : getInventoryConditionForCounts(quantity, damagedQuantity),
+      lostQuantity,
+      usedQuantity: getInventoryAssetType(item) === 'rental' ? 0 : usedQuantity,
+      condition: getInventoryConditionForCounts(total, damagedQuantity, lostQuantity),
       lastUpdated: new Date().toISOString().split('T')[0]
     });
   };
@@ -238,17 +241,6 @@ export default function AuditorView({
             <span>Egg Inventory ({availableEggCount})</span>
           </button>
         </div>
-
-        {inventoryTab === 'inventory' && (
-          <button
-            type="button"
-            onClick={openAddInventory}
-            className="flex items-center gap-1.5 rounded-xl bg-[#1B4332] px-4 py-2 text-xs font-black text-white shadow-sm transition-all hover:bg-[#143326] cursor-pointer"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Record Inventory Item</span>
-          </button>
-        )}
       </div>
 
       {inventoryTab === 'eggs' ? (
@@ -274,31 +266,65 @@ export default function AuditorView({
       ) : inventoryTab === 'inventory' ? (
         <section className="space-y-4" aria-label="Association inventory registry">
           <div className="rounded-2xl border border-[#B7D9BF] bg-[#EAF4EC] p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl border border-emerald-700/15 bg-white p-2.5">
-                <Package className="h-5 w-5 text-emerald-800" />
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl border border-emerald-700/15 bg-white p-2.5">
+                  <Package className="h-5 w-5 text-emerald-800" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-[#1B4332]">Custodial Asset Inspection Registry</h2>
+                  <p className="text-xs text-[#4A5F57]">
+                    Assets are automatically added when the Treasurer logs an asset purchase. Inspect items below to mark damaged, lost, or consumed quantities.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-black text-[#1B4332]">Association Inventory & Custodial Notes</h2>
-                <p className="text-sm text-[#4A5F57]">Track counts, damaged units, storage, and rental listings.</p>
+              <div className="inline-flex rounded-xl border border-[#B7D9BF] bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => { setAssetTypeTab('rental'); setInventoryCategoryFilter('All'); }}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-black transition-all cursor-pointer ${
+                    assetTypeTab === 'rental'
+                      ? 'bg-[#1B4332] text-white shadow-sm'
+                      : 'text-[#4A5F57] hover:text-[#1B4332]'
+                  }`}
+                >
+                  Rental Assets ({rentalInventory.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAssetTypeTab('usable'); setInventoryCategoryFilter('All'); }}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-black transition-all cursor-pointer ${
+                    assetTypeTab === 'usable'
+                      ? 'bg-[#1B4332] text-white shadow-sm'
+                      : 'text-[#4A5F57] hover:text-[#1B4332]'
+                  }`}
+                >
+                  Usable Assets &amp; Supplies ({usableInventory.length})
+                </button>
               </div>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className={`mt-3 grid grid-cols-2 gap-3 ${assetTypeTab === 'usable' ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
               <div className="rounded-xl border border-[#D5CFC1] bg-white p-3">
-                <p className="text-[10px] font-bold uppercase text-[#4A5F57]">Asset Types</p>
-                <p className="text-lg font-black text-[#1B4332]">{inventory.length}</p>
-              </div>
-              <div className="rounded-xl border border-[#D5CFC1] bg-white p-3">
-                <p className="text-[10px] font-bold uppercase text-[#4A5F57]">Total Units</p>
+                <p className="text-[10px] font-bold uppercase text-[#4A5F57]">Purchased Units</p>
                 <p className="text-lg font-black text-[#1B4332]">{inventoryUnits}</p>
               </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-[10px] font-bold uppercase text-emerald-800">Available</p>
+                <p className="text-lg font-black text-emerald-900">{availableUnits}</p>
+              </div>
+              {assetTypeTab === 'usable' && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-[10px] font-bold uppercase text-blue-800">Used / Consumed</p>
+                  <p className="text-lg font-black text-blue-900">{usedUnits}</p>
+                </div>
+              )}
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-[10px] font-bold uppercase text-amber-800">Available Units</p>
-                <p className="text-lg font-black text-amber-900">{availableUnits}</p>
+                <p className="text-[10px] font-bold uppercase text-amber-800">Damaged</p>
+                <p className="text-lg font-black text-amber-900">{damagedUnits}</p>
               </div>
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                <p className="text-[10px] font-bold uppercase text-rose-800">Damaged Units</p>
-                <p className="text-lg font-black text-rose-900">{damagedUnits}</p>
+                <p className="text-[10px] font-bold uppercase text-rose-800">Lost</p>
+                <p className="text-lg font-black text-rose-900">{lostUnits}</p>
               </div>
             </div>
           </div>
@@ -342,7 +368,10 @@ export default function AuditorView({
           {filteredInventory.length ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {filteredInventory.map(item => {
+                const isRentalAsset = getInventoryAssetType(item) === 'rental';
                 const damagedQuantity = getInventoryDamagedQuantity(item);
+                const lostQuantity = getInventoryLostQuantity(item);
+                const usedQuantity = getInventoryUsedQuantity(item);
                 const availableQuantity = getAvailableInventoryQuantity(item);
                 const catalogProduct = products.find(product => product.id === item.catalogProductId);
                 return (
@@ -358,12 +387,31 @@ export default function AuditorView({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <span className="rounded-lg border border-[#D5CFC1] bg-[#F7F4EF] px-2 py-0.5 text-[10px] font-bold uppercase text-[#4A5F57]">{item.category}</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase ${
+                          isRentalAsset
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                            : 'border-blue-200 bg-blue-50 text-blue-800'
+                        }`}>
+                          {isRentalAsset ? 'Rental Asset' : 'Usable / Supply'}
+                        </span>
+                        <span className="rounded-lg border border-[#D5CFC1] bg-[#F7F4EF] px-2 py-0.5 text-[10px] font-bold uppercase text-[#4A5F57]">{item.category}</span>
+                      </div>
                       <h3 className="mt-1 break-words text-sm font-black text-[#1B4332]">{item.name}</h3>
                       <p className="font-mono text-xs text-[#4A5F57]">
-                        {item.quantity} {item.unit} total · {availableQuantity} available · {damagedQuantity} damaged
+                        {item.quantity} {item.unit} purchased · <strong>{availableQuantity}</strong> available
+                        {!isRentalAsset && ` · ${usedQuantity} used`}
+                        {` · ${damagedQuantity} damaged · ${lostQuantity} lost`}
                       </p>
                       {item.location && <p className="mt-0.5 text-[10px] text-[#4A5F57]">Location: {item.location}</p>}
+                      {item.purchaseTransactionId && (
+                        <p className="mt-0.5 font-mono text-[10px] text-emerald-800">Linked Purchase: {item.purchaseTransactionId}</p>
+                      )}
+                      {resolveAcquisitionLink(item.activityId, item.meetingId) && (
+                        <p className="mt-0.5 inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
+                          Acquired for: {resolveAcquisitionLink(item.activityId, item.meetingId)}
+                        </p>
+                      )}
                     </div>
                     <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-black uppercase ${
                       item.condition === 'Good'
@@ -379,51 +427,48 @@ export default function AuditorView({
                     <div className="mt-2.5 rounded-xl border border-[#D5CFC1] bg-[#F7F4EF] p-2.5">
                       <span className="flex items-center gap-1 text-[10px] font-black uppercase text-emerald-700">
                         <FileText className="h-3 w-3" />
-                        Auditor's Custodial Notes:
+                        Auditor&apos;s Inspection Notes:
                       </span>
                       <p className="mt-1 break-words text-xs italic text-[#33473D]">{item.notes}</p>
                     </div>
                   )}
                   <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-2.5">
-                    <span className="mr-auto text-xs font-bold text-[#33473D]">Adjust stock</span>
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={!onUpdateInventory || item.quantity <= damagedQuantity}
-                        onClick={() => saveInventoryCounts(item, item.quantity - 1, damagedQuantity)}
-                        aria-label={`Remove one ${item.name}`}
-                        className="rounded-lg border border-[#D5CFC1] bg-white p-1.5 text-[#1B4332] hover:bg-[#EAF4EC] disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="min-w-8 text-center font-mono text-xs font-black text-[#1B4332]">{item.quantity}</span>
-                      <button
-                        type="button"
-                        disabled={!onUpdateInventory}
-                        onClick={() => saveInventoryCounts(item, item.quantity + 1, damagedQuantity)}
-                        aria-label={`Add one ${item.name}`}
-                        className="rounded-lg border border-[#D5CFC1] bg-white p-1.5 text-[#1B4332] hover:bg-[#EAF4EC] disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    <span className="mr-auto text-xs font-bold text-[#33473D]">Inspection</span>
                     <button
                       type="button"
-                      disabled={!onUpdateInventory || availableQuantity === 0 || item.condition === 'Lost'}
-                      onClick={() => saveInventoryCounts(item, item.quantity, damagedQuantity + 1)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2 py-1.5 text-[11px] font-bold text-rose-800 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!onUpdateInventory || availableQuantity === 0}
+                      onClick={() => saveInspectionCounts(item, damagedQuantity + 1, lostQuantity, usedQuantity)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-[11px] font-bold text-amber-900 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                     >
-                      <AlertTriangle className="h-3.5 w-3.5" /> Mark damaged
+                      <AlertTriangle className="h-3.5 w-3.5" /> +1 Damaged
                     </button>
                     <button
                       type="button"
-                      disabled={!onUpdateInventory || damagedQuantity === 0 || item.condition === 'Lost'}
-                      onClick={() => saveInventoryCounts(item, item.quantity, damagedQuantity - 1)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!onUpdateInventory || damagedQuantity === 0}
+                      onClick={() => saveInspectionCounts(item, damagedQuantity - 1, lostQuantity, usedQuantity)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                     >
                       <Wrench className="h-3.5 w-3.5" /> Repaired
                     </button>
-                    {item.category === 'Rental Assets' && (
+                    <button
+                      type="button"
+                      disabled={!onUpdateInventory || availableQuantity === 0}
+                      onClick={() => saveInspectionCounts(item, damagedQuantity, lostQuantity + 1, usedQuantity)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2 py-1.5 text-[11px] font-bold text-rose-800 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                    >
+                      <XCircle className="h-3.5 w-3.5" /> +1 Lost
+                    </button>
+                    {!isRentalAsset && (
+                      <button
+                        type="button"
+                        disabled={!onUpdateInventory || availableQuantity === 0}
+                        onClick={() => saveInspectionCounts(item, damagedQuantity, lostQuantity, usedQuantity + 1)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2 py-1.5 text-[11px] font-bold text-blue-800 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                      >
+                        <PackageMinus className="h-3.5 w-3.5" /> +1 Used
+                      </button>
+                    )}
+                    {isRentalAsset && (
                       catalogProduct ? (
                         <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1.5 text-[11px] font-bold text-emerald-800">
                           <ShoppingBag className="h-3.5 w-3.5" /> In product catalog
@@ -433,23 +478,24 @@ export default function AuditorView({
                           type="button"
                           disabled={!onPublishRentalProduct}
                           onClick={() => openRentalListing(item)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-[#1B4332] px-2 py-1.5 text-[11px] font-bold text-white hover:bg-[#143326] disabled:cursor-not-allowed disabled:opacity-40"
+                          className="inline-flex items-center gap-1 rounded-lg bg-[#1B4332] px-2 py-1.5 text-[11px] font-bold text-white hover:bg-[#143326] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                         >
-                          <ShoppingBag className="h-3.5 w-3.5" /> Add to catalog
+                          <ShoppingBag className="h-3.5 w-3.5" /> Publish Rental
                         </button>
                       )
                     )}
                   </div>
                   <div className="mt-3 flex items-center justify-between border-t border-[#E9E4D9] pt-2.5">
-                    <span className="font-mono text-[10px] text-[#4A5F57]">By: {item.recordedBy} • Updated: {item.lastUpdated}</span>
-                    <div className="flex gap-1.5">
-                      <button type="button" onClick={() => openEditInventory(item)} className="rounded-lg bg-[#F5FAF6] p-1.5 text-[#4B6259] transition-all hover:text-[#1B4332] cursor-pointer" title="Edit inventory item">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button type="button" onClick={() => { if (confirm(`Sigurado ka nga gusto nimong idelete ang inventory item "${item.name}"?`)) onDeleteInventory?.(item.id); }} className="rounded-lg bg-rose-500/10 p-1.5 text-rose-600 transition-all hover:bg-rose-500/20 cursor-pointer" title="Delete inventory item">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                    <span className="font-mono text-[10px] text-[#4A5F57]">Logged by: {item.recordedBy} • Updated: {item.lastUpdated}</span>
+                    <button
+                      type="button"
+                      onClick={() => openEditInventory(item)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-[#F5FAF6] px-2.5 py-1 text-[11px] font-bold text-[#1B4332] hover:bg-[#E3F2E8] cursor-pointer"
+                      title="Inspect & update asset status"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      <span>Inspect</span>
+                    </button>
                   </div>
                 </article>
                 );
@@ -457,9 +503,11 @@ export default function AuditorView({
             </div>
           ) : (
             <div className="rounded-2xl border border-[#D5CFC1] bg-white p-8 text-center text-sm text-[#4A5F57]">
-              {inventory.length
+              {activeTypeInventory.length
                 ? 'No inventory items match these filters.'
-                : 'No inventory items recorded yet. Use "Record Inventory Item" to start the association inventory registry.'}
+                : assetTypeTab === 'rental'
+                  ? 'No rental assets purchased yet. When the Treasurer logs a Rental Asset expense (e.g., chairs, tables, tents), it will appear here automatically.'
+                  : 'No usable assets or supplies purchased yet. When the Treasurer logs an Equipment or Office Supplies expense (e.g., laptop, bond paper), it will appear here automatically.'}
             </div>
           )}
         </section>
@@ -573,6 +621,11 @@ export default function AuditorView({
                       {transaction.type === 'income' ? 'Deposited to: ' : 'Budget source: '}
                       {transaction.fundSource || 'General Operational Fund'}
                     </span>
+                    {resolveAcquisitionLink(transaction.activityId, transaction.meetingId) && (
+                      <span className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
+                        {resolveAcquisitionLink(transaction.activityId, transaction.meetingId)}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1.5 break-words text-sm font-semibold text-[#1B4332]">{transaction.description}</p>
                   <p className="mt-1 text-[10px] text-[#4A5F57]">Logged by: {transaction.recordedBy}</p>
@@ -631,91 +684,99 @@ export default function AuditorView({
       </>
       )}
 
-      {/* ADD / EDIT INVENTORY ITEM MODAL */}
-      {showInventoryModal && (
+      {/* INSPECT INVENTORY ITEM MODAL (Auditor inspection only — no manual add/delete) */}
+      {showInventoryModal && editingInventoryItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="presentation">
-          <div role="dialog" aria-modal="true" className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#D5CFC1] bg-[#F7F4EF] shadow-2xl">
+          <div role="dialog" aria-modal="true" className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#D5CFC1] bg-[#F7F4EF] shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#D5CFC1] bg-[#EAF4EC] px-5 py-4">
-              <h2 className="text-base font-bold text-[#1B4332]">{editingInventoryItem ? 'Edit Inventory Item & Notes' : 'Record Inventory Item & Notes'}</h2>
+              <div>
+                <h2 className="text-base font-bold text-[#1B4332]">Inspect Asset &amp; Record Condition</h2>
+                <p className="text-xs text-[#4A5F57]">
+                  {editingInventoryItem.name} · {getInventoryAssetType(editingInventoryItem) === 'rental' ? 'Rental Asset' : 'Usable Asset / Supply'} · {editingInventoryItem.quantity} {editingInventoryItem.unit} purchased
+                </p>
+              </div>
               <button type="button" onClick={() => setShowInventoryModal(false)} className="text-xl font-bold text-[#4A5F57] hover:text-[#1B4332]" aria-label="Close inventory dialog">&times;</button>
             </div>
             <form onSubmit={handleSaveInventory} className="space-y-3.5 p-5">
-              <div>
-                <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Item Name</label>
-                <input type="text" required value={invName} onChange={e => setInvName(e.target.value)} placeholder="IGP Plastic Chairs, Harvest Sacks, Knapsack Sprayer" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Category</label>
-                  <select value={invCategory} onChange={e => setInvCategory(e.target.value as InventoryItem['category'])} className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none">
-                    <option value="IGP Equipment">IGP Equipment</option>
-                    <option value="Farm Tools">Farm Tools</option>
-                    <option value="Office Supplies">Office Supplies</option>
-                    <option value="Rental Assets">Rental Assets</option>
-                    <option value="Livestock">Livestock</option>
-                    <option value="Other">Other</option>
-                  </select>
+              <div className="rounded-xl border border-[#D5CFC1] bg-white p-3 text-xs text-[#33473D]">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span><strong>Purchased Total:</strong> {editingInventoryItem.quantity} {editingInventoryItem.unit}</span>
+                  <span>
+                    <strong>Live Available:</strong>{' '}
+                    <span className="font-mono font-black text-emerald-800">
+                      {Math.max(
+                        0,
+                        editingInventoryItem.quantity
+                          - (Number(invDamagedQuantity) || 0)
+                          - (Number(invLostQuantity) || 0)
+                          - (getInventoryAssetType(editingInventoryItem) === 'rental' ? 0 : (Number(invUsedQuantity) || 0))
+                      )} {editingInventoryItem.unit}
+                    </span>
+                  </span>
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Condition</label>
-                  <select
-                    value={invCondition}
-                    onChange={e => {
-                      const nextCondition = e.target.value as InventoryItem['condition'];
-                      setInvCondition(nextCondition);
-                      if (nextCondition === 'Good' || nextCondition === 'Lost') setInvDamagedQuantity(0);
-                      else if (nextCondition === 'Damaged') setInvDamagedQuantity(Number(invQuantity));
-                      else setInvDamagedQuantity(Math.min(Number(invQuantity), Math.max(1, Number(invDamagedQuantity))));
-                    }}
-                    className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none"
-                  >
-                    <option value="Good">Good</option>
-                    <option value="Needs Repair">Needs Repair</option>
-                    <option value="Damaged">Damaged</option>
-                    <option value="Lost">Lost</option>
-                  </select>
-                </div>
+                {editingInventoryItem.purchaseTransactionId && (
+                  <p className="mt-1 font-mono text-[10px] text-[#4A5F57]">
+                    Purchase Ref: {editingInventoryItem.purchaseTransactionId} (Quantity is locked to Treasurer&apos;s expense ledger)
+                  </p>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+
+              <div className={`grid gap-3 ${getInventoryAssetType(editingInventoryItem) === 'usable' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2'}`}>
                 <div>
-                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Quantity</label>
+                  <label className="mb-1 block text-xs font-bold uppercase text-amber-900">Damaged Units</label>
                   <input
                     type="number"
                     min={0}
+                    max={Math.max(0, editingInventoryItem.quantity)}
                     step={1}
                     required
-                    value={invQuantity}
-                    onChange={e => {
-                      const nextQuantity = Number(e.target.value);
-                      setInvQuantity(nextQuantity);
-                      setInvDamagedQuantity(invCondition === 'Damaged' ? nextQuantity : Math.min(invDamagedQuantity, nextQuantity));
-                    }}
+                    value={invDamagedQuantity}
+                    onChange={e => setInvDamagedQuantity(Number(e.target.value))}
                     className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 font-mono text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none"
                   />
-                  <p className="mt-1 text-[10px] text-[#4A5F57]">Total units currently owned.</p>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Damaged Units</label>
-                  <input type="number" min={0} max={Math.max(0, invQuantity)} step={1} required value={invDamagedQuantity} onChange={e => setInvDamagedQuantity(Number(e.target.value))} className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 font-mono text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
-                  <p className="mt-1 text-[10px] text-[#4A5F57]">Available units are calculated automatically.</p>
+                  <label className="mb-1 block text-xs font-bold uppercase text-rose-800">Lost Units</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={Math.max(0, editingInventoryItem.quantity)}
+                    step={1}
+                    required
+                    value={invLostQuantity}
+                    onChange={e => setInvLostQuantity(Number(e.target.value))}
+                    className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 font-mono text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none"
+                  />
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Unit</label>
-                  <input type="text" required value={invUnit} onChange={e => setInvUnit(e.target.value)} placeholder="Pieces, sacks, or units" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
-                </div>
+                {getInventoryAssetType(editingInventoryItem) === 'usable' && (
+                  <div>
+                    <label className="mb-1 block text-xs font-bold uppercase text-blue-800">Used / Consumed</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={Math.max(0, editingInventoryItem.quantity)}
+                      step={1}
+                      required
+                      value={invUsedQuantity}
+                      onChange={e => setInvUsedQuantity(Number(e.target.value))}
+                      className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 font-mono text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none"
+                    />
+                  </div>
+                )}
               </div>
+
               <div>
                 <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Storage Location (Optional)</label>
                 <input type="text" value={invLocation} onChange={e => setInvLocation(e.target.value)} placeholder="Barangay Alegria Covered Court Storage" className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Custodial / Inventory Notes (Optional)</label>
-                <textarea rows={3} value={invNotes} onChange={e => setInvNotes(e.target.value)} placeholder="Counted 120 pieces during quarterly physical inventory; 8 chairs returned broken by renters." className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
+                <label className="mb-1 block text-xs font-bold uppercase text-[#4A5F57]">Custodial / Inspection Notes (Optional)</label>
+                <textarea rows={3} value={invNotes} onChange={e => setInvNotes(e.target.value)} placeholder="Physical count remarks, damaged/lost explanation, or supply consumption notes." className="w-full rounded-xl border border-[#D5CFC1] bg-white px-3.5 py-2.5 text-sm text-[#1B4332] focus:border-emerald-600 focus:outline-none" />
               </div>
               {inventoryError && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">{inventoryError}</p>}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowInventoryModal(false)} className="flex-1 rounded-xl border border-[#D5CFC1] px-3 py-2.5 text-sm font-semibold text-[#1B4332] hover:bg-[#EAF4EE]">Cancel</button>
-                <button type="submit" className="flex-1 rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Save Inventory Record</button>
+                <button type="submit" className="flex-1 rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Save Inspection</button>
               </div>
             </form>
           </div>

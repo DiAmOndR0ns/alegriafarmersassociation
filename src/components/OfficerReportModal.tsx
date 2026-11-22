@@ -137,9 +137,11 @@ export default function OfficerReportModal({
       funds,
       inventory,
       livestockIgp,
+      activities,
+      meetings,
       customRemarks: customRemarks.trim() || undefined,
     });
-  }, [reportDate, users, transactions, funds, inventory, livestockIgp, customRemarks]);
+  }, [reportDate, users, transactions, funds, inventory, livestockIgp, activities, meetings, customRemarks]);
   const reportAnchorDate = reportDate || new Date().toISOString().split('T')[0];
   const treasurerReportRange = getTreasurerReportRange(reportAnchorDate, reportPeriod);
   const treasurerCategoryRows = getTreasurerReportRows(transactions, livestockIgp, treasurerReportRange, reportKind);

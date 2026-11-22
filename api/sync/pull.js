@@ -582,6 +582,18 @@ async function runSchemaMigrations(client) {
       SET activity_id = NULL
       WHERE tx.activity_id IS NOT NULL
         AND NOT EXISTS(SELECT 1 FROM activities AS activity WHERE activity.id = tx.activity_id); `,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS asset_type VARCHAR(50) NOT NULL DEFAULT 'usable';`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS lost_quantity INTEGER DEFAULT 0;`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS used_quantity INTEGER DEFAULT 0;`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS purchase_transaction_id VARCHAR(100);`,
+    `UPDATE inventory
+      SET asset_type = 'rental'
+      WHERE (asset_type IS NULL OR asset_type = 'usable')
+        AND (category = 'Rental Assets' OR catalog_product_id IS NOT NULL);`,
+    `UPDATE inventory AS item
+      SET purchase_transaction_id = NULL
+      WHERE item.purchase_transaction_id IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM financial_transactions AS tx WHERE tx.id = item.purchase_transaction_id);`,
     `UPDATE inventory AS item
       SET catalog_product_id = NULL
       WHERE item.catalog_product_id IS NOT NULL
@@ -608,11 +620,23 @@ async function runSchemaMigrations(client) {
             FOREIGN KEY(catalog_product_id) REFERENCES products(id) ON DELETE SET NULL
             DEFERRABLE INITIALLY DEFERRED NOT VALID;
         END IF;
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
+          WHERE conname = 'inventory_purchase_transaction_id_fkey'
+            AND conrelid = 'inventory':: regclass
+  ) THEN
+          ALTER TABLE inventory
+            ADD CONSTRAINT inventory_purchase_transaction_id_fkey
+            FOREIGN KEY(purchase_transaction_id) REFERENCES financial_transactions(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
       END $$; `,
     `ALTER TABLE financial_transactions VALIDATE CONSTRAINT financial_transactions_activity_id_fkey; `,
     `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_catalog_product_id_fkey; `,
+    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_purchase_transaction_id_fkey; `,
     `CREATE INDEX IF NOT EXISTS financial_transactions_activity_id_idx ON financial_transactions(activity_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_catalog_product_id_idx ON inventory(catalog_product_id); `,
+    `CREATE INDEX IF NOT EXISTS inventory_purchase_transaction_id_idx ON inventory(purchase_transaction_id); `,
     `CREATE TABLE IF NOT EXISTS achievements(
     id VARCHAR(100) PRIMARY KEY,
     year VARCHAR(20) NOT NULL,
@@ -973,7 +997,11 @@ async function initDatabaseSchema(pool) {
     await client.query(`
       ALTER TABLE inventory
         ADD COLUMN IF NOT EXISTS damaged_quantity INTEGER DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100);
+        ADD COLUMN IF NOT EXISTS lost_quantity INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS used_quantity INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS asset_type VARCHAR(50) NOT NULL DEFAULT 'usable',
+        ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS purchase_transaction_id VARCHAR(100);
   `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS activities(
@@ -1462,14 +1490,18 @@ async function fetchAllDataFromPostgres(pool) {
     const inventory = inventoryRes.rows.map((r) => ({
       id: r.id,
       name: r.name,
+      assetType: r.asset_type === "rental" || r.category === "Rental Assets" || Boolean(r.catalog_product_id) ? "rental" : "usable",
       category: r.category,
       quantity: Number(r.quantity || 0),
       damagedQuantity: r.damaged_quantity == null ? void 0 : Number(r.damaged_quantity),
+      lostQuantity: r.lost_quantity == null ? void 0 : Number(r.lost_quantity),
+      usedQuantity: r.used_quantity == null ? void 0 : Number(r.used_quantity),
       unit: r.unit,
       condition: r.item_condition,
       location: r.location || void 0,
       notes: r.notes || void 0,
       catalogProductId: r.catalog_product_id || void 0,
+      purchaseTransactionId: r.purchase_transaction_id || void 0,
       recordedBy: r.recorded_by || "",
       dateRecorded: r.date_recorded || "",
       lastUpdated: r.last_updated || ""

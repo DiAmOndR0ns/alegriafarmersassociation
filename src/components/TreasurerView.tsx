@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  FinancialTransaction, OrganizationFund, LivestockIgpState, User, OfficerRole, InventoryItem, AssociationActivity,
+  FinancialTransaction, OrganizationFund, LivestockIgpState, User, OfficerRole, InventoryItem, InventoryAssetType, AssociationActivity, Meeting,
   Member, MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot
 } from '../types';
+import { getInventoryAssetType } from '../utils/inventory';
 import {
   DEFAULT_MEMBERSHIP_DUES,
   getDuesCollected,
@@ -37,6 +38,7 @@ import {
 interface TreasurerViewProps {
   transactions: FinancialTransaction[];
   activities?: AssociationActivity[];
+  meetings?: Meeting[];
   funds?: OrganizationFund[];
   livestockIgp?: LivestockIgpState;
   inventory?: InventoryItem[];
@@ -76,6 +78,7 @@ const getFundSourceValue = (fund: OrganizationFund) => `${fund.code} (${fund.nam
 export default function TreasurerView({
   transactions,
   activities = [],
+  meetings = [],
   funds = INITIAL_FUNDS,
   livestockIgp = INITIAL_LIVESTOCK_IGP,
   inventory = [],
@@ -130,7 +133,20 @@ export default function TreasurerView({
   const [txDesc, setTxDesc] = useState('');
   const [txPurpose, setTxPurpose] = useState('');
   const [txActivityId, setTxActivityId] = useState('');
+  const [txMeetingId, setTxMeetingId] = useState('');
   const [txActivityError, setTxActivityError] = useState('');
+
+  // Asset / Inventory Purchase link (only for expense transactions)
+  const [isAssetPurchase, setIsAssetPurchase] = useState(false);
+  const [assetPurchaseMode, setAssetPurchaseMode] = useState<'new' | 'existing'>('new');
+  const [assetExistingId, setAssetExistingId] = useState('');
+  const [assetType, setAssetType] = useState<InventoryAssetType>('usable');
+  const [assetName, setAssetName] = useState('');
+  const [assetCategory, setAssetCategory] = useState<InventoryItem['category']>('Office Supplies');
+  const [assetQuantity, setAssetQuantity] = useState('1');
+  const [assetUnit, setAssetUnit] = useState('pieces');
+  const [assetLocation, setAssetLocation] = useState('');
+  const [assetError, setAssetError] = useState('');
 
   // Add Organization Fund Modal
   const [showAddFundModal, setShowAddFundModal] = useState(false);
@@ -152,7 +168,7 @@ export default function TreasurerView({
 
   const CATEGORIES = {
     income: ['Membership Dues', 'Donation', 'Livelihood Assistance', 'Produce Sales', 'Coop Fee', 'Other Income'],
-    expense: ['Seeds & Seedlings', 'Fertilizer Depot', 'Equipment Purchase', 'Equipment Maintenance', 'Meeting Snacks & Logistics', 'Honorarium', 'Other Expense']
+    expense: ['Seeds & Seedlings', 'Fertilizer Depot', 'Equipment Purchase', 'Rental Asset Purchase', 'Office Supplies', 'Equipment Maintenance', 'Meeting Snacks & Logistics', 'Honorarium', 'Other Expense']
   };
 
   useEffect(() => {
@@ -290,6 +306,46 @@ export default function TreasurerView({
       }
     }
 
+    let assetPurchasePayload: FinancialTransaction['assetPurchase'];
+    if (txType === 'expense' && isAssetPurchase) {
+      const parsedQty = Number(assetQuantity);
+      if (!Number.isInteger(parsedQty) || parsedQty < 1) {
+        setAssetError('Enter a whole-number quantity of at least 1 for the purchased asset.');
+        return;
+      }
+      if (assetPurchaseMode === 'existing') {
+        const existing = inventory.find(item => item.id === assetExistingId);
+        if (!existing) {
+          setAssetError('Select an existing inventory item to add stock to, or switch to New Asset Item.');
+          return;
+        }
+        assetPurchasePayload = {
+          mode: 'existing',
+          existingInventoryId: existing.id,
+          assetType: getInventoryAssetType(existing),
+          itemName: existing.name,
+          category: existing.category,
+          quantity: parsedQty,
+          unit: existing.unit
+        };
+      } else {
+        if (!assetName.trim()) {
+          setAssetError('Enter the asset or supply name to add to the custodial inventory.');
+          return;
+        }
+        assetPurchasePayload = {
+          mode: 'new',
+          assetType,
+          itemName: assetName.trim(),
+          category: assetType === 'rental' ? 'Rental Assets' : assetCategory,
+          quantity: parsedQty,
+          unit: assetUnit.trim() || 'pieces',
+          location: assetLocation.trim() || undefined
+        };
+      }
+      setAssetError('');
+    }
+
     const effectivePurpose = txPurpose.trim() || txDesc.trim();
     const liquidationDeadline = txType === 'expense'
       ? new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -302,17 +358,30 @@ export default function TreasurerView({
       date: txDate,
       description: txDesc,
       activityId: txActivityId || undefined,
+      meetingId: txMeetingId || undefined,
       purpose: effectivePurpose,
       liquidationDeadline,
       fundSource: getFundSourceValue(selectedFund),
-      recordedBy: defaultCustodian
+      recordedBy: defaultCustodian,
+      assetPurchase: assetPurchasePayload
     });
 
     setTxAmount('');
     setTxDesc('');
     setTxPurpose('');
     setTxActivityId('');
+    setTxMeetingId('');
     setTxActivityError('');
+    setIsAssetPurchase(false);
+    setAssetPurchaseMode('new');
+    setAssetExistingId('');
+    setAssetType('usable');
+    setAssetName('');
+    setAssetCategory('Office Supplies');
+    setAssetQuantity('1');
+    setAssetUnit('pieces');
+    setAssetLocation('');
+    setAssetError('');
     setTxDate(new Date().toISOString().split('T')[0]);
     setShowAddModal(false);
   };
@@ -1359,7 +1428,21 @@ export default function TreasurerView({
                 </label>
                 <select
                   value={txCategory}
-                  onChange={(e) => setTxCategory(e.target.value)}
+                  onChange={(e) => {
+                    const nextCat = e.target.value;
+                    setTxCategory(nextCat);
+                    if (txType === 'expense') {
+                      if (nextCat === 'Rental Asset Purchase') {
+                        setIsAssetPurchase(true);
+                        setAssetType('rental');
+                        setAssetCategory('Rental Assets');
+                      } else if (nextCat === 'Equipment Purchase' || nextCat === 'Office Supplies') {
+                        setIsAssetPurchase(true);
+                        setAssetType('usable');
+                        setAssetCategory(nextCat === 'Office Supplies' ? 'Office Supplies' : 'IGP Equipment');
+                      }
+                    }
+                  }}
                   className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                 >
                   {availableCategories.map(cat => (
@@ -1373,33 +1456,265 @@ export default function TreasurerView({
                 <p className="mt-1 text-xs text-[#4B6259] hidden">Choose a category or add one for this role, such as Budget Source Allocation.</p>
               </div>
 
-              <div>
-                <label htmlFor="transaction-activity" className="block text-xs font-bold text-[#18372D] uppercase mb-1">
-                  Association activity (optional)
-                </label>
-                <select
-                  id="transaction-activity"
-                  value={txActivityId}
-                  onChange={(e) => {
-                    setTxActivityId(e.target.value);
-                    setTxActivityError('');
-                  }}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="">Not linked to an activity</option>
-                  {activities.filter(activity => txType !== 'expense' || isActivityOpenForExpenses(activity)).map(activity => (
-                    <option key={activity.id} value={activity.id}>
-                      {activity.title} — {activity.status} ({activity.scheduledDate})
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[11px] text-[#33473d]">
-                  {txType === 'expense'
-                    ? 'Expenses can be linked only while an activity is scheduled or in progress. Mark it Completed in the PIO activity manager to close it to new expenses.'
-                    : 'Link this entry to an activity to include it in activity-level financial reporting.'}
-                </p>
-                {txActivityError && <p role="alert" className="mt-1 text-xs font-semibold text-rose-700">{txActivityError}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label htmlFor="transaction-activity" className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                    Event / Activity (optional)
+                  </label>
+                  <select
+                    id="transaction-activity"
+                    value={txActivityId}
+                    onChange={(e) => {
+                      setTxActivityId(e.target.value);
+                      if (e.target.value) setTxMeetingId('');
+                      setTxActivityError('');
+                    }}
+                    className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">Not linked to an event</option>
+                    {activities.filter(activity => txType !== 'expense' || isActivityOpenForExpenses(activity)).map(activity => (
+                      <option key={activity.id} value={activity.id}>
+                        {activity.title} — {activity.status} ({activity.scheduledDate})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="transaction-meeting" className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                    Upcoming Meeting (optional)
+                  </label>
+                  <select
+                    id="transaction-meeting"
+                    value={txMeetingId}
+                    onChange={(e) => {
+                      setTxMeetingId(e.target.value);
+                      if (e.target.value) setTxActivityId('');
+                      setTxActivityError('');
+                    }}
+                    className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">Not linked to a meeting</option>
+                    {meetings
+                      .filter(m => txType !== 'expense' || !m.date || m.date >= new Date().toISOString().split('T')[0])
+                      .map(meeting => (
+                        <option key={meeting.id} value={meeting.id}>
+                          {meeting.title} ({meeting.date})
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
+              <p className="-mt-1 text-[11px] text-[#33473d]">
+                {txType === 'expense'
+                  ? 'Link an acquisition or expense to an open event/activity or upcoming meeting for full audit & custodial tracking.'
+                  : 'Link this entry to an event or meeting to include it in activity-level financial reporting.'}
+              </p>
+              {txActivityError && <p role="alert" className="-mt-1 text-xs font-semibold text-rose-700">{txActivityError}</p>}
+
+              {/* ASSET / INVENTORY PURCHASE LINK (Treasurer purchase -> Auditor custodial inspection) */}
+              {txType === 'expense' && (
+                <div className="space-y-2.5 rounded-xl border border-[#B8CDBE] bg-[#F2F8F4] p-3">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isAssetPurchase}
+                      onChange={(e) => {
+                        setIsAssetPurchase(e.target.checked);
+                        setAssetError('');
+                      }}
+                      className="mt-0.5 h-4 w-4 accent-[#1B4332]"
+                    />
+                    <div>
+                      <span className="block text-xs font-black uppercase text-[#1B4332]">
+                        Record as Association Asset / Inventory Purchase
+                      </span>
+                      <span className="block text-[11px] text-[#33473d]">
+                        Automatically adds this purchase to the Auditor&apos;s custodial inventory registry (no manual item creation needed).
+                      </span>
+                    </div>
+                  </label>
+
+                  {isAssetPurchase && (
+                    <div className="space-y-2.5 pt-1 border-t border-[#D5CFC1]">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setAssetPurchaseMode('new'); setAssetError(''); }}
+                          className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer ${
+                            assetPurchaseMode === 'new'
+                              ? 'border-[#1B4332] bg-[#1B4332] text-white'
+                              : 'border-[#B8CDBE] bg-white text-[#1B4332]'
+                          }`}
+                        >
+                          New Asset Item
+                        </button>
+                        <button
+                          type="button"
+                          disabled={inventory.length === 0}
+                          onClick={() => {
+                            setAssetPurchaseMode('existing');
+                            if (!assetExistingId && inventory[0]) setAssetExistingId(inventory[0].id);
+                            setAssetError('');
+                          }}
+                          className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                            assetPurchaseMode === 'existing'
+                              ? 'border-[#1B4332] bg-[#1B4332] text-white'
+                              : 'border-[#B8CDBE] bg-white text-[#1B4332]'
+                          }`}
+                        >
+                          Add to Existing ({inventory.length})
+                        </button>
+                      </div>
+
+                      {assetPurchaseMode === 'existing' ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div className="sm:col-span-2">
+                            <label className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Existing Inventory Item</label>
+                            <select
+                              value={assetExistingId}
+                              onChange={(e) => setAssetExistingId(e.target.value)}
+                              className="w-full rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-xs font-semibold text-[#1B4332]"
+                            >
+                              <option value="">Select item to restock</option>
+                              {inventory.map(item => (
+                                <option key={item.id} value={item.id}>
+                                  [{getInventoryAssetType(item) === 'rental' ? 'Rental' : 'Usable'}] {item.name} (Current: {item.quantity} {item.unit})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Qty Purchased</label>
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              required={isAssetPurchase}
+                              value={assetQuantity}
+                              onChange={(e) => setAssetQuantity(e.target.value)}
+                              className="w-full rounded-xl border border-[#8FA99A] bg-white px-3 py-2 font-mono text-xs font-bold text-[#1B4332]"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Asset Classification</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAssetType('rental');
+                                  setAssetCategory('Rental Assets');
+                                }}
+                                className={`rounded-lg border px-2.5 py-2 text-left text-xs font-bold cursor-pointer ${
+                                  assetType === 'rental'
+                                    ? 'border-emerald-700 bg-emerald-700 text-white'
+                                    : 'border-[#B8CDBE] bg-white text-[#1B4332]'
+                                }`}
+                              >
+                                <span className="block">Rental Asset</span>
+                                <span className={`block text-[10px] font-normal ${assetType === 'rental' ? 'text-emerald-100' : 'text-[#4A5F57]'}`}>
+                                  Chairs, tables, tents, sacks
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAssetType('usable');
+                                  if (assetCategory === 'Rental Assets') setAssetCategory('Office Supplies');
+                                }}
+                                className={`rounded-lg border px-2.5 py-2 text-left text-xs font-bold cursor-pointer ${
+                                  assetType === 'usable'
+                                    ? 'border-blue-700 bg-blue-700 text-white'
+                                    : 'border-[#B8CDBE] bg-white text-[#1B4332]'
+                                }`}
+                              >
+                                <span className="block">Usable Asset / Supply</span>
+                                <span className={`block text-[10px] font-normal ${assetType === 'usable' ? 'text-blue-100' : 'text-[#4A5F57]'}`}>
+                                  Laptops, bondpaper, tools
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Item Name</label>
+                              <input
+                                type="text"
+                                required={isAssetPurchase && assetPurchaseMode === 'new'}
+                                value={assetName}
+                                onChange={(e) => setAssetName(e.target.value)}
+                                placeholder={assetType === 'rental' ? 'e.g., Monobloc Chairs' : 'e.g., A4 Bond Paper / Association Laptop'}
+                                className="w-full rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-xs text-[#1B4332]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Category</label>
+                              <select
+                                value={assetType === 'rental' ? 'Rental Assets' : assetCategory}
+                                disabled={assetType === 'rental'}
+                                onChange={(e) => setAssetCategory(e.target.value as InventoryItem['category'])}
+                                className="w-full rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-xs text-[#1B4332] disabled:bg-slate-100"
+                              >
+                                {assetType === 'rental' ? (
+                                  <option value="Rental Assets">Rental Assets</option>
+                                ) : (
+                                  <>
+                                    <option value="Office Supplies">Office Supplies</option>
+                                    <option value="IGP Equipment">IGP Equipment</option>
+                                    <option value="Farm Tools">Farm Tools</option>
+                                    <option value="Other">Other</option>
+                                  </>
+                                )}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Quantity</label>
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                required={isAssetPurchase}
+                                value={assetQuantity}
+                                onChange={(e) => setAssetQuantity(e.target.value)}
+                                className="w-full rounded-xl border border-[#8FA99A] bg-white px-3 py-2 font-mono text-xs font-bold text-[#1B4332]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Unit</label>
+                              <input
+                                type="text"
+                                required={isAssetPurchase}
+                                value={assetUnit}
+                                onChange={(e) => setAssetUnit(e.target.value)}
+                                placeholder="pieces, reams, units"
+                                className="w-full rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-xs text-[#1B4332]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Location</label>
+                              <input
+                                type="text"
+                                value={assetLocation}
+                                onChange={(e) => setAssetLocation(e.target.value)}
+                                placeholder="AFA Hall"
+                                className="w-full rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-xs text-[#1B4332]"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {assetError && <p role="alert" className="text-xs font-bold text-rose-700">{assetError}</p>}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Fund Account Selection (Deposit Destination for Income, Budget Source for Expense) */}
               <div className="space-y-1.5 bg-[#EAF4EC] p-2.5 rounded-xl border border-[#D5CFC1]">

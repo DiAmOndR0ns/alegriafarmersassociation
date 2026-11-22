@@ -8,11 +8,16 @@ import type {
   InventoryItem,
   LivestockIgpState,
   EggHarvestLog,
+  AssociationActivity,
+  Meeting,
 } from "../types";
 import { resolveOfficerName } from "../utils/officers";
 import {
   getAvailableInventoryQuantity,
+  getInventoryAssetType,
   getInventoryDamagedQuantity,
+  getInventoryLostQuantity,
+  getInventoryUsedQuantity,
 } from "../utils/inventory";
 import { deriveIgpLivestockInventory } from "../utils/igpInventory";
 
@@ -71,9 +76,12 @@ export interface LivestockAuditRow {
 export interface InventoryAuditRow {
   id: string;
   name: string;
+  assetType: "rental" | "usable";
   category: string;
   quantity: number;
   damagedQuantity: number;
+  lostQuantity: number;
+  usedQuantity: number;
   availableQuantity: number;
   unit: string;
   condition: string;
@@ -135,6 +143,8 @@ export interface AuditorReportData {
     damagedLostCount: number;
     totalUnits: number;
     totalDamagedUnits: number;
+    totalLostUnits: number;
+    totalUsedUnits: number;
     totalAvailableUnits: number;
   };
   inventoryRows: InventoryAuditRow[];
@@ -182,6 +192,8 @@ export function buildAuditorReportData(params: {
   funds?: OrganizationFund[];
   inventory?: InventoryItem[];
   livestockIgp?: LivestockIgpState;
+  activities?: AssociationActivity[];
+  meetings?: Meeting[];
   customRemarks?: string;
 }): AuditorReportData {
   const year = params.year ?? new Date().getFullYear();
@@ -191,6 +203,8 @@ export function buildAuditorReportData(params: {
   const funds = params.funds || [];
   const inventory = params.inventory || [];
   const livestockIgp = params.livestockIgp;
+  const activities = params.activities || [];
+  const meetings = params.meetings || [];
 
   const auditedTx = transactions.filter((t) => t.auditedStatus === "Audited");
   const flaggedTx = transactions.filter((t) => t.auditedStatus === "Flagged");
@@ -321,20 +335,34 @@ export function buildAuditorReportData(params: {
   const totalLivestockHeads = livestockSnapshot.reduce((sum, row) => sum + row.headCount, 0);
 
   const inventoryRows: InventoryAuditRow[] = inventory.map((item) => {
+    const assetType = getInventoryAssetType(item);
     const damagedQuantity = getInventoryDamagedQuantity(item);
+    const lostQuantity = getInventoryLostQuantity(item);
+    const usedQuantity = getInventoryUsedQuantity(item);
     const availableQuantity = getAvailableInventoryQuantity(item);
+    const linkedAct = item.activityId ? activities.find((a) => a.id === item.activityId) : undefined;
+    const linkedMeeting = item.meetingId ? meetings.find((m) => m.id === item.meetingId) : undefined;
+    const linkPrefix = linkedAct
+      ? `Acquired for Event: ${linkedAct.title} (${linkedAct.scheduledDate})`
+      : linkedMeeting
+        ? `Acquired for Meeting: ${linkedMeeting.title} (${linkedMeeting.date})`
+        : "";
+    const combinedNotes = [linkPrefix, item.notes].filter(Boolean).join(" · ") || "—";
     return {
       id: item.id,
       name: item.name,
+      assetType,
       category: item.category || "Other",
       quantity: Number(item.quantity || 0),
       damagedQuantity,
+      lostQuantity,
+      usedQuantity,
       availableQuantity,
       unit: item.unit || "units",
       condition: item.condition || "Good",
       location: item.location || "—",
-      notes: item.notes || "—",
-      recordedBy: item.recordedBy || "Auditor",
+      notes: combinedNotes,
+      recordedBy: item.recordedBy || "Treasurer",
       lastUpdated: item.lastUpdated || item.dateRecorded || "—",
     };
   });
@@ -344,6 +372,8 @@ export function buildAuditorReportData(params: {
   const damagedLostCount = inventoryRows.filter((i) => i.condition === "Damaged" || i.condition === "Lost").length;
   const totalUnits = inventoryRows.reduce((sum, i) => sum + i.quantity, 0);
   const totalDamagedUnits = inventoryRows.reduce((sum, i) => sum + i.damagedQuantity, 0);
+  const totalLostUnits = inventoryRows.reduce((sum, i) => sum + i.lostQuantity, 0);
+  const totalUsedUnits = inventoryRows.reduce((sum, i) => sum + i.usedQuantity, 0);
   const totalAvailableUnits = inventoryRows.reduce((sum, i) => sum + i.availableQuantity, 0);
 
   return {
@@ -394,6 +424,8 @@ export function buildAuditorReportData(params: {
       damagedLostCount,
       totalUnits,
       totalDamagedUnits,
+      totalLostUnits,
+      totalUsedUnits,
       totalAvailableUnits,
     },
     inventoryRows,
@@ -591,39 +623,60 @@ export function buildAuditorReportPrintHtml(data: AuditorReportData): string {
   <h2>V. Association Property &amp; Custodial Inventory Registry (Auditor's Custody)</h2>
   <table>
     <thead>
-      <tr><th class="num">Registered Items</th><th class="num">Good</th><th class="num">Needs Repair</th><th class="num">Damaged / Lost</th><th class="num">Total Units</th><th class="num">Damaged Units</th><th class="num">Available Units</th></tr>
+      <tr><th class="num">Items</th><th class="num">Purchased Units</th><th class="num">Available</th><th class="num">Used / Consumed</th><th class="num">Damaged</th><th class="num">Lost</th></tr>
     </thead>
     <tbody>
       <tr>
         <td class="num"><strong>${inventorySummary.totalItems}</strong></td>
-        <td class="num" style="color:#166534;font-weight:700;">${inventorySummary.goodCount}</td>
-        <td class="num" style="color:#92400e;font-weight:700;">${inventorySummary.needsRepairCount}</td>
-        <td class="num" style="color:#b91c1c;font-weight:700;">${inventorySummary.damagedLostCount}</td>
         <td class="num">${inventorySummary.totalUnits}</td>
-        <td class="num">${inventorySummary.totalDamagedUnits}</td>
-        <td class="num"><strong>${inventorySummary.totalAvailableUnits}</strong></td>
+        <td class="num" style="color:#166534;font-weight:700;">${inventorySummary.totalAvailableUnits}</td>
+        <td class="num">${inventorySummary.totalUsedUnits}</td>
+        <td class="num" style="color:#92400e;font-weight:700;">${inventorySummary.totalDamagedUnits}</td>
+        <td class="num" style="color:#b91c1c;font-weight:700;">${inventorySummary.totalLostUnits}</td>
       </tr>
     </tbody>
   </table>
 
+  <p class="muted" style="margin:6px 0 4px;"><strong>A. Rental Assets (${inventoryRows.filter((i) => i.assetType === "rental").length})</strong></p>
   <table>
     <thead>
-      <tr><th>Item Name</th><th>Category</th><th class="num">Total</th><th class="num">Damaged</th><th class="num">Available</th><th>Condition</th><th>Location</th><th>Custodial Notes</th><th>Updated</th></tr>
+      <tr><th>Item Name</th><th class="num">Purchased</th><th class="num">Damaged</th><th class="num">Lost</th><th class="num">Available</th><th>Condition</th><th>Location</th><th>Inspection Notes</th></tr>
     </thead>
     <tbody>
-      ${inventoryRows.length > 0 ? inventoryRows.map((i) => `
+      ${inventoryRows.filter((i) => i.assetType === "rental").length > 0 ? inventoryRows.filter((i) => i.assetType === "rental").map((i) => `
         <tr>
           <td><strong>${escapeHtml(i.name)}</strong></td>
-          <td>${escapeHtml(i.category)}</td>
           <td class="num">${i.quantity} ${escapeHtml(i.unit)}</td>
           <td class="num">${i.damagedQuantity}</td>
+          <td class="num">${i.lostQuantity}</td>
           <td class="num"><strong>${i.availableQuantity}</strong></td>
           <td>${escapeHtml(i.condition)}</td>
           <td>${escapeHtml(i.location)}</td>
           <td>${escapeHtml(i.notes)}</td>
-          <td>${escapeHtml(i.lastUpdated)}</td>
         </tr>
-      `).join("") : `<tr><td colspan="9" class="muted">No association inventory items recorded.</td></tr>`}
+      `).join("") : `<tr><td colspan="8" class="muted">No rental assets recorded.</td></tr>`}
+    </tbody>
+  </table>
+
+  <p class="muted" style="margin:8px 0 4px;"><strong>B. Usable Assets &amp; Consumable Supplies (${inventoryRows.filter((i) => i.assetType === "usable").length})</strong></p>
+  <table>
+    <thead>
+      <tr><th>Item Name</th><th>Category</th><th class="num">Purchased</th><th class="num">Used</th><th class="num">Damaged</th><th class="num">Lost</th><th class="num">Available</th><th>Condition</th><th>Inspection Notes</th></tr>
+    </thead>
+    <tbody>
+      ${inventoryRows.filter((i) => i.assetType === "usable").length > 0 ? inventoryRows.filter((i) => i.assetType === "usable").map((i) => `
+        <tr>
+          <td><strong>${escapeHtml(i.name)}</strong></td>
+          <td>${escapeHtml(i.category)}</td>
+          <td class="num">${i.quantity} ${escapeHtml(i.unit)}</td>
+          <td class="num">${i.usedQuantity}</td>
+          <td class="num">${i.damagedQuantity}</td>
+          <td class="num">${i.lostQuantity}</td>
+          <td class="num"><strong>${i.availableQuantity}</strong></td>
+          <td>${escapeHtml(i.condition)}</td>
+          <td>${escapeHtml(i.notes)}</td>
+        </tr>
+      `).join("") : `<tr><td colspan="9" class="muted">No usable assets or supplies recorded.</td></tr>`}
     </tbody>
   </table>
 
@@ -958,54 +1011,91 @@ export default function AuditorReport({
             <thead>
               <tr>
                 <th className="text-right">Items</th>
-                <th className="text-right">Good</th>
-                <th className="text-right">Needs Repair</th>
-                <th className="text-right">Damaged / Lost</th>
-                <th className="text-right">Total Units</th>
-                <th className="text-right">Damaged Units</th>
-                <th className="text-right">Available Units</th>
+                <th className="text-right">Purchased</th>
+                <th className="text-right">Available</th>
+                <th className="text-right">Used</th>
+                <th className="text-right">Damaged</th>
+                <th className="text-right">Lost</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td className="text-right font-bold">{inventorySummary.totalItems}</td>
-                <td className="text-right font-bold text-emerald-800">{inventorySummary.goodCount}</td>
-                <td className="text-right font-bold text-amber-800">{inventorySummary.needsRepairCount}</td>
-                <td className="text-right font-bold text-rose-700">{inventorySummary.damagedLostCount}</td>
                 <td className="text-right">{inventorySummary.totalUnits}</td>
-                <td className="text-right">{inventorySummary.totalDamagedUnits}</td>
-                <td className="text-right font-bold">{inventorySummary.totalAvailableUnits}</td>
+                <td className="text-right font-bold text-emerald-800">{inventorySummary.totalAvailableUnits}</td>
+                <td className="text-right">{inventorySummary.totalUsedUnits}</td>
+                <td className="text-right font-bold text-amber-800">{inventorySummary.totalDamagedUnits}</td>
+                <td className="text-right font-bold text-rose-700">{inventorySummary.totalLostUnits}</td>
               </tr>
             </tbody>
           </table>
 
-          <table className="pr-table mt-2">
+          <p className="text-xs font-bold text-slate-700 mt-3 mb-1">
+            A. Rental Assets ({inventoryRows.filter((i) => i.assetType === "rental").length})
+          </p>
+          <table className="pr-table">
             <thead>
               <tr>
                 <th>Item Name</th>
-                <th>Category</th>
-                <th className="text-right">Total</th>
+                <th className="text-right">Purchased</th>
                 <th className="text-right">Damaged</th>
+                <th className="text-right">Lost</th>
                 <th className="text-right">Available</th>
                 <th>Condition</th>
                 <th>Location</th>
-                <th>Custodial Notes</th>
+                <th>Notes</th>
               </tr>
             </thead>
             <tbody>
-              {inventoryRows.length === 0 ? (
-                <tr><td colSpan={8} className="text-slate-500">No association inventory items recorded.</td></tr>
+              {inventoryRows.filter((i) => i.assetType === "rental").length === 0 ? (
+                <tr><td colSpan={8} className="text-slate-500">No rental assets recorded.</td></tr>
               ) : (
-                inventoryRows.map((item) => (
+                inventoryRows.filter((i) => i.assetType === "rental").map((item) => (
                   <tr key={item.id}>
                     <td><strong>{item.name}</strong></td>
-                    <td>{item.category}</td>
                     <td className="text-right">{item.quantity} {item.unit}</td>
                     <td className="text-right">{item.damagedQuantity}</td>
+                    <td className="text-right">{item.lostQuantity}</td>
                     <td className="text-right font-bold">{item.availableQuantity}</td>
                     <td>{item.condition}</td>
                     <td>{item.location}</td>
                     <td>{item.notes}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          <p className="text-xs font-bold text-slate-700 mt-3 mb-1">
+            B. Usable Assets &amp; Consumable Supplies ({inventoryRows.filter((i) => i.assetType === "usable").length})
+          </p>
+          <table className="pr-table">
+            <thead>
+              <tr>
+                <th>Item Name</th>
+                <th>Category</th>
+                <th className="text-right">Purchased</th>
+                <th className="text-right">Used</th>
+                <th className="text-right">Damaged</th>
+                <th className="text-right">Lost</th>
+                <th className="text-right">Available</th>
+                <th>Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inventoryRows.filter((i) => i.assetType === "usable").length === 0 ? (
+                <tr><td colSpan={8} className="text-slate-500">No usable assets or supplies recorded.</td></tr>
+              ) : (
+                inventoryRows.filter((i) => i.assetType === "usable").map((item) => (
+                  <tr key={item.id}>
+                    <td><strong>{item.name}</strong></td>
+                    <td>{item.category}</td>
+                    <td className="text-right">{item.quantity} {item.unit}</td>
+                    <td className="text-right">{item.usedQuantity}</td>
+                    <td className="text-right">{item.damagedQuantity}</td>
+                    <td className="text-right">{item.lostQuantity}</td>
+                    <td className="text-right font-bold">{item.availableQuantity}</td>
+                    <td>{item.condition}</td>
                   </tr>
                 ))
               )}

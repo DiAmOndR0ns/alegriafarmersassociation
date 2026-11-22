@@ -2162,8 +2162,9 @@ export default function App() {
         return;
       }
     }
+    const { assetPurchase, ...cleanTxData } = txData;
     const newTx: FinancialTransaction = {
-      ...txData,
+      ...cleanTxData,
       id: `tx-${Date.now()}`,
       auditedStatus: 'Unaudited'
     };
@@ -2171,25 +2172,84 @@ export default function App() {
     setTransactions(updated);
     updateStorage('bafa_transactions', updated);
 
-    if (isOnline) {
-      logAction('Recorded Transaction', `Logged PHP ${newTx.amount.toLocaleString()} ${newTx.type} under "${newTx.category}"`);
-      showToastMessage(`Contribution & ledger entry recorded. Syncing to database...`, 'info');
-      pushAllDataToCloud({ financialTransactions: updated }, { silent: false, source: 'Contribution Recorded' });
-    } else {
-      addToSyncQueue('create', 'transaction', newTx);
+    // If this expense is an association asset purchase, automatically create or restock
+    // the linked custodial inventory record (Treasurer purchases -> Auditor inspects).
+    let updatedInventory: InventoryItem[] | undefined;
+    let assetSummary = '';
+    if (newTx.type === 'expense' && assetPurchase && assetPurchase.quantity > 0) {
+      const todayStr = newTx.date || new Date().toISOString().split('T')[0];
+      const addedQty = Math.max(1, Math.floor(Number(assetPurchase.quantity) || 0));
+      if (assetPurchase.mode === 'existing' && assetPurchase.existingInventoryId) {
+        const target = inventory.find(item => item.id === assetPurchase.existingInventoryId);
+        if (target) {
+          const nextQty = Math.max(0, Math.floor(Number(target.quantity) || 0)) + addedQty;
+          const updatedItem: InventoryItem = {
+            ...target,
+            quantity: nextQty,
+            purchaseTransactionId: newTx.id,
+            activityId: newTx.activityId ?? target.activityId,
+            meetingId: newTx.meetingId ?? target.meetingId,
+            lastUpdated: todayStr
+          };
+          updatedInventory = inventory.map(item => (item.id === target.id ? updatedItem : item));
+          assetSummary = ` (+${addedQty} ${target.unit} added to "${target.name}")`;
+        }
+      }
+      if (!updatedInventory) {
+        const newAsset: InventoryItem = {
+          id: `inv-${Date.now() + 1}`,
+          name: assetPurchase.itemName.trim(),
+          assetType: assetPurchase.assetType,
+          category: assetPurchase.assetType === 'rental' ? 'Rental Assets' : (assetPurchase.category || 'Office Supplies'),
+          quantity: addedQty,
+          damagedQuantity: 0,
+          lostQuantity: 0,
+          usedQuantity: 0,
+          unit: assetPurchase.unit.trim() || 'pieces',
+          condition: 'Good',
+          location: assetPurchase.location?.trim() || undefined,
+          purchaseTransactionId: newTx.id,
+          activityId: newTx.activityId,
+          meetingId: newTx.meetingId,
+          recordedBy: newTx.recordedBy || `Treasurer (${getOfficerName('Treasurer')})`,
+          dateRecorded: todayStr,
+          lastUpdated: todayStr
+        };
+        updatedInventory = [newAsset, ...inventory];
+        assetSummary = ` (Added ${addedQty} ${newAsset.unit} of "${newAsset.name}" to ${newAsset.assetType === 'rental' ? 'Rental Assets' : 'Usable Assets'})`;
+      }
+      setInventory(updatedInventory);
+      updateStorage('bafa_inventory', updatedInventory);
     }
 
     // Recompute the live balance from the initial fund plus the full ledger.
     // Deriving (rather than incrementing) means the balance can never drift from
     // the transactions that produced it, and overspending shows as negative.
+    let updatedFunds: OrganizationFund[] | undefined;
     if (newTx.fundSource) {
-      const updatedFunds = computeFundBalances(funds, updated);
-
+      updatedFunds = computeFundBalances(funds, updated);
       setFunds(updatedFunds);
       updateStorage('bafa_funds', updatedFunds);
-      if (isOnline) {
-        pushAllDataToCloud({ funds: updatedFunds }, { silent: true, source: 'Fund Balance Updated' });
-      }
+    }
+
+    if (isOnline) {
+      logAction('Recorded Transaction', `Logged PHP ${newTx.amount.toLocaleString()} ${newTx.type} under "${newTx.category}"${assetSummary}`);
+      showToastMessage(
+        assetSummary
+          ? `Expense & linked inventory updated${assetSummary}. Syncing to database...`
+          : `Contribution & ledger entry recorded. Syncing to database...`,
+        'info'
+      );
+      pushAllDataToCloud(
+        {
+          financialTransactions: updated,
+          ...(updatedFunds ? { funds: updatedFunds } : {}),
+          ...(updatedInventory ? { inventory: updatedInventory } : {})
+        },
+        { silent: false, source: assetSummary ? 'Asset Purchase Recorded' : 'Contribution Recorded' }
+      );
+    } else {
+      addToSyncQueue('create', 'transaction', newTx);
     }
   };
 
@@ -4809,6 +4869,7 @@ export default function App() {
                   <TreasurerView
                     transactions={transactions}
                     activities={activities}
+                    meetings={meetings}
                     funds={funds}
                     livestockIgp={livestockIgp}
                     inventory={inventory}
@@ -4834,14 +4895,14 @@ export default function App() {
                 {currentRole === 'Auditor' && (
                   <AuditorView
                     transactions={transactions}
+                    activities={activities}
+                    meetings={meetings}
                     livestockIgp={livestockIgp}
                     onAuditTransaction={handleAuditTransaction}
                     onOpenReportModal={() => setShowReportModal(true)}
                     inventory={inventory}
                     products={products}
-                    onAddInventory={handleAddInventoryItem}
                     onUpdateInventory={handleUpdateInventoryItem}
-                    onDeleteInventory={handleDeleteInventoryItem}
                     onPublishRentalProduct={handlePublishRentalProduct}
                     auditorName={`Auditor (${getOfficerName('Auditor')})`}
                   />

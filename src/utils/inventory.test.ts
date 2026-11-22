@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { InventoryItem } from '../types';
 import {
   getAvailableInventoryQuantity,
+  getInventoryAssetType,
   getInventoryConditionForCounts,
   getInventoryDamagedQuantity,
+  getInventoryLostQuantity,
+  getInventoryUsedQuantity,
   getRentalStockStatus
 } from './inventory';
 
@@ -42,5 +45,28 @@ describe('inventory count helpers', () => {
     expect(getRentalStockStatus(item({ damagedQuantity: 10 }))).toBe('Out of Stock');
     expect(getRentalStockStatus(item({ damagedQuantity: 2 }))).toBe('Limited Stock');
     expect(getRentalStockStatus(item())).toBe('In Stock');
+  });
+
+  it('separates rental vs usable assets and tracks lost and used/consumed quantities', () => {
+    const chairs = item({ name: 'Monobloc Chairs', category: 'Rental Assets', quantity: 50, damagedQuantity: 3, lostQuantity: 2 });
+    expect(getInventoryAssetType(chairs)).toBe('rental');
+    expect(getInventoryLostQuantity(chairs)).toBe(2);
+    expect(getInventoryUsedQuantity(chairs)).toBe(0);
+    expect(getAvailableInventoryQuantity(chairs)).toBe(45);
+
+    const bondpaper = item({
+      name: 'A4 Bond Paper',
+      assetType: 'usable',
+      category: 'Office Supplies',
+      quantity: 20,
+      damagedQuantity: 1,
+      lostQuantity: 1,
+      usedQuantity: 8,
+      unit: 'reams'
+    });
+    expect(getInventoryAssetType(bondpaper)).toBe('usable');
+    expect(getInventoryUsedQuantity(bondpaper)).toBe(8);
+    expect(getAvailableInventoryQuantity(bondpaper)).toBe(10);
+    expect(getInventoryConditionForCounts(20, 0, 20)).toBe('Lost');
   });
 });

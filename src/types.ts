@@ -164,6 +164,19 @@ export interface Resolution {
   status: 'Pending Approval' | 'Approved' | 'Archived';
 }
 
+export type InventoryAssetType = 'rental' | 'usable';
+
+export interface AssetPurchaseLink {
+  mode: 'new' | 'existing';
+  existingInventoryId?: string;
+  assetType: InventoryAssetType;
+  itemName: string;
+  category: InventoryItem['category'];
+  quantity: number;
+  unit: string;
+  location?: string;
+}
+
 export interface FinancialTransaction {
   id: string;
   type: 'income' | 'expense';
@@ -172,7 +185,9 @@ export interface FinancialTransaction {
   date: string;
   description: string;
   activityId?: string;
+  meetingId?: string; // Optional link to an upcoming or scheduled association meeting
   purpose?: string; // Purpose of the funds or cash advance; required for expense/disbursement logs
+  assetPurchase?: AssetPurchaseLink; // Transient link used when Treasurer records an asset purchase into inventory
   liquidationDeadline?: string; // Deadline when an officer must liquidate funds with receipts
   recordedBy: string; // Treasurer
   fundSource?: string; // Where the budget was taken from, e.g. "GF-SLP (General Fund / DSWD-SLP)", "DOLE-IGP (DOLE Livelihood Program)", "ATI-TRG (ATI Training Fund)", "DISP-5% (Dispersal Risk Pool)", "CBU (Member Equity)"
@@ -400,16 +415,22 @@ export interface DelegationRequest {
 // since the association has no separate Property Custodian officer)
 export interface InventoryItem {
   id: string;
-  name: string; // e.g. "IGP Plastic Chairs", "Harvest Sacks", "Sprayer"
+  name: string; // e.g. "IGP Plastic Chairs", "Harvest Sacks", "Laptop", "Bond Paper"
+  assetType?: InventoryAssetType; // 'rental' (chairs, tables, sacks) vs 'usable' (laptops, bondpaper, tools)
   category: 'IGP Equipment' | 'Farm Tools' | 'Office Supplies' | 'Rental Assets' | 'Livestock' | 'Other' | string;
   quantity: number;
   damagedQuantity?: number;
-  unit: string; // e.g. "pieces", "sacks", "units"
+  lostQuantity?: number;
+  usedQuantity?: number; // For usable/consumable supplies (e.g., bond paper reams consumed)
+  unit: string; // e.g. "pieces", "sacks", "reams", "units"
   condition: 'Good' | 'Needs Repair' | 'Damaged' | 'Lost' | string;
   location?: string; // e.g. "Barangay Alegria Covered Court Storage"
-  notes?: string; // Auditor's custody / inventory notes
+  notes?: string; // Auditor's custody / inspection notes
   catalogProductId?: string;
-  recordedBy: string; // Auditor
+  purchaseTransactionId?: string; // Linked Treasurer expense transaction ID
+  activityId?: string; // Optional linked event / activity this asset was acquired for
+  meetingId?: string; // Optional linked upcoming/scheduled meeting this asset was acquired for
+  recordedBy: string; // Treasurer (purchase) / Auditor (inspection)
   dateRecorded: string;
   lastUpdated: string;
 }

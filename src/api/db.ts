@@ -216,6 +216,7 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
 
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS meeting_id VARCHAR(100);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
@@ -671,6 +672,32 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
       SET activity_id = NULL
       WHERE tx.activity_id IS NOT NULL
         AND NOT EXISTS(SELECT 1 FROM activities AS activity WHERE activity.id = tx.activity_id); `,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS asset_type VARCHAR(50) NOT NULL DEFAULT 'usable';`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS lost_quantity INTEGER DEFAULT 0;`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS used_quantity INTEGER DEFAULT 0;`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS purchase_transaction_id VARCHAR(100);`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100);`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS meeting_id VARCHAR(100);`,
+    `UPDATE financial_transactions AS tx
+      SET meeting_id = NULL
+      WHERE tx.meeting_id IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM meetings AS m WHERE m.id = tx.meeting_id);`,
+    `UPDATE inventory AS item
+      SET activity_id = NULL
+      WHERE item.activity_id IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM activities AS a WHERE a.id = item.activity_id);`,
+    `UPDATE inventory AS item
+      SET meeting_id = NULL
+      WHERE item.meeting_id IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM meetings AS m WHERE m.id = item.meeting_id);`,
+    `UPDATE inventory
+      SET asset_type = 'rental'
+      WHERE (asset_type IS NULL OR asset_type = 'usable')
+        AND (category = 'Rental Assets' OR catalog_product_id IS NOT NULL);`,
+    `UPDATE inventory AS item
+      SET purchase_transaction_id = NULL
+      WHERE item.purchase_transaction_id IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM financial_transactions AS tx WHERE tx.id = item.purchase_transaction_id);`,
     `UPDATE inventory AS item
       SET catalog_product_id = NULL
       WHERE item.catalog_product_id IS NOT NULL
@@ -697,11 +724,59 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
             FOREIGN KEY(catalog_product_id) REFERENCES products(id) ON DELETE SET NULL
             DEFERRABLE INITIALLY DEFERRED NOT VALID;
         END IF;
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
+          WHERE conname = 'inventory_purchase_transaction_id_fkey'
+            AND conrelid = 'inventory':: regclass
+  ) THEN
+          ALTER TABLE inventory
+            ADD CONSTRAINT inventory_purchase_transaction_id_fkey
+            FOREIGN KEY(purchase_transaction_id) REFERENCES financial_transactions(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
+          WHERE conname = 'financial_transactions_meeting_id_fkey'
+            AND conrelid = 'financial_transactions':: regclass
+  ) THEN
+          ALTER TABLE financial_transactions
+            ADD CONSTRAINT financial_transactions_meeting_id_fkey
+            FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
+          WHERE conname = 'inventory_activity_id_fkey'
+            AND conrelid = 'inventory':: regclass
+  ) THEN
+          ALTER TABLE inventory
+            ADD CONSTRAINT inventory_activity_id_fkey
+            FOREIGN KEY(activity_id) REFERENCES activities(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
+          WHERE conname = 'inventory_meeting_id_fkey'
+            AND conrelid = 'inventory':: regclass
+  ) THEN
+          ALTER TABLE inventory
+            ADD CONSTRAINT inventory_meeting_id_fkey
+            FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
       END $$; `,
     `ALTER TABLE financial_transactions VALIDATE CONSTRAINT financial_transactions_activity_id_fkey; `,
+    `ALTER TABLE financial_transactions VALIDATE CONSTRAINT financial_transactions_meeting_id_fkey; `,
     `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_catalog_product_id_fkey; `,
+    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_purchase_transaction_id_fkey; `,
+    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_activity_id_fkey; `,
+    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_meeting_id_fkey; `,
     `CREATE INDEX IF NOT EXISTS financial_transactions_activity_id_idx ON financial_transactions(activity_id); `,
+    `CREATE INDEX IF NOT EXISTS financial_transactions_meeting_id_idx ON financial_transactions(meeting_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_catalog_product_id_idx ON inventory(catalog_product_id); `,
+    `CREATE INDEX IF NOT EXISTS inventory_purchase_transaction_id_idx ON inventory(purchase_transaction_id); `,
+    `CREATE INDEX IF NOT EXISTS inventory_activity_id_idx ON inventory(activity_id); `,
+    `CREATE INDEX IF NOT EXISTS inventory_meeting_id_idx ON inventory(meeting_id); `,
 
     `CREATE TABLE IF NOT EXISTS achievements(
     id VARCHAR(100) PRIMARY KEY,
@@ -1093,7 +1168,13 @@ export async function initDatabaseSchema(pool: pg.Pool) {
     await client.query(`
       ALTER TABLE inventory
         ADD COLUMN IF NOT EXISTS damaged_quantity INTEGER DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100);
+        ADD COLUMN IF NOT EXISTS lost_quantity INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS used_quantity INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS asset_type VARCHAR(50) NOT NULL DEFAULT 'usable',
+        ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS purchase_transaction_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS meeting_id VARCHAR(100);
   `);
 
     // 11. Activities
@@ -1720,6 +1801,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       description: r.description,
       recordedBy: r.recorded_by,
       activityId: r.activity_id,
+      meetingId: r.meeting_id || undefined,
       fundSource: r.fund_source,
       auditedStatus: r.audited_status,
       auditedBy: r.audited_by,
@@ -1779,14 +1861,20 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const inventory = inventoryRes.rows.map(r => ({
       id: r.id,
       name: r.name,
+      assetType: (r.asset_type === 'rental' || r.category === 'Rental Assets' || Boolean(r.catalog_product_id)) ? 'rental' : 'usable',
       category: r.category,
       quantity: Number(r.quantity || 0),
       damagedQuantity: r.damaged_quantity == null ? undefined : Number(r.damaged_quantity),
+      lostQuantity: r.lost_quantity == null ? undefined : Number(r.lost_quantity),
+      usedQuantity: r.used_quantity == null ? undefined : Number(r.used_quantity),
       unit: r.unit,
       condition: r.item_condition,
       location: r.location || undefined,
       notes: r.notes || undefined,
       catalogProductId: r.catalog_product_id || undefined,
+      purchaseTransactionId: r.purchase_transaction_id || undefined,
+      activityId: r.activity_id || undefined,
+      meetingId: r.meeting_id || undefined,
       recordedBy: r.recorded_by || '',
       dateRecorded: r.date_recorded || '',
       lastUpdated: r.last_updated || ''
@@ -2389,8 +2477,8 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
           if (!existingActivityIds.has(activityId)) activityId = null;
         }
         await client.query(`
-          INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, purpose, liquidation_deadline, audited_status, audited_by, audited_date, audit_notes)
-  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, purpose, liquidation_deadline, audited_status, audited_by, audited_date, audit_notes, meeting_id)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           ON CONFLICT (id) DO UPDATE SET
   type = EXCLUDED.type,
     category = EXCLUDED.category,
@@ -2405,14 +2493,16 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     audited_status = EXCLUDED.audited_status,
     audited_by = EXCLUDED.audited_by,
     audited_date = EXCLUDED.audited_date,
-    audit_notes = EXCLUDED.audit_notes;
+    audit_notes = EXCLUDED.audit_notes,
+    meeting_id = EXCLUDED.meeting_id;
   `, [
           tx.id, txType === 'income' ? 'income' : 'expense', cleanText(tx.category, 100) || 'Uncategorized',
           cleanNumber(txAmount), cleanDateString(tx.date, 50), cleanText(tx.description, 2000),
           cleanText(tx.recordedBy, 200), activityId, cleanText(tx.fundSource, 200),
           cleanText(tx.purpose, 2000), cleanDateString(tx.liquidationDeadline, 50),
           AUDITED_STATUSES.includes(String(tx.auditedStatus)) ? String(tx.auditedStatus) : 'Unaudited',
-          cleanText(tx.auditedBy, 200), cleanDateString(tx.auditedDate, 50), cleanText(tx.auditNotes, 2000)
+          cleanText(tx.auditedBy, 200), cleanDateString(tx.auditedDate, 50), cleanText(tx.auditNotes, 2000),
+          cleanText(tx.meetingId, 100)
         ]);
       }
       console.log('[DB DEBUG] Transactions saved');
@@ -2846,18 +2936,30 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       ] },
       { table: 'inventory', deletedIds: deletedInventoryIds, fields: [
         ['name', 'name', (r) => cleanText(r.name, 300) || 'Unnamed inventory item'],
+        ['asset_type', 'assetType', (r) => (r.assetType === 'rental' || r.category === 'Rental Assets' || Boolean(r.catalogProductId)) ? 'rental' : 'usable'],
         ['category', 'category', (r) => cleanText(r.category, 100) || 'Other'],
         ['quantity', 'quantity', (r) => Math.floor(cleanNumber(r.quantity))],
         ['damaged_quantity', 'damagedQuantity', (r) => Math.min(
           Math.floor(cleanNumber(r.quantity)),
           Math.floor(cleanNumber(r.damagedQuantity))
         )],
+        ['lost_quantity', 'lostQuantity', (r) => Math.min(
+          Math.floor(cleanNumber(r.quantity)),
+          Math.floor(cleanNumber(r.lostQuantity))
+        )],
+        ['used_quantity', 'usedQuantity', (r) => Math.min(
+          Math.floor(cleanNumber(r.quantity)),
+          Math.floor(cleanNumber(r.usedQuantity))
+        )],
         ['unit', 'unit', (r) => cleanText(r.unit, 50) || 'units'],
         ['item_condition', 'condition', (r) => cleanText(r.condition, 50) || 'Good'],
         ['location', 'location', (r) => cleanText(r.location, 500)],
         ['notes', 'notes', (r) => cleanText(r.notes, 5000)],
         ['catalog_product_id', 'catalogProductId', (r) => cleanText(r.catalogProductId, 100)],
-        ['recorded_by', 'recordedBy', (r) => cleanText(r.recordedBy, 200) || 'Auditor'],
+        ['purchase_transaction_id', 'purchaseTransactionId', (r) => cleanText(r.purchaseTransactionId, 100)],
+        ['activity_id', 'activityId', (r) => cleanText(r.activityId, 100)],
+        ['meeting_id', 'meetingId', (r) => cleanText(r.meetingId, 100)],
+        ['recorded_by', 'recordedBy', (r) => cleanText(r.recordedBy, 200) || 'Treasurer'],
         ['date_recorded', 'dateRecorded', (r) => cleanDateString(r.dateRecorded, 50)],
         ['last_updated', 'lastUpdated', (r) => cleanDateString(r.lastUpdated, 50)]
       ] },
