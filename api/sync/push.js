@@ -1550,15 +1550,13 @@ async function saveIgpLivestock(client, livestock) {
     );
   }
 }
-async function saveIgpHarvests(client, harvests, replace = true) {
-  const ids = [];
+async function saveIgpHarvests(client, harvests) {
   for (const harvest of harvests) {
     if (typeof harvest?.id !== "string" || !harvest.id.trim()) {
       throw new Error("Cannot sync IGP harvest without a valid id");
     }
     const collectedBy = cleanText(harvest.collectedBy, 200);
     if (!collectedBy) throw new Error(`Cannot sync IGP harvest ${harvest.id} without a collector`);
-    ids.push(harvest.id);
     await client.query(`
       INSERT INTO afa_igp_harvests(
     id, produce, date, time, collected_by, egg_count, notes, status,
@@ -1566,7 +1564,7 @@ async function saveIgpHarvests(client, harvests, replace = true) {
   )
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       ON CONFLICT (id) DO UPDATE SET
-  produce = EXCLUDED.produce,
+  produce = COALESCE(EXCLUDED.produce, afa_igp_harvests.produce),
     date = EXCLUDED.date,
     time = EXCLUDED.time,
     collected_by = EXCLUDED.collected_by,
@@ -1595,12 +1593,6 @@ async function saveIgpHarvests(client, harvests, replace = true) {
       cleanDateString(harvest.signedDate, 50),
       cleanText(harvest.signatureRemarks, 2e3)
     ]);
-  }
-  if (replace) {
-    await client.query(
-      "DELETE FROM afa_igp_harvests WHERE NOT (id = ANY($1::varchar[]))",
-      [ids]
-    );
   }
 }
 async function saveFullStateToPostgres(pool, state) {
@@ -2030,7 +2022,7 @@ async function saveFullStateToPostgres(pool, state) {
       if (Array.isArray(state.livestockIgp.sales)) {
         await saveIgpSales(client, state.livestockIgp.sales);
       }
-      if (eggHarvests) await saveIgpHarvests(client, eggHarvests);
+      if (eggHarvests && eggHarvests.length > 0) await saveIgpHarvests(client, eggHarvests);
       console.log("[DB DEBUG] AFA IGP state saved");
     }
     if (Array.isArray(state.eggHarvests) && !state.livestockIgp) {
@@ -2040,7 +2032,7 @@ async function saveFullStateToPostgres(pool, state) {
         const existingIds = new Set(existing.rows.map((row) => row?.id));
         eggHarvests = eggHarvests.filter((harvest) => !existingIds.has(harvest?.id));
       }
-      await saveIgpHarvests(client, eggHarvests, !state.appendEggHarvests);
+      await saveIgpHarvests(client, eggHarvests);
     }
     const logList = state.systemLogs || state.logs;
     if (logList && Array.isArray(logList)) {

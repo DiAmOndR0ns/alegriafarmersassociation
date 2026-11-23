@@ -900,8 +900,8 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
   }
 
   if (failures.length > 0) {
-    const details = failures.map(({ statement, error }) => `- ${ error }: ${ statement } `).join('\n');
-    throw new Error(`Schema migration failed for ${ failures.length } statement(s): \n${ details } `);
+    const details = failures.map(({ statement, error }) => `- ${error}: ${statement} `).join('\n');
+    throw new Error(`Schema migration failed for ${failures.length} statement(s): \n${details} `);
   }
 }
 
@@ -1428,7 +1428,7 @@ export async function deleteEntityFromPostgres(
 ): Promise<{ success: boolean; deletedCount: number; entity: string; table: string }> {
   const tableName = lookupEntityTable(entity);
   if (!tableName) {
-    throw new Error(`Unknown entity type for database deletion: ${ entity } `);
+    throw new Error(`Unknown entity type for database deletion: ${entity} `);
   }
 
   const idList = Array.isArray(ids) ? ids.filter(Boolean) : [ids].filter(Boolean);
@@ -1438,8 +1438,8 @@ export async function deleteEntityFromPostgres(
 
   const client = await pool.connect();
   try {
-    const res = await client.query(`DELETE FROM ${ tableName } WHERE id = ANY($1)`, [idList]);
-    console.log(`[DB DELETE] Removed ${ res.rowCount || 0 } record(s) from "${tableName}"(IDs: ${ idList.join(', ') })`);
+    const res = await client.query(`DELETE FROM ${tableName} WHERE id = ANY($1)`, [idList]);
+    console.log(`[DB DELETE] Removed ${res.rowCount || 0} record(s) from "${tableName}"(IDs: ${idList.join(', ')})`);
     return { success: true, deletedCount: res.rowCount || 0, entity, table: tableName };
   } finally {
     client.release();
@@ -1592,7 +1592,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
         reviewedDate: r.reviewed_date,
         remarks: r.remarks
       }));
-    } catch {}
+    } catch { }
 
     // Membership dues ledger + the roster snapshots of closed membership years.
     let membershipPayments: MembershipPayment[] = [];
@@ -1620,7 +1620,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
         notes: r.notes || undefined,
         transactionId: r.transaction_id || undefined
       }));
-    } catch {}
+    } catch { }
 
     try {
       const snapRes = await client.query('SELECT * FROM membership_year_snapshots ORDER BY year DESC');
@@ -1637,7 +1637,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
         unpaidMemberIds: Array.isArray(r.unpaid_member_ids) ? r.unpaid_member_ids : [],
         remarks: r.remarks || undefined
       }));
-    } catch {}
+    } catch { }
 
     let hogState: {
       livestockInventory: IgpLivestockInventory[];
@@ -1963,13 +1963,13 @@ async function saveEntity(
   if (activeRows.length === 0) return;
 
   const columns = ['id', ...mapping.fields.map(([column]) => column)];
-  const placeholders = columns.map((_, index) => `$${ index + 1 } `);
+  const placeholders = columns.map((_, index) => `$${index + 1} `);
   const updates = columns.slice(1).map((column) =>
     mapping.table === 'users' && column === 'password'
       ? `password = CASE WHEN EXCLUDED.password IS NOT NULL AND EXCLUDED.password != '' THEN EXCLUDED.password ELSE users.password END`
-      : `${ column } = EXCLUDED.${ column } `
+      : `${column} = EXCLUDED.${column} `
   );
-  const query = `INSERT INTO ${ mapping.table } (${ columns.join(', ') }) VALUES(${ placeholders.join(', ') }) ON CONFLICT (id) DO UPDATE SET ${ updates.join(', ') } `;
+  const query = `INSERT INTO ${mapping.table} (${columns.join(', ')}) VALUES(${placeholders.join(', ')}) ON CONFLICT (id) DO UPDATE SET ${updates.join(', ')} `;
 
   for (const row of activeRows) {
     const values = [row.id, ...mapping.fields.map(([, , transform]) => transform(row, row))];
@@ -2126,17 +2126,14 @@ async function saveIgpLivestock(
 
 async function saveIgpHarvests(
   client: pg.PoolClient,
-  harvests: EggHarvestLog[],
-  replace = true
+  harvests: EggHarvestLog[]
 ) {
-  const ids: string[] = [];
   for (const harvest of harvests) {
     if (typeof harvest?.id !== 'string' || !harvest.id.trim()) {
       throw new Error('Cannot sync IGP harvest without a valid id');
     }
     const collectedBy = cleanText(harvest.collectedBy, 200);
-    if (!collectedBy) throw new Error(`Cannot sync IGP harvest ${ harvest.id } without a collector`);
-    ids.push(harvest.id);
+    if (!collectedBy) throw new Error(`Cannot sync IGP harvest ${harvest.id} without a collector`);
     await client.query(`
       INSERT INTO afa_igp_harvests(
     id, produce, date, time, collected_by, egg_count, notes, status,
@@ -2144,7 +2141,7 @@ async function saveIgpHarvests(
   )
   VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       ON CONFLICT (id) DO UPDATE SET
-  produce = EXCLUDED.produce,
+  produce = COALESCE(EXCLUDED.produce, afa_igp_harvests.produce),
     date = EXCLUDED.date,
     time = EXCLUDED.time,
     collected_by = EXCLUDED.collected_by,
@@ -2173,13 +2170,6 @@ async function saveIgpHarvests(
       cleanDateString(harvest.signedDate, 50),
       cleanText(harvest.signatureRemarks, 2000)
     ]);
-  }
-
-  if (replace) {
-    await client.query(
-      'DELETE FROM afa_igp_harvests WHERE NOT (id = ANY($1::varchar[]))',
-      [ids]
-    );
   }
 }
 
@@ -2289,7 +2279,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     if (state.deleteItem && state.deleteItem.entity && state.deleteItem.id) {
       const tbl = lookupEntityTable(state.deleteItem.entity);
       if (tbl) {
-        await client.query(`DELETE FROM ${ tbl } WHERE id = $1`, [state.deleteItem.id]);
+        await client.query(`DELETE FROM ${tbl} WHERE id = $1`, [state.deleteItem.id]);
         if (tbl === 'users') deletedUserIds.add(state.deleteItem.id);
         if (tbl === 'members') deletedMemberIds.add(state.deleteItem.id);
         if (tbl === 'meetings') deletedMeetingIds.add(state.deleteItem.id);
@@ -2304,7 +2294,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         if (tbl === 'delegation_requests') deletedDelegationIds.add(state.deleteItem.id);
         if (tbl === 'membership_payments') deletedMembershipPaymentIds.add(state.deleteItem.id);
         if (tbl === 'members') await client.query('DELETE FROM membership_payments WHERE member_id = $1', [state.deleteItem.id]);
-        console.log(`[DB DELETE] Single deleted ${ tbl } ID: ${ state.deleteItem.id } `);
+        console.log(`[DB DELETE] Single deleted ${tbl} ID: ${state.deleteItem.id} `);
       }
     }
 
@@ -2550,37 +2540,37 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       const legacyBreakdown = state.livestockIgp.herdBreakdown;
       const legacyInventory = legacyBreakdown && typeof legacyBreakdown === 'object'
         ? [
-            {
-              produce: 'Swine Raising (Baboyan)',
-              stageBreakdown: {
-                Fattening: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.fattening))),
-                Gestation: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.gestation))),
-                Lactating: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.lactating))),
-                Dispersal: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.dispersal)))
-              }
-            },
-            {
-              produce: 'Cattle Raising (Bakahan)',
-              stageBreakdown: {
-                Fattening: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.cattleFattening))),
-                Dispersal: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.cattleDispersal)))
-              }
-            },
-            {
-              produce: 'Poultry Raising (RTL)',
-              stageBreakdown: { RTL: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.rtlCount))) }
+          {
+            produce: 'Swine Raising (Baboyan)',
+            stageBreakdown: {
+              Fattening: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.fattening))),
+              Gestation: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.gestation))),
+              Lactating: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.lactating))),
+              Dispersal: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.dispersal)))
             }
-          ]
+          },
+          {
+            produce: 'Cattle Raising (Bakahan)',
+            stageBreakdown: {
+              Fattening: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.cattleFattening))),
+              Dispersal: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.cattleDispersal)))
+            }
+          },
+          {
+            produce: 'Poultry Raising (RTL)',
+            stageBreakdown: { RTL: Math.max(0, Math.floor(cleanNumber(legacyBreakdown.rtlCount))) }
+          }
+        ]
         : undefined;
       const explicitInventory = Array.isArray(state.livestockIgp.livestockInventory)
         ? state.livestockIgp.livestockInventory
         : legacyInventory;
       const derivedInventory = Array.isArray(state.livestockIgp.expenses)
         ? deriveIgpLivestockInventory(
-            state.livestockIgp.expenses,
-            Array.isArray(state.livestockIgp.sales) ? state.livestockIgp.sales : [],
-            state.livestockIgp.produces?.[0]
-          )
+          state.livestockIgp.expenses,
+          Array.isArray(state.livestockIgp.sales) ? state.livestockIgp.sales : [],
+          state.livestockIgp.produces?.[0]
+        )
         : [];
       const livestockInventory = (() => {
         if (!explicitInventory && derivedInventory.length === 0) return undefined;
@@ -2624,7 +2614,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
       if (Array.isArray(state.livestockIgp.sales)) {
         await saveIgpSales(client, state.livestockIgp.sales);
       }
-      if (eggHarvests) await saveIgpHarvests(client, eggHarvests);
+      if (eggHarvests && eggHarvests.length > 0) await saveIgpHarvests(client, eggHarvests);
       console.log('[DB DEBUG] AFA IGP state saved');
     }
 
@@ -2635,7 +2625,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         const existingIds = new Set(existing.rows.map((row: any) => row?.id));
         eggHarvests = eggHarvests.filter((harvest: any) => !existingIds.has(harvest?.id));
       }
-      await saveIgpHarvests(client, eggHarvests, !state.appendEggHarvests);
+      await saveIgpHarvests(client, eggHarvests);
     }
 
     // 6. System Logs
@@ -2904,101 +2894,123 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     }
 
     const saveMappings: SaveMapping[] = [
-      { table: 'members', deletedIds: deletedMemberIds, fields: [
-        ['name', 'name', (r) => r.name], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],
-        ['primary_crops', 'primaryCrops', (r) => r.primaryCrops || []], ['contact_number', 'contactNumber', (r) => r.contactNumber || null],
-        ['status', 'status', (r) => r.status || 'Active'], ['joined_date', 'joinedDate', (r) => r.joinedDate || null],
-        ['member_id_number', 'memberIdNumber', (r) => r.memberIdNumber || null], ['rsbsa_number', 'rsbsaNumber', (r) => r.rsbsaNumber || null],
-        ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)], ['avatar_url', 'avatarUrl', (r) => r.avatarUrl || null],
-        ['gender', 'gender', (r) => r.gender || null], ['birth_date', 'birthDate', (r) => r.birthDate || null],
-        ['membership_paid_through', 'membershipPaidThrough', (r) => r.membershipPaidThrough == null ? null : Math.floor(cleanNumber(r.membershipPaidThrough))],
-        ['inactive_reason', 'inactiveReason', (r) => r.inactiveReason ? cleanText(r.inactiveReason, 500) : null]
-      ] },
-      { table: 'meetings', deletedIds: deletedMeetingIds, fields: [
-        ['title', 'title', (r) => r.title], ['date', 'date', (r) => r.date], ['location', 'location', (r) => r.location],
-        ['attendance_count', 'attendanceCount', (r) => r.attendanceCount || 0], ['agenda', 'agenda', (r) => r.agenda || ''],
-        ['minutes', 'minutes', (r) => r.minutes || ''], ['officer_in_charge', 'officerInCharge', (r) => r.officerInCharge || ''],
-        ['attendance_record', 'attendanceRecord', (r) => JSON.stringify(r.attendanceRecord || {})]
-      ] },
-      { table: 'system_logs', deletedIds: new Set(), fields: [
-        ['timestamp', 'timestamp', (r) => r.timestamp], ['user_name', 'user', (r) => r.user || r.userName || 'Officer'],
-        ['role', 'role', (r) => r.role], ['action', 'action', (r) => r.action], ['details', 'details', (r) => r.details],
-        ['sync_status', 'syncStatus', (r) => r.syncStatus || 'synced'], ['hash', 'hash', (r) => r.hash || null], ['previous_hash', 'previousHash', (r) => r.previousHash || null]
-      ] },
-      { table: 'products', deletedIds: deletedProductIds, fields: [
-        ['name', 'name', (r) => r.name], ['ceb_name', 'cebName', (r) => r.cebName || null], ['category', 'category', (r) => r.category],
-        ['description', 'description', (r) => r.description], ['unit', 'unit', (r) => r.unit], ['price', 'price', (r) => r.price],
-        ['quantity_available', 'quantityAvailable', (r) => r.quantityAvailable || null], ['stock_status', 'stockStatus', (r) => r.stockStatus],
-        ['farmer_name', 'farmerName', (r) => r.farmerName || null], ['farmer_sitio', 'farmerSitio', (r) => r.farmerSitio || null],
-        ['farmer_phone', 'farmerPhone', (r) => r.farmerPhone || null], ['contact_person', 'contactPerson', (r) => r.contactPerson || null],
-        ['image_url', 'imageUrl', (r) => r.imageUrl || null], ['is_published', 'isPublished', (r) => r.isPublished ?? true],
-        ['updated_by', 'updatedBy', (r) => r.updatedBy || null], ['managed_by', 'managedBy', (r) => r.managedBy || null], ['date_updated', 'dateUpdated', (r) => r.dateUpdated || null]
-      ] },
-      { table: 'inventory', deletedIds: deletedInventoryIds, fields: [
-        ['name', 'name', (r) => cleanText(r.name, 300) || 'Unnamed inventory item'],
-        ['asset_type', 'assetType', (r) => (r.assetType === 'rental' || r.category === 'Rental Assets' || Boolean(r.catalogProductId)) ? 'rental' : 'usable'],
-        ['category', 'category', (r) => cleanText(r.category, 100) || 'Other'],
-        ['quantity', 'quantity', (r) => Math.floor(cleanNumber(r.quantity))],
-        ['damaged_quantity', 'damagedQuantity', (r) => Math.min(
-          Math.floor(cleanNumber(r.quantity)),
-          Math.floor(cleanNumber(r.damagedQuantity))
-        )],
-        ['lost_quantity', 'lostQuantity', (r) => Math.min(
-          Math.floor(cleanNumber(r.quantity)),
-          Math.floor(cleanNumber(r.lostQuantity))
-        )],
-        ['used_quantity', 'usedQuantity', (r) => Math.min(
-          Math.floor(cleanNumber(r.quantity)),
-          Math.floor(cleanNumber(r.usedQuantity))
-        )],
-        ['unit', 'unit', (r) => cleanText(r.unit, 50) || 'units'],
-        ['item_condition', 'condition', (r) => cleanText(r.condition, 50) || 'Good'],
-        ['location', 'location', (r) => cleanText(r.location, 500)],
-        ['notes', 'notes', (r) => cleanText(r.notes, 5000)],
-        ['catalog_product_id', 'catalogProductId', (r) => cleanText(r.catalogProductId, 100)],
-        ['purchase_transaction_id', 'purchaseTransactionId', (r) => cleanText(r.purchaseTransactionId, 100)],
-        ['activity_id', 'activityId', (r) => cleanText(r.activityId, 100)],
-        ['meeting_id', 'meetingId', (r) => cleanText(r.meetingId, 100)],
-        ['recorded_by', 'recordedBy', (r) => cleanText(r.recordedBy, 200) || 'Treasurer'],
-        ['date_recorded', 'dateRecorded', (r) => cleanDateString(r.dateRecorded, 50)],
-        ['last_updated', 'lastUpdated', (r) => cleanDateString(r.lastUpdated, 50)]
-      ] },
-      { table: 'resolutions', deletedIds: deletedResolutionIds, fields: [
-        ['resolution_number', 'resolutionNumber', (r) => r.resolutionNumber], ['title', 'title', (r) => r.title], ['description', 'description', (r) => r.description],
-        ['date_agreed', 'dateAgreed', (r) => r.dateAgreed], ['moved_by', 'movedBy', (r) => r.movedBy], ['seconded_by', 'secondedBy', (r) => r.secondedBy],
-        ['vote_in_favor', 'voteInFavor', (r) => r.voteInFavor], ['vote_against', 'voteAgainst', (r) => r.voteAgainst],
-        ['vote_abstain', 'voteAbstain', (r) => r.voteAbstain], ['status', 'status', (r) => r.status]
-      ] },
-      { table: 'announcements', deletedIds: deletedAnnouncementIds, fields: [
-        ['title', 'title', (r) => r.title], ['category', 'category', (r) => r.category], ['content', 'content', (r) => r.content],
-        ['date_posted', 'datePosted', (r) => r.datePosted], ['priority', 'priority', (r) => r.priority], ['posted_by', 'postedBy', (r) => r.postedBy]
-      ] },
-      { table: 'activities', deletedIds: deletedActivityIds, fields: [
-        ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null], ['category', 'category', (r) => r.category],
-        ['scheduled_date', 'scheduledDate', (r) => r.scheduledDate || r.dateScheduled || null], ['date_scheduled', 'dateScheduled', (r) => r.dateScheduled || r.scheduledDate || null],
-        ['scheduled_time', 'scheduledTime', (r) => r.scheduledTime || r.timeScheduled || null], ['time_scheduled', 'timeScheduled', (r) => r.timeScheduled || r.scheduledTime || null],
-        ['location', 'location', (r) => r.location], ['description', 'description', (r) => r.description], ['organizer', 'organizer', (r) => r.organizer],
-        ['status', 'status', (r) => r.status], ['status_reason', 'statusReason', (r) => r.statusReason || null],
-        ['documented_notes', 'documentedNotes', (r) => r.documentedNotes || null],
-        ['attendees_count', 'attendeesCount', (r) => r.attendeesCount || 0], ['target_audience', 'targetAudience', (r) => r.targetAudience || null], ['image_url', 'imageUrl', (r) => r.imageUrl || null]
-      ] },
-      { table: 'achievements', deletedIds: deletedAchievementIds, fields: [
-        ['year', 'year', (r) => r.year], ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null],
-        ['description', 'description', (r) => r.description], ['icon', 'icon', (r) => r.icon || 'Trophy']
-      ] },
-      { table: 'organization_funds', deletedIds: deletedFundIds, fields: [
-        ['name', 'name', (r) => r.name], ['code', 'code', (r) => r.code], ['initial_fund', 'initialFund', (r) => getInitialFund(r)],
-        ['current_balance', 'currentBalance', (r) => r.currentBalance || 0], ['description', 'description', (r) => r.description || ''],
-        ['custodian', 'custodian', (r) => r.custodian || ''], ['last_updated', 'lastUpdated', (r) => r.lastUpdated || new Date().toISOString().split('T')[0]],
-        ['category', 'category', (r) => r.category || null], ['source_origin', 'source', (r) => r.source || null]
-      ] },
-      { table: 'delegation_requests', deletedIds: deletedDelegationIds, fields: [
-        ['requested_by', 'requestedBy', (r) => r.requestedBy], ['reason', 'reason', (r) => r.reason],
-        ['scopes', 'scopes', (r) => JSON.stringify(Array.isArray(r.scopes) ? r.scopes : [])], ['requested_date', 'requestedDate', (r) => r.requestedDate],
-        ['effective_start', 'effectiveStart', (r) => r.effectiveStart || null], ['effective_end', 'effectiveEnd', (r) => r.effectiveEnd || null],
-        ['status', 'status', (r) => r.status || 'Pending'], ['reviewed_by', 'reviewedBy', (r) => r.reviewedBy || null],
-        ['reviewed_date', 'reviewedDate', (r) => r.reviewedDate || null], ['remarks', 'remarks', (r) => r.remarks || null]
-      ] }
+      {
+        table: 'members', deletedIds: deletedMemberIds, fields: [
+          ['name', 'name', (r) => r.name], ['farm_location', 'farmLocation', (r) => r.farmLocation || null],
+          ['primary_crops', 'primaryCrops', (r) => r.primaryCrops || []], ['contact_number', 'contactNumber', (r) => r.contactNumber || null],
+          ['status', 'status', (r) => r.status || 'Active'], ['joined_date', 'joinedDate', (r) => r.joinedDate || null],
+          ['member_id_number', 'memberIdNumber', (r) => r.memberIdNumber || null], ['rsbsa_number', 'rsbsaNumber', (r) => r.rsbsaNumber || null],
+          ['is_rsbsa_registered', 'isRsbsaRegistered', (r) => Boolean(r.isRsbsaRegistered)], ['avatar_url', 'avatarUrl', (r) => r.avatarUrl || null],
+          ['gender', 'gender', (r) => r.gender || null], ['birth_date', 'birthDate', (r) => r.birthDate || null],
+          ['membership_paid_through', 'membershipPaidThrough', (r) => r.membershipPaidThrough == null ? null : Math.floor(cleanNumber(r.membershipPaidThrough))],
+          ['inactive_reason', 'inactiveReason', (r) => r.inactiveReason ? cleanText(r.inactiveReason, 500) : null]
+        ]
+      },
+      {
+        table: 'meetings', deletedIds: deletedMeetingIds, fields: [
+          ['title', 'title', (r) => r.title], ['date', 'date', (r) => r.date], ['location', 'location', (r) => r.location],
+          ['attendance_count', 'attendanceCount', (r) => r.attendanceCount || 0], ['agenda', 'agenda', (r) => r.agenda || ''],
+          ['minutes', 'minutes', (r) => r.minutes || ''], ['officer_in_charge', 'officerInCharge', (r) => r.officerInCharge || ''],
+          ['attendance_record', 'attendanceRecord', (r) => JSON.stringify(r.attendanceRecord || {})]
+        ]
+      },
+      {
+        table: 'system_logs', deletedIds: new Set(), fields: [
+          ['timestamp', 'timestamp', (r) => r.timestamp], ['user_name', 'user', (r) => r.user || r.userName || 'Officer'],
+          ['role', 'role', (r) => r.role], ['action', 'action', (r) => r.action], ['details', 'details', (r) => r.details],
+          ['sync_status', 'syncStatus', (r) => r.syncStatus || 'synced'], ['hash', 'hash', (r) => r.hash || null], ['previous_hash', 'previousHash', (r) => r.previousHash || null]
+        ]
+      },
+      {
+        table: 'products', deletedIds: deletedProductIds, fields: [
+          ['name', 'name', (r) => r.name], ['ceb_name', 'cebName', (r) => r.cebName || null], ['category', 'category', (r) => r.category],
+          ['description', 'description', (r) => r.description], ['unit', 'unit', (r) => r.unit], ['price', 'price', (r) => r.price],
+          ['quantity_available', 'quantityAvailable', (r) => r.quantityAvailable || null], ['stock_status', 'stockStatus', (r) => r.stockStatus],
+          ['farmer_name', 'farmerName', (r) => r.farmerName || null], ['farmer_sitio', 'farmerSitio', (r) => r.farmerSitio || null],
+          ['farmer_phone', 'farmerPhone', (r) => r.farmerPhone || null], ['contact_person', 'contactPerson', (r) => r.contactPerson || null],
+          ['image_url', 'imageUrl', (r) => r.imageUrl || null], ['is_published', 'isPublished', (r) => r.isPublished ?? true],
+          ['updated_by', 'updatedBy', (r) => r.updatedBy || null], ['managed_by', 'managedBy', (r) => r.managedBy || null], ['date_updated', 'dateUpdated', (r) => r.dateUpdated || null]
+        ]
+      },
+      {
+        table: 'inventory', deletedIds: deletedInventoryIds, fields: [
+          ['name', 'name', (r) => cleanText(r.name, 300) || 'Unnamed inventory item'],
+          ['asset_type', 'assetType', (r) => (r.assetType === 'rental' || r.category === 'Rental Assets' || Boolean(r.catalogProductId)) ? 'rental' : 'usable'],
+          ['category', 'category', (r) => cleanText(r.category, 100) || 'Other'],
+          ['quantity', 'quantity', (r) => Math.floor(cleanNumber(r.quantity))],
+          ['damaged_quantity', 'damagedQuantity', (r) => Math.min(
+            Math.floor(cleanNumber(r.quantity)),
+            Math.floor(cleanNumber(r.damagedQuantity))
+          )],
+          ['lost_quantity', 'lostQuantity', (r) => Math.min(
+            Math.floor(cleanNumber(r.quantity)),
+            Math.floor(cleanNumber(r.lostQuantity))
+          )],
+          ['used_quantity', 'usedQuantity', (r) => Math.min(
+            Math.floor(cleanNumber(r.quantity)),
+            Math.floor(cleanNumber(r.usedQuantity))
+          )],
+          ['unit', 'unit', (r) => cleanText(r.unit, 50) || 'units'],
+          ['item_condition', 'condition', (r) => cleanText(r.condition, 50) || 'Good'],
+          ['location', 'location', (r) => cleanText(r.location, 500)],
+          ['notes', 'notes', (r) => cleanText(r.notes, 5000)],
+          ['catalog_product_id', 'catalogProductId', (r) => cleanText(r.catalogProductId, 100)],
+          ['purchase_transaction_id', 'purchaseTransactionId', (r) => cleanText(r.purchaseTransactionId, 100)],
+          ['activity_id', 'activityId', (r) => cleanText(r.activityId, 100)],
+          ['meeting_id', 'meetingId', (r) => cleanText(r.meetingId, 100)],
+          ['recorded_by', 'recordedBy', (r) => cleanText(r.recordedBy, 200) || 'Treasurer'],
+          ['date_recorded', 'dateRecorded', (r) => cleanDateString(r.dateRecorded, 50)],
+          ['last_updated', 'lastUpdated', (r) => cleanDateString(r.lastUpdated, 50)]
+        ]
+      },
+      {
+        table: 'resolutions', deletedIds: deletedResolutionIds, fields: [
+          ['resolution_number', 'resolutionNumber', (r) => r.resolutionNumber], ['title', 'title', (r) => r.title], ['description', 'description', (r) => r.description],
+          ['date_agreed', 'dateAgreed', (r) => r.dateAgreed], ['moved_by', 'movedBy', (r) => r.movedBy], ['seconded_by', 'secondedBy', (r) => r.secondedBy],
+          ['vote_in_favor', 'voteInFavor', (r) => r.voteInFavor], ['vote_against', 'voteAgainst', (r) => r.voteAgainst],
+          ['vote_abstain', 'voteAbstain', (r) => r.voteAbstain], ['status', 'status', (r) => r.status]
+        ]
+      },
+      {
+        table: 'announcements', deletedIds: deletedAnnouncementIds, fields: [
+          ['title', 'title', (r) => r.title], ['category', 'category', (r) => r.category], ['content', 'content', (r) => r.content],
+          ['date_posted', 'datePosted', (r) => r.datePosted], ['priority', 'priority', (r) => r.priority], ['posted_by', 'postedBy', (r) => r.postedBy]
+        ]
+      },
+      {
+        table: 'activities', deletedIds: deletedActivityIds, fields: [
+          ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null], ['category', 'category', (r) => r.category],
+          ['scheduled_date', 'scheduledDate', (r) => r.scheduledDate || r.dateScheduled || null], ['date_scheduled', 'dateScheduled', (r) => r.dateScheduled || r.scheduledDate || null],
+          ['scheduled_time', 'scheduledTime', (r) => r.scheduledTime || r.timeScheduled || null], ['time_scheduled', 'timeScheduled', (r) => r.timeScheduled || r.scheduledTime || null],
+          ['location', 'location', (r) => r.location], ['description', 'description', (r) => r.description], ['organizer', 'organizer', (r) => r.organizer],
+          ['status', 'status', (r) => r.status], ['status_reason', 'statusReason', (r) => r.statusReason || null],
+          ['documented_notes', 'documentedNotes', (r) => r.documentedNotes || null],
+          ['attendees_count', 'attendeesCount', (r) => r.attendeesCount || 0], ['target_audience', 'targetAudience', (r) => r.targetAudience || null], ['image_url', 'imageUrl', (r) => r.imageUrl || null]
+        ]
+      },
+      {
+        table: 'achievements', deletedIds: deletedAchievementIds, fields: [
+          ['year', 'year', (r) => r.year], ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null],
+          ['description', 'description', (r) => r.description], ['icon', 'icon', (r) => r.icon || 'Trophy']
+        ]
+      },
+      {
+        table: 'organization_funds', deletedIds: deletedFundIds, fields: [
+          ['name', 'name', (r) => r.name], ['code', 'code', (r) => r.code], ['initial_fund', 'initialFund', (r) => getInitialFund(r)],
+          ['current_balance', 'currentBalance', (r) => r.currentBalance || 0], ['description', 'description', (r) => r.description || ''],
+          ['custodian', 'custodian', (r) => r.custodian || ''], ['last_updated', 'lastUpdated', (r) => r.lastUpdated || new Date().toISOString().split('T')[0]],
+          ['category', 'category', (r) => r.category || null], ['source_origin', 'source', (r) => r.source || null]
+        ]
+      },
+      {
+        table: 'delegation_requests', deletedIds: deletedDelegationIds, fields: [
+          ['requested_by', 'requestedBy', (r) => r.requestedBy], ['reason', 'reason', (r) => r.reason],
+          ['scopes', 'scopes', (r) => JSON.stringify(Array.isArray(r.scopes) ? r.scopes : [])], ['requested_date', 'requestedDate', (r) => r.requestedDate],
+          ['effective_start', 'effectiveStart', (r) => r.effectiveStart || null], ['effective_end', 'effectiveEnd', (r) => r.effectiveEnd || null],
+          ['status', 'status', (r) => r.status || 'Pending'], ['reviewed_by', 'reviewedBy', (r) => r.reviewedBy || null],
+          ['reviewed_date', 'reviewedDate', (r) => r.reviewedDate || null], ['remarks', 'remarks', (r) => r.remarks || null]
+        ]
+      }
     ];
 
     for (const mapping of saveMappings) {
