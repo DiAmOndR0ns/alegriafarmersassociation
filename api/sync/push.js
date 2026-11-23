@@ -2965,6 +2965,7 @@ function separateEggHarvestsFromFinancialState(state, role, name, hasDelegatedAp
       (entry) => entry && typeof entry === "object" && entry.status === "Pending Audit" && typeof name === "string" && entry.collectedBy === name && Number.isInteger(entry.eggCount) && entry.eggCount >= 0 && entry.eggCount <= MAX_EGG_COUNT && typeof entry.date === "string" && typeof entry.time === "string"
     ).map((entry) => ({
       ...typeof entry.id === "string" ? { id: entry.id } : {},
+      ...typeof entry.produce === "string" && entry.produce.trim() ? { produce: entry.produce.trim().slice(0, 200) } : {},
       collectedBy: entry.collectedBy,
       eggCount: entry.eggCount,
       date: entry.date.slice(0, 50),

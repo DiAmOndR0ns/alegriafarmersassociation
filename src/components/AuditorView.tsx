@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, AlertTriangle, CheckCircle, FileText, Filter, ShieldCheck, Wallet, Package, Pencil, Boxes, Search, Wrench, ShoppingBag, PackageMinus, XCircle } from 'lucide-react';
 import { FinancialTransaction, LivestockIgpState, InventoryItem, InventoryAssetType, Product, AssociationActivity, Meeting } from '../types';
-import { getAvailableEggCount } from '../utils/eggInventory';
+import { getTotalAvailableEggCount } from '../utils/eggInventory';
 import {
   getAvailableInventoryQuantity,
   getInventoryAssetType,
@@ -189,10 +189,9 @@ export default function AuditorView({
     });
     setRentalListingItem(null);
   };
-  const availableEggCount = getAvailableEggCount(
+  const availableEggCount = getTotalAvailableEggCount(
     livestockIgp.eggHarvests || [],
-    livestockIgp.sales || [],
-    'Poultry Raising (RTL)'
+    livestockIgp.sales || []
   );
 
   const submitAudit = (event: React.FormEvent) => {

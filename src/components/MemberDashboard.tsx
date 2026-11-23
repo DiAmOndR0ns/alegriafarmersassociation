@@ -1012,6 +1012,7 @@ export default function MemberDashboard({
             currentUser={currentUser}
             isOfficerMode={false}
             users={users}
+            membershipPayments={membershipPayments}
             closedYears={livestockIgpState.closedYears || [2025]}
           />
         </div>

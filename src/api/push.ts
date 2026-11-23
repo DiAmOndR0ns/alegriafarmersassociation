@@ -319,6 +319,7 @@ export function separateEggHarvestsFromFinancialState(
       // the fields a pending harvest needs and drop workflow/MFA-side data.
       .map((entry: any) => ({
         ...(typeof entry.id === 'string' ? { id: entry.id } : {}),
+        ...(typeof entry.produce === 'string' && entry.produce.trim() ? { produce: entry.produce.trim().slice(0, 200) } : {}),
         collectedBy: entry.collectedBy,
         eggCount: entry.eggCount,
         date: entry.date.slice(0, 50),

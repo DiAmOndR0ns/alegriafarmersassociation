@@ -4935,6 +4935,8 @@ export default function App() {
                   funds={funds}
                   members={members}
                   meetings={meetings}
+                  membershipPayments={membershipPayments}
+                  membershipYear={currentMembershipYear}
                   onAddExpense={handleAddPigExpense}
                   onUpdateExpense={handleUpdatePigExpense}
                   onDeleteExpense={handleDeletePigExpense}

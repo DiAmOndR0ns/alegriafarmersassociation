@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EggHarvestLog, IgpSale } from '../types';
-import { getAvailableEggCount } from './eggInventory';
+import { getAvailableEggCount, getTotalAvailableEggCount } from './eggInventory';
 
 const harvest = (id: string, eggCount: number, status: EggHarvestLog['status'] = 'Signed'): EggHarvestLog => ({
   id,
@@ -49,5 +49,12 @@ describe('getAvailableEggCount', () => {
 
   it('excludes the edited sale when recalculating available eggs', () => {
     expect(getAvailableEggCount([harvest('h1', 300)], [sale('s1', 100)], 'Poultry Raising (RTL)', 's1')).toBe(300);
+  });
+
+  it('links harvests with blank or legacy produce names to custom RTL/poultry projects', () => {
+    const blankProduceHarvest: EggHarvestLog = { ...harvest('h-blank', 120, 'Audited'), produce: undefined };
+    const customProduceHarvest: EggHarvestLog = { ...harvest('h-custom', 80, 'Signed'), produce: 'RTL Chickens (Poultry / Eggs)' };
+    expect(getAvailableEggCount([blankProduceHarvest, customProduceHarvest], [], 'RTL Chickens (Poultry / Eggs)')).toBe(200);
+    expect(getTotalAvailableEggCount([blankProduceHarvest, customProduceHarvest], [])).toBe(200);
   });
 });

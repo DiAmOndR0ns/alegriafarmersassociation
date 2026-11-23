@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  LivestockIgpState, IgpStage, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund
+  LivestockIgpState, IgpStage, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund, MembershipPayment
 } from '../types';
 import {
   Briefcase, Plus, Trash2, Printer, Calculator, Lock, ArrowDownRight, ArrowUpRight,
@@ -35,6 +35,8 @@ interface LivestockMonitorProps {
   currentUser: User;
   isOfficerMode?: boolean;
   users?: User[];
+  membershipPayments?: MembershipPayment[];
+  membershipYear?: number;
   closedYears?: number[];
   onCloseDecemberBook?: (year: number) => void;
 }
@@ -100,6 +102,8 @@ export default function LivestockMonitor({
   isTreasurer,
   currentUser,
   users = [],
+  membershipPayments = [],
+  membershipYear,
   closedYears = state.closedYears || [],
   onCloseDecemberBook,
   onSubmitEggHarvest,
@@ -1600,6 +1604,8 @@ export default function LivestockMonitor({
         meetings={meetings}
         livestockIgpState={state}
         users={users}
+        membershipPayments={membershipPayments}
+        membershipYear={membershipYear}
       />
 
     </div>
