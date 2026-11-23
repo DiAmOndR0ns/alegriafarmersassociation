@@ -131,6 +131,7 @@ async function runSchemaMigrations(client) {
       WHERE lower(replace(role, ' ', '_')) NOT IN ('member', 'board_member');`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS fund_source TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100);`,
+    `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS meeting_id VARCHAR(100);`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_status VARCHAR(50) DEFAULT 'Unaudited';`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_by TEXT;`,
     `ALTER TABLE financial_transactions ADD COLUMN IF NOT EXISTS audited_date VARCHAR(50);`,
@@ -586,6 +587,20 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS lost_quantity INTEGER DEFAULT 0;`,
     `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS used_quantity INTEGER DEFAULT 0;`,
     `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS purchase_transaction_id VARCHAR(100);`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100);`,
+    `ALTER TABLE inventory ADD COLUMN IF NOT EXISTS meeting_id VARCHAR(100);`,
+    `UPDATE financial_transactions AS tx
+      SET meeting_id = NULL
+      WHERE tx.meeting_id IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM meetings AS m WHERE m.id = tx.meeting_id);`,
+    `UPDATE inventory AS item
+      SET activity_id = NULL
+      WHERE item.activity_id IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM activities AS a WHERE a.id = item.activity_id);`,
+    `UPDATE inventory AS item
+      SET meeting_id = NULL
+      WHERE item.meeting_id IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM meetings AS m WHERE m.id = item.meeting_id);`,
     `UPDATE inventory
       SET asset_type = 'rental'
       WHERE (asset_type IS NULL OR asset_type = 'usable')
@@ -630,13 +645,49 @@ async function runSchemaMigrations(client) {
             FOREIGN KEY(purchase_transaction_id) REFERENCES financial_transactions(id) ON DELETE SET NULL
             DEFERRABLE INITIALLY DEFERRED NOT VALID;
         END IF;
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
+          WHERE conname = 'financial_transactions_meeting_id_fkey'
+            AND conrelid = 'financial_transactions':: regclass
+  ) THEN
+          ALTER TABLE financial_transactions
+            ADD CONSTRAINT financial_transactions_meeting_id_fkey
+            FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
+          WHERE conname = 'inventory_activity_id_fkey'
+            AND conrelid = 'inventory':: regclass
+  ) THEN
+          ALTER TABLE inventory
+            ADD CONSTRAINT inventory_activity_id_fkey
+            FOREIGN KEY(activity_id) REFERENCES activities(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
+        IF NOT EXISTS(
+    SELECT 1 FROM pg_constraint
+          WHERE conname = 'inventory_meeting_id_fkey'
+            AND conrelid = 'inventory':: regclass
+  ) THEN
+          ALTER TABLE inventory
+            ADD CONSTRAINT inventory_meeting_id_fkey
+            FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE SET NULL
+            DEFERRABLE INITIALLY DEFERRED NOT VALID;
+        END IF;
       END $$; `,
     `ALTER TABLE financial_transactions VALIDATE CONSTRAINT financial_transactions_activity_id_fkey; `,
+    `ALTER TABLE financial_transactions VALIDATE CONSTRAINT financial_transactions_meeting_id_fkey; `,
     `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_catalog_product_id_fkey; `,
     `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_purchase_transaction_id_fkey; `,
+    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_activity_id_fkey; `,
+    `ALTER TABLE inventory VALIDATE CONSTRAINT inventory_meeting_id_fkey; `,
     `CREATE INDEX IF NOT EXISTS financial_transactions_activity_id_idx ON financial_transactions(activity_id); `,
+    `CREATE INDEX IF NOT EXISTS financial_transactions_meeting_id_idx ON financial_transactions(meeting_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_catalog_product_id_idx ON inventory(catalog_product_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_purchase_transaction_id_idx ON inventory(purchase_transaction_id); `,
+    `CREATE INDEX IF NOT EXISTS inventory_activity_id_idx ON inventory(activity_id); `,
+    `CREATE INDEX IF NOT EXISTS inventory_meeting_id_idx ON inventory(meeting_id); `,
     `CREATE TABLE IF NOT EXISTS achievements(
     id VARCHAR(100) PRIMARY KEY,
     year VARCHAR(20) NOT NULL,
@@ -1001,7 +1052,9 @@ async function initDatabaseSchema(pool) {
         ADD COLUMN IF NOT EXISTS used_quantity INTEGER DEFAULT 0,
         ADD COLUMN IF NOT EXISTS asset_type VARCHAR(50) NOT NULL DEFAULT 'usable',
         ADD COLUMN IF NOT EXISTS catalog_product_id VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS purchase_transaction_id VARCHAR(100);
+        ADD COLUMN IF NOT EXISTS purchase_transaction_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS activity_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS meeting_id VARCHAR(100);
   `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS activities(
