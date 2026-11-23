@@ -2175,6 +2175,7 @@ export default function App() {
     // If this expense is an association asset purchase, automatically create or restock
     // the linked custodial inventory record (Treasurer purchases -> Auditor inspects).
     let updatedInventory: InventoryItem[] | undefined;
+    let updatedProducts: Product[] | undefined;
     let assetSummary = '';
     if (newTx.type === 'expense' && assetPurchase && assetPurchase.quantity > 0) {
       const todayStr = newTx.date || new Date().toISOString().split('T')[0];
@@ -2193,6 +2194,21 @@ export default function App() {
           };
           updatedInventory = inventory.map(item => (item.id === target.id ? updatedItem : item));
           assetSummary = ` (+${addedQty} ${target.unit} added to "${target.name}")`;
+          if (updatedItem.catalogProductId) {
+            const linkedProduct = products.find(product => product.id === updatedItem.catalogProductId);
+            if (linkedProduct) {
+              updatedProducts = products.map(product => product.id === linkedProduct.id
+                ? {
+                  ...product,
+                  quantityAvailable: `${getAvailableInventoryQuantity(updatedItem)} ${updatedItem.unit} available`,
+                  stockStatus: getRentalStockStatus(updatedItem),
+                  dateUpdated: todayStr
+                }
+                : product);
+              setProducts(updatedProducts);
+              updateStorage('bafa_products', updatedProducts);
+            }
+          }
         }
       }
       if (!updatedInventory) {
@@ -2244,7 +2260,8 @@ export default function App() {
         {
           financialTransactions: updated,
           ...(updatedFunds ? { funds: updatedFunds } : {}),
-          ...(updatedInventory ? { inventory: updatedInventory } : {})
+          ...(updatedInventory ? { inventory: updatedInventory } : {}),
+          ...(updatedProducts ? { products: updatedProducts } : {})
         },
         { silent: false, source: assetSummary ? 'Asset Purchase Recorded' : 'Contribution Recorded' }
       );

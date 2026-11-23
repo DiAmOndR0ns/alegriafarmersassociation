@@ -162,7 +162,7 @@ export default function OfficerReportModal({
   const fundIncomeBreakdown: Record<string, number> = {};
 
   transactions.forEach(t => {
-    const budgetSource = t.fundSource || 'General Operational Fund (GF-SLP)';
+    const budgetSource = t.fundSource || 'Unspecified';
     if (t.type === 'income') {
       totalIncome += t.amount;
       incomeCategoryTotals[t.category] = (incomeCategoryTotals[t.category] || 0) + t.amount;
@@ -439,7 +439,7 @@ export default function OfficerReportModal({
                 <td>${t.date}</td>
                 <td><span class="${t.type}">${t.type.toUpperCase()}</span></td>
                 <td>${t.category}</td>
-                <td><strong style="color: #0f766e;">${t.fundSource || 'General Operational Fund (GF-SLP)'}</strong></td>
+                <td><strong style="color: #0f766e;">${t.fundSource || 'Unspecified'}</strong></td>
                 <td>${t.description}</td>
                 <td>${t.recordedBy}</td>
                 <td class="${t.type === 'income' ? 'income' : 'expense'}">PHP ${t.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
@@ -787,7 +787,7 @@ export default function OfficerReportModal({
           t.type,
           `"${t.category.replace(/"/g, '""')}"`,
           `"${activityName.replace(/"/g, '""')}"`,
-          `"${(t.fundSource || 'General Operational Fund (GF-SLP)').replace(/"/g, '""')}"`,
+          `"${(t.fundSource || 'Unspecified').replace(/"/g, '""')}"`,
           `"${t.description.replace(/"/g, '""')}"`,
           `"${t.recordedBy.replace(/"/g, '""')}"`,
           t.amount.toFixed(2),

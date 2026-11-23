@@ -10,7 +10,7 @@ import {
   AssociationActivity, AssociationAchievement, User
 } from '../types';
 import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
-import { getAvailableEggCount, isEggCatalogProduct } from '../utils/eggInventory';
+import { getTotalAvailableEggCount, isEggCatalogProduct } from '../utils/eggInventory';
 import { useLanguage } from '../i18n/LanguageContext';
 
 /** Shape returned by GET /api/public/summary (aggregates + officer names only). */
@@ -71,24 +71,9 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
     return products.filter(product => product.isPublished);
   }
 
-  const eggProjects = new Set([
-    'Poultry Raising (RTL)',
-    ...(livestockIgp.produces || []).filter(isPoultryProject),
-    ...(livestockIgp.eggHarvests || [])
-      .map(harvest => harvest.produce || 'Poultry Raising (RTL)')
-      .filter(isPoultryProject),
-    ...(livestockIgp.sales || [])
-      .filter(sale => sale.stage === 'Eggs' || sale.stage === 'General' || sale.stage === undefined)
-      .map(sale => sale.produce || 'Poultry Raising (RTL)')
-      .filter(isPoultryProject)
-  ]);
-  const availableEggs = [...eggProjects].reduce(
-    (total, produce) => total + getAvailableEggCount(
-      livestockIgp.eggHarvests || [],
-      livestockIgp.sales || [],
-      produce
-    ),
-    0
+  const availableEggs = getTotalAvailableEggCount(
+    livestockIgp.eggHarvests || [],
+    livestockIgp.sales || []
   );
 
   // If verified egg stock is available and a price is configured, auto-publish with live stock.

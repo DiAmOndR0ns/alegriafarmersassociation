@@ -654,6 +654,15 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
         });
       }
     }
+    // Custodial inventory writes are restricted to Treasurer (asset purchases),
+    // Auditor (physical condition inspection), and President (backup restore).
+    const canWriteInventory = isTreasurerRole(user.role) || normalizedPushRole === 'auditor' || isPresidentRole(user.role);
+    if (!canWriteInventory && ('inventory' in state || (safeState.deletedIds && typeof safeState.deletedIds === 'object' && Array.isArray((safeState.deletedIds as Record<string, unknown>).inventory) && ((safeState.deletedIds as Record<string, unknown>).inventory as unknown[]).length > 0))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: 'Only the Treasurer (asset purchases) or Auditor (custodial inspection) may update association inventory.',
+      });
+    }
     await saveFullStateToPostgres(getPool(), safeState);
     return sendResponse(res, 200, { success: true, offlineMode: false, message: 'State successfully synced.' });
   } catch (error: any) {

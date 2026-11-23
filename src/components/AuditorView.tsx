@@ -618,7 +618,7 @@ export default function AuditorView({
                     <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                       <Wallet className="h-3 w-3" />
                       {transaction.type === 'income' ? 'Deposited to: ' : 'Budget source: '}
-                      {transaction.fundSource || 'General Operational Fund'}
+                      {transaction.fundSource || 'Unspecified'}
                     </span>
                     {resolveAcquisitionLink(transaction.activityId, transaction.meetingId) && (
                       <span className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800">

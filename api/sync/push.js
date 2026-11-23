@@ -1858,6 +1858,7 @@ async function saveFullStateToPostgres(pool, state) {
         ).map((activity) => activity.id)
       );
       let existingActivityIds = null;
+      let existingMeetingIds = null;
       console.log("[DB DEBUG] Saving", txList.length, "transactions...");
       for (const tx of txList) {
         if (!tx || typeof tx.id !== "string" || !tx.id) continue;
@@ -1872,6 +1873,14 @@ async function saveFullStateToPostgres(pool, state) {
             existingActivityIds = new Set(existingActivities.rows.map((row) => String(row.id)));
           }
           if (!existingActivityIds.has(activityId)) activityId = null;
+        }
+        let meetingId = cleanText(tx.meetingId, 100);
+        if (meetingId) {
+          if (!existingMeetingIds) {
+            const existingMeetings = await client.query("SELECT id FROM meetings");
+            existingMeetingIds = new Set(existingMeetings.rows.map((row) => String(row.id)));
+          }
+          if (!existingMeetingIds.has(meetingId)) meetingId = null;
         }
         await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, purpose, liquidation_deadline, audited_status, audited_by, audited_date, audit_notes, meeting_id)
@@ -1908,7 +1917,7 @@ async function saveFullStateToPostgres(pool, state) {
           cleanText(tx.auditedBy, 200),
           cleanDateString(tx.auditedDate, 50),
           cleanText(tx.auditNotes, 2e3),
-          cleanText(tx.meetingId, 100)
+          meetingId
         ]);
       }
       console.log("[DB DEBUG] Transactions saved");
@@ -2341,158 +2350,202 @@ async function saveFullStateToPostgres(pool, state) {
       }
     }
     const saveMappings = [
-      { table: "members", deletedIds: deletedMemberIds, fields: [
-        ["name", "name", (r) => r.name],
-        ["farm_location", "farmLocation", (r) => r.farmLocation || null],
-        ["primary_crops", "primaryCrops", (r) => r.primaryCrops || []],
-        ["contact_number", "contactNumber", (r) => r.contactNumber || null],
-        ["status", "status", (r) => r.status || "Active"],
-        ["joined_date", "joinedDate", (r) => r.joinedDate || null],
-        ["member_id_number", "memberIdNumber", (r) => r.memberIdNumber || null],
-        ["rsbsa_number", "rsbsaNumber", (r) => r.rsbsaNumber || null],
-        ["is_rsbsa_registered", "isRsbsaRegistered", (r) => Boolean(r.isRsbsaRegistered)],
-        ["avatar_url", "avatarUrl", (r) => r.avatarUrl || null],
-        ["gender", "gender", (r) => r.gender || null],
-        ["birth_date", "birthDate", (r) => r.birthDate || null],
-        ["membership_paid_through", "membershipPaidThrough", (r) => r.membershipPaidThrough == null ? null : Math.floor(cleanNumber(r.membershipPaidThrough))],
-        ["inactive_reason", "inactiveReason", (r) => r.inactiveReason ? cleanText(r.inactiveReason, 500) : null]
-      ] },
-      { table: "meetings", deletedIds: deletedMeetingIds, fields: [
-        ["title", "title", (r) => r.title],
-        ["date", "date", (r) => r.date],
-        ["location", "location", (r) => r.location],
-        ["attendance_count", "attendanceCount", (r) => r.attendanceCount || 0],
-        ["agenda", "agenda", (r) => r.agenda || ""],
-        ["minutes", "minutes", (r) => r.minutes || ""],
-        ["officer_in_charge", "officerInCharge", (r) => r.officerInCharge || ""],
-        ["attendance_record", "attendanceRecord", (r) => JSON.stringify(r.attendanceRecord || {})]
-      ] },
-      { table: "system_logs", deletedIds: /* @__PURE__ */ new Set(), fields: [
-        ["timestamp", "timestamp", (r) => r.timestamp],
-        ["user_name", "user", (r) => r.user || r.userName || "Officer"],
-        ["role", "role", (r) => r.role],
-        ["action", "action", (r) => r.action],
-        ["details", "details", (r) => r.details],
-        ["sync_status", "syncStatus", (r) => r.syncStatus || "synced"],
-        ["hash", "hash", (r) => r.hash || null],
-        ["previous_hash", "previousHash", (r) => r.previousHash || null]
-      ] },
-      { table: "products", deletedIds: deletedProductIds, fields: [
-        ["name", "name", (r) => r.name],
-        ["ceb_name", "cebName", (r) => r.cebName || null],
-        ["category", "category", (r) => r.category],
-        ["description", "description", (r) => r.description],
-        ["unit", "unit", (r) => r.unit],
-        ["price", "price", (r) => r.price],
-        ["quantity_available", "quantityAvailable", (r) => r.quantityAvailable || null],
-        ["stock_status", "stockStatus", (r) => r.stockStatus],
-        ["farmer_name", "farmerName", (r) => r.farmerName || null],
-        ["farmer_sitio", "farmerSitio", (r) => r.farmerSitio || null],
-        ["farmer_phone", "farmerPhone", (r) => r.farmerPhone || null],
-        ["contact_person", "contactPerson", (r) => r.contactPerson || null],
-        ["image_url", "imageUrl", (r) => r.imageUrl || null],
-        ["is_published", "isPublished", (r) => r.isPublished ?? true],
-        ["updated_by", "updatedBy", (r) => r.updatedBy || null],
-        ["managed_by", "managedBy", (r) => r.managedBy || null],
-        ["date_updated", "dateUpdated", (r) => r.dateUpdated || null]
-      ] },
-      { table: "inventory", deletedIds: deletedInventoryIds, fields: [
-        ["name", "name", (r) => cleanText(r.name, 300) || "Unnamed inventory item"],
-        ["asset_type", "assetType", (r) => r.assetType === "rental" || r.category === "Rental Assets" || Boolean(r.catalogProductId) ? "rental" : "usable"],
-        ["category", "category", (r) => cleanText(r.category, 100) || "Other"],
-        ["quantity", "quantity", (r) => Math.floor(cleanNumber(r.quantity))],
-        ["damaged_quantity", "damagedQuantity", (r) => Math.min(
-          Math.floor(cleanNumber(r.quantity)),
-          Math.floor(cleanNumber(r.damagedQuantity))
-        )],
-        ["lost_quantity", "lostQuantity", (r) => Math.min(
-          Math.floor(cleanNumber(r.quantity)),
-          Math.floor(cleanNumber(r.lostQuantity))
-        )],
-        ["used_quantity", "usedQuantity", (r) => Math.min(
-          Math.floor(cleanNumber(r.quantity)),
-          Math.floor(cleanNumber(r.usedQuantity))
-        )],
-        ["unit", "unit", (r) => cleanText(r.unit, 50) || "units"],
-        ["item_condition", "condition", (r) => cleanText(r.condition, 50) || "Good"],
-        ["location", "location", (r) => cleanText(r.location, 500)],
-        ["notes", "notes", (r) => cleanText(r.notes, 5e3)],
-        ["catalog_product_id", "catalogProductId", (r) => cleanText(r.catalogProductId, 100)],
-        ["purchase_transaction_id", "purchaseTransactionId", (r) => cleanText(r.purchaseTransactionId, 100)],
-        ["activity_id", "activityId", (r) => cleanText(r.activityId, 100)],
-        ["meeting_id", "meetingId", (r) => cleanText(r.meetingId, 100)],
-        ["recorded_by", "recordedBy", (r) => cleanText(r.recordedBy, 200) || "Treasurer"],
-        ["date_recorded", "dateRecorded", (r) => cleanDateString(r.dateRecorded, 50)],
-        ["last_updated", "lastUpdated", (r) => cleanDateString(r.lastUpdated, 50)]
-      ] },
-      { table: "resolutions", deletedIds: deletedResolutionIds, fields: [
-        ["resolution_number", "resolutionNumber", (r) => r.resolutionNumber],
-        ["title", "title", (r) => r.title],
-        ["description", "description", (r) => r.description],
-        ["date_agreed", "dateAgreed", (r) => r.dateAgreed],
-        ["moved_by", "movedBy", (r) => r.movedBy],
-        ["seconded_by", "secondedBy", (r) => r.secondedBy],
-        ["vote_in_favor", "voteInFavor", (r) => r.voteInFavor],
-        ["vote_against", "voteAgainst", (r) => r.voteAgainst],
-        ["vote_abstain", "voteAbstain", (r) => r.voteAbstain],
-        ["status", "status", (r) => r.status]
-      ] },
-      { table: "announcements", deletedIds: deletedAnnouncementIds, fields: [
-        ["title", "title", (r) => r.title],
-        ["category", "category", (r) => r.category],
-        ["content", "content", (r) => r.content],
-        ["date_posted", "datePosted", (r) => r.datePosted],
-        ["priority", "priority", (r) => r.priority],
-        ["posted_by", "postedBy", (r) => r.postedBy]
-      ] },
-      { table: "activities", deletedIds: deletedActivityIds, fields: [
-        ["title", "title", (r) => r.title],
-        ["ceb_title", "cebTitle", (r) => r.cebTitle || null],
-        ["category", "category", (r) => r.category],
-        ["scheduled_date", "scheduledDate", (r) => r.scheduledDate || r.dateScheduled || null],
-        ["date_scheduled", "dateScheduled", (r) => r.dateScheduled || r.scheduledDate || null],
-        ["scheduled_time", "scheduledTime", (r) => r.scheduledTime || r.timeScheduled || null],
-        ["time_scheduled", "timeScheduled", (r) => r.timeScheduled || r.scheduledTime || null],
-        ["location", "location", (r) => r.location],
-        ["description", "description", (r) => r.description],
-        ["organizer", "organizer", (r) => r.organizer],
-        ["status", "status", (r) => r.status],
-        ["status_reason", "statusReason", (r) => r.statusReason || null],
-        ["documented_notes", "documentedNotes", (r) => r.documentedNotes || null],
-        ["attendees_count", "attendeesCount", (r) => r.attendeesCount || 0],
-        ["target_audience", "targetAudience", (r) => r.targetAudience || null],
-        ["image_url", "imageUrl", (r) => r.imageUrl || null]
-      ] },
-      { table: "achievements", deletedIds: deletedAchievementIds, fields: [
-        ["year", "year", (r) => r.year],
-        ["title", "title", (r) => r.title],
-        ["ceb_title", "cebTitle", (r) => r.cebTitle || null],
-        ["description", "description", (r) => r.description],
-        ["icon", "icon", (r) => r.icon || "Trophy"]
-      ] },
-      { table: "organization_funds", deletedIds: deletedFundIds, fields: [
-        ["name", "name", (r) => r.name],
-        ["code", "code", (r) => r.code],
-        ["initial_fund", "initialFund", (r) => getInitialFund(r)],
-        ["current_balance", "currentBalance", (r) => r.currentBalance || 0],
-        ["description", "description", (r) => r.description || ""],
-        ["custodian", "custodian", (r) => r.custodian || ""],
-        ["last_updated", "lastUpdated", (r) => r.lastUpdated || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]],
-        ["category", "category", (r) => r.category || null],
-        ["source_origin", "source", (r) => r.source || null]
-      ] },
-      { table: "delegation_requests", deletedIds: deletedDelegationIds, fields: [
-        ["requested_by", "requestedBy", (r) => r.requestedBy],
-        ["reason", "reason", (r) => r.reason],
-        ["scopes", "scopes", (r) => JSON.stringify(Array.isArray(r.scopes) ? r.scopes : [])],
-        ["requested_date", "requestedDate", (r) => r.requestedDate],
-        ["effective_start", "effectiveStart", (r) => r.effectiveStart || null],
-        ["effective_end", "effectiveEnd", (r) => r.effectiveEnd || null],
-        ["status", "status", (r) => r.status || "Pending"],
-        ["reviewed_by", "reviewedBy", (r) => r.reviewedBy || null],
-        ["reviewed_date", "reviewedDate", (r) => r.reviewedDate || null],
-        ["remarks", "remarks", (r) => r.remarks || null]
-      ] }
+      {
+        table: "members",
+        deletedIds: deletedMemberIds,
+        fields: [
+          ["name", "name", (r) => r.name],
+          ["farm_location", "farmLocation", (r) => r.farmLocation || null],
+          ["primary_crops", "primaryCrops", (r) => r.primaryCrops || []],
+          ["contact_number", "contactNumber", (r) => r.contactNumber || null],
+          ["status", "status", (r) => r.status || "Active"],
+          ["joined_date", "joinedDate", (r) => r.joinedDate || null],
+          ["member_id_number", "memberIdNumber", (r) => r.memberIdNumber || null],
+          ["rsbsa_number", "rsbsaNumber", (r) => r.rsbsaNumber || null],
+          ["is_rsbsa_registered", "isRsbsaRegistered", (r) => Boolean(r.isRsbsaRegistered)],
+          ["avatar_url", "avatarUrl", (r) => r.avatarUrl || null],
+          ["gender", "gender", (r) => r.gender || null],
+          ["birth_date", "birthDate", (r) => r.birthDate || null],
+          ["membership_paid_through", "membershipPaidThrough", (r) => r.membershipPaidThrough == null ? null : Math.floor(cleanNumber(r.membershipPaidThrough))],
+          ["inactive_reason", "inactiveReason", (r) => r.inactiveReason ? cleanText(r.inactiveReason, 500) : null]
+        ]
+      },
+      {
+        table: "meetings",
+        deletedIds: deletedMeetingIds,
+        fields: [
+          ["title", "title", (r) => r.title],
+          ["date", "date", (r) => r.date],
+          ["location", "location", (r) => r.location],
+          ["attendance_count", "attendanceCount", (r) => r.attendanceCount || 0],
+          ["agenda", "agenda", (r) => r.agenda || ""],
+          ["minutes", "minutes", (r) => r.minutes || ""],
+          ["officer_in_charge", "officerInCharge", (r) => r.officerInCharge || ""],
+          ["attendance_record", "attendanceRecord", (r) => JSON.stringify(r.attendanceRecord || {})]
+        ]
+      },
+      {
+        table: "system_logs",
+        deletedIds: /* @__PURE__ */ new Set(),
+        fields: [
+          ["timestamp", "timestamp", (r) => r.timestamp],
+          ["user_name", "user", (r) => r.user || r.userName || "Officer"],
+          ["role", "role", (r) => r.role],
+          ["action", "action", (r) => r.action],
+          ["details", "details", (r) => r.details],
+          ["sync_status", "syncStatus", (r) => r.syncStatus || "synced"],
+          ["hash", "hash", (r) => r.hash || null],
+          ["previous_hash", "previousHash", (r) => r.previousHash || null]
+        ]
+      },
+      {
+        table: "products",
+        deletedIds: deletedProductIds,
+        fields: [
+          ["name", "name", (r) => r.name],
+          ["ceb_name", "cebName", (r) => r.cebName || null],
+          ["category", "category", (r) => r.category],
+          ["description", "description", (r) => r.description],
+          ["unit", "unit", (r) => r.unit],
+          ["price", "price", (r) => r.price],
+          ["quantity_available", "quantityAvailable", (r) => r.quantityAvailable || null],
+          ["stock_status", "stockStatus", (r) => r.stockStatus],
+          ["farmer_name", "farmerName", (r) => r.farmerName || null],
+          ["farmer_sitio", "farmerSitio", (r) => r.farmerSitio || null],
+          ["farmer_phone", "farmerPhone", (r) => r.farmerPhone || null],
+          ["contact_person", "contactPerson", (r) => r.contactPerson || null],
+          ["image_url", "imageUrl", (r) => r.imageUrl || null],
+          ["is_published", "isPublished", (r) => r.isPublished ?? true],
+          ["updated_by", "updatedBy", (r) => r.updatedBy || null],
+          ["managed_by", "managedBy", (r) => r.managedBy || null],
+          ["date_updated", "dateUpdated", (r) => r.dateUpdated || null]
+        ]
+      },
+      {
+        table: "activities",
+        deletedIds: deletedActivityIds,
+        fields: [
+          ["title", "title", (r) => r.title],
+          ["ceb_title", "cebTitle", (r) => r.cebTitle || null],
+          ["category", "category", (r) => r.category],
+          ["scheduled_date", "scheduledDate", (r) => r.scheduledDate || r.dateScheduled || null],
+          ["date_scheduled", "dateScheduled", (r) => r.dateScheduled || r.scheduledDate || null],
+          ["scheduled_time", "scheduledTime", (r) => r.scheduledTime || r.timeScheduled || null],
+          ["time_scheduled", "timeScheduled", (r) => r.timeScheduled || r.scheduledTime || null],
+          ["location", "location", (r) => r.location],
+          ["description", "description", (r) => r.description],
+          ["organizer", "organizer", (r) => r.organizer],
+          ["status", "status", (r) => r.status],
+          ["status_reason", "statusReason", (r) => r.statusReason || null],
+          ["documented_notes", "documentedNotes", (r) => r.documentedNotes || null],
+          ["attendees_count", "attendeesCount", (r) => r.attendeesCount || 0],
+          ["target_audience", "targetAudience", (r) => r.targetAudience || null],
+          ["image_url", "imageUrl", (r) => r.imageUrl || null]
+        ]
+      },
+      {
+        table: "inventory",
+        deletedIds: deletedInventoryIds,
+        fields: [
+          ["name", "name", (r) => cleanText(r.name, 300) || "Unnamed inventory item"],
+          ["asset_type", "assetType", (r) => r.assetType === "rental" || r.category === "Rental Assets" || Boolean(r.catalogProductId) ? "rental" : "usable"],
+          ["category", "category", (r) => cleanText(r.category, 100) || "Other"],
+          ["quantity", "quantity", (r) => Math.floor(cleanNumber(r.quantity))],
+          ["damaged_quantity", "damagedQuantity", (r) => Math.min(
+            Math.floor(cleanNumber(r.quantity)),
+            Math.floor(cleanNumber(r.damagedQuantity))
+          )],
+          ["lost_quantity", "lostQuantity", (r) => Math.min(
+            Math.floor(cleanNumber(r.quantity)),
+            Math.floor(cleanNumber(r.lostQuantity))
+          )],
+          ["used_quantity", "usedQuantity", (r) => Math.min(
+            Math.floor(cleanNumber(r.quantity)),
+            Math.floor(cleanNumber(r.usedQuantity))
+          )],
+          ["unit", "unit", (r) => cleanText(r.unit, 50) || "units"],
+          ["item_condition", "condition", (r) => cleanText(r.condition, 50) || "Good"],
+          ["location", "location", (r) => cleanText(r.location, 500)],
+          ["notes", "notes", (r) => cleanText(r.notes, 5e3)],
+          ["catalog_product_id", "catalogProductId", (r) => cleanText(r.catalogProductId, 100)],
+          ["purchase_transaction_id", "purchaseTransactionId", (r) => cleanText(r.purchaseTransactionId, 100)],
+          ["activity_id", "activityId", (r) => cleanText(r.activityId, 100)],
+          ["meeting_id", "meetingId", (r) => cleanText(r.meetingId, 100)],
+          ["recorded_by", "recordedBy", (r) => cleanText(r.recordedBy, 200) || "Treasurer"],
+          ["date_recorded", "dateRecorded", (r) => cleanDateString(r.dateRecorded, 50)],
+          ["last_updated", "lastUpdated", (r) => cleanDateString(r.lastUpdated, 50)]
+        ]
+      },
+      {
+        table: "resolutions",
+        deletedIds: deletedResolutionIds,
+        fields: [
+          ["resolution_number", "resolutionNumber", (r) => r.resolutionNumber],
+          ["title", "title", (r) => r.title],
+          ["description", "description", (r) => r.description],
+          ["date_agreed", "dateAgreed", (r) => r.dateAgreed],
+          ["moved_by", "movedBy", (r) => r.movedBy],
+          ["seconded_by", "secondedBy", (r) => r.secondedBy],
+          ["vote_in_favor", "voteInFavor", (r) => r.voteInFavor],
+          ["vote_against", "voteAgainst", (r) => r.voteAgainst],
+          ["vote_abstain", "voteAbstain", (r) => r.voteAbstain],
+          ["status", "status", (r) => r.status]
+        ]
+      },
+      {
+        table: "announcements",
+        deletedIds: deletedAnnouncementIds,
+        fields: [
+          ["title", "title", (r) => r.title],
+          ["category", "category", (r) => r.category],
+          ["content", "content", (r) => r.content],
+          ["date_posted", "datePosted", (r) => r.datePosted],
+          ["priority", "priority", (r) => r.priority],
+          ["posted_by", "postedBy", (r) => r.postedBy]
+        ]
+      },
+      {
+        table: "achievements",
+        deletedIds: deletedAchievementIds,
+        fields: [
+          ["year", "year", (r) => r.year],
+          ["title", "title", (r) => r.title],
+          ["ceb_title", "cebTitle", (r) => r.cebTitle || null],
+          ["description", "description", (r) => r.description],
+          ["icon", "icon", (r) => r.icon || "Trophy"]
+        ]
+      },
+      {
+        table: "organization_funds",
+        deletedIds: deletedFundIds,
+        fields: [
+          ["name", "name", (r) => r.name],
+          ["code", "code", (r) => r.code],
+          ["initial_fund", "initialFund", (r) => getInitialFund(r)],
+          ["current_balance", "currentBalance", (r) => r.currentBalance || 0],
+          ["description", "description", (r) => r.description || ""],
+          ["custodian", "custodian", (r) => r.custodian || ""],
+          ["last_updated", "lastUpdated", (r) => r.lastUpdated || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]],
+          ["category", "category", (r) => r.category || null],
+          ["source_origin", "source", (r) => r.source || null]
+        ]
+      },
+      {
+        table: "delegation_requests",
+        deletedIds: deletedDelegationIds,
+        fields: [
+          ["requested_by", "requestedBy", (r) => r.requestedBy],
+          ["reason", "reason", (r) => r.reason],
+          ["scopes", "scopes", (r) => JSON.stringify(Array.isArray(r.scopes) ? r.scopes : [])],
+          ["requested_date", "requestedDate", (r) => r.requestedDate],
+          ["effective_start", "effectiveStart", (r) => r.effectiveStart || null],
+          ["effective_end", "effectiveEnd", (r) => r.effectiveEnd || null],
+          ["status", "status", (r) => r.status || "Pending"],
+          ["reviewed_by", "reviewedBy", (r) => r.reviewedBy || null],
+          ["reviewed_date", "reviewedDate", (r) => r.reviewedDate || null],
+          ["remarks", "remarks", (r) => r.remarks || null]
+        ]
+      }
     ];
     for (const mapping of saveMappings) {
       const stateKeyByTable = {
@@ -2501,7 +2554,35 @@ async function saveFullStateToPostgres(pool, state) {
         delegation_requests: ["delegationRequests"]
       };
       const stateKeys = stateKeyByTable[mapping.table] || [mapping.table];
-      const rows = stateKeys.map((key) => state[key]).find(Array.isArray);
+      let rows = stateKeys.map((key) => state[key]).find(Array.isArray);
+      if (Array.isArray(rows) && mapping.table === "inventory" && rows.length > 0) {
+        const loadIds = async (sql) => {
+          const res = await client.query(sql);
+          return new Set(res.rows.map((row) => String(row.id)));
+        };
+        const hasCatalogRef = rows.some((r) => cleanText(r?.catalogProductId, 100));
+        const hasTxRef = rows.some((r) => cleanText(r?.purchaseTransactionId, 100));
+        const hasActRef = rows.some((r) => cleanText(r?.activityId, 100));
+        const hasMtgRef = rows.some((r) => cleanText(r?.meetingId, 100));
+        const validProductIds = hasCatalogRef ? await loadIds("SELECT id FROM products") : null;
+        const validTxIds = hasTxRef ? await loadIds("SELECT id FROM financial_transactions") : null;
+        const validActivityIds = hasActRef ? await loadIds("SELECT id FROM activities") : null;
+        const validMeetingIds = hasMtgRef ? await loadIds("SELECT id FROM meetings") : null;
+        rows = rows.map((r) => {
+          if (!r || typeof r !== "object") return r;
+          const catalogProductId = cleanText(r.catalogProductId, 100);
+          const purchaseTransactionId = cleanText(r.purchaseTransactionId, 100);
+          const activityId = cleanText(r.activityId, 100);
+          const meetingId = cleanText(r.meetingId, 100);
+          return {
+            ...r,
+            catalogProductId: catalogProductId && validProductIds?.has(catalogProductId) ? catalogProductId : null,
+            purchaseTransactionId: purchaseTransactionId && validTxIds?.has(purchaseTransactionId) ? purchaseTransactionId : null,
+            activityId: activityId && validActivityIds?.has(activityId) ? activityId : null,
+            meetingId: meetingId && validMeetingIds?.has(meetingId) ? meetingId : null
+          };
+        });
+      }
       if (Array.isArray(rows)) await saveEntity(client, rows, mapping);
     }
     console.log("[DB DEBUG] Committing transaction...");
@@ -3220,6 +3301,13 @@ async function handler(req, res) {
           message: "Only the Treasurer or Assistant Treasurer may record or close membership dues."
         });
       }
+    }
+    const canWriteInventory = isTreasurerRole(user.role) || normalizedPushRole === "auditor" || isPresidentRole(user.role);
+    if (!canWriteInventory && ("inventory" in state || safeState.deletedIds && typeof safeState.deletedIds === "object" && Array.isArray(safeState.deletedIds.inventory) && safeState.deletedIds.inventory.length > 0)) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: "Only the Treasurer (asset purchases) or Auditor (custodial inspection) may update association inventory."
+      });
     }
     await saveFullStateToPostgres(getPool(), safeState);
     return sendResponse(res, 200, { success: true, offlineMode: false, message: "State successfully synced." });

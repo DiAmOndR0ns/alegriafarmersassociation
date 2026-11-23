@@ -2448,6 +2448,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
           .map((activity: any) => activity.id)
       );
       let existingActivityIds: Set<string> | null = null;
+      let existingMeetingIds: Set<string> | null = null;
       console.log('[DB DEBUG] Saving', txList.length, 'transactions...');
       for (const tx of txList) {
         if (!tx || typeof tx.id !== 'string' || !tx.id) continue;
@@ -2465,6 +2466,14 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
             existingActivityIds = new Set(existingActivities.rows.map((row: any) => String(row.id)));
           }
           if (!existingActivityIds.has(activityId)) activityId = null;
+        }
+        let meetingId = cleanText(tx.meetingId, 100);
+        if (meetingId) {
+          if (!existingMeetingIds) {
+            const existingMeetings = await client.query('SELECT id FROM meetings');
+            existingMeetingIds = new Set(existingMeetings.rows.map((row: any) => String(row.id)));
+          }
+          if (!existingMeetingIds.has(meetingId)) meetingId = null;
         }
         await client.query(`
           INSERT INTO financial_transactions (id, type, category, amount, date, description, recorded_by, activity_id, fund_source, purpose, liquidation_deadline, audited_status, audited_by, audited_date, audit_notes, meeting_id)
@@ -2492,7 +2501,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
           cleanText(tx.purpose, 2000), cleanDateString(tx.liquidationDeadline, 50),
           AUDITED_STATUSES.includes(String(tx.auditedStatus)) ? String(tx.auditedStatus) : 'Unaudited',
           cleanText(tx.auditedBy, 200), cleanDateString(tx.auditedDate, 50), cleanText(tx.auditNotes, 2000),
-          cleanText(tx.meetingId, 100)
+          meetingId
         ]);
       }
       console.log('[DB DEBUG] Transactions saved');
@@ -2933,6 +2942,17 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ]
       },
       {
+        table: 'activities', deletedIds: deletedActivityIds, fields: [
+          ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null], ['category', 'category', (r) => r.category],
+          ['scheduled_date', 'scheduledDate', (r) => r.scheduledDate || r.dateScheduled || null], ['date_scheduled', 'dateScheduled', (r) => r.dateScheduled || r.scheduledDate || null],
+          ['scheduled_time', 'scheduledTime', (r) => r.scheduledTime || r.timeScheduled || null], ['time_scheduled', 'timeScheduled', (r) => r.timeScheduled || r.scheduledTime || null],
+          ['location', 'location', (r) => r.location], ['description', 'description', (r) => r.description], ['organizer', 'organizer', (r) => r.organizer],
+          ['status', 'status', (r) => r.status], ['status_reason', 'statusReason', (r) => r.statusReason || null],
+          ['documented_notes', 'documentedNotes', (r) => r.documentedNotes || null],
+          ['attendees_count', 'attendeesCount', (r) => r.attendeesCount || 0], ['target_audience', 'targetAudience', (r) => r.targetAudience || null], ['image_url', 'imageUrl', (r) => r.imageUrl || null]
+        ]
+      },
+      {
         table: 'inventory', deletedIds: deletedInventoryIds, fields: [
           ['name', 'name', (r) => cleanText(r.name, 300) || 'Unnamed inventory item'],
           ['asset_type', 'assetType', (r) => (r.assetType === 'rental' || r.category === 'Rental Assets' || Boolean(r.catalogProductId)) ? 'rental' : 'usable'],
@@ -2978,17 +2998,6 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ]
       },
       {
-        table: 'activities', deletedIds: deletedActivityIds, fields: [
-          ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null], ['category', 'category', (r) => r.category],
-          ['scheduled_date', 'scheduledDate', (r) => r.scheduledDate || r.dateScheduled || null], ['date_scheduled', 'dateScheduled', (r) => r.dateScheduled || r.scheduledDate || null],
-          ['scheduled_time', 'scheduledTime', (r) => r.scheduledTime || r.timeScheduled || null], ['time_scheduled', 'timeScheduled', (r) => r.timeScheduled || r.scheduledTime || null],
-          ['location', 'location', (r) => r.location], ['description', 'description', (r) => r.description], ['organizer', 'organizer', (r) => r.organizer],
-          ['status', 'status', (r) => r.status], ['status_reason', 'statusReason', (r) => r.statusReason || null],
-          ['documented_notes', 'documentedNotes', (r) => r.documentedNotes || null],
-          ['attendees_count', 'attendeesCount', (r) => r.attendeesCount || 0], ['target_audience', 'targetAudience', (r) => r.targetAudience || null], ['image_url', 'imageUrl', (r) => r.imageUrl || null]
-        ]
-      },
-      {
         table: 'achievements', deletedIds: deletedAchievementIds, fields: [
           ['year', 'year', (r) => r.year], ['title', 'title', (r) => r.title], ['ceb_title', 'cebTitle', (r) => r.cebTitle || null],
           ['description', 'description', (r) => r.description], ['icon', 'icon', (r) => r.icon || 'Trophy']
@@ -3020,7 +3029,38 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         delegation_requests: ['delegationRequests']
       };
       const stateKeys = stateKeyByTable[mapping.table] || [mapping.table];
-      const rows = stateKeys.map((key) => state[key]).find(Array.isArray) as any[] | undefined;
+      let rows = stateKeys.map((key) => state[key]).find(Array.isArray) as any[] | undefined;
+      if (Array.isArray(rows) && mapping.table === 'inventory' && rows.length > 0) {
+        // Validate optional foreign keys against live DB rows so stale or deleted
+        // links gracefully clear to NULL instead of tripping PostgreSQL FK 23503.
+        const loadIds = async (sql: string) => {
+          const res = await client.query(sql);
+          return new Set(res.rows.map((row: any) => String(row.id)));
+        };
+        const hasCatalogRef = rows.some((r) => cleanText(r?.catalogProductId, 100));
+        const hasTxRef = rows.some((r) => cleanText(r?.purchaseTransactionId, 100));
+        const hasActRef = rows.some((r) => cleanText(r?.activityId, 100));
+        const hasMtgRef = rows.some((r) => cleanText(r?.meetingId, 100));
+        const validProductIds = hasCatalogRef ? await loadIds('SELECT id FROM products') : null;
+        const validTxIds = hasTxRef ? await loadIds('SELECT id FROM financial_transactions') : null;
+        const validActivityIds = hasActRef ? await loadIds('SELECT id FROM activities') : null;
+        const validMeetingIds = hasMtgRef ? await loadIds('SELECT id FROM meetings') : null;
+
+        rows = rows.map((r) => {
+          if (!r || typeof r !== 'object') return r;
+          const catalogProductId = cleanText(r.catalogProductId, 100);
+          const purchaseTransactionId = cleanText(r.purchaseTransactionId, 100);
+          const activityId = cleanText(r.activityId, 100);
+          const meetingId = cleanText(r.meetingId, 100);
+          return {
+            ...r,
+            catalogProductId: catalogProductId && validProductIds?.has(catalogProductId) ? catalogProductId : null,
+            purchaseTransactionId: purchaseTransactionId && validTxIds?.has(purchaseTransactionId) ? purchaseTransactionId : null,
+            activityId: activityId && validActivityIds?.has(activityId) ? activityId : null,
+            meetingId: meetingId && validMeetingIds?.has(meetingId) ? meetingId : null,
+          };
+        });
+      }
       if (Array.isArray(rows)) await saveEntity(client, rows, mapping);
     }
 

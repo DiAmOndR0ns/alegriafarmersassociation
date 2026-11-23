@@ -19,7 +19,7 @@
 | Tailwind CSS (v4.1.14) | Used to style components efficiently and maintain a consistent, mobile-first visual design system throughout the Farmers Association Management System (FAMS). |
 | Node.js (v23.8.0) | Handles the server-side JavaScript/TypeScript runtime environment, enabling reliable processing of authentication, role-based access control, and data synchronization. |
 | Express.js (v4.21.2) | Acts as the back-end web application framework that manages server-side routes, signed session cookies, security headers, and REST API endpoints efficiently. |
-| PostgreSQL / Supabase (pg v8.23.0) | Serves as the relational database management system that securely stores all 21 system tables—including user accounts, members, annual dues, meetings, resolutions, organization funds, financial transactions, products, inventory, IGP records, and SHA-256 audit logs. |
+| PostgreSQL / Supabase (pg v8.23.0) | Serves as the relational database management system that securely stores all 20 system tables—including user accounts, members, annual dues, meetings, resolutions, organization funds, financial transactions, products, inventory, IGP records, and SHA-256 audit logs. |
 | Vitest & Testing Library | Used for automated unit and component testing to verify authentication security, role permissions, image compression, and portal functionality. |
 
 Table 1 presents the developmental software platforms used in building the Farmers Association Management System (FAMS) for the Alegria Farmers Association. These tools were selected to ensure the system's efficiency, data integrity, security, and offline-first reliability. The combination of React.js, TypeScript, Vite, HTML5, CSS3, and Tailwind CSS delivered a responsive, accessible, and visually consistent front-end interface across mobile, tablet, and desktop viewports. Meanwhile, Node.js and Express.js handled server-side operations, managing role-based access control, session security, and offline-to-cloud synchronization. PostgreSQL (hosted via Supabase and accessed through the pg driver) served as the primary relational database, securely storing membership, governance, financial, marketplace, and Income-Generating Project (IGP) records for structured retrieval, while Vitest and Testing Library verified application correctness through automated testing.
@@ -266,6 +266,7 @@ Table 11 presents the data dictionary for the Organization Funds (organization_f
 | description | TEXT | Line-item description of the receipt or disbursement | Any text | Snacks and venue chairs for Q1 Assembly |
 | recorded_by | TEXT | Treasurer or Assistant Treasurer who recorded entry | Officer name | Jose R. Mendoza |
 | activity_id | VARCHAR(100) | Enforced FK referencing activities(id) | Valid activity id or NULL | act_2026_001 |
+| meeting_id | VARCHAR(100) | Enforced FK referencing meetings(id) for meeting-linked acquisitions | Valid meeting id or NULL | mtg_2026_02 |
 | fund_source | TEXT | Name or ID of the funding account in organization_funds | Valid fund reference | AFA General Operating Fund |
 | purpose | TEXT | Stated operational purpose of the disbursement | Any text | General assembly logistics |
 | liquidation_deadline | VARCHAR(50) | Target due date for cash-advance liquidation | ISO date or NULL | 2026-02-28 |
@@ -278,9 +279,9 @@ Table 11 presents the data dictionary for the Organization Funds (organization_f
 | president_approved_date | VARCHAR(50) | Date of presidential sign-off | ISO date or NULL | 2026-02-19 |
 | president_approval_remarks | TEXT | Remarks entered during presidential sign-off | Any text or NULL | Approved for posting |
 
-*Note.* Enforced PostgreSQL foreign key on activity_id referencing activities(id) ON DELETE SET NULL.
+*Note.* Enforced PostgreSQL foreign keys on activity_id referencing activities(id) and meeting_id referencing meetings(id), both ON DELETE SET NULL.
 
-Table 12 presents the data dictionary for the Financial Transactions (financial_transactions) entity. It captures all association income and expense records, enforcing a multi-tier internal control chain from Treasurer encoding to Auditor review (audited_status, audited_by) and final Presidential sign-off (president_approval_status, president_approved_by), while linking activity expenses directly to activities(id).
+Table 12 presents the data dictionary for the Financial Transactions (financial_transactions) entity. It captures all association income and expense records, enforcing a multi-tier internal control chain from Treasurer encoding to Auditor review (audited_status, audited_by) and final Presidential sign-off (president_approval_status, president_approved_by), while linking event and assembly disbursements directly to activities(id) or meetings(id).
 
 **Table 13**  
 *Data Dictionary for Activities and Events (activities)*
@@ -377,21 +378,27 @@ Table 16 presents the data dictionary for the Farmers' Market Products (products
 | :--- | :--- | :--- | :--- | :--- |
 | id | VARCHAR(100) | Primary key uniquely identifying an inventory item | Non-empty unique string | inv_chairs_01 |
 | name | TEXT | Name of the association tool, asset, or rental item | Any non-empty string | Monoblock Chairs (White) |
-| category | VARCHAR(100) | Asset classification category | Equipment, Rental Asset, Supplies, Farm Tools | Rental Asset |
-| quantity | INTEGER | Total usable quantity currently on hand | Non-negative integer | 120 |
-| damaged_quantity | INTEGER | Count of damaged or non-serviceable units | Non-negative integer | 4 |
-| unit | VARCHAR(50) | Counting unit for the inventory item | pcs, sets, sacks, units | pcs |
+| asset_type | VARCHAR(20) | Custodial classification separating rental assets from usable supplies/equipment | rental, usable | rental |
+| category | VARCHAR(100) | Asset classification category | Rental Assets, Office Supplies, Equipment, Farm Tools | Rental Assets |
+| quantity | INTEGER | Total acquired stock quantity recorded by the Treasurer | Non-negative integer | 120 |
+| damaged_quantity | INTEGER | Count of damaged or non-serviceable units flagged by the Auditor | Non-negative integer (<= quantity) | 4 |
+| lost_quantity | INTEGER | Count of lost or missing units flagged by the Auditor | Non-negative integer (<= quantity) | 1 |
+| used_quantity | INTEGER | Count of consumed or used units for usable supplies/consumables | Non-negative integer (<= quantity) | 0 |
+| unit | VARCHAR(50) | Counting unit for the inventory item | pcs, sets, reams, sacks, units | pcs |
 | item_condition | VARCHAR(50) | Overall physical condition rating of the asset | Good, Fair, Needs Repair, Condemned | Good |
 | location | TEXT | Storage facility or custodian location | Any text | AFA Storage Room, Sitio Proper |
-| notes | TEXT | Maintenance or custody remarks | Any text or NULL | 4 cracked legs set aside |
+| notes | TEXT | Maintenance, inspection, or custody remarks | Any text or NULL | 4 cracked legs set aside |
 | catalog_product_id | VARCHAR(100) | Enforced FK linking rental asset to products(id) | Valid product id or NULL | prod_chairs_01 |
-| recorded_by | TEXT | Officer who encoded or audited the inventory count | Officer name | Jose R. Mendoza |
+| purchase_transaction_id | VARCHAR(100) | Enforced FK linking asset acquisition to financial_transactions(id) | Valid transaction id or NULL | tx_2026_012 |
+| activity_id | VARCHAR(100) | Enforced FK linking acquisition to a scheduled event in activities(id) | Valid activity id or NULL | act_2026_001 |
+| meeting_id | VARCHAR(100) | Enforced FK linking acquisition to an assembly in meetings(id) | Valid meeting id or NULL | mtg_2026_02 |
+| recorded_by | TEXT | Treasurer or officer who logged the asset acquisition | Officer name | Jose R. Mendoza |
 | date_recorded | VARCHAR(50) | Initial acquisition or encoding date | ISO date (YYYY-MM-DD) | 2025-05-10 |
-| last_updated | VARCHAR(50) | Date of the most recent physical stock count | ISO date (YYYY-MM-DD) | 2026-03-01 |
+| last_updated | VARCHAR(50) | Date of the most recent restock or Auditor inspection | ISO date (YYYY-MM-DD) | 2026-03-01 |
 
-*Note.* Enforced PostgreSQL foreign key on catalog_product_id referencing products(id) ON DELETE SET NULL.
+*Note.* Enforced PostgreSQL foreign keys on catalog_product_id -> products(id), purchase_transaction_id -> financial_transactions(id), activity_id -> activities(id), and meeting_id -> meetings(id), all ON DELETE SET NULL.
 
-Table 17 presents the data dictionary for the Custodial Assets and Inventory (inventory) entity. It tracks association-owned equipment, tools, and rental items—including both usable and damaged counts—and enforces a relational foreign key (catalog_product_id) when custodial assets such as monoblock chairs are published for rental in the Farmers' Market.
+Table 17 presents the data dictionary for the Custodial Assets and Inventory (inventory) entity. Asset records are created exclusively from Treasurer purchase disbursements (purchase_transaction_id) and separated by asset_type into rental assets versus usable equipment/supplies, with Auditor-only inspection counts (damaged_quantity, lost_quantity, used_quantity) and optional relational links to Farmers' Market rentals (catalog_product_id), events (activity_id), and meetings (meeting_id).
 
 **Table 18**  
 *Data Dictionary for IGP Root Registry (afa_igp)*
