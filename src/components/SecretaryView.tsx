@@ -216,7 +216,8 @@ export default function SecretaryView({
     'Sitio Tapon',
     'Sitio Pundok 1',
     'Sitio Pundok 2',
-    'Sitio Lamak'
+    'Sitio Lamak',
+    'Sitio Patag 1'
   ];
 
   const CROPS = [

@@ -56,7 +56,7 @@ export default function SecretaryTemplatesModal({
   const [reqAddress, setReqAddress] = useState('Municipality of Tuburan, Cebu Province');
   const [reqSubject, setReqSubject] = useState('Request for Allocation of 100 Bags Organic Fertilizer & High-Yield Hybrid Corn Seeds');
   const [reqItems, setReqItems] = useState('1. 100 Bags of Certified Organic Fertilizer (50kg/bag)\n2. 50 Bags of Hybrid Yellow Corn Seedlings (Pioneer/Dekalb)\n3. 1 Unit Communal Knapsack Sprayer with Solar Charging Battery\n4. Veterinary Dewormer and Multi-Vitamins for Livestock IGP');
-  const [reqJustification, setReqJustification] = useState('Our 42 registered smallholder farmers across the 4 official sitios in Barangay Alegria (Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak) are preparing for the upcoming wet cropping season and need certified farm inputs to sustain food productivity.');
+  const [reqJustification, setReqJustification] = useState('Our 42 registered smallholder farmers across the 5 official sitios in Barangay Alegria (Sitio Tapon, Sitio Pundok 1, Sitio Pundok 2, Sitio Lamak, Sitio Patag 1) are preparing for the upcoming wet cropping season and need certified farm inputs to sustain food productivity.');
 
   if (!isOpen) return null;
 
@@ -121,7 +121,7 @@ export default function SecretaryTemplatesModal({
           </p>
           <div style="background:#f4f6f4; border-left:4px solid #1B4332; padding:12px 16px; margin:16px 0; font-weight:bold; font-size:13px;">
             Project Title: ${escapeHtml(loiProjectTitle)}<br/>
-            Target Beneficiaries: ${escapeHtml(loiBeneficiariesCount)} Registered Smallholder Farmers (4 Official Sitios of Brgy. Alegria: Tapon, Pundok 1, Pundok 2, Lamak)<br/>
+            Target Beneficiaries: ${escapeHtml(loiBeneficiariesCount)} Registered Smallholder Farmers (5 Official Sitios of Brgy. Alegria: Tapon, Pundok 1, Pundok 2, Lamak, Patag 1)<br/>
             Estimated Project Cost: PHP ${Number(loiEstimatedCost.replace(/,/g, '') || 0).toLocaleString('en-US')}.00
           </div>
           <p>

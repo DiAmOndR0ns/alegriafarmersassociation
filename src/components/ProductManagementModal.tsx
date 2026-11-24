@@ -716,11 +716,12 @@ export default function ProductManagementModal({
                     onChange={(e) => setFarmerSitio(e.target.value)}
                     className="bg-white border border-[#D5CFC1] rounded-lg px-2.5 py-1.5 text-[#1B4332] focus:outline-none focus:border-amber-500 text-xs"
                   >
-                    <option value="">Pilia ang Sitio (Official 4 Sitios)</option>
+                    <option value="">Pilia ang Sitio (Official 5 Sitios)</option>
                     <option value="Sitio Tapon">Sitio Tapon</option>
                     <option value="Sitio Pundok 1">Sitio Pundok 1</option>
                     <option value="Sitio Pundok 2">Sitio Pundok 2</option>
                     <option value="Sitio Lamak">Sitio Lamak</option>
+                    <option value="Sitio Patag 1">Sitio Patag 1</option>
                   </select>                  <input
                     type="text"
                     required

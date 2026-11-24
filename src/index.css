@@ -385,6 +385,10 @@ body.has-mobile-dock {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.mobile-bottom-dock.cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .mobile-bottom-dock.cols-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

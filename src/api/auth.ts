@@ -1028,7 +1028,7 @@ export async function passwordResetRequestHandler(req: any, res: any) {
   const body: any = await parseRequestBody(req).catch(() => null);
   const username = typeof body?.username === 'string' ? body.username.trim() : '';
   const sitio = typeof body?.sitio === 'string' ? body.sitio.trim() : '';
-  const validSitios = new Set(['Sitio Tapon', 'Sitio Pundok 1', 'Sitio Pundok 2', 'Sitio Lamak']);
+  const validSitios = new Set(['Sitio Tapon', 'Sitio Pundok 1', 'Sitio Pundok 2', 'Sitio Lamak', 'Sitio Patag 1']);
   if (!username || username.length > 120 || !validSitios.has(sitio)) {
     return errorResponse(res, 400, 'Please enter your username and select your assigned Sitio.');
   }

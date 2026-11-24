@@ -123,12 +123,13 @@ describe('GuestPortal product catalog', () => {
     expect(resolveProductArtwork(makeProduct('3', 'Chicken Eggs', true))).toBe('/assets/product-eggs.jpg');
   });
 
-  it('renders mobile-first dimensional portal shell with 6-tab bottom dock, sunrise hero, and 4-sitio map', () => {
+  it('renders mobile-first dimensional portal shell with 4-tab bottom dock, sunrise hero, and Market landing view', () => {
     const html = renderToString(
       <GuestPortal
         onEnterLogin={() => {}}
         members={[]}
         livestockIgp={{ expenses: [], sales: [] }}
+        products={[makeProduct('p-1', 'Organic Eggs', true)]}
         cachedSummary={{
           success: true,
           totalMembers: 42,
@@ -141,14 +142,13 @@ describe('GuestPortal product catalog', () => {
       />
     );
 
-    expect(html).toContain('mobile-bottom-dock');
+    expect(html).toContain('mobile-bottom-dock cols-4');
     expect(html).toContain('tab-nav-wrapper');
     expect(html).toContain('heritage-pill');
     expect(html).toContain('/assets/hero-alegria.jpg');
     expect(html).toContain('hero-banig-border');
-    expect(html).toContain('Sitio Tapon');
-    expect(html).toContain('Sitio Lamak');
-    expect(html).toContain('42');
+    expect(html).toContain('Organic Eggs');
+    expect(html).toContain('Bahin');
     expect(html).toContain('FAMS');
   });
 

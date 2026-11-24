@@ -36,7 +36,8 @@ const SITIOS = [
   'Sitio Tapon',
   'Sitio Pundok 1',
   'Sitio Pundok 2',
-  'Sitio Lamak'
+  'Sitio Lamak',
+  'Sitio Patag 1'
 ];
 
 const CROPS_AND_LIVESTOCK = [

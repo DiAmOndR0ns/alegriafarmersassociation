@@ -402,8 +402,8 @@ export default function AuthScreen({
               </div>
               <p className="text-sm text-[#E5F6EA] leading-relaxed">
                 {t(
-                  'Opisyal nga sistema sa Alegria Farmers Association para sa mga opisyales ug miyembro sa upat ka sitio.',
-                  'Official management portal for Alegria Farmers Association officers and members across all four sitios.'
+                  'Opisyal nga sistema sa Alegria Farmers Association para sa mga opisyales ug miyembro sa lima ka sitio.',
+                  'Official management portal for Alegria Farmers Association officers and members across all five sitios.'
                 )}
               </p>
             </div>

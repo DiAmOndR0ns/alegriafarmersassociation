@@ -1,11 +1,12 @@
 export type OfficerRole = 'President' | 'Vice_President' | 'Secretary' | 'Assistant_Secretary' | 'Board_Member' | 'Treasurer' | 'Assistant_Treasurer' | 'Auditor' | 'PIO';
 
-// The 4 Official Sitios of Barangay Alegria, Tuburan, Cebu (based on the official Barangay Profile of Tuburan)
+// The 5 Official Sitios of Barangay Alegria, Tuburan, Cebu (based on the official Barangay Profile of Tuburan)
 export const OFFICIAL_ALEGRIA_SITIOS = [
   'Sitio Tapon',
   'Sitio Pundok 1',
   'Sitio Pundok 2',
-  'Sitio Lamak'
+  'Sitio Lamak',
+  'Sitio Patag 1'
 ] as const;
 
 export type AlegriaSitio = typeof OFFICIAL_ALEGRIA_SITIOS[number];
