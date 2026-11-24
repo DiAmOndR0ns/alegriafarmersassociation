@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import {  getSecureItem, setSecureItem } from '../utils/secureStorage';
+import { escapeHtml, triggerPrintWindow } from '../utils/htmlEscape';
 import {
   Megaphone, Search, Bell, Calendar, Tag, CloudSun,
   AlertTriangle, BookOpen, User, Phone,
@@ -137,10 +138,13 @@ export default function AnnouncementDashboard({
     if (!printWindow) return;
     
     const catLabel = getCategoryLabel(ann.category);
+    const priorityClass = ['high', 'medium', 'low'].includes(String(ann.priority).toLowerCase())
+      ? String(ann.priority).toLowerCase()
+      : 'low';
     printWindow.document.write(`
       <html>
         <head>
-          <title>AFA Bulletin - ${ann.title}</title>
+          <title>AFA Bulletin - ${escapeHtml(ann.title)}</title>
           <style>
             body { font-family: 'Inter', system-ui, sans-serif; padding: 40px; color: #2d3748; line-height: 1.6; }
             .header { border-bottom: 3px double #1b4332; padding-bottom: 20px; margin-bottom: 30px; text-align: center; }
@@ -159,35 +163,33 @@ export default function AnnouncementDashboard({
           <div class="header">
             <h3 style="margin:0; font-size:12px; letter-spacing:1.5px; color:#555;">ALEGRIA FARMERS ASSOCIATION (AFA)</h3>
             <div style="font-size:11px; color:#666;">Tuburan, Cebu Province, Philippines</div>
-            <div class="title">${ann.title}</div>
+            <div class="title">${escapeHtml(ann.title)}</div>
           </div>
           
           <div class="meta-grid">
             <div>
-              <div class="meta-item"><strong>Category:</strong> ${catLabel.en} (${catLabel.ceb})</div>
-              <div class="meta-item"><strong>Priority:</strong> <span class="badge ${ann.priority.toLowerCase()}">${ann.priority} Priority</span></div>
+              <div class="meta-item"><strong>Category:</strong> ${escapeHtml(catLabel.en)} (${escapeHtml(catLabel.ceb)})</div>
+              <div class="meta-item"><strong>Priority:</strong> <span class="badge ${priorityClass}">${escapeHtml(ann.priority)} Priority</span></div>
             </div>
             <div style="text-align: right;">
-              <div class="meta-item"><strong>Date Posted (Adlaw):</strong> ${ann.datePosted}</div>
-              <div class="meta-item"><strong>Posted By (Nag-post):</strong> ${ann.postedBy}</div>
+              <div class="meta-item"><strong>Date Posted (Adlaw):</strong> ${escapeHtml(ann.datePosted)}</div>
+              <div class="meta-item"><strong>Posted By (Nag-post):</strong> ${escapeHtml(ann.postedBy)}</div>
             </div>
           </div>
 
           <div class="content">
-            ${ann.content}
+            ${escapeHtml(ann.content)}
           </div>
 
           <div class="footer">
             <p>This is an official broadcast from the Alegria Farmers Association Bulletin Board Portal.</p>
             <p>© 2026 Alegria Farmers Association • Tuburan, Cebu</p>
           </div>
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
         </body>
       </html>
     `);
     printWindow.document.close();
+    triggerPrintWindow(printWindow);
   };
 
   return (

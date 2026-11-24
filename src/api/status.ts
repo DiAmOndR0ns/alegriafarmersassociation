@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { sendResponse } from './helper';
 import { cleanDatabaseUrl, getDatabaseSslOptions, isLoopbackDatabaseUrl } from './db';
+import { getAuthenticatedUser, isMemberRole } from './auth';
 // Public health check endpoint
 
 // Bulletproof Pool resolution across CJS, ESM, and bundled Vercel serverless environments
@@ -145,8 +146,10 @@ export default async function handler(req: any, res: any) {
     const provider = 'Supabase';
 
     const pool = getStatusPool();
+    const actor = await getAuthenticatedUser(req).catch(() => null);
+    const showDetailedStats = Boolean(actor && !isMemberRole(actor.role));
     const queryPromise = pool.query('SELECT NOW() as current_time, current_database() as db_name');
-    const statsPromise = getLiveTableStats(pool);
+    const statsPromise = showDetailedStats ? getLiveTableStats(pool) : Promise.resolve(null);
     const presPromise = pool.query("SELECT 1 FROM users WHERE lower(replace(role, ' ', '_')) = 'president' LIMIT 1").catch(() => ({ rowCount: 0 }));
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => {
@@ -169,12 +172,16 @@ export default async function handler(req: any, res: any) {
       configured: true,
       storageMode: 'supabase',
       provider,
-      database: result.rows[0]?.db_name || 'postgres',
       timestamp: result.rows[0]?.current_time,
-      tableCounts: stats.tableCounts,
-      totalRecords: stats.totalRecords,
       hasPresident: Boolean(presRes?.rowCount && presRes.rowCount > 0),
-      message: `Connected to ${provider} (${result.rows[0]?.db_name || 'postgres'}) — ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`,
+      ...(showDetailedStats && stats ? {
+        database: result.rows[0]?.db_name || 'postgres',
+        tableCounts: stats.tableCounts,
+        totalRecords: stats.totalRecords,
+        message: `Connected to ${provider} (${result.rows[0]?.db_name || 'postgres'}) — ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`,
+      } : {
+        message: `Connected to ${provider}`,
+      }),
     });
   } catch (err: any) {
     // This endpoint is public. Driver errors include host, port, user and

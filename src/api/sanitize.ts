@@ -60,7 +60,7 @@ export function safeImageUrl(value: unknown, maxLength = 400_000): string | null
   if (!url) return null;
   if (/^https?:\/\/[^\s<>"]+$/i.test(url)) return url;
   if (/^\/assets\/[a-z0-9._/-]+\.(png|jpe?g|webp|gif)$/i.test(url) && !url.includes('..')) return url;
-  if (/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(url)) return url;
+  if (/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(url)) return url;
   return null;
 }
 

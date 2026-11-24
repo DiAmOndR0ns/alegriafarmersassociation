@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Member, Resolution, User, OfficerRole } from '../types';
 import { resolveOfficerName } from '../utils/officers';
+import { escapeHtml, triggerPrintWindow } from '../utils/htmlEscape';
 import { 
   FileText, Printer, CheckCircle, Copy, Download, 
   Send, Sparkles, X, ChevronRight, Building, Award, ShieldCheck
@@ -103,25 +104,25 @@ export default function SecretaryTemplatesModal({
         </div>
 
         <div style="font-size:12px; line-height:1.6; margin-bottom:24px;">
-          <strong>${loiOfficerName}</strong><br/>
-          ${loiOfficerPosition}<br/>
-          ${loiTargetAgency}
+          <strong>${escapeHtml(loiOfficerName)}</strong><br/>
+          ${escapeHtml(loiOfficerPosition)}<br/>
+          ${escapeHtml(loiTargetAgency)}
         </div>
 
         <div style="font-size:13px; font-weight:bold; text-decoration:underline; margin-bottom:20px; color:#1B4332;">
-          SUBJECT: LETTER OF INTENT FOR ${loiProjectTitle.toUpperCase()}
+          SUBJECT: LETTER OF INTENT FOR ${escapeHtml(loiProjectTitle.toUpperCase())}
         </div>
 
         <div style="font-size:12px; line-height:1.8; text-align:justify; margin-bottom:20px;">
-          <p>Dear ${loiOfficerName.split(' ')[0] || 'Sir/Madam'},</p>
+          <p>Dear ${escapeHtml(loiOfficerName.split(' ')[0] || 'Sir/Madam')},</p>
           <p>Greetings of Peace and Solidarity in Agricultural Development!</p>
           <p>
             The <strong>Alegria Farmers Association (AFA)</strong>, a duly registered and active community-based rural farmers organization situated in Barangay Alegria, Tuburan, Cebu, respectfully submits this <strong>LETTER OF INTENT</strong> to formally apply for technical and livelihood program assistance under your esteemed agency for the implementation of:
           </p>
           <div style="background:#f4f6f4; border-left:4px solid #1B4332; padding:12px 16px; margin:16px 0; font-weight:bold; font-size:13px;">
-            Project Title: ${loiProjectTitle}<br/>
-            Target Beneficiaries: ${loiBeneficiariesCount} Registered Smallholder Farmers (4 Official Sitios of Brgy. Alegria: Tapon, Pundok 1, Pundok 2, Lamak)<br/>
-            Estimated Project Cost: PHP ${Number(loiEstimatedCost.replace(/,/g, '')).toLocaleString('en-US')}.00
+            Project Title: ${escapeHtml(loiProjectTitle)}<br/>
+            Target Beneficiaries: ${escapeHtml(loiBeneficiariesCount)} Registered Smallholder Farmers (4 Official Sitios of Brgy. Alegria: Tapon, Pundok 1, Pundok 2, Lamak)<br/>
+            Estimated Project Cost: PHP ${Number(loiEstimatedCost.replace(/,/g, '') || 0).toLocaleString('en-US')}.00
           </div>
           <p>
             Our association has maintained an exemplary track record in communal agriculture, having established functional group rotation systems for livestock rearing (Livestock IGP), corn production, and high-value coffee propagation. This program will significantly elevate rural productivity, bolster food self-sufficiency, and provide resilient household incomes for our agrarian families.
@@ -136,11 +137,11 @@ export default function SecretaryTemplatesModal({
           <p style="margin-bottom:30px;">Respectfully submitted,</p>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:40px;">
             <div>
-              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">{resolveOfficerName(users, 'Secretary' as OfficerRole).toUpperCase()}</div>
+              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">${escapeHtml(resolveOfficerName(users, 'Secretary' as OfficerRole).toUpperCase())}</div>
               <div style="font-size:11px; color:#555;">Secretary, AFA</div>
             </div>
             <div>
-              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">ZENAIDA A. ELBIÑA</div>
+              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">${escapeHtml(resolveOfficerName(users, 'President' as OfficerRole).toUpperCase())}</div>
               <div style="font-size:11px; color:#555;">President, AFA</div>
             </div>
           </div>
@@ -157,45 +158,45 @@ export default function SecretaryTemplatesModal({
 
         <div style="text-align:center; margin:20px 0 10px;">
           <h3 style="margin:0; font-size:14px; color:#1B4332; text-decoration:underline; font-weight:900;">OFFICE OF THE BOARD OF DIRECTORS</h3>
-          <p style="margin:4px 0 0; font-size:12px; font-weight:bold;">EXCERPT FROM THE MINUTES OF THE GENERAL ASSEMBLY MEETING HELD ON ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} AT ALEGRIA MULTI-PURPOSE CENTER</p>
+          <p style="margin:4px 0 0; font-size:12px; font-weight:bold;">EXCERPT FROM THE MINUTES OF THE GENERAL ASSEMBLY MEETING HELD ON ${escapeHtml(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))} AT ALEGRIA MULTI-PURPOSE CENTER</p>
         </div>
 
         <div style="text-align:center; font-size:14px; font-weight:900; color:#1B4332; margin:20px 0 10px; background:#f0f7f3; padding:8px; border:1px solid #1B4332;">
-          ${resNumber.toUpperCase()}
+          ${escapeHtml(resNumber.toUpperCase())}
         </div>
 
         <div style="text-align:center; font-size:13px; font-weight:900; line-height:1.4; margin-bottom:24px; text-transform:uppercase;">
-          ${resTitle}
+          ${escapeHtml(resTitle)}
         </div>
 
         <div style="font-size:12px; line-height:1.8; text-align:justify; margin-bottom:20px;">
-          <p>${resWhereas1}</p>
-          <p>${resWhereas2}</p>
-          <p>${resWhereas3}</p>
-          <p style="margin-top:16px;"><strong>${resResolved}</strong></p>
+          <p>${escapeHtml(resWhereas1)}</p>
+          <p>${escapeHtml(resWhereas2)}</p>
+          <p>${escapeHtml(resWhereas3)}</p>
+          <p style="margin-top:16px;"><strong>${escapeHtml(resResolved)}</strong></p>
         </div>
 
         <div style="background:#faf8f5; border:1px solid #e2dccf; padding:10px 15px; font-size:11px; margin:20px 0;">
           <strong>VOTING RECORD:</strong><br/>
-          Moved by: <strong>${resMovedBy}</strong> | Seconded by: <strong>${resSecondedBy}</strong><br/>
-          In Favor: <strong>${resVoteFavor}</strong> | Against: <strong>${resVoteAgainst}</strong> | Abstain: <strong>${resVoteAbstain}</strong><br/>
+          Moved by: <strong>${escapeHtml(resMovedBy)}</strong> | Seconded by: <strong>${escapeHtml(resSecondedBy)}</strong><br/>
+          In Favor: <strong>${escapeHtml(resVoteFavor)}</strong> | Against: <strong>${escapeHtml(resVoteAgainst)}</strong> | Abstain: <strong>${escapeHtml(resVoteAbstain)}</strong><br/>
           Status: <strong>APPROVED AND ADOPTED UNANIMOUSLY</strong>
         </div>
 
         <div style="margin-top:35px; font-size:12px;">
           <p style="margin-bottom:25px;">I HEREBY CERTIFY to the correctness of the foregoing resolution:</p>
-          <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">JENNYLYN S. LUMACTAO</div>
+          <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">${escapeHtml(resolveOfficerName(users, 'Secretary' as OfficerRole).toUpperCase())}</div>
           <div style="font-size:11px; color:#555;">Secretary, AFA</div>
 
           <div style="margin-top:30px; display:grid; grid-template-columns:1fr 1fr; gap:40px;">
             <div>
               <p style="font-size:11px; margin-bottom:25px;">Attested & Approved by:</p>
-              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">ZENAIDA A. ELBIÑA</div>
+              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">${escapeHtml(resolveOfficerName(users, 'President' as OfficerRole).toUpperCase())}</div>
               <div style="font-size:11px; color:#555;">President, AFA</div>
             </div>
             <div>
               <p style="font-size:11px; margin-bottom:25px;">Audited & Verified by:</p>
-              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">LORENA B. PINOTE</div>
+              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">${escapeHtml(resolveOfficerName(users, 'Auditor' as OfficerRole).toUpperCase())}</div>
               <div style="font-size:11px; color:#555;">Auditor, AFA</div>
             </div>
           </div>
@@ -211,27 +212,27 @@ export default function SecretaryTemplatesModal({
         </div>
 
         <div style="text-align:right; font-size:12px; margin-bottom:20px;">
-          <strong>Date:</strong> ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          <strong>Date:</strong> ${escapeHtml(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }))}
         </div>
 
         <div style="font-size:12px; line-height:1.6; margin-bottom:20px;">
-          <strong>${reqRecipient}</strong><br/>
-          ${reqOffice}<br/>
-          ${reqAddress}
+          <strong>${escapeHtml(reqRecipient)}</strong><br/>
+          ${escapeHtml(reqOffice)}<br/>
+          ${escapeHtml(reqAddress)}
         </div>
 
         <div style="font-size:13px; font-weight:bold; text-decoration:underline; margin-bottom:18px; color:#1B4332;">
-          SUBJECT: ${reqSubject.toUpperCase()}
+          SUBJECT: ${escapeHtml(reqSubject.toUpperCase())}
         </div>
 
         <div style="font-size:12px; line-height:1.8; text-align:justify; margin-bottom:20px;">
-          <p>Dear ${reqRecipient.split(',')[0] || 'Honorable Mayor'},</p>
+          <p>Dear ${escapeHtml(reqRecipient.split(',')[0] || 'Honorable Mayor')},</p>
           <p>Warm agricultural greetings from Alegria Farmers Association!</p>
-          <p>${reqJustification}</p>
+          <p>${escapeHtml(reqJustification)}</p>
           <p>In this regard, we most respectfully request your benevolent assistance for the provision of the following essential agricultural inputs and equipment:</p>
           
           <div style="background:#faf8f5; border:1px solid #e2dccf; padding:12px 18px; margin:16px 0; font-size:12px; white-space:pre-line; font-family:inherit; line-height:1.7;">
-            ${reqItems}
+            ${escapeHtml(reqItems)}
           </div>
 
           <p>
@@ -244,11 +245,11 @@ export default function SecretaryTemplatesModal({
           <p style="margin-bottom:30px;">Very truly yours,</p>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:40px;">
             <div>
-              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">{resolveOfficerName(users, 'Secretary' as OfficerRole).toUpperCase()}</div>
+              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">${escapeHtml(resolveOfficerName(users, 'Secretary' as OfficerRole).toUpperCase())}</div>
               <div style="font-size:11px; color:#555;">Secretary, AFA</div>
             </div>
             <div>
-              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">ZENAIDA A. ELBIÑA</div>
+              <div style="border-bottom:1px solid #000; width:220px; padding-bottom:4px; font-weight:bold;">${escapeHtml(resolveOfficerName(users, 'President' as OfficerRole).toUpperCase())}</div>
               <div style="font-size:11px; color:#555;">President, AFA</div>
             </div>
           </div>
@@ -260,7 +261,7 @@ export default function SecretaryTemplatesModal({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>AFA Official Document - ${selectedTemplate.toUpperCase()}</title>
+          <title>AFA Official Document - ${escapeHtml(selectedTemplate.toUpperCase())}</title>
           <style>
             @page { size: portrait; margin: 20mm; }
             body { font-family: 'Times New Roman', Times, serif; color: #111; line-height: 1.5; padding: 15px; }
@@ -272,13 +273,11 @@ export default function SecretaryTemplatesModal({
         </head>
         <body>
           ${contentHtml}
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
         </body>
       </html>
     `);
     printWindow.document.close();
+    triggerPrintWindow(printWindow);
   };
 
   return (

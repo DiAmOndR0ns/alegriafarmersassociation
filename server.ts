@@ -17,6 +17,8 @@ import publicSummaryHandler from "./src/api/publicSummary";
 import deleteHandler from "./src/api/delete";
 import {
   bootstrapHandler,
+  getAuthenticatedUser,
+  isMemberRole,
   loginHandler,
   logoutHandler,
   mfaConfirmHandler,
@@ -123,8 +125,10 @@ export async function createApp() {
     try {
       const pool = getPool();
       await ensureDatabaseSchema(pool);
+      const actor = await getAuthenticatedUser(req).catch(() => null);
+      const showDetailedStats = Boolean(actor && !isMemberRole(actor.role));
       const queryPromise = pool.query('SELECT NOW() as current_time, current_database() as db_name');
-      const statsPromise = getTableStats(pool);
+      const statsPromise = showDetailedStats ? getTableStats(pool) : Promise.resolve(null);
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => {
           reject(new Error(
@@ -145,11 +149,15 @@ export async function createApp() {
         configured: true,
         storageMode: 'supabase',
         provider,
-        database: result.rows[0]?.db_name || 'postgres',
         timestamp: result.rows[0]?.current_time,
-        tableCounts: stats.tableCounts,
-        totalRecords: stats.totalRecords,
-        message: `Connected to ${provider} (${result.rows[0]?.db_name || 'postgres'}) — ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`,
+        ...(showDetailedStats && stats ? {
+          database: result.rows[0]?.db_name || 'postgres',
+          tableCounts: stats.tableCounts,
+          totalRecords: stats.totalRecords,
+          message: `Connected to ${provider} (${result.rows[0]?.db_name || 'postgres'}) — ${stats.totalRecords} records across ${Object.keys(stats.tableCounts).length} tables`,
+        } : {
+          message: `Connected to ${provider}`,
+        }),
       });
     } catch (err: any) {
       // Public health check: log the driver error, never return it to the caller.

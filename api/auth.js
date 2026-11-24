@@ -1919,8 +1919,33 @@ async function readBody(req) {
 function errorResponse(res, status, message) {
   return sendResponse(res, status, { success: false, message });
 }
+var AUTH_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1e3;
+var AUTH_RATE_LIMIT_MAX = 25;
+var authRateBuckets = /* @__PURE__ */ new Map();
+function isAuthRateLimited(req, bucket) {
+  if (process.env.VITEST || process.env.NODE_ENV === "test") return false;
+  const forwarded = String(req?.headers?.["x-forwarded-for"] || "").split(",")[0].trim();
+  const ip = forwarded || String(req?.socket?.remoteAddress || req?.ip || "unknown");
+  const key = `${bucket}:${ip}`;
+  const now = Date.now();
+  const cutoff = now - AUTH_RATE_LIMIT_WINDOW_MS;
+  const recent = (authRateBuckets.get(key) || []).filter((ts) => ts > cutoff);
+  if (recent.length >= AUTH_RATE_LIMIT_MAX) {
+    authRateBuckets.set(key, recent);
+    return true;
+  }
+  recent.push(now);
+  authRateBuckets.set(key, recent);
+  if (authRateBuckets.size > 2e3) {
+    for (const [k, stamps] of authRateBuckets) {
+      if (stamps.every((ts) => ts <= cutoff)) authRateBuckets.delete(k);
+    }
+  }
+  return false;
+}
 async function loginHandler(req, res) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  if (isAuthRateLimited(req, "login")) return errorResponse(res, 429, "Too many authentication attempts. Please try again shortly.");
   let pool;
   try {
     signingSecret();
@@ -2091,6 +2116,7 @@ async function mfaResetHandler(req, res) {
 }
 async function mfaConfirmHandler(req, res) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  if (isAuthRateLimited(req, "mfa-confirm")) return errorResponse(res, 429, "Too many verification attempts. Please try again shortly.");
   try {
     signingSecret();
     const body = await readBody(req);
@@ -2109,6 +2135,10 @@ async function mfaConfirmHandler(req, res) {
       if (!user) {
         await client.query("ROLLBACK");
         return errorResponse(res, 401, "Invalid or expired MFA challenge.");
+      }
+      if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) {
+        await client.query("ROLLBACK");
+        return errorResponse(res, 423, "Account temporarily locked. Try again later.");
       }
       if (claims.kind === "mfa-setup") {
         if (!claims.bootstrap && !claims.passwordVerified) {
@@ -2167,6 +2197,7 @@ async function mfaConfirmHandler(req, res) {
 }
 async function bootstrapHandler(req, res) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  if (isAuthRateLimited(req, "bootstrap")) return errorResponse(res, 429, "Too many bootstrap attempts. Please try again shortly.");
   const bootstrapSecret = process.env.FAMS_BOOTSTRAP_SECRET || process.env.BOOTSTRAP_SECRET || "";
   if (!bootstrapSecret || bootstrapSecret.length < 32) return errorResponse(res, 503, "Bootstrap is not configured.");
   let pool;
@@ -2480,6 +2511,7 @@ async function accountProvisionHandler(req, res) {
 async function passwordResetRequestHandler(req, res) {
   if (req.method && req.method !== "POST") return errorResponse(res, 405, "Method not allowed.");
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  if (isAuthRateLimited(req, "password-request")) return errorResponse(res, 429, "Too many reset requests. Please try again shortly.");
   const body = await parseRequestBody(req).catch(() => null);
   const username = typeof body?.username === "string" ? body.username.trim() : "";
   const sitio = typeof body?.sitio === "string" ? body.sitio.trim() : "";
@@ -2496,8 +2528,10 @@ async function passwordResetRequestHandler(req, res) {
     await getPool().query(
       `UPDATE users
        SET reset_requested = TRUE
-       WHERE lower(username) = lower($1) AND is_approved IS NOT FALSE`,
-      [username]
+       WHERE lower(username) = lower($1)
+         AND is_approved IS NOT FALSE
+         AND lower(coalesce(farm_location, '')) = lower($2)`,
+      [username, sitio]
     );
   } catch (error) {
     console.error("[Auth password reset request failure]", error);

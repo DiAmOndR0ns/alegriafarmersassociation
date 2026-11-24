@@ -89,7 +89,7 @@ function safeImageUrl(value, maxLength = 4e5) {
   if (!url) return null;
   if (/^https?:\/\/[^\s<>"]+$/i.test(url)) return url;
   if (/^\/assets\/[a-z0-9._/-]+\.(png|jpe?g|webp|gif)$/i.test(url) && !url.includes("..")) return url;
-  if (/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(url)) return url;
+  if (/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(url)) return url;
   return null;
 }
 function cleanDateString(value, maxLength = 50) {
@@ -2807,6 +2807,7 @@ function isTreasurerRole(role) {
 function errorResponse(res, status, message) {
   return sendResponse(res, status, { success: false, message });
 }
+var AUTH_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1e3;
 async function requireAuthenticated(req, res) {
   try {
     const user = await getAuthenticatedUser(req);
@@ -3307,6 +3308,68 @@ async function handler(req, res) {
       return sendResponse(res, 403, {
         success: false,
         message: "Only the Treasurer (asset purchases) or Auditor (custodial inspection) may update association inventory."
+      });
+    }
+    const hasDeletedKey = (keys) => {
+      if (!safeState.deletedIds || typeof safeState.deletedIds !== "object") return false;
+      const d = safeState.deletedIds;
+      return keys.some((k) => Array.isArray(d[k]) && d[k].length > 0);
+    };
+    const deleteItemEntity = String(safeState.deleteItem?.entity || "").toLowerCase().replace(/[\s-]/g, "_");
+    if (hasDeletedKey(["delegationRequests", "delegation_requests", "systemLogs", "system_logs", "logs"]) || ["delegation_request", "delegation_requests", "system_log", "system_logs", "log", "logs"].includes(deleteItemEntity)) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: "Delegation records and system audit logs cannot be deleted through bulk synchronization."
+      });
+    }
+    if (normalizedPushRole === "member") {
+      const anyDeletion = Boolean(safeState.deleteItem) || Boolean(
+        safeState.deletedIds && typeof safeState.deletedIds === "object" && Object.values(safeState.deletedIds).some((v) => Array.isArray(v) && v.length > 0)
+      );
+      if (anyDeletion) {
+        return sendResponse(res, 403, {
+          success: false,
+          message: "Members are not authorized to delete association records."
+        });
+      }
+      if ("systemLogs" in state || "logs" in state) {
+        delete safeState.systemLogs;
+        delete safeState.logs;
+      }
+    }
+    const canWriteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role) || isTreasurerRole(user.role);
+    const canDeleteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role);
+    if (!canWriteMembers && "members" in state) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: "Only the President, Secretary, or Treasurer may update the member registry."
+      });
+    }
+    if (!canDeleteMembers && (hasDeletedKey(["members"]) || ["member", "members"].includes(deleteItemEntity))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: "Only the President or Secretary may remove member records."
+      });
+    }
+    const canWriteMeetings = isPresidentRole(user.role) || isSecretaryRole(user.role) || isVicePresident && delegationScopes.has("record_approval");
+    const canDeleteMeetings = isPresidentRole(user.role) || isSecretaryRole(user.role);
+    if (!canWriteMeetings && "meetings" in state) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: "Only the President, Secretary, or a delegated Vice President may update meeting records."
+      });
+    }
+    if (!canDeleteMeetings && (hasDeletedKey(["meetings"]) || ["meeting", "meetings"].includes(deleteItemEntity))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: "Only the President or Secretary may delete meeting records."
+      });
+    }
+    const canWriteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role);
+    if (!canWriteResolutions && ("resolutions" in state || hasDeletedKey(["resolutions"]) || ["resolution", "resolutions"].includes(deleteItemEntity))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: "Only the President or Secretary may create, update, or delete resolutions."
       });
     }
     await saveFullStateToPostgres(getPool(), safeState);

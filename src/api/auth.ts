@@ -375,8 +375,35 @@ function errorResponse(res: any, status: number, message: string) {
   return sendResponse(res, status, { success: false, message });
 }
 
+const AUTH_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+const AUTH_RATE_LIMIT_MAX = 25;
+const authRateBuckets = new Map<string, number[]>();
+
+function isAuthRateLimited(req: any, bucket: string): boolean {
+  if (process.env.VITEST || process.env.NODE_ENV === 'test') return false;
+  const forwarded = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+  const ip = forwarded || String(req?.socket?.remoteAddress || req?.ip || 'unknown');
+  const key = `${bucket}:${ip}`;
+  const now = Date.now();
+  const cutoff = now - AUTH_RATE_LIMIT_WINDOW_MS;
+  const recent = (authRateBuckets.get(key) || []).filter((ts) => ts > cutoff);
+  if (recent.length >= AUTH_RATE_LIMIT_MAX) {
+    authRateBuckets.set(key, recent);
+    return true;
+  }
+  recent.push(now);
+  authRateBuckets.set(key, recent);
+  if (authRateBuckets.size > 2000) {
+    for (const [k, stamps] of authRateBuckets) {
+      if (stamps.every((ts) => ts <= cutoff)) authRateBuckets.delete(k);
+    }
+  }
+  return false;
+}
+
 export async function loginHandler(req: any, res: any) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  if (isAuthRateLimited(req, 'login')) return errorResponse(res, 429, 'Too many authentication attempts. Please try again shortly.');
   let pool: Pool;
   try {
     signingSecret();
@@ -590,6 +617,7 @@ export async function mfaResetHandler(req: any, res: any) {
 
 export async function mfaConfirmHandler(req: any, res: any) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  if (isAuthRateLimited(req, 'mfa-confirm')) return errorResponse(res, 429, 'Too many verification attempts. Please try again shortly.');
   try {
     signingSecret();
     const body = await readBody(req);
@@ -608,6 +636,10 @@ export async function mfaConfirmHandler(req: any, res: any) {
       if (!user) {
         await client.query('ROLLBACK');
         return errorResponse(res, 401, 'Invalid or expired MFA challenge.');
+      }
+      if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) {
+        await client.query('ROLLBACK');
+        return errorResponse(res, 423, 'Account temporarily locked. Try again later.');
       }
       if (claims.kind === 'mfa-setup') {
         if (!claims.bootstrap && !claims.passwordVerified) {
@@ -652,7 +684,7 @@ export async function mfaConfirmHandler(req: any, res: any) {
       }
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
+      await client.query('ROLLBACK').catch(() => { });
       throw error;
     } finally {
       client.release();
@@ -668,6 +700,7 @@ export async function mfaConfirmHandler(req: any, res: any) {
 
 export async function bootstrapHandler(req: any, res: any) {
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  if (isAuthRateLimited(req, 'bootstrap')) return errorResponse(res, 429, 'Too many bootstrap attempts. Please try again shortly.');
   const bootstrapSecret = process.env.FAMS_BOOTSTRAP_SECRET || process.env.BOOTSTRAP_SECRET || '';
   if (!bootstrapSecret || bootstrapSecret.length < 32) return errorResponse(res, 503, 'Bootstrap is not configured.');
   let pool: Pool;
@@ -715,7 +748,7 @@ export async function bootstrapHandler(req: any, res: any) {
     row = inserted.rows[0];
     await client.query('COMMIT');
   } catch (error: any) {
-    await client.query('ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK').catch(() => { });
     if (error?.code === '23505') return errorResponse(res, 409, 'A unique President seat or username is already present.');
     console.error('[Auth bootstrap failure]', error);
     return errorResponse(res, 500, 'Unable to initialize the first President account.');
@@ -854,11 +887,11 @@ export async function passwordResetHandler(req: any, res: any) {
         locked_until = NULL, reset_requested = FALSE,
         is_approved = CASE WHEN password IS NULL OR password = '' OR password NOT LIKE '$2%' THEN TRUE ELSE is_approved END
         WHERE id = $3 RETURNING *`,
-      [newHash, JSON.stringify(nextHistory), target.id]);
+        [newHash, JSON.stringify(nextHistory), target.id]);
       target = updated.rows[0];
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
+      await client.query('ROLLBACK').catch(() => { });
       throw error;
     } finally {
       client.release();
@@ -951,7 +984,7 @@ export async function accountProvisionHandler(req: any, res: any) {
         failed_login_attempts = 0, locked_until = NULL, reset_requested = FALSE,
         is_approved = CASE WHEN password IS NULL OR password = '' OR password NOT LIKE '$2%' THEN TRUE ELSE is_approved END
         WHERE id = $5 RETURNING *`,
-      [username, passwordHash, name, JSON.stringify(nextHistory), id]);
+        [username, passwordHash, name, JSON.stringify(nextHistory), id]);
       row = updated.rows[0];
     } else {
       const usernameInUse = await client.query(
@@ -973,12 +1006,12 @@ export async function accountProvisionHandler(req: any, res: any) {
          password_changed_at, must_change_password, failed_login_attempts, locked_until, reset_requested)
         VALUES ($1, $2, $3, $4, $5, TRUE, NOW()::text, '[]'::jsonb, NOW(), FALSE, 0, NULL, FALSE)
         RETURNING *`,
-      [id, username, passwordHash, name, role]);
+        [id, username, passwordHash, name, role]);
       row = inserted.rows[0];
     }
     await client.query('COMMIT');
   } catch (error: any) {
-    await client.query('ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK').catch(() => { });
     if (error?.code === '23505') return errorResponse(res, 409, 'That account ID, username, or role is already in use.');
     console.error('[Auth account provisioning failure]', error);
     return errorResponse(res, 500, 'Unable to create or update the account.');
@@ -991,6 +1024,7 @@ export async function accountProvisionHandler(req: any, res: any) {
 export async function passwordResetRequestHandler(req: any, res: any) {
   if (req.method && req.method !== 'POST') return errorResponse(res, 405, 'Method not allowed.');
   if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, 'Cross-origin requests are not allowed.');
+  if (isAuthRateLimited(req, 'password-request')) return errorResponse(res, 429, 'Too many reset requests. Please try again shortly.');
   const body: any = await parseRequestBody(req).catch(() => null);
   const username = typeof body?.username === 'string' ? body.username.trim() : '';
   const sitio = typeof body?.sitio === 'string' ? body.sitio.trim() : '';
@@ -1012,8 +1046,10 @@ export async function passwordResetRequestHandler(req: any, res: any) {
     await getPool().query(
       `UPDATE users
        SET reset_requested = TRUE
-       WHERE lower(username) = lower($1) AND is_approved IS NOT FALSE`,
-      [username]
+       WHERE lower(username) = lower($1)
+         AND is_approved IS NOT FALSE
+         AND lower(coalesce(farm_location, '')) = lower($2)`,
+      [username, sitio]
     );
   } catch (error) {
     console.error('[Auth password reset request failure]', error);

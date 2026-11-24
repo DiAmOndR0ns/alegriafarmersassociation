@@ -1477,6 +1477,7 @@ function isPresidentRole(role) {
 function errorResponse(res, status, message) {
   return sendResponse(res, status, { success: false, message });
 }
+var AUTH_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1e3;
 async function requireAuthenticated(req, res) {
   try {
     const user = await getAuthenticatedUser(req);

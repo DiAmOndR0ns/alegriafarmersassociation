@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Member } from '../types';
+import { escapeHtml, safePrintImageUrl, triggerPrintWindow } from '../utils/htmlEscape';
 import { 
   Printer, X, ShieldCheck, CheckCircle2, AlertCircle, 
   MapPin, Phone, Calendar, User, QrCode, Tag, Award
@@ -109,7 +110,9 @@ export default function MemberIdBadgeModal({
         </head>
         <body>
           <div class="grid-cards">
-            ${membersToPrint.map(m => `
+            ${membersToPrint.map(m => {
+              const safeAvatar = safePrintImageUrl(m.avatarUrl);
+              return `
               <div class="id-card">
                 <div class="id-header">
                   <h3>Alegria Farmers Association</h3>
@@ -117,36 +120,36 @@ export default function MemberIdBadgeModal({
                 </div>
                 <div class="id-body">
                   <div class="photo-box">
-                    ${m.avatarUrl ? `<img src="${m.avatarUrl}" alt="Photo" />` : `<span>2x2 ID PHOTO</span><span style="font-size:7px; color:#666; margin-top:2px;">AFA SEAL</span>`}
+                    ${safeAvatar ? `<img src="${escapeHtml(safeAvatar)}" alt="Photo" />` : `<span>2x2 ID PHOTO</span><span style="font-size:7px; color:#666; margin-top:2px;">AFA SEAL</span>`}
                   </div>
                   <div class="info-fields">
-                    <div class="member-name">${m.name}</div>
+                    <div class="member-name">${escapeHtml(m.name)}</div>
                     <div class="field-row">
                       <span class="field-label">Member ID:</span> 
-                      <span class="field-val" style="font-family:monospace; color:#1B4332;">${m.memberIdNumber || 'Not assigned'}</span>
+                      <span class="field-val" style="font-family:monospace; color:#1B4332;">${escapeHtml(m.memberIdNumber || 'Not assigned')}</span>
                     </div>
                     <div class="field-row">
                       <span class="field-label">Sitio Address:</span> 
-                      <span class="field-val">${m.farmLocation}</span>
+                      <span class="field-val">${escapeHtml(m.farmLocation)}</span>
                     </div>
                     <div class="field-row">
                       <span class="field-label">Contact No:</span> 
-                      <span class="field-val">${m.contactNumber}</span>
+                      <span class="field-val">${escapeHtml(m.contactNumber)}</span>
                     </div>
                     <div class="field-row">
                       <span class="field-label">Primary Crops / IGP:</span> 
-                      <span class="field-val">${m.primaryCrops.join(', ')}</span>
+                      <span class="field-val">${escapeHtml(m.primaryCrops.join(', '))}</span>
                     </div>
                     <div>
                       <span class="rsbsa-badge">
-                        ${m.isRsbsaRegistered ? `✓ RSBSA: ${m.rsbsaNumber || 'REGISTERED'}` : '⚠ RSBSA PENDING'}
+                        ${m.isRsbsaRegistered ? `✓ RSBSA: ${escapeHtml(m.rsbsaNumber || 'REGISTERED')}` : '⚠ RSBSA PENDING'}
                       </span>
                     </div>
                     ${m.affiliations && m.affiliations.length > 0 ? `
                       <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px;">
                         ${m.affiliations.map(a => `
                           <span style="background: #EAF4EC; border: 1px solid #B7E4C7; color: #1B4332; font-size: 7.5px; font-weight: bold; padding: 1px 4px; border-radius: 3px;">
-                            ${a.name}${a.idNumber ? ` (${a.idNumber})` : ''}
+                            ${escapeHtml(a.name)}${a.idNumber ? ` (${escapeHtml(a.idNumber)})` : ''}
                           </span>
                         `).join('')}
                       </div>
@@ -154,24 +157,18 @@ export default function MemberIdBadgeModal({
                   </div>
                 </div>
                 <div class="id-footer">
-                  <span>Joined: ${m.joinedDate}</span>
+                  <span>Joined: ${escapeHtml(m.joinedDate)}</span>
                   <span style="font-weight:bold; color:#1B4332;">OFFICIAL FARMER MEMBER</span>
                 </div>
               </div>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
-          <script>
-            window.onload = function() {
-              const images = Array.from(document.images);
-              Promise.all(images.map((image) => image.decode().catch(() => undefined))).then(() => {
-                setTimeout(() => { window.focus(); window.print(); }, 250);
-              });
-            };
-          </script>
         </body>
       </html>
     `);
     printWindow.document.close();
+    triggerPrintWindow(printWindow, true);
   };
 
   return (

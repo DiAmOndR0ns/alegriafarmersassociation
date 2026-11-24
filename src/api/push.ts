@@ -663,6 +663,84 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
         message: 'Only the Treasurer (asset purchases) or Auditor (custodial inspection) may update association inventory.',
       });
     }
+
+    // Strict per-role write & deletion guards for governance, roster, and audit tables.
+    const hasDeletedKey = (keys: string[]) => {
+      if (!safeState.deletedIds || typeof safeState.deletedIds !== 'object') return false;
+      const d = safeState.deletedIds as Record<string, unknown>;
+      return keys.some((k) => Array.isArray(d[k]) && (d[k] as unknown[]).length > 0);
+    };
+    const deleteItemEntity = String(safeState.deleteItem?.entity || '').toLowerCase().replace(/[\s-]/g, '_');
+
+    // Never allow deleting delegation requests or system logs via bulk sync.
+    if (
+      hasDeletedKey(['delegationRequests', 'delegation_requests', 'systemLogs', 'system_logs', 'logs']) ||
+      ['delegation_request', 'delegation_requests', 'system_log', 'system_logs', 'log', 'logs'].includes(deleteItemEntity)
+    ) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: 'Delegation records and system audit logs cannot be deleted through bulk synchronization.',
+      });
+    }
+
+    // Plain Members may never delete any record or write audit logs.
+    if (normalizedPushRole === 'member') {
+      const anyDeletion = Boolean(safeState.deleteItem) || Boolean(
+        safeState.deletedIds && typeof safeState.deletedIds === 'object' &&
+        Object.values(safeState.deletedIds as Record<string, unknown>).some((v) => Array.isArray(v) && v.length > 0)
+      );
+      if (anyDeletion) {
+        return sendResponse(res, 403, {
+          success: false,
+          message: 'Members are not authorized to delete association records.',
+        });
+      }
+      if ('systemLogs' in state || 'logs' in state) {
+        delete safeState.systemLogs;
+        delete safeState.logs;
+      }
+    }
+
+    // Member roster writes: President, Secretary, Assistant Secretary, Treasurer, Assistant Treasurer.
+    const canWriteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role) || isTreasurerRole(user.role);
+    const canDeleteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role);
+    if (!canWriteMembers && 'members' in state) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: 'Only the President, Secretary, or Treasurer may update the member registry.',
+      });
+    }
+    if (!canDeleteMembers && (hasDeletedKey(['members']) || ['member', 'members'].includes(deleteItemEntity))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: 'Only the President or Secretary may remove member records.',
+      });
+    }
+
+    // Meetings writes: President, Secretary, Assistant Secretary, or delegated Vice President (record_approval).
+    const canWriteMeetings = isPresidentRole(user.role) || isSecretaryRole(user.role) || (isVicePresident && delegationScopes.has('record_approval'));
+    const canDeleteMeetings = isPresidentRole(user.role) || isSecretaryRole(user.role);
+    if (!canWriteMeetings && 'meetings' in state) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: 'Only the President, Secretary, or a delegated Vice President may update meeting records.',
+      });
+    }
+    if (!canDeleteMeetings && (hasDeletedKey(['meetings']) || ['meeting', 'meetings'].includes(deleteItemEntity))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: 'Only the President or Secretary may delete meeting records.',
+      });
+    }
+
+    // Resolutions writes: President, Secretary, Assistant Secretary.
+    const canWriteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role);
+    if (!canWriteResolutions && ('resolutions' in state || hasDeletedKey(['resolutions']) || ['resolution', 'resolutions'].includes(deleteItemEntity))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: 'Only the President or Secretary may create, update, or delete resolutions.',
+      });
+    }
     await saveFullStateToPostgres(getPool(), safeState);
     return sendResponse(res, 200, { success: true, offlineMode: false, message: 'State successfully synced.' });
   } catch (error: any) {

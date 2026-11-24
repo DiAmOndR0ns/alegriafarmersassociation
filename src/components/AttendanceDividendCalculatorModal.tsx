@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Member, Meeting, LivestockIgpState, User, MembershipPayment } from '../types';
 import { resolveOfficerName } from '../utils/officers';
 import { getDerivedMemberStatus } from '../utils/membership';
+import { escapeHtml, triggerPrintWindow } from '../utils/htmlEscape';
 import { 
   DollarSign, Calculator, Printer, CheckCircle, AlertTriangle, 
   Users, Percent, Calendar, Sparkles, TrendingUp, X, Award, ShieldAlert
@@ -216,11 +217,11 @@ export default function AttendanceDividendCalculatorModal({
               ${calculatedDividendRoster.map((item, idx) => `
                 <tr style="${!item.isEligible ? 'background:#FEE2E2;' : ''}">
                   <td>${idx + 1}</td>
-                  <td><strong>${item.member.name}</strong></td>
-                  <td>${item.member.farmLocation}</td>
-                  <td>${item.member.isRsbsaRegistered ? (item.member.rsbsaNumber || 'RSBSA Registered') : 'Non-RSBSA'}</td>
+                  <td><strong>${escapeHtml(item.member.name)}</strong></td>
+                  <td>${escapeHtml(item.member.farmLocation)}</td>
+                  <td>${escapeHtml(item.member.isRsbsaRegistered ? (item.member.rsbsaNumber || 'RSBSA Registered') : 'Non-RSBSA')}</td>
                   <td>${item.attendedCount} / ${item.totalMeetings} (${item.attendanceRate.toFixed(0)}%)</td>
-                  <td><strong>${item.reason}</strong></td>
+                  <td><strong>${escapeHtml(item.reason)}</strong></td>
                   <td class="text-right" style="font-weight:900; font-family:monospace; color:${item.isEligible ? '#1B4332' : '#991B1B'}">
                     PHP ${item.finalDividend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
@@ -232,23 +233,20 @@ export default function AttendanceDividendCalculatorModal({
 
           <div class="signatures">
             <div>
-              <div class="sign-line">${resolveOfficerName(users, 'Treasurer').toUpperCase()}<br/><span style="font-size:9px; font-weight:normal;">Treasurer, AFA</span></div>
+              <div class="sign-line">${escapeHtml(resolveOfficerName(users, 'Treasurer').toUpperCase())}<br/><span style="font-size:9px; font-weight:normal;">Treasurer, AFA</span></div>
             </div>
             <div>
-              <div class="sign-line">${resolveOfficerName(users, 'Auditor').toUpperCase()}<br/><span style="font-size:9px; font-weight:normal;">Auditor, AFA</span></div>
+              <div class="sign-line">${escapeHtml(resolveOfficerName(users, 'Auditor').toUpperCase())}<br/><span style="font-size:9px; font-weight:normal;">Auditor, AFA</span></div>
             </div>
             <div>
-              <div class="sign-line">${resolveOfficerName(users, 'President').toUpperCase()}<br/><span style="font-size:9px; font-weight:normal;">President, AFA</span></div>
+              <div class="sign-line">${escapeHtml(resolveOfficerName(users, 'President').toUpperCase())}<br/><span style="font-size:9px; font-weight:normal;">President, AFA</span></div>
             </div>
           </div>
-
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
         </body>
       </html>
     `);
     printWindow.document.close();
+    triggerPrintWindow(printWindow);
   };
 
   return (
