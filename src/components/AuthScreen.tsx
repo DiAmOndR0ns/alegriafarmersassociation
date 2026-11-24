@@ -373,9 +373,6 @@ export default function AuthScreen({
                   />
                 </div>
                 <div className="min-w-0 text-left">
-                  <p className="text-[11px] md:text-xs font-extrabold tracking-[0.14em] uppercase text-[#FFF0C2] truncate">
-                    AFA • TUBURAN, CEBU
-                  </p>
                   <h1 className="font-display text-lg md:text-2xl font-bold text-white leading-tight truncate">
                     {t('Farmer Access Portal', 'Farmer Access Portal')}
                   </h1>
@@ -402,8 +399,8 @@ export default function AuthScreen({
               </div>
               <p className="text-sm text-[#E5F6EA] leading-relaxed">
                 {t(
-                  'Opisyal nga sistema sa Alegria Farmers Association para sa mga opisyales ug miyembro sa lima ka sitio.',
-                  'Official management portal for Alegria Farmers Association officers and members across all five sitios.'
+                  'Opisyal nga sistema sa Alegria Farmers Association para sa mga opisyales ug miyembro sa upat ka sitio.',
+                  'Official management portal for Alegria Farmers Association officers and members across all four sitios.'
                 )}
               </p>
             </div>
@@ -438,10 +435,6 @@ export default function AuthScreen({
               </div>
             </div>
           </div>
-
-          <p className="login-aside-desc relative z-10 text-xs text-[#CBE9D2] font-semibold text-left pt-6">
-            DOLE Reg. No. 2315 • Barangay Alegria, Tuburan, Cebu
-          </p>
         </aside>
 
         {/* RIGHT FORM PANEL */}
@@ -453,14 +446,9 @@ export default function AuthScreen({
                   {showResetForm
                     ? t('Hangyo sa Bag-ong Password', 'Password Reset Request')
                     : authChallenge
-                    ? t('Two-Factor Verification', 'Two-Factor Verification')
-                    : t('Pagsulod sa Account', 'Sign In to FAMS')}
+                      ? t('Two-Factor Verification', 'Two-Factor Verification')
+                      : t('Pagsulod sa Account', 'Sign In to FAMS')}
                 </h2>
-                <p className="text-xs sm:text-sm text-[#455C50] font-medium">
-                  {showResetForm
-                    ? t('Ipadala ang hangyo ngadto sa mga opisyales sa AFA.', 'Notify AFA officers to reset your credentials.')
-                    : t('Alegria Farmers Association • FAMS', 'Alegria Farmers Association • FAMS')}
-                </p>
               </div>
             </div>
 
@@ -565,9 +553,9 @@ export default function AuthScreen({
                     {authChallenge.setup
                       ? authChallenge.secret
                         ? t(
-                            'Idugang kini nga account sa authenticator app ug isulod ang 6-digit code.',
-                            'Add this account to an authenticator app, then enter the current 6-digit code to complete setup.'
-                          )
+                          'Idugang kini nga account sa authenticator app ug isulod ang 6-digit code.',
+                          'Add this account to an authenticator app, then enter the current 6-digit code to complete setup.'
+                        )
                         : 'This account must first enroll an authenticator. Ask the President or Secretary to issue a fresh setup key from the officer console, then enter the current 6-digit code.'
                       : t('Isulod ang kasamtangang 6-digit code gikan sa imong authenticator app.', 'Enter the current 6-digit code from your authenticator app.')}
                   </p>

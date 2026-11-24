@@ -688,9 +688,6 @@ export default function GuestPortal({
               <h1 className="text-[13px] sm:text-base md:text-lg font-extrabold tracking-tight text-[#1B4332] uppercase font-display leading-tight truncate">
                 Alegria Farmers Association
               </h1>
-              <p className="brand-subtitle text-xs font-semibold text-[#455C50] leading-tight truncate">
-                FAMS • Barangay Alegria, Tuburan, Cebu
-              </p>
             </div>
           </button>
 
@@ -768,12 +765,6 @@ export default function GuestPortal({
               )}
             </h2>
 
-            <p className="text-sm sm:text-base md:text-lg text-[#EBF7EE] max-w-2xl leading-relaxed font-medium">
-              {t(
-                'Opisyal nga Farmers Association Management System (FAMS) alang sa lima ka sitio sa Alegria — direktang merkado, pahibalo, ug kalihokan sa komunidad.',
-                'Official Farmers Association Management System (FAMS) uniting Alegria’s five sitios with direct farm produce, transparent records, and community updates.'
-              )}
-            </p>
 
             {/* Dual Hero CTAs: 2-column side-by-side grid on <480px */}
             <div className="grid grid-cols-2 sm:inline-flex gap-2.5 sm:gap-3 pt-1.5 w-full sm:w-auto">
@@ -815,8 +806,8 @@ export default function GuestPortal({
                   onClick={() => selectTab(tab.id, true)}
                   aria-current={isActive ? 'page' : undefined}
                   className={`px-4 lg:px-5 py-2.5 text-sm lg:text-base font-bold transition-all duration-150 flex items-center justify-center gap-2 rounded-xl border cursor-pointer ${isActive
-                      ? 'bg-[#D6EFD9] border-[#1B4332]/30 text-[#1B4332] shadow-xs'
-                      : 'border-transparent text-[#455C50] hover:text-[#1B4332] hover:bg-white'
+                    ? 'bg-[#D6EFD9] border-[#1B4332]/30 text-[#1B4332] shadow-xs'
+                    : 'border-transparent text-[#455C50] hover:text-[#1B4332] hover:bg-white'
                     }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -831,6 +822,321 @@ export default function GuestPortal({
       {/* MAIN PORTAL CONTENT */}
       <main id="portal-main" ref={mainRef} className="flex-1 px-3.5 sm:px-6 py-5 sm:py-8 max-w-7xl mx-auto w-full space-y-6 sm:space-y-8 min-w-0">
 
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === 'home' && (
+          <div className="space-y-6 sm:space-y-8 text-left min-w-0 animate-fade-in">
+
+            {/* 2x2 MOBILE KPI IMPACT GRID -> 4 COLS ON 1024px+ */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="dim-card rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between gap-2.5 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="portal-meta text-xs sm:text-sm font-bold text-[#455C50] leading-snug">
+                    {t('Rehistradong Mag-uuma', 'Registered Farmers')}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-[#D6EFD9] text-[#1B4332] flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5" aria-hidden="true" />
+                  </div>
+                </div>
+                {isLoadingSummary ? (
+                  <div className="space-y-1.5">
+                    <div className="h-7 w-24 rounded-lg skeleton-shimmer" />
+                    <div className="h-3.5 w-20 rounded-md skeleton-shimmer" />
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-2xl sm:text-3xl font-extrabold text-[#1B4332] font-mono leading-tight block">
+                      {registeredMembersCount.toLocaleString()}
+                    </span>
+                    <span className="portal-meta text-sm font-semibold text-[#455C50]">
+                      {t('Miyembro sa AFA', 'AFA Members')}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="dim-card rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between gap-2.5 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="portal-meta text-xs sm:text-sm font-bold text-[#455C50] leading-snug">
+                    {t('Sakop nga Sitios', 'Covered Sitios')}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-[#FFF0C2] text-[#8A5404] flex items-center justify-center shrink-0">
+                    <MapPin className="w-5 h-5" aria-hidden="true" />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-2xl sm:text-3xl font-extrabold text-[#1B4332] font-mono leading-tight block">
+                    4 Sitios
+                  </span>
+                  <span className="portal-meta text-sm font-semibold text-[#455C50]">
+                    {t('Barangay Alegria', 'Barangay Alegria')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="dim-card rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between gap-2.5 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="portal-meta text-xs sm:text-sm font-bold text-[#455C50] leading-snug">
+                    {t('Produkto & IGP', 'Products & IGP')}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-[#FFE9DC] text-[#C2410C] flex items-center justify-center shrink-0">
+                    <ShoppingBag className="w-5 h-5" aria-hidden="true" />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-2xl sm:text-3xl font-extrabold text-[#1B4332] font-mono leading-tight block">
+                    {displayProducts.length}
+                  </span>
+                  <span className="portal-meta text-sm font-semibold text-[#455C50]">
+                    {t('Baligya sa Merkado', 'Catalog Listings')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="dim-card rounded-2xl p-3.5 sm:p-5 flex flex-col justify-between gap-2.5 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="portal-meta text-xs sm:text-sm font-bold text-[#455C50] leading-snug">
+                    {t('Abangan sa Komunidad', 'Community Rentals')}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-[#D6EFD9] text-[#1B4332] flex items-center justify-center shrink-0">
+                    <Boxes className="w-5 h-5" aria-hidden="true" />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-2xl sm:text-3xl font-extrabold text-[#1B4332] font-mono leading-tight block">
+                    {t('98+ Buok', '98+ Units')}
+                  </span>
+                  <span className="portal-meta text-sm font-semibold text-[#455C50]">
+                    {t('Lingkoranan ug sako', 'Chairs & sacks')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* INTERACTIVE 4-SITIO MAP STRIP */}
+            <section className="dim-card rounded-3xl p-4 sm:p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-[#D6EFD9] text-[#1B4332] flex items-center justify-center shrink-0">
+                    <Compass className="w-5 h-5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-lg sm:text-xl font-bold text-[#1B4332] leading-tight">
+                      {t('Mapa sa Upat ka Sitio sa Alegria', 'Interactive 4-Sitio Coverage Map')}
+                    </h3>
+                    <p className="portal-meta text-sm text-[#455C50]">
+                      {t('Pindota ang sitio aron makita ang mga tanom ug koordineytor.', 'Tap a sitio to explore primary crops and local coverage.')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="tablist" aria-label={t('Mga Sitio sa Alegria', 'Alegria Sitios')}>
+                {SITIO_PROFILES.map((sitio) => {
+                  const isSelected = sitio.id === activeSitio.id;
+                  return (
+                    <button
+                      key={sitio.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      aria-label={sitio.name}
+                      onClick={() => setSelectedSitioId(sitio.id)}
+                      className={`px-3 py-2.5 rounded-xl border text-left transition-all cursor-pointer ${isSelected
+                        ? 'bg-[#1B4332] border-[#123326] text-white shadow-md'
+                        : 'bg-[#FAF8F5] border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF6EE]'
+                        }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-extrabold text-sm leading-tight">
+                        <MapPin className={`w-4 h-4 shrink-0 ${isSelected ? 'text-[#F4C76D]' : 'text-[#C2410C]'}`} aria-hidden="true" />
+                        <span className="truncate">{sitio.name.replace('Sitio ', '')}</span>
+                      </div>
+                      <span className={`block text-xs mt-0.5 font-semibold truncate ${isSelected ? 'text-[#D6EFD9]' : 'text-[#455C50]'}`}>
+                        {en ? sitio.tagEn : sitio.tagCeb}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Recessed Inset Detail Card */}
+              <div className="recessed-control rounded-2xl p-4 sm:p-5 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="font-display text-base sm:text-lg font-bold text-[#1B4332] flex items-center gap-2">
+                    <Sprout className="w-5 h-5 text-[#2D6A4F] shrink-0" aria-hidden="true" />
+                    <span>{activeSitio.name}</span>
+                  </h4>
+                  <span className="portal-badge px-3 py-0.5 rounded-full bg-white text-[#1B4332] border border-[#1B4332]/20 font-bold">
+                    {en ? activeSitio.tagEn : activeSitio.tagCeb}
+                  </span>
+                </div>
+                <p className="text-sm sm:text-base text-[#18372D] font-semibold">
+                  <span className="text-[#455C50] font-bold">{t('Nag-unang Abot:', 'Primary Crops:')}</span>{' '}
+                  {en ? activeSitio.cropsEn : activeSitio.cropsCeb}
+                </p>
+                <p className="text-sm text-[#354B40] leading-relaxed">
+                  {en ? activeSitio.focusEn : activeSitio.focusCeb}
+                </p>
+                <p className="portal-meta text-sm font-bold text-[#2D6A4F] pt-1">
+                  {en ? activeSitio.coordinatorEn : activeSitio.coordinatorCeb}
+                </p>
+              </div>
+            </section>
+
+            {/* LATEST ANNOUNCEMENTS & ACTIVITIES PREVIEW */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Latest Announcements */}
+              <div className="dim-card rounded-3xl p-4 sm:p-6 space-y-3.5">
+                <div className="flex items-center justify-between border-b border-[#D6EFD9] pb-2.5 gap-2">
+                  <h4 className="font-display font-bold text-[#1B4332] text-base sm:text-lg flex items-center gap-2">
+                    <Megaphone className="w-5 h-5 text-[#C2410C] shrink-0" aria-hidden="true" />
+                    <span>{t('Pinakabag-ong Pahibalo', 'Latest Notices')}</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => selectTab('announcements', true)}
+                    className="text-sm font-extrabold text-[#C2410C] hover:underline cursor-pointer flex items-center gap-1 px-2"
+                  >
+                    <span>{t('Tan-awa tanan', 'View all')}</span>
+                    <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  </button>
+                </div>
+
+                {isLoadingSummary ? (
+                  <div className="space-y-3" aria-busy="true">
+                    {[0, 1].map(i => (
+                      <div key={i} className="p-3.5 rounded-2xl bg-[#FAF8F5] space-y-2">
+                        <div className="h-4 w-32 rounded skeleton-shimmer" />
+                        <div className="h-5 w-3/4 rounded skeleton-shimmer" />
+                        <div className="h-4 w-full rounded skeleton-shimmer" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {displayAnnouncements.slice(0, 3).map((ann) => {
+                      const leaf = parseCalendarLeaf(ann.datePosted, en);
+                      return (
+                        <div key={ann.id} className="p-3.5 bg-[#FAF8F5] border border-[#E6E0D3] rounded-2xl flex items-start gap-3">
+                          <div className="calendar-leaf" aria-hidden="true">
+                            <div className="calendar-leaf-month is-terracotta">{leaf.month}</div>
+                            <div className="calendar-leaf-day">{leaf.day}</div>
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <span className={`portal-badge inline-block px-2.5 py-0.5 rounded-md font-extrabold ${ann.priority === 'High' ? 'bg-rose-100 text-rose-900 border border-rose-300' :
+                              ann.priority === 'Medium' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                                'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                              }`}>
+                              {localizePriority(ann.priority)}
+                            </span>
+                            <h5 className="font-extrabold text-[#163327] text-base leading-snug">{ann.title}</h5>
+                            <p className="text-sm text-[#354B40] line-clamp-2">{ann.content}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {displayAnnouncements.length === 0 && (
+                      <p className="text-sm text-[#455C50] italic text-center py-6">
+                        {t('Walay bag-ong pahibalo karon.', 'There are no new notices right now.')}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Upcoming Activities */}
+              <div className="dim-card rounded-3xl p-4 sm:p-6 space-y-3.5">
+                <div className="flex items-center justify-between border-b border-[#D6EFD9] pb-2.5 gap-2">
+                  <h4 className="font-display font-bold text-[#1B4332] text-base sm:text-lg flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-[#2D6A4F] shrink-0" aria-hidden="true" />
+                    <span>{t('Umaabot nga Kalihokan', 'Upcoming Events')}</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => selectTab('activities', true)}
+                    className="text-sm font-extrabold text-[#1B4332] hover:underline cursor-pointer flex items-center gap-1 px-2"
+                  >
+                    <span>{t('Tan-awa tanan', 'View all')}</span>
+                    <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  </button>
+                </div>
+
+                {isLoadingSummary ? (
+                  <div className="space-y-3" aria-busy="true">
+                    {[0, 1].map(i => (
+                      <div key={i} className="p-3.5 rounded-2xl bg-[#FAF8F5] space-y-2">
+                        <div className="h-4 w-36 rounded skeleton-shimmer" />
+                        <div className="h-5 w-3/4 rounded skeleton-shimmer" />
+                        <div className="h-4 w-2/3 rounded skeleton-shimmer" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {displayActivities.slice(0, 3).map((act) => {
+                      const leaf = parseCalendarLeaf(act.scheduledDate || act.dateScheduled, en);
+                      return (
+                        <div key={act.id} className="p-3.5 bg-[#FAF8F5] border border-[#E6E0D3] rounded-2xl flex items-start gap-3">
+                          <div className="calendar-leaf" aria-hidden="true">
+                            <div className="calendar-leaf-month">{leaf.month}</div>
+                            <div className="calendar-leaf-day">{leaf.day}</div>
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="portal-badge px-2.5 py-0.5 rounded-md font-extrabold bg-[#D6EFD9] text-[#1B4332]">
+                                {localizeActivityStatus(act.status)}
+                              </span>
+                            </div>
+                            <h5 className="font-extrabold text-[#163327] text-base leading-snug">{act.title}</h5>
+                            <div className="portal-meta text-sm text-[#455C50] flex flex-wrap items-center gap-x-3 gap-y-1 font-medium">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="w-4 h-4 shrink-0 text-[#2D6A4F]" aria-hidden="true" />
+                                {act.scheduledTime || act.timeScheduled || t('Buntag', 'Morning')}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <MapPin className="w-4 h-4 shrink-0 text-[#C2410C]" aria-hidden="true" />
+                                {act.location}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {displayActivities.length === 0 && (
+                      <p className="text-sm text-[#455C50] italic text-center py-6">
+                        {t('Walay naka-eskedyul nga kalihokan karon.', 'There are no scheduled events right now.')}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* MEMBER / OFFICER PORTAL CALLOUT */}
+            <div className="dim-card-warm rounded-3xl p-5 sm:p-7 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="space-y-1 min-w-0">
+                <h4 className="font-display text-lg sm:text-xl font-bold text-[#1B4332] flex items-center gap-2">
+                  <Milestone className="w-5 h-5 text-[#C2410C] shrink-0" aria-hidden="true" />
+                  <span>{t('Rehistrado ba ikaw nga miyembro o opisyal sa AFA?', 'Are you a registered AFA member or officer?')}</span>
+                </h4>
+                <p className="text-sm text-[#455C50]">
+                  {t(
+                    'Sulod sa FAMS aron makita ang imong digital ID, bayad sa tinuig nga dues, ug rekord sa ani.',
+                    'Sign in to FAMS to access your member ID, annual dues records, and officer tools.'
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onEnterLogin}
+                className="btn-bevel-terracotta w-full md:w-auto px-6 py-3 rounded-xl font-extrabold text-sm sm:text-base shrink-0 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+              >
+                <span>{t('Sulod sa FAMS Portal', 'Open FAMS Portal')}</span>
+                <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* TAB 2: ANNOUNCEMENTS (PAHIBALO) */}
         {activeTab === 'announcements' && (
           <div className="space-y-5 sm:space-y-6 text-left min-w-0 animate-fade-in">
@@ -843,9 +1149,6 @@ export default function GuestPortal({
                   <h3 className="font-display text-xl sm:text-2xl font-bold text-[#1B4332]">
                     {t('Opisyal nga mga Pahibalo', 'Official Announcements')}
                   </h3>
-                  <p className="portal-meta text-sm text-[#455C50]">
-                    {t('Direktang abiso gikan sa mga opisyales sa Alegria Farmers Association.', 'Direct bulletins from the Alegria Farmers Association officers.')}
-                  </p>
                 </div>
               </div>
 
@@ -858,8 +1161,8 @@ export default function GuestPortal({
                       type="button"
                       onClick={() => setAnnouncementFilter(filter.id)}
                       className={`px-3.5 py-2 rounded-xl text-sm font-bold border transition-all cursor-pointer ${active
-                          ? 'bg-[#1B4332] text-white border-[#123326] shadow-xs'
-                          : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF6EE]'
+                        ? 'bg-[#1B4332] text-white border-[#123326] shadow-xs'
+                        : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF6EE]'
                         }`}
                     >
                       {filter.label}
@@ -893,8 +1196,8 @@ export default function GuestPortal({
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`portal-badge px-2.5 py-0.5 rounded-lg font-extrabold ${ann.priority === 'High' ? 'bg-rose-100 text-rose-900 border border-rose-300' :
-                                ann.priority === 'Medium' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-                                  'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                              ann.priority === 'Medium' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                                'bg-emerald-100 text-emerald-900 border border-emerald-300'
                               }`}>
                               {localizePriority(ann.priority)}
                             </span>
@@ -945,9 +1248,6 @@ export default function GuestPortal({
                   <h3 className="font-display text-xl sm:text-2xl font-bold text-[#1B4332]">
                     {t('Kalihokan sa Komunidad', 'Community Activities')}
                   </h3>
-                  <p className="portal-meta text-sm text-[#455C50]">
-                    {t('Mga tigom, training, ug pista sa ani sa Barangay Alegria.', 'Assemblies, workshops, and harvest events across Barangay Alegria.')}
-                  </p>
                 </div>
               </div>
 
@@ -960,8 +1260,8 @@ export default function GuestPortal({
                       type="button"
                       onClick={() => setActivityFilter(filter.id)}
                       className={`px-3.5 py-2 rounded-xl text-sm font-bold border transition-all cursor-pointer ${active
-                          ? 'bg-[#1B4332] text-white border-[#123326] shadow-xs'
-                          : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF6EE]'
+                        ? 'bg-[#1B4332] text-white border-[#123326] shadow-xs'
+                        : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF6EE]'
                         }`}
                     >
                       {filter.label}
@@ -1073,9 +1373,6 @@ export default function GuestPortal({
                   <h3 className="font-display text-xl sm:text-2xl font-bold text-[#1B4332]">
                     {t('Merkado sa Mag-uuma', 'Farmers’ Market & Rentals')}
                   </h3>
-                  <p className="portal-meta text-sm text-[#455C50]">
-                    {t('Preskong abot sa kaumahan, produkto sa IGP, ug abangan nga gamit sa komunidad.', 'Fresh farm produce, cooperative IGP goods, and affordable community rentals.')}
-                  </p>
                 </div>
               </div>
 
@@ -1089,8 +1386,8 @@ export default function GuestPortal({
                         type="button"
                         onClick={() => setProductFilter(cat)}
                         className={`px-3.5 py-2 rounded-xl text-sm font-bold border transition-all cursor-pointer ${active
-                            ? 'bg-[#1B4332] text-white border-[#123326] shadow-xs'
-                            : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF6EE]'
+                          ? 'bg-[#1B4332] text-white border-[#123326] shadow-xs'
+                          : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF6EE]'
                           }`}
                       >
                         {cat === 'All' ? t('Tanan', 'All') : cat}
@@ -1120,10 +1417,10 @@ export default function GuestPortal({
                       <div className="product-media-frame">
                         <img src={artwork} alt={prod.name} loading="lazy" />
                         <span className={`portal-badge absolute top-2.5 left-2.5 z-10 px-2.5 py-0.5 rounded-full font-extrabold shadow-sm ${isUpcoming
-                            ? 'bg-[#FFF0C2] text-[#7A4904] border border-[#E9B34A]'
-                            : isRental
-                              ? 'bg-[#1B4332] text-white border border-white/25'
-                              : 'bg-white/95 text-[#1B4332] border border-[#1B4332]/20'
+                          ? 'bg-[#FFF0C2] text-[#7A4904] border border-[#E9B34A]'
+                          : isRental
+                            ? 'bg-[#1B4332] text-white border border-white/25'
+                            : 'bg-white/95 text-[#1B4332] border border-[#1B4332]/20'
                           }`}>
                           {localizeStockStatus(prod)}
                         </span>
@@ -1290,11 +1587,10 @@ export default function GuestPortal({
                       aria-selected={isSelected}
                       aria-label={sitio.name}
                       onClick={() => setSelectedSitioId(sitio.id)}
-                      className={`px-3 py-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#1B4332] border-[#123326] text-white shadow-md'
-                          : 'bg-[#FAF8F5] border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF6EE]'
-                      }`}
+                      className={`px-3 py-2.5 rounded-xl border text-left transition-all cursor-pointer ${isSelected
+                        ? 'bg-[#1B4332] border-[#123326] text-white shadow-md'
+                        : 'bg-[#FAF8F5] border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF6EE]'
+                        }`}
                     >
                       <div className="flex items-center gap-1.5 font-extrabold text-sm leading-tight">
                         <MapPin className={`w-4 h-4 shrink-0 ${isSelected ? 'text-[#F4C76D]' : 'text-[#C2410C]'}`} aria-hidden="true" />
