@@ -373,9 +373,6 @@ export default function AuthScreen({
                   />
                 </div>
                 <div className="min-w-0 text-left">
-                  <p className="text-[11px] md:text-xs font-extrabold tracking-[0.14em] uppercase text-[#FFF0C2] truncate">
-                    AFA • TUBURAN, CEBU
-                  </p>
                   <h1 className="font-display text-lg md:text-2xl font-bold text-white leading-tight truncate">
                     {t('Farmer Access Portal', 'Farmer Access Portal')}
                   </h1>
@@ -400,12 +397,6 @@ export default function AuthScreen({
                 <Sprout className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span>FAMS — Farmers Association Management System</span>
               </div>
-              <p className="text-sm text-[#E5F6EA] leading-relaxed">
-                {t(
-                  'Opisyal nga sistema sa Alegria Farmers Association para sa mga opisyales ug miyembro sa upat ka sitio.',
-                  'Official management portal for Alegria Farmers Association officers and members across all four sitios.'
-                )}
-              </p>
             </div>
 
             <div className="space-y-2.5 text-left text-sm text-white">
@@ -438,10 +429,6 @@ export default function AuthScreen({
               </div>
             </div>
           </div>
-
-          <p className="login-aside-desc relative z-10 text-xs text-[#CBE9D2] font-semibold text-left pt-6">
-            DOLE Reg. No. 2315 • Barangay Alegria, Tuburan, Cebu
-          </p>
         </aside>
 
         {/* RIGHT FORM PANEL */}
@@ -456,11 +443,6 @@ export default function AuthScreen({
                     ? t('Two-Factor Verification', 'Two-Factor Verification')
                     : t('Pagsulod sa Account', 'Sign In to FAMS')}
                 </h2>
-                <p className="text-xs sm:text-sm text-[#455C50] font-medium">
-                  {showResetForm
-                    ? t('Ipadala ang hangyo ngadto sa mga opisyales sa AFA.', 'Notify AFA officers to reset your credentials.')
-                    : t('Alegria Farmers Association • FAMS', 'Alegria Farmers Association • FAMS')}
-                </p>
               </div>
             </div>
 

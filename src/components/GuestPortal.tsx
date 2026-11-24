@@ -678,9 +678,6 @@ export default function GuestPortal({
               <h1 className="text-[13px] sm:text-base md:text-lg font-extrabold tracking-tight text-[#1B4332] uppercase font-display leading-tight truncate">
                 Alegria Farmers Association
               </h1>
-              <p className="brand-subtitle text-xs font-semibold text-[#455C50] leading-tight truncate">
-                FAMS • Barangay Alegria, Tuburan, Cebu
-              </p>
             </div>
           </button>
 
@@ -760,12 +757,6 @@ export default function GuestPortal({
               )}
             </h2>
 
-            <p className="text-sm sm:text-base md:text-lg text-[#EBF7EE] max-w-2xl leading-relaxed font-medium">
-              {t(
-                'Opisyal nga Farmers Association Management System (FAMS) alang sa upat ka sitio sa Alegria — direktang merkado, pahibalo, ug kalihokan sa komunidad.',
-                'Official Farmers Association Management System (FAMS) uniting Alegria’s four sitios with direct farm produce, transparent records, and community updates.'
-              )}
-            </p>
 
             {/* Dual Hero CTAs: 2-column side-by-side grid on <480px */}
             <div className="grid grid-cols-2 sm:inline-flex gap-2.5 sm:gap-3 pt-1.5 w-full sm:w-auto">
@@ -925,9 +916,6 @@ export default function GuestPortal({
                     <h3 className="font-display text-lg sm:text-xl font-bold text-[#1B4332] leading-tight">
                       {t('Mapa sa Upat ka Sitio sa Alegria', 'Interactive 4-Sitio Coverage Map')}
                     </h3>
-                    <p className="portal-meta text-sm text-[#455C50]">
-                      {t('Pindota ang sitio aron makita ang mga tanom ug koordineytor.', 'Tap a sitio to explore primary crops and local coverage.')}
-                    </p>
                   </div>
                 </div>
               </div>
@@ -1153,9 +1141,6 @@ export default function GuestPortal({
                   <h3 className="font-display text-xl sm:text-2xl font-bold text-[#1B4332]">
                     {t('Opisyal nga mga Pahibalo', 'Official Announcements')}
                   </h3>
-                  <p className="portal-meta text-sm text-[#455C50]">
-                    {t('Direktang abiso gikan sa mga opisyales sa Alegria Farmers Association.', 'Direct bulletins from the Alegria Farmers Association officers.')}
-                  </p>
                 </div>
               </div>
 
@@ -1257,9 +1242,6 @@ export default function GuestPortal({
                   <h3 className="font-display text-xl sm:text-2xl font-bold text-[#1B4332]">
                     {t('Kalihokan sa Komunidad', 'Community Activities')}
                   </h3>
-                  <p className="portal-meta text-sm text-[#455C50]">
-                    {t('Mga tigom, training, ug pista sa ani sa Barangay Alegria.', 'Assemblies, workshops, and harvest events across Barangay Alegria.')}
-                  </p>
                 </div>
               </div>
 
@@ -1386,9 +1368,6 @@ export default function GuestPortal({
                   <h3 className="font-display text-xl sm:text-2xl font-bold text-[#1B4332]">
                     {t('Merkado sa Mag-uuma', 'Farmers’ Market & Rentals')}
                   </h3>
-                  <p className="portal-meta text-sm text-[#455C50]">
-                    {t('Preskong abot sa kaumahan, produkto sa IGP, ug abangan nga gamit sa komunidad.', 'Fresh farm produce, cooperative IGP goods, and affordable community rentals.')}
-                  </p>
                 </div>
               </div>
 
