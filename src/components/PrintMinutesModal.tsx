@@ -336,7 +336,7 @@ Attested by:
           )}
 
           {/* DOCUMENT PRINT CONTAINER (SCROLLABLE IN APP, EXACT SHEET ON PAPER) */}
-          <div className="flex-1 bg-slate-950 p-6 md:p-10 overflow-y-auto flex justify-center">
+          <div className="flex-1 bg-[#E9E4D9] p-6 md:p-10 overflow-y-auto flex justify-center">
             
             {/* PAPER SHEET: White Background, Dark Slate text representing physical paper sheet */}
             <div 
@@ -431,7 +431,7 @@ Attested by:
                 {/* I. MEETING AGENDA */}
                 <div className="space-y-2.5">
                   <h3 className="text-sm font-bold tracking-wide uppercase text-slate-800 font-sans border-b border-slate-300 pb-1 flex items-center gap-1.5">
-                    <span className="bg-slate-800 text-white w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] font-mono shrink-0">I</span>
+                    <span className="bg-[#1B4332] text-white w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] font-mono shrink-0">I</span>
                     <span>Approved Meeting Agenda</span>
                   </h3>
                   
@@ -452,7 +452,7 @@ Attested by:
                 {/* II. DISCUSSION DETAILS & PROCEEDINGS */}
                 <div className="space-y-2.5">
                   <h3 className="text-sm font-bold tracking-wide uppercase text-slate-800 font-sans border-b border-slate-300 pb-1 flex items-center gap-1.5">
-                    <span className="bg-slate-800 text-white w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] font-mono shrink-0">II</span>
+                    <span className="bg-[#1B4332] text-white w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] font-mono shrink-0">II</span>
                     <span>Minutes of Discussion & Agreements</span>
                   </h3>
 

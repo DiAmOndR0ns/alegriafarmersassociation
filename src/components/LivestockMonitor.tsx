@@ -536,7 +536,7 @@ export default function LivestockMonitor({
         <div className="flex min-w-0 flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#E9E4D9] pb-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
                 Live Cooperative Assets
               </span>
             </div>
@@ -986,7 +986,7 @@ export default function LivestockMonitor({
               </select>
 
               {isYearClosed && (
-                <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-slate-800 text-white flex items-center gap-1">
+                <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-[#1B4332] text-white flex items-center gap-1">
                   <Lock className="w-3 h-3" /> Book Closed
                 </span>
               )}
@@ -1014,7 +1014,7 @@ export default function LivestockMonitor({
                         onCloseDecemberBook(reportYear);
                       }
                     }}
-                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-slate-800 text-white hover:bg-slate-900 cursor-pointer flex items-center gap-1"
+                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-[#1B4332] text-white hover:bg-[#143326] cursor-pointer flex items-center gap-1"
                   >
                     <Lock className="w-3.5 h-3.5" /> Close {reportYear} Book
                   </button>

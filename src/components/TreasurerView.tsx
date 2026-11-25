@@ -1236,31 +1236,31 @@ export default function TreasurerView({
             visibleTx.map((tx) => (
               <div
                 key={tx.id}
-                className={`bg-slate-800 border rounded-2xl p-4.5 transition-all shadow-sm flex flex-col md:flex-row justify-between gap-4 ${
+                className={`bg-white border rounded-2xl p-4.5 transition-all shadow-sm flex flex-col md:flex-row justify-between gap-4 ${
                   tx.auditedStatus === 'Flagged'
-                    ? 'border-rose-300 bg-rose-50'
+                    ? 'border-rose-300 bg-rose-50/40'
                     : tx.auditedStatus === 'Audited'
-                    ? 'border-emerald-500/10'
-                    : 'border-slate-700/50'
+                    ? 'border-emerald-300'
+                    : 'border-[#D5CFC1]'
                 }`}
               >
                 {/* LHS: Info */}
                 <div className="flex items-start gap-3.5">
                   <div className={`p-2.5 rounded-xl shrink-0 border ${
                     tx.type === 'income'
-                      ? 'bg-emerald-950/40 border-emerald-500/20 text-emerald-400'
-                      : 'bg-rose-950/40 border-rose-500/20 text-rose-400'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-rose-50 border-rose-200 text-rose-700'
                   }`}>
                     {tx.type === 'income' ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
                   </div>
 
                   <div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-xs font-semibold text-slate-400 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
+                      <span className="text-xs font-semibold text-[#1B4332] bg-[#F7F4EF] px-2 py-0.5 rounded-lg border border-[#D5CFC1]">
                         {tx.category}
                       </span>
-                      <span className="text-xs text-slate-500 font-mono">{tx.date}</span>
-                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-500/20 flex items-center gap-1">
+                      <span className="text-xs text-[#4A5F57] font-mono">{tx.date}</span>
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1">
                         <Wallet className="w-2.5 h-2.5" />
                         <span>
                           {tx.type === 'income' ? 'Deposited To: ' : 'Budget Source: '}
@@ -1268,23 +1268,23 @@ export default function TreasurerView({
                         </span>
                       </span>
                     </div>
-                    <p className="text-sm font-semibold text-white mt-1.5">{tx.description}</p>
+                    <p className="text-sm font-semibold text-[#1B4332] mt-1.5">{tx.description}</p>
                     {tx.purpose && (
-                      <p className="text-[11px] text-amber-200 mt-1.5">
-                        <span className="font-semibold text-amber-300">Purpose:</span> {tx.purpose}
+                      <p className="text-[11px] text-amber-900 mt-1.5">
+                        <span className="font-bold text-amber-800">Purpose:</span> {tx.purpose}
                       </p>
                     )}
                     {tx.activityId && (
-                      <p className="text-[11px] text-sky-200 mt-1">
+                      <p className="text-[11px] text-sky-900 font-semibold mt-1">
                         Activity: {activities.find(activity => activity.id === tx.activityId)?.title || 'Activity no longer listed'}
                       </p>
                     )}
                     {tx.liquidationDeadline && (
-                      <p className="text-[10px] text-amber-300 mt-1">
+                      <p className="text-[10px] text-amber-800 font-semibold mt-1">
                         Liquidation due by {tx.liquidationDeadline} • 20-day rule
                       </p>
                     )}
-                    <p className="text-[10px] text-slate-500 mt-1">Logged by: {tx.recordedBy}</p>
+                    <p className="text-[10px] text-[#4A5F57] mt-1">Logged by: {tx.recordedBy}</p>
 
                     {/* Audit Details Sub-Block */}
                     {tx.auditedStatus !== 'Unaudited' && (
@@ -1313,8 +1313,8 @@ export default function TreasurerView({
                 </div>
 
                 {/* RHS: Value and Action */}
-                <div className="flex md:flex-col justify-between items-end gap-3 shrink-0 border-t md:border-t-0 border-slate-750 pt-3 md:pt-0">
-                  <div className={`text-lg font-bold font-mono ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <div className="flex md:flex-col justify-between items-end gap-3 shrink-0 border-t md:border-t-0 border-[#D5CFC1] pt-3 md:pt-0">
+                  <div className={`text-lg font-bold font-mono ${tx.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
                     {tx.type === 'income' ? '+' : '-'} PHP {tx.amount.toLocaleString()}
                   </div>
 
@@ -1322,10 +1322,10 @@ export default function TreasurerView({
                     {/* Display Audit Status Badge to Treasurer */}
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                       tx.auditedStatus === 'Audited'
-                        ? 'bg-emerald-500/10 text-emerald-400'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                         : tx.auditedStatus === 'Flagged'
-                        ? 'bg-red-500/10 text-red-400 animate-pulse'
-                        : 'bg-slate-700 text-slate-400'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-200 animate-pulse'
+                        : 'bg-[#F7F4EF] text-[#4A5F57] border border-[#D5CFC1]'
                     }`}>
                       {tx.auditedStatus}
                     </span>
@@ -1337,7 +1337,7 @@ export default function TreasurerView({
                             onDeleteTransaction(tx.id);
                           }
                         }}
-                        className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                        className="p-1 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         title="Delete transaction record"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1348,7 +1348,7 @@ export default function TreasurerView({
               </div>
             ))
           ) : (
-            <div className="bg-slate-800 border border-slate-700/50 rounded-2xl p-8 text-center text-slate-500">
+            <div className="bg-white border border-[#D5CFC1] rounded-2xl p-8 text-center text-[#4A5F57]">
               No transactions match selected filter.
             </div>
           )}
@@ -1364,7 +1364,7 @@ export default function TreasurerView({
       {/* TREASURER ADD TRANSACTION MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className={`px-4 py-2 border-b flex justify-between items-center shrink-0 ${
               txType === 'income'
                 ? 'bg-emerald-50 border-emerald-200'
@@ -1373,8 +1373,8 @@ export default function TreasurerView({
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
                 <div className={`p-1.5 rounded-xl border shrink-0 ${
                   txType === 'income'
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                    : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                    ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
+                    : 'bg-rose-100 border-rose-200 text-rose-700'
                 }`}>
                   {txType === 'income' ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
                 </div>
@@ -1403,14 +1403,14 @@ export default function TreasurerView({
                     {txType === 'income' ? '● (INFLOW / DEPOSIT)' : '● (OUTFLOW / DISBURSEMENT)'}
                   </span>
                 </label>
-                <div className="grid grid-cols-2 gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-750">
+                <div className="grid grid-cols-2 gap-2 bg-white p-1.5 rounded-xl border border-[#D5CFC1]">
                   <button
                     type="button"
                     onClick={() => handleTypeChange('income')}
                     className={`py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                       txType === 'income'
                         ? 'bg-emerald-600 text-white shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-[#4A5F57] hover:text-[#1B4332]'
                     }`}
                   >
                     <ArrowUpRight className="w-3.5 h-3.5" />
@@ -1422,7 +1422,7 @@ export default function TreasurerView({
                     className={`py-2 px-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                       txType === 'expense'
                         ? 'bg-rose-700 text-white shadow-md'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-[#4A5F57] hover:text-[#1B4332]'
                     }`}
                   >
                     <ArrowDownRight className="w-3.5 h-3.5" />
@@ -1438,7 +1438,7 @@ export default function TreasurerView({
                     {txType === 'income' ? 'Amount Received (PHP)' : 'Amount Spent (PHP)'}
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-2.5 text-slate-400 font-mono text-sm">₱</span>
+                    <span className="absolute left-3.5 top-2.5 text-[#4A5F57] font-mono text-sm">₱</span>
                     <input
                       type="number"
                       step="any"
@@ -1446,7 +1446,7 @@ export default function TreasurerView({
                       required
                       value={txAmount}
                       onChange={(e) => setTxAmount(e.target.value)}
-                      className="w-full pl-8 pr-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-500"
+                      className="w-full pl-8 pr-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono focus:outline-none focus:border-emerald-600"
                     />
                   </div>
                 </div>
@@ -1459,7 +1459,7 @@ export default function TreasurerView({
                     required
                     value={txDate}
                     onChange={(e) => setTxDate(e.target.value)}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               </div>
@@ -1491,7 +1491,7 @@ export default function TreasurerView({
                           }
                         }
                       }}
-                      className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                     >
                       {availableCategories.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
@@ -1517,7 +1517,7 @@ export default function TreasurerView({
                       value={txCustomCategory}
                       onChange={(e) => setTxCustomCategory(e.target.value)}
                       placeholder={txType === 'income' ? 'e.g., Bank Interest, Raffle Proceeds, Equipment Rental...' : 'e.g., Tarpaulin Printing, Barangay Permit, Transport Fare...'}
-                      className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                     />
                   </div>
                 )}
@@ -1536,7 +1536,7 @@ export default function TreasurerView({
                       if (e.target.value) setTxMeetingId('');
                       setTxActivityError('');
                     }}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                   >
                     <option value="">Not linked to an event</option>
                     {activities.filter(activity => txType !== 'expense' || isActivityOpenForExpenses(activity)).map(activity => (
@@ -1558,7 +1558,7 @@ export default function TreasurerView({
                       if (e.target.value) setTxActivityId('');
                       setTxActivityError('');
                     }}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                   >
                     <option value="">Not linked to a meeting</option>
                     {meetings
@@ -1873,10 +1873,9 @@ export default function TreasurerView({
                 <textarea
                   rows={2}
                   required={txType === 'expense'}
-
                   value={txPurpose}
                   onChange={(e) => setTxPurpose(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500 font-sans"
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600 font-sans"
                 />
                 <p className="mt-1 text-[11px] text-[#33473d]">
                   {txType === 'expense'
@@ -1895,10 +1894,9 @@ export default function TreasurerView({
                 <textarea
                   rows={3}
                   required
-
                   value={txDesc}
                   onChange={(e) => setTxDesc(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500 font-sans"
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600 font-sans"
                 />
               </div>
 
@@ -1957,18 +1955,19 @@ export default function TreasurerView({
       {/* ADD ORGANIZATION FUND MODAL */}
       {showAddFundModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-slate-800 border border-slate-700 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl">
-            <div className="bg-slate-900 px-5 py-4 border-b border-slate-700 flex justify-between items-center">
+          <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl">
+            <div className="bg-[#1B4332] px-5 py-4 border-b border-[#2D6A4F] flex justify-between items-center">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                <div className="p-2 bg-white/15 border border-white/25 rounded-xl text-[#FFF0C2]">
                   <Wallet className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">Add Budget Source</h3>
-                </div>              </div>
+                </div>
+              </div>
               <button
                 onClick={() => setShowAddFundModal(false)}
-                className="text-slate-400 hover:text-white text-xl font-bold p-1 cursor-pointer"
+                className="text-white/80 hover:text-white text-xl font-bold p-1 cursor-pointer"
               >
                 &times;
               </button>
@@ -1977,21 +1976,21 @@ export default function TreasurerView({
             <form onSubmit={handleAddFundSubmit} className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">
-                Fund Account Name <span className="text-rose-400">*</span>
+                  Fund Account Name <span className="text-rose-700">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={fundFormName}
                   onChange={(e) => setFundFormName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="fund-source-category" className="block text-xs font-bold text-slate-200 uppercase mb-1">
-                    Source Category <span className="text-rose-400">*</span>
+                  <label htmlFor="fund-source-category" className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                    Source Category <span className="text-rose-700">*</span>
                   </label>
                   <select
                     id="fund-source-category"
@@ -2001,7 +2000,7 @@ export default function TreasurerView({
                       setFundFormCategory(e.target.value);
                       if (e.target.value !== 'Other') setFundFormCustomCategory('');
                     }}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                   >
                     <option>Grant</option>
                     <option>Government Program</option>
@@ -2013,8 +2012,8 @@ export default function TreasurerView({
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="fund-source-origin" className="block text-xs font-bold text-slate-200 uppercase mb-1">
-                    Where is it from? <span className="text-rose-400">*</span>
+                  <label htmlFor="fund-source-origin" className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                    Where is it from? <span className="text-rose-700">*</span>
                   </label>
                   <input
                     id="fund-source-origin"
@@ -2024,15 +2023,15 @@ export default function TreasurerView({
                     value={fundFormSource}
                     onChange={(e) => setFundFormSource(e.target.value)}
                     placeholder="e.g. Department of Labor and Employment"
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               </div>
 
               {fundFormCategory === 'Other' && (
                 <div>
-                  <label htmlFor="fund-source-custom-category" className="block text-xs font-bold text-slate-200 uppercase mb-1">
-                    Specify Source Category <span className="text-rose-400">*</span>
+                  <label htmlFor="fund-source-custom-category" className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                    Specify Source Category <span className="text-rose-700">*</span>
                   </label>
                   <input
                     id="fund-source-custom-category"
@@ -2042,7 +2041,7 @@ export default function TreasurerView({
                     value={fundFormCustomCategory}
                     onChange={(e) => setFundFormCustomCategory(e.target.value)}
                     placeholder="e.g., NGO Partnership, Revolving Livelihood Loan, Private Endowment..."
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               )}
@@ -2056,7 +2055,7 @@ export default function TreasurerView({
                     type="text"
                     value={fundFormCode}
                     onChange={(e) => setFundFormCode(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white uppercase font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] uppercase font-mono focus:outline-none focus:border-emerald-600"
                   />
                 </div>
                 <div>
@@ -2068,7 +2067,7 @@ export default function TreasurerView({
                     required
                     value={fundFormCustodian}
                     onChange={(e) => setFundFormCustodian(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               </div>
@@ -2084,7 +2083,7 @@ export default function TreasurerView({
                     min="0"
                     value={fundFormInitialFund}
                     onChange={(e) => setFundFormInitialFund(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               </div>
@@ -2096,7 +2095,7 @@ export default function TreasurerView({
                   rows={2}
                   value={fundFormDescription}
                   onChange={(e) => setFundFormDescription(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500 font-sans"
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-600 font-sans"
                 />
               </div>
 

@@ -108,7 +108,7 @@ export default function RollCallModal({
         {/* MODAL HEADER */}
         <div className="bg-[#1B4332] text-white px-5 py-4 border-b border-[#2D6A4F] flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="bg-emerald-600/10 p-2 rounded-xl border border-emerald-500/20 text-emerald-800">
+            <div className="bg-white/15 p-2 rounded-xl border border-white/25 text-[#FFF0C2]">
               <UserCheck className="w-5 h-5" />
             </div>
             <div>
@@ -323,7 +323,7 @@ export default function RollCallModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-initial px-5 py-2 bg-slate-800 hover:bg-[#F7F4EF] text-[#1B4332] hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition-all cursor-pointer"
+              className="flex-1 sm:flex-initial px-5 py-2 bg-white hover:bg-[#F7F4EF] text-[#1B4332] rounded-xl text-xs font-bold border border-[#D5CFC1] transition-all cursor-pointer"
             >
               Discard Changes
             </button>

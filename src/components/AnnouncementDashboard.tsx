@@ -121,16 +121,16 @@ export default function AnnouncementDashboard({
 
   // Colors based on theme mode
   const theme = {
-    bg: isOfficerMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900',
-    cardBg: isOfficerMode ? 'bg-slate-800 border-slate-700/80' : 'bg-bafa-neutral-50 border-bafa-neutral-200',
-    cardHover: isOfficerMode ? 'hover:border-slate-600 hover:bg-slate-800/80' : 'hover:border-bafa-700 hover:bg-white',
-    inputBg: isOfficerMode ? 'bg-slate-950 border-slate-750 text-white' : 'bg-white border-bafa-neutral-300 text-bafa-neutral-800',
-    headerText: isOfficerMode ? 'text-white' : 'text-bafa-700',
-    subText: isOfficerMode ? 'text-slate-400' : 'text-bafa-neutral-700',
-    accentText: isOfficerMode ? 'text-emerald-400' : 'text-bafa-coral-600',
-    accentBg: isOfficerMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-bafa-gold-200 text-bafa-coral-600',
-    primaryButton: isOfficerMode ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-bafa-700 hover:bg-bafa-800 text-white',
-    badgeSecondary: isOfficerMode ? 'bg-slate-700 text-slate-200 border-slate-600' : 'bg-bafa-100 text-bafa-700 border-bafa-300'
+    bg: 'bg-white text-[#1B4332]',
+    cardBg: 'bg-[#FAF8F5] border-[#E9E4D9]',
+    cardHover: 'hover:border-[#1B4332] hover:bg-white',
+    inputBg: 'bg-white border-[#D5CFC1] text-[#1B4332]',
+    headerText: 'text-[#1B4332]',
+    subText: 'text-[#354B40]',
+    accentText: 'text-[#C2410C]',
+    accentBg: 'bg-[#FFF0C2] text-[#C2410C]',
+    primaryButton: 'bg-[#1B4332] hover:bg-[#143326] text-white',
+    badgeSecondary: 'bg-[#EAF4EC] text-[#1B4332] border-[#B7D9BF]'
   };
 
   const handlePrintAnnouncement = (ann: Announcement) => {
@@ -196,10 +196,10 @@ export default function AnnouncementDashboard({
     <div id="announcement-dashboard-container" className="space-y-4">
       
       {/* HEADER WITH ACTION ROW */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-4 text-left">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#E9E4D9] pb-4 text-left">
         <div>
           <h2 className={`text-xl font-black ${theme.headerText} flex items-center gap-2.5 font-display`}>
-            <Megaphone className={`w-6 h-6 ${isOfficerMode ? 'text-emerald-400' : 'text-[#E65100]'}`} />
+            <Megaphone className="w-6 h-6 text-[#C2410C]" />
             <span>Announcements</span>
           </h2>
         </div>
@@ -208,11 +208,7 @@ export default function AnnouncementDashboard({
           <button
             id="mark-all-read-btn"
             onClick={handleMarkAllRead}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-              isOfficerMode 
-                ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700' 
-                : 'bg-[#EAF4EC] hover:bg-[#D8F3DC] text-[#1B4332] border-[#2D6A4F]/25'
-            }`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer bg-[#EAF4EC] hover:bg-[#D8F3DC] text-[#1B4332] border-[#2D6A4F]/25"
           >
             <Check className="w-3.5 h-3.5" />
             <span>Basahon Tanan (Mark All as Read)</span>
@@ -371,22 +367,22 @@ export default function AnnouncementDashboard({
                   >
                     <div>
                       {/* Badge Row */}
-                      <div className="flex justify-between items-start gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5 mb-3">
+                      <div className="flex justify-between items-start gap-2 border-b border-[#E9E4D9] pb-2.5 mb-3">
                         <div className="flex items-center gap-1.5">
                           {getCategoryIcon(ann.category)}
-                          <span className={`text-[10px] font-black uppercase tracking-wider block ${isOfficerMode ? 'text-slate-300' : 'text-slate-500'}`}>
+                          <span className="text-[10px] font-black uppercase tracking-wider block text-[#455C50]">
                             {cebLabel}
                           </span>
                         </div>
                         
                         <div className="flex items-center gap-1.5">
                           {ann.priority === 'High' && (
-                            <span className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            <span className="bg-red-100 text-red-800 border border-red-300 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
                               DINALIAN
                             </span>
                           )}
                           {!isRead && (
-                            <span className="bg-amber-500 text-white font-black text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5 shadow-sm">
+                            <span className="bg-amber-600 text-white font-black text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5 shadow-sm">
                               <span className="w-1 h-1 rounded-full bg-white animate-ping" />
                               Bag-o
                             </span>
@@ -395,10 +391,10 @@ export default function AnnouncementDashboard({
                       </div>
 
                       {/* Title & Date */}
-                      <h3 className={`text-sm sm:text-base font-extrabold ${theme.headerText} tracking-tight leading-snug group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors`}>
+                      <h3 className={`text-sm sm:text-base font-extrabold ${theme.headerText} tracking-tight leading-snug group-hover:text-[#2D6A4F] transition-colors`}>
                         {ann.title}
                       </h3>
-                      <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400 font-medium">
+                      <div className="flex items-center gap-1 mt-1 text-[10px] text-[#455C50] font-medium">
                         <Clock className="w-3.5 h-3.5" />
                         <span>Posted on: {ann.datePosted}</span>
                       </div>
@@ -410,9 +406,9 @@ export default function AnnouncementDashboard({
                     </div>
 
                     {/* Footer Row */}
-                    <div className="mt-5 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
+                    <div className="mt-5 pt-3.5 border-t border-[#E9E4D9] flex justify-between items-center text-[10px] text-[#455C50]">
                       <span className="font-semibold">Ni: {ann.postedBy}</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold group-hover:underline flex items-center gap-0.5">
+                      <span className="text-[#1B4332] font-extrabold group-hover:underline flex items-center gap-0.5">
                         Basaha <span className="text-xs">→</span>
                       </span>
                     </div>
@@ -422,9 +418,9 @@ export default function AnnouncementDashboard({
             </div>
           ) : (
             <div className={`border border-dashed p-12 rounded-3xl text-center ${theme.cardBg}`}>
-              <Megaphone className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <h3 className="font-bold text-slate-400 text-sm">No announcements found</h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
+              <Megaphone className="w-10 h-10 text-[#455C50] mx-auto mb-3" />
+              <h3 className="font-bold text-[#1B4332] text-sm">No announcements found</h3>
+              <p className="text-xs text-[#455C50] max-w-sm mx-auto mt-1">
                 Sulayi pag-usab ang imong mga filters o pag-search og laing pulong.
               </p>
             </div>
@@ -436,19 +432,19 @@ export default function AnnouncementDashboard({
           
           {/* PIO Broadcast Info Desk */}
           <div className={`p-5 rounded-3xl border ${theme.cardBg} space-y-4 shadow-sm`}>
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2.5">
-              <User className="w-4.5 h-4.5 text-slate-400" />
+            <h3 className="text-xs font-black text-[#455C50] uppercase tracking-wider flex items-center gap-1.5 border-b border-[#E9E4D9] pb-2.5">
+              <User className="w-4.5 h-4.5 text-[#2D6A4F]" />
               <span>Public Information & Media Desk</span>
             </h3>
 
             <div className="space-y-3.5 text-xs">
               <div className="flex gap-3 items-center">
-                <div className="w-10 h-10 rounded-xl bg-slate-200 border border-slate-300 overflow-hidden flex items-center justify-center shrink-0">
-                  <span className="font-black text-slate-600 text-sm">I</span>
+                <div className="w-10 h-10 rounded-xl bg-[#EAF4EC] border border-[#B7D9BF] overflow-hidden flex items-center justify-center shrink-0">
+                  <span className="font-black text-[#1B4332] text-sm">I</span>
                 </div>
                 <div>
-                  <h4 className={`font-black text-sm ${isOfficerMode ? 'text-white' : 'text-[#1B4332]'}`}>AFA PIO</h4>
-                  <p className={`text-[10px] ${isOfficerMode ? 'text-slate-300' : 'text-slate-500'}`}>Public Information Officer (PIO), AFA</p>
+                  <h4 className="font-black text-sm text-[#1B4332]">AFA PIO</h4>
+                  <p className="text-[10px] text-[#455C50]">Public Information Officer (PIO), AFA</p>
                 </div>
               </div>
 
@@ -459,11 +455,7 @@ export default function AnnouncementDashboard({
               <div className="space-y-2 pt-1">
                 <a 
                   href="tel:09176543210"
-                  className={`flex items-center gap-2.5 p-2 rounded-xl border text-xs font-bold transition-all ${
-                    isOfficerMode 
-                      ? 'bg-slate-900 border-slate-800 hover:border-slate-750' 
-                      : 'bg-white border-[#E9E4D9] hover:border-[#1B4332]'
-                  }`}
+                  className="flex items-center gap-2.5 p-2 rounded-xl border text-xs font-bold transition-all bg-white border-[#E9E4D9] hover:border-[#1B4332]"
                 >
                   <Phone className="w-4 h-4 text-emerald-700 shrink-0" />
                   <div>
@@ -473,9 +465,7 @@ export default function AnnouncementDashboard({
                 </a>
 
                 <div
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-[10px] ${
-                    isOfficerMode ? 'bg-slate-900/50 border-slate-800' : 'bg-[#FFF8E1]/40 border-[#FFE082]'
-                  }`}
+                  className="flex items-start gap-2.5 p-2.5 rounded-xl border text-[10px] bg-[#FFF8E1]/60 border-[#FFE082]"
                 >
                   <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                   <p className="text-[#33473d] leading-normal">

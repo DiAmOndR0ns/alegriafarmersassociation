@@ -170,12 +170,12 @@ Attested by:
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in no-print text-left">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-6xl h-[92vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="bg-[#F7F4EF] border border-[#D5CFC1] w-full max-w-6xl h-[92vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         
         {/* MODAL ACTION BAR */}
-        <div className="bg-slate-950 px-5 py-4 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3" style={{ background: '#1B4332', color: '#fff', borderColor: '#2D6A4F' }}>
+        <div className="bg-[#1B4332] text-white px-5 py-4 border-b border-[#2D6A4F] flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="bg-emerald-600/10 p-1.5 rounded-lg border border-emerald-500/20 text-emerald-400">
+            <div className="bg-white/15 p-1.5 rounded-lg border border-white/25 text-[#FFF0C2]">
               <Users className="w-4 h-4" />
             </div>
             <div>
@@ -187,10 +187,10 @@ Attested by:
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
                 showSettings 
                   ? 'bg-emerald-600 border-emerald-500 text-white' 
-                  : 'bg-white border-[#D5CFC1] text-black hover:bg-[#EAF4EC]'
+                  : 'bg-white border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF4EC]'
               }`}
             >
               <Settings className="w-3.5 h-3.5" />
@@ -199,7 +199,7 @@ Attested by:
 
             <button
               onClick={handleCopyToClipboard}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF4EC] transition-all cursor-pointer"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copied Plain' : 'Copy Text'}</span>
@@ -207,7 +207,7 @@ Attested by:
 
             <button
               onClick={handleDownloadTxt}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF4EC] transition-all cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download .txt</span>
@@ -221,11 +221,11 @@ Attested by:
               <span>Print / Save PDF</span>
             </button>
 
-            <div className="w-[1px] h-6 bg-slate-800 mx-1" />
+            <div className="w-[1px] h-6 bg-white/20 mx-1" />
 
             <button 
               onClick={onClose}
-              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-all"
+              className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/15 transition-all cursor-pointer"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
@@ -239,21 +239,21 @@ Attested by:
           {/* SIDEBAR SETTINGS */}
           {showSettings && (
             <div className="w-80 bg-[#F7F4EF] border-r border-[#D5CFC1] p-4 overflow-y-auto space-y-4 shrink-0 animate-fade-in">
-              <h4 className="text-xs font-bold text-black uppercase tracking-wider border-b border-[#D5CFC1] pb-2">
+              <h4 className="text-xs font-bold text-[#1B4332] uppercase tracking-wider border-b border-[#D5CFC1] pb-2">
                 Sheet Settings
               </h4>
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Sheet Type</label>
+                  <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">Sheet Type</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setSheetType('blank')}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
                         sheetType === 'blank'
-                          ? 'bg-emerald-600 border-emerald-500 text-white'
-                          : 'bg-white border-[#D5CFC1] text-black hover:bg-[#EAF4EC]'
+                          ? 'bg-[#1B4332] border-[#1B4332] text-white'
+                          : 'bg-white border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF4EC]'
                       }`}
                     >
                       Blank Rows
@@ -261,10 +261,10 @@ Attested by:
                     <button
                       type="button"
                       onClick={() => setSheetType('prepopulated')}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
                         sheetType === 'prepopulated'
-                          ? 'bg-emerald-600 border-emerald-500 text-white'
-                          : 'bg-white border-[#D5CFC1] text-black hover:bg-[#EAF4EC]'
+                          ? 'bg-[#1B4332] border-[#1B4332] text-white'
+                          : 'bg-white border-[#D5CFC1] text-[#1B4332] hover:bg-[#EAF4EC]'
                       }`}
                     >
                       Active Members ({activeMembers.length})
@@ -273,65 +273,63 @@ Attested by:
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Sheet Header Title</label>
+                  <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">Sheet Header Title</label>
                   <input
                     type="text"
                     value={documentType}
                     onChange={(e) => setDocumentType(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none"
-
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] font-semibold focus:outline-none focus:border-[#2D6A4F]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Meeting Purpose</label>
+                  <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">Meeting Purpose</label>
                   <input
                     type="text"
                     value={meetingTitle}
                     onChange={(e) => setMeetingTitle(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none"
-
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] font-semibold focus:outline-none focus:border-[#2D6A4F]"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-black uppercase mb-1">Date</label>
+                    <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">Date</label>
                     <input
                       type="text"
                       value={meetingDate}
                       onChange={(e) => setMeetingDate(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] font-semibold focus:outline-none focus:border-[#2D6A4F] font-sans"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-black uppercase mb-1">Presiding Officer</label>
+                    <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">Presiding Officer</label>
                     <input
                       type="text"
                       value={presidingOfficer}
                       onChange={(e) => setPresidingOfficer(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] font-semibold focus:outline-none focus:border-[#2D6A4F] font-sans"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Venue</label>
+                  <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">Venue</label>
                   <input
                     type="text"
                     value={meetingVenue}
                     onChange={(e) => setMeetingVenue(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] font-semibold focus:outline-none focus:border-[#2D6A4F]"
                   />
                 </div>
 
                 {sheetType === 'blank' && (
                   <div>
-                    <label className="block text-[10px] font-bold text-black uppercase mb-1">Number of Blank Rows</label>
+                    <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">Number of Blank Rows</label>
                     <select
                       value={blankRowsCount}
                       onChange={(e) => setBlankRowsCount(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] font-semibold focus:outline-none focus:border-[#2D6A4F]"
                     >
                       <option value="15">15 Rows</option>
                       <option value="20">20 Rows</option>
@@ -344,25 +342,24 @@ Attested by:
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-bold text-black uppercase mb-1">Remarks / Note on footer</label>
+                  <label className="block text-[10px] font-bold text-[#1B4332] uppercase mb-1">Remarks / Note on footer</label>
                   <textarea
                     rows={2}
-
                     value={customNotes}
                     onChange={(e) => setCustomNotes(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-750 rounded-lg text-white focus:outline-none font-sans"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#D5CFC1] rounded-lg text-[#1B4332] font-semibold focus:outline-none focus:border-[#2D6A4F] font-sans"
                   />
                 </div>
 
-                <div className="pt-2 border-t border-slate-800 space-y-2">
+                <div className="pt-2 border-t border-[#D5CFC1] space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showLetterhead}
                       onChange={(e) => setShowLetterhead(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-900 text-emerald-600 focus:ring-0 focus:ring-offset-0"
+                      className="rounded border-[#D5CFC1] bg-white text-[#1B4332] focus:ring-0 focus:ring-offset-0"
                     />
-                    <span className="text-xs text-black">Show Barangay Letterhead</span>
+                    <span className="text-xs font-semibold text-[#1B4332]">Show Barangay Letterhead</span>
                   </label>
 
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -370,14 +367,14 @@ Attested by:
                       type="checkbox"
                       checked={showWatermark}
                       onChange={(e) => setShowWatermark(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-900 text-emerald-600 focus:ring-0 focus:ring-offset-0"
+                      className="rounded border-[#D5CFC1] bg-white text-[#1B4332] focus:ring-0 focus:ring-offset-0"
                     />
-                    <span className="text-xs text-black">Subtle Draft Watermark</span>
+                    <span className="text-xs font-semibold text-[#1B4332]">Subtle Draft Watermark</span>
                   </label>
                 </div>
               </div>
 
-              <div className="p-3 bg-emerald-950/20 border border-emerald-500/15 rounded-lg text-[10px] text-emerald-400 leading-relaxed">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-[10px] text-emerald-900 leading-relaxed font-semibold">
                 <strong>💡 Quick Tip:</strong> If printing empty rows, choose the "Blank Rows" option. If printing a verification list, choose "Active Members" to save time writing down names.
               </div>
             </div>

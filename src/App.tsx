@@ -5214,11 +5214,11 @@ export default function App() {
       </main>
 
       {/* LOWER FOOTER */}
-      <footer className="bg-slate-900 border-t border-slate-800 py-4 px-6 text-center text-xs text-slate-500 shrink-0">
+      <footer className="bg-[#FAF8F5] border-t border-[#D5CFC1] py-4 px-6 text-center text-xs text-[#455C50] font-semibold shrink-0">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>© 2026 Alegria Farmers Association (AFA) • Tuburan, Cebu</span>
-          <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="flex items-center gap-1.5 text-[#1B4332]">
+            <span className="w-2 h-2 rounded-full bg-emerald-600" />
             Offline-First Progressive Web App (PWA) Standard Certified
           </span>
         </div>

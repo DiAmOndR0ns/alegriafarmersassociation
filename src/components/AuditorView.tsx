@@ -519,8 +519,8 @@ export default function AuditorView({
               <ShieldCheck className="h-5 w-5 text-emerald-800" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-white">Auditor Review Desk</h2>
-              <p className="mt-1 text-sm text-emerald-100">Review transaction records, verify entries, and flag discrepancies.</p>
+              <h2 className="text-lg font-black text-[#1B4332]">Auditor Review Desk</h2>
+              <p className="mt-1 text-sm text-[#4A5F57]">Review transaction records, verify entries, and flag discrepancies.</p>
             </div>
           </div>
           {onOpenReportModal && (

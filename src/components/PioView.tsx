@@ -226,24 +226,24 @@ export default function PioView({
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
       case 'Meeting':
-        return <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />;
+        return <Calendar className="w-4 h-4 text-emerald-700 shrink-0" />;
       case 'Assistance':
-        return <Tag className="w-4 h-4 text-blue-400 shrink-0" />;
+        return <Tag className="w-4 h-4 text-blue-700 shrink-0" />;
       case 'Weather':
-        return <CloudSun className="w-4 h-4 text-amber-400 shrink-0" />;
+        return <CloudSun className="w-4 h-4 text-amber-700 shrink-0" />;
       case 'Price Advisory':
-        return <DollarSign className="w-4 h-4 text-yellow-400 shrink-0" />;
+        return <DollarSign className="w-4 h-4 text-amber-800 shrink-0" />;
       default:
-        return <Megaphone className="w-4 h-4 text-slate-400 shrink-0" />;
+        return <Megaphone className="w-4 h-4 text-[#2D6A4F] shrink-0" />;
     }
   };
 
   const getPriorityClass = (pri: string) => {
     switch (pri) {
       case 'High':
-        return 'bg-red-500/10 text-red-400 border border-red-500/20';
+        return 'bg-red-100 text-red-800 border border-red-300';
       case 'Medium':
-        return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        return 'bg-amber-100 text-amber-900 border border-amber-300';
       default:
         return 'bg-[#EAF4EC] text-[#1B4332] border border-[#B7D9BF]';
     }
@@ -254,8 +254,8 @@ export default function PioView({
       {/* PIO BANNER AND ACTION BUTTON */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#EAF4EC] p-4 rounded-2xl border border-[#B7D9BF]">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Megaphone className="w-5 h-5 text-emerald-200" />
+          <h2 className="text-xl font-bold text-[#1B4332] flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-[#2D6A4F]" />
             <span>{postingOnly ? 'Authorized Announcement & Activity Posting' : 'PIO Communications & Activity Management'}</span>
           </h2>
         </div>
@@ -497,7 +497,7 @@ export default function PioView({
                               onDeleteActivity(act.id);
                             }
                           }}
-                          className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all cursor-pointer"
+                          className="p-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 transition-all cursor-pointer"
                           title="Delete Activity"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
