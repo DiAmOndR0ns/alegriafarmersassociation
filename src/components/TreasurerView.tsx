@@ -106,6 +106,7 @@ export default function TreasurerView({
   const [duesPaymentAmount, setDuesPaymentAmount] = useState(String(duesAmount));
   const [duesDatePaid, setDuesDatePaid] = useState(new Date().toISOString().split('T')[0]);
   const [duesMethod, setDuesMethod] = useState<MembershipPaymentMethod>('Cash');
+  const [duesCustomMethod, setDuesCustomMethod] = useState('');
   const [duesReference, setDuesReference] = useState('');
   const [duesNotes, setDuesNotes] = useState('');
   const [duesVerifyNow, setDuesVerifyNow] = useState(false);
@@ -155,6 +156,7 @@ export default function TreasurerView({
   const [fundFormName, setFundFormName] = useState('');
   const [fundFormCode, setFundFormCode] = useState('');
   const [fundFormCategory, setFundFormCategory] = useState('Grant');
+  const [fundFormCustomCategory, setFundFormCustomCategory] = useState('');
   const [fundFormSource, setFundFormSource] = useState('');
   const [fundFormInitialFund, setFundFormInitialFund] = useState('');
   const defaultCustodian = useMemo(() => {
@@ -260,7 +262,8 @@ export default function TreasurerView({
 
   const handleAddFundSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!onAddFund || !fundFormName.trim() || !fundFormCategory || !fundFormSource.trim()) return;
+    const resolvedFundCategory = fundFormCategory === 'Other' ? fundFormCustomCategory.trim() : fundFormCategory.trim();
+    if (!onAddFund || !fundFormName.trim() || !resolvedFundCategory || !fundFormSource.trim()) return;
 
     const initialFund = parseFloat(fundFormInitialFund) || 0;
     const code = fundFormCode.trim().toUpperCase() ||
@@ -269,7 +272,7 @@ export default function TreasurerView({
     onAddFund({
       name: fundFormName.trim(),
       code,
-      category: fundFormCategory,
+      category: resolvedFundCategory,
       source: fundFormSource.trim(),
       initialFund,
       // A brand-new fund has no ledger yet, so its live balance equals the initial fund.
@@ -286,6 +289,7 @@ export default function TreasurerView({
     setFundFormName('');
     setFundFormCode('');
     setFundFormCategory('Grant');
+    setFundFormCustomCategory('');
     setFundFormSource('');
     setFundFormInitialFund('');
     setFundFormCustodian(defaultCustodian);
@@ -1006,16 +1010,21 @@ export default function TreasurerView({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              const resolvedDuesMethod = duesMethod === 'Other' ? duesCustomMethod.trim() : duesMethod;
+              if (!resolvedDuesMethod) return;
               const ok = onRecordMembershipPayment({
                 memberId: duesMemberId,
                 year: duesYear,
                 amount: parseFloat(duesPaymentAmount) || 0,
                 datePaid: duesDatePaid,
-                method: duesMethod,
+                method: resolvedDuesMethod,
                 referenceNo: duesReference,
                 notes: duesNotes
               }, { verifyImmediately: duesVerifyNow });
-              if (ok) setShowDuesModal(false);
+              if (ok) {
+                setDuesCustomMethod('');
+                setShowDuesModal(false);
+              }
             }}
             className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-5 space-y-3"
           >
@@ -1074,7 +1083,11 @@ export default function TreasurerView({
                 <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Method</label>
                 <select
                   value={duesMethod}
-                  onChange={(e) => setDuesMethod(e.target.value as MembershipPaymentMethod)}
+                  onChange={(e) => {
+                    const nextMethod = e.target.value as MembershipPaymentMethod;
+                    setDuesMethod(nextMethod);
+                    if (nextMethod !== 'Other') setDuesCustomMethod('');
+                  }}
                   className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332]"
                 >
                   {(['Cash', 'GCash', 'Bank Transfer', 'In-Kind', 'Other'] as MembershipPaymentMethod[]).map(m => (
@@ -1092,6 +1105,21 @@ export default function TreasurerView({
                 />
               </div>
             </div>
+
+            {duesMethod === 'Other' && (
+              <div>
+                <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Specify Payment Method</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={50}
+                  value={duesCustomMethod}
+                  onChange={(e) => setDuesCustomMethod(e.target.value)}
+                  placeholder="e.g., Maya, Palawan Express, Check, Money Order..."
+                  className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332]"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Notes (optional)</label>
@@ -1969,7 +1997,10 @@ export default function TreasurerView({
                     id="fund-source-category"
                     required
                     value={fundFormCategory}
-                    onChange={(e) => setFundFormCategory(e.target.value)}
+                    onChange={(e) => {
+                      setFundFormCategory(e.target.value);
+                      if (e.target.value !== 'Other') setFundFormCustomCategory('');
+                    }}
                     className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500"
                   >
                     <option>Grant</option>
@@ -1997,6 +2028,24 @@ export default function TreasurerView({
                   />
                 </div>
               </div>
+
+              {fundFormCategory === 'Other' && (
+                <div>
+                  <label htmlFor="fund-source-custom-category" className="block text-xs font-bold text-slate-200 uppercase mb-1">
+                    Specify Source Category <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    id="fund-source-custom-category"
+                    type="text"
+                    required
+                    maxLength={80}
+                    value={fundFormCustomCategory}
+                    onChange={(e) => setFundFormCustomCategory(e.target.value)}
+                    placeholder="e.g., NGO Partnership, Revolving Livelihood Loan, Private Endowment..."
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

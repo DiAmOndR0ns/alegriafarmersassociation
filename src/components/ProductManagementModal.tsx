@@ -126,12 +126,26 @@ export default function ProductManagementModal({
     setShowAddEditModal(true);
   };
 
+  const STANDARD_PRODUCT_CATEGORIES = [
+    'Produce',
+    'Livestock',
+    'Processed Goods',
+    'Seeds & Fertilizer',
+    'Coffee & Crops',
+    'Rental Assets'
+  ];
+
   const handleOpenEdit = (p: Product) => {
     setEditingProduct(p);
     setName(p.name);
     setCebName(p.cebName || '');
-    setCategory(p.category);
-    setOtherCategory(!['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops', 'Rental Assets'].includes(p.category) ? p.category : '');
+    if (STANDARD_PRODUCT_CATEGORIES.includes(p.category)) {
+      setCategory(p.category);
+      setOtherCategory('');
+    } else {
+      setCategory('Other');
+      setOtherCategory(p.category === 'Other' ? '' : p.category);
+    }
     setPrice(p.price);
     setUnit(p.unit);
     setQuantityAvailable(p.quantityAvailable || 'Available in harvest stock');
@@ -159,7 +173,7 @@ export default function ProductManagementModal({
       return;
     }
 
-    const finalCategory = (category === 'Other' ? otherCategory.trim() : category) || 'Other';
+    const finalCategory = category === 'Other' ? otherCategory.trim() : category.trim();
     if (!finalCategory) return;
 
     const contactStr = `${farmerName || 'AFA Member Farmer'} ${farmerSitio ? `• ${farmerSitio}` : ''} (${farmerPhone || 'Contact AFA Officer'})`;
@@ -224,7 +238,11 @@ export default function ProductManagementModal({
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.cebName && p.cebName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       p.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+    const matchesCategory =
+      selectedCategory === 'All' ||
+      (selectedCategory === 'Other'
+        ? (p.category === 'Other' || !STANDARD_PRODUCT_CATEGORIES.includes(p.category))
+        : p.category === selectedCategory);
     return matchesSearch && matchesCategory;
   });
 
@@ -607,33 +625,39 @@ export default function ProductManagementModal({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[#4A5F57] font-bold mb-1">Kategoriya (Category):</label>
-                  {category === 'Other' || !['Produce', 'Livestock', 'Processed Goods', 'Seeds & Fertilizer', 'Coffee & Crops', 'Rental Assets'].includes(category) ? (
-                    <input
-                      type="text"
-                      value={otherCategory}
-                      onChange={(e) => setOtherCategory(e.target.value)}
-                      placeholder="Enter new category name"
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[#4A5F57] font-bold mb-1">Kategoriya (Category):</label>
+                    <select
+                      value={category}
+                      onChange={(e) => {
+                        if (e.target.value !== 'Other') { setOtherCategory(''); }
+                        setCategory(e.target.value as any);
+                      }}
                       className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
-                    />
-                  ) : (
-                  <select
-                    value={category}
-                    onChange={(e) => {
-                      if (e.target.value === 'Other') { setOtherCategory(''); }
-                      setCategory(e.target.value as any);
-                    }}
-                    className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="Produce">Produce (Ani)</option>
-                    <option value="Livestock">Livestock (Baboy/Manok)</option>
-                    <option value="Processed Goods">Processed Goods</option>
-                    <option value="Seeds & Fertilizer">Seeds & Fertilizer</option>
-                    <option value="Coffee & Crops">Coffee & Crops</option>
-                    <option value="Rental Assets">Rental Assets</option>
-                    <option value="Other">Other (Iba pa — type your own)</option>
-                  </select>
+                    >
+                      <option value="Produce">Produce (Ani)</option>
+                      <option value="Livestock">Livestock (Baboy/Manok)</option>
+                      <option value="Processed Goods">Processed Goods</option>
+                      <option value="Seeds & Fertilizer">Seeds & Fertilizer</option>
+                      <option value="Coffee & Crops">Coffee & Crops</option>
+                      <option value="Rental Assets">Rental Assets</option>
+                      <option value="Other">Other (Iba pa — type your own)</option>
+                    </select>
+                  </div>
+                  {category === 'Other' && (
+                    <div>
+                      <label className="block text-[#4A5F57] font-bold mb-1">Specify Product Category:</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={80}
+                        value={otherCategory}
+                        onChange={(e) => setOtherCategory(e.target.value)}
+                        placeholder="e.g., Handicrafts, Native Delicacies, Farm Tools..."
+                        className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
                   )}
                 </div>
 

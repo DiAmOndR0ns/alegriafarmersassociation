@@ -162,6 +162,7 @@ export default function SecretaryView({
   const [memberRsbsa, setMemberRsbsa] = useState('');
   const [isRsbsaRegistered, setIsRsbsaRegistered] = useState(true);
   const [memberGender, setMemberGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [memberCustomGender, setMemberCustomGender] = useState('');
   const [memberBirthMonth, setMemberBirthMonth] = useState('');
   const [memberBirthDay, setMemberBirthDay] = useState('');
   const [memberBirthYear, setMemberBirthYear] = useState('');
@@ -181,6 +182,7 @@ export default function SecretaryView({
   const [editRsbsa, setEditRsbsa] = useState('');
   const [editIsRsbsa, setEditIsRsbsa] = useState(true);
   const [editGender, setEditGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [editCustomGender, setEditCustomGender] = useState('');
   const [editBirthMonth, setEditBirthMonth] = useState('');
   const [editBirthDay, setEditBirthDay] = useState('');
   const [editBirthYear, setEditBirthYear] = useState('');
@@ -263,6 +265,9 @@ export default function SecretaryView({
     }
     setLoginPasswordError('');
 
+    const resolvedMemberGender = memberGender === 'Other' ? memberCustomGender.trim() : memberGender;
+    if (!resolvedMemberGender) return;
+
     const result = await onAddMember({
       name: assembledName,
       memberIdNumber: finalMemberId,
@@ -271,7 +276,7 @@ export default function SecretaryView({
       contactNumber: memberContact || 'None',
       farmLocation: memberSitio,
       primaryCrops: selectedCrops.length > 0 ? selectedCrops : ['Vegetables'],
-      gender: memberGender,
+      gender: resolvedMemberGender,
       birthDate: birthDate || undefined,
       status: 'Active',
       affiliations: memberAffiliations.length > 0 ? memberAffiliations : undefined
@@ -301,6 +306,7 @@ export default function SecretaryView({
     setMemberRsbsa('');
     setIsRsbsaRegistered(true);
     setMemberGender('Male');
+    setMemberCustomGender('');
     setMemberBirthMonth('');
     setMemberBirthDay('');
     setMemberBirthYear('');
@@ -324,7 +330,13 @@ export default function SecretaryView({
     setEditMemberIdNum(member.memberIdNumber || '');
     setEditRsbsa(member.rsbsaNumber || '');
     setEditIsRsbsa(member.isRsbsaRegistered ?? true);
-    setEditGender(member.gender || 'Male');
+    if (!member.gender || member.gender === 'Male' || member.gender === 'Female') {
+      setEditGender((member.gender as 'Male' | 'Female') || 'Male');
+      setEditCustomGender('');
+    } else {
+      setEditGender('Other');
+      setEditCustomGender(member.gender === 'Other' ? '' : member.gender);
+    }
     const birthDateParts = splitBirthDate(member.birthDate || '');
     setEditBirthMonth(birthDateParts.month);
     setEditBirthDay(birthDateParts.day);
@@ -354,6 +366,9 @@ export default function SecretaryView({
     }
     setBirthDateError('');
 
+    const resolvedEditGender = editGender === 'Other' ? editCustomGender.trim() : editGender;
+    if (!resolvedEditGender) return;
+
     const updated: Member = {
       ...editingMember,
       name: assembledName,
@@ -363,7 +378,7 @@ export default function SecretaryView({
       contactNumber: editContact.trim() || 'None',
       farmLocation: editSitio,
       primaryCrops: editSelectedCrops.length > 0 ? editSelectedCrops : ['Vegetables'],
-      gender: editGender,
+      gender: resolvedEditGender,
       birthDate: birthDate || undefined,
       affiliations: editAffiliations
     };
@@ -1090,17 +1105,37 @@ export default function SecretaryView({
 
                 {/* Gender & Birth Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Gender</label>
-                    <select
-                      value={memberGender}
-                      onChange={(e) => setMemberGender(e.target.value as any)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Gender</label>
+                      <select
+                        value={memberGender}
+                        onChange={(e) => {
+                          const next = e.target.value as any;
+                          setMemberGender(next);
+                          if (next !== 'Other') setMemberCustomGender('');
+                        }}
+                        className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-900 border border-slate-750 rounded-xl text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    {memberGender === 'Other' && (
+                      <div>
+                        <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Specify Gender</label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={20}
+                          value={memberCustomGender}
+                          onChange={(e) => setMemberCustomGender(e.target.value)}
+                          placeholder="Specify gender..."
+                          className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="block text-sm font-bold text-[#1B4332]">Birth Date (Optional)</label>
@@ -1371,17 +1406,37 @@ export default function SecretaryView({
 
                 {/* Gender & Birth Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Gender</label>
-                    <select
-                      value={editGender}
-                      onChange={(e) => setEditGender(e.target.value as any)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Gender</label>
+                      <select
+                        value={editGender}
+                        onChange={(e) => {
+                          const next = e.target.value as any;
+                          setEditGender(next);
+                          if (next !== 'Other') setEditCustomGender('');
+                        }}
+                        className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    {editGender === 'Other' && (
+                      <div>
+                        <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Specify Gender</label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={20}
+                          value={editCustomGender}
+                          onChange={(e) => setEditCustomGender(e.target.value)}
+                          placeholder="Specify gender..."
+                          className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="block text-sm font-bold text-[#1B4332]">Birth Date (Optional)</label>

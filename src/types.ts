@@ -72,7 +72,7 @@ export interface Member {
   status: 'Active' | 'Inactive';
   joinedDate: string;
   avatarUrl?: string;
-  gender?: 'Male' | 'Female' | 'Other';
+  gender?: 'Male' | 'Female' | 'Other' | string;
   birthDate?: string;
   affiliations?: MemberAffiliation[]; // Other IDs or organizations aside from RSBSA (e.g., Senior Citizen, PWD, 4Ps, Cooperative)
   /** Membership year through which dues are settled (e.g. 2026). Derived from verified payments. */
@@ -86,7 +86,7 @@ export interface Member {
 // a verified payment exists for it, so status is derived from these records
 // instead of being hand-toggled by an officer.
 export type MembershipPaymentStatus = 'Pending' | 'Verified' | 'Voided';
-export type MembershipPaymentMethod = 'Cash' | 'GCash' | 'Bank Transfer' | 'In-Kind' | 'Other';
+export type MembershipPaymentMethod = 'Cash' | 'GCash' | 'Bank Transfer' | 'In-Kind' | 'Other' | string;
 
 export interface MembershipPayment {
   id: string;

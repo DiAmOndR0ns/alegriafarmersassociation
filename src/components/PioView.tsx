@@ -84,6 +84,7 @@ export default function PioView({
   const [actTitle, setActTitle] = useState('');
   const [actCebTitle, setActCebTitle] = useState('');
   const [actCategory, setActCategory] = useState<AssociationActivity['category']>('Training / Workshop');
+  const [actCustomCategory, setActCustomCategory] = useState('');
   const [actDate, setActDate] = useState(new Date().toISOString().split('T')[0]);
   const [actTime, setActTime] = useState('09:00 AM');
   const [actLocation, setActLocation] = useState('Barangay Alegria Covered Court');
@@ -102,13 +103,22 @@ export default function PioView({
     { value: 'Price Advisory', label: 'Crop Price Advisory' }
   ];
 
+  const STANDARD_ACTIVITY_CATEGORIES = [
+    'Training / Workshop',
+    'Community Outreach',
+    'Harvest Fair',
+    'Assembly & Fiesta',
+    'Livelihood Project'
+  ];
+
   const handlePostSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !content.trim()) return;
+    const resolvedCategory = category === 'Other' ? customCategory.trim() : category.trim();
+    if (!title.trim() || !content.trim() || !resolvedCategory) return;
 
     onAddAnnouncement({
       title,
-      category: (category === 'Other' ? (customCategory.trim() || 'General') : category) as any,
+      category: resolvedCategory as any,
       content,
       priority,
       postedBy: postedByName
@@ -127,6 +137,7 @@ export default function PioView({
     setActTitle('');
     setActCebTitle('');
     setActCategory('Training / Workshop');
+    setActCustomCategory('');
     setActDate(new Date().toISOString().split('T')[0]);
     setActTime('09:00 AM');
     setActLocation('Barangay Alegria Covered Court');
@@ -143,7 +154,13 @@ export default function PioView({
     setEditingActivity(act);
     setActTitle(act.title);
     setActCebTitle(act.cebTitle || '');
-    setActCategory(act.category);
+    if (STANDARD_ACTIVITY_CATEGORIES.includes(act.category)) {
+      setActCategory(act.category);
+      setActCustomCategory('');
+    } else {
+      setActCategory('Other');
+      setActCustomCategory(act.category === 'Other' ? '' : act.category);
+    }
     setActDate(act.scheduledDate);
     setActTime(act.scheduledTime);
     setActLocation(act.location);
@@ -158,7 +175,8 @@ export default function PioView({
 
   const handleSaveActivity = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!actTitle.trim() || !actDesc.trim()) return;
+    const resolvedActCategory = actCategory === 'Other' ? actCustomCategory.trim() : actCategory;
+    if (!actTitle.trim() || !actDesc.trim() || !resolvedActCategory) return;
     if (editingActivity && ['Postponed', 'Cancelled'].includes(actStatus) && !actStatusReason.trim()) {
       setActStatusReasonError(en
         ? 'Please provide a reason before saving this status.'
@@ -172,7 +190,7 @@ export default function PioView({
         ...editingActivity,
         title: actTitle,
         cebTitle: actCebTitle,
-        category: actCategory,
+        category: resolvedActCategory,
         scheduledDate: actDate,
         dateScheduled: actDate,
         scheduledTime: actTime,
@@ -188,7 +206,7 @@ export default function PioView({
       onAddActivity({
         title: actTitle,
         cebTitle: actCebTitle,
-        category: actCategory,
+        category: resolvedActCategory,
         scheduledDate: actDate,
         dateScheduled: actDate,
         scheduledTime: actTime,
@@ -700,7 +718,11 @@ export default function PioView({
                     <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider">{en ? 'Category' : 'Klase sa Kalihokan'}</label>
                     <select
                       value={actCategory}
-                      onChange={(e) => setActCategory(e.target.value as any)}
+                      onChange={(e) => {
+                        const nextCat = e.target.value as any;
+                        setActCategory(nextCat);
+                        if (nextCat !== 'Other') setActCustomCategory('');
+                      }}
                       className="w-full px-3.5 py-2.5 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors cursor-pointer"
                     >
                       <option value="Training / Workshop">{t('Pagbansay / Workshop', 'Training / Workshop')}</option>
@@ -708,8 +730,24 @@ export default function PioView({
                       <option value="Harvest Fair">{t('Harvest Fair', 'Harvest Fair')}</option>
                       <option value="Assembly & Fiesta">{t('Asembliya ug Pista', 'Assembly & Fiesta')}</option>
                       <option value="Livelihood Project">{t('Proyektong Panginabuhian', 'Livelihood Project')}</option>
-                      <option value="Other">{t('Iba pa', 'Other')}</option>
+                      <option value="Other">{t('Iba pa (Isulat ang imoha)', 'Other (Type your own)')}</option>
                     </select>
+                    {actCategory === 'Other' && (
+                      <div className="pt-1.5">
+                        <label className="block text-[11px] font-black text-[#4A5F57] uppercase tracking-wider mb-1">
+                          {en ? 'Specify Activity Category' : 'Isulat ang Klase sa Kalihokan'}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={80}
+                          value={actCustomCategory}
+                          onChange={(e) => setActCustomCategory(e.target.value)}
+                          placeholder={en ? 'e.g., Tree Planting, Seed Distribution, Medical Mission...' : 'pananglitan: Tree Planting, Pagpanghatag og Binhi...'}
+                          className="w-full px-3.5 py-2 text-sm bg-[#FAF8F5] border-2 border-[#D5CFC1] rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#2D6A4F] focus:bg-white transition-colors"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {editingActivity ? (
