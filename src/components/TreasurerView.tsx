@@ -123,6 +123,7 @@ export default function TreasurerView({
   // Add Transaction Form
   const [txType, setTxType] = useState<'income' | 'expense'>('income');
   const [txCategory, setTxCategory] = useState('Membership Dues');
+  const [txCustomCategory, setTxCustomCategory] = useState('');
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -143,6 +144,7 @@ export default function TreasurerView({
   const [assetType, setAssetType] = useState<InventoryAssetType>('usable');
   const [assetName, setAssetName] = useState('');
   const [assetCategory, setAssetCategory] = useState<InventoryItem['category']>('Office Supplies');
+  const [assetCustomCategory, setAssetCustomCategory] = useState('');
   const [assetQuantity, setAssetQuantity] = useState('1');
   const [assetUnit, setAssetUnit] = useState('pieces');
   const [assetLocation, setAssetLocation] = useState('');
@@ -247,9 +249,12 @@ export default function TreasurerView({
   );
   const currentRegisteredFundBalance = funds.reduce((total, fund) => total + (Number(fund.currentBalance) || 0), 0);
 
+  const isOtherTxCategory = txCategory === 'Other Income' || txCategory === 'Other Expense' || txCategory === 'Other';
+
   const handleTypeChange = (type: 'income' | 'expense') => {
     setTxType(type);
     setTxCategory(CATEGORIES[type][0]);
+    setTxCustomCategory('');
     setTxPurpose('');
   };
 
@@ -290,7 +295,8 @@ export default function TreasurerView({
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!txAmount || parseFloat(txAmount) <= 0 || !txDesc.trim()) return;
+    const resolvedCategory = isOtherTxCategory ? txCustomCategory.trim() : txCategory.trim();
+    if (!resolvedCategory || !txAmount || parseFloat(txAmount) <= 0 || !txDesc.trim()) return;
     const selectedFund = funds.find(fund => getFundSourceValue(fund) === txFundSource);
     if (!selectedFund) {
       setTxFundSourceError('Choose a registered fund source, or add and register one before recording this transaction.');
@@ -333,11 +339,18 @@ export default function TreasurerView({
           setAssetError('Enter the asset or supply name to add to the custodial inventory.');
           return;
         }
+        const resolvedAssetCategory = assetType === 'rental'
+          ? 'Rental Assets'
+          : (assetCategory === 'Other' ? assetCustomCategory.trim() : assetCategory);
+        if (!resolvedAssetCategory) {
+          setAssetError('Specify what category this asset or supply is for.');
+          return;
+        }
         assetPurchasePayload = {
           mode: 'new',
           assetType,
           itemName: assetName.trim(),
-          category: assetType === 'rental' ? 'Rental Assets' : assetCategory,
+          category: resolvedAssetCategory,
           quantity: parsedQty,
           unit: assetUnit.trim() || 'pieces',
           location: assetLocation.trim() || undefined
@@ -353,7 +366,7 @@ export default function TreasurerView({
 
     onAddTransaction({
       type: txType,
-      category: txCategory,
+      category: resolvedCategory,
       amount: parseFloat(txAmount),
       date: txDate,
       description: txDesc,
@@ -367,6 +380,7 @@ export default function TreasurerView({
     });
 
     setTxAmount('');
+    setTxCustomCategory('');
     setTxDesc('');
     setTxPurpose('');
     setTxActivityId('');
@@ -378,6 +392,7 @@ export default function TreasurerView({
     setAssetType('usable');
     setAssetName('');
     setAssetCategory('Office Supplies');
+    setAssetCustomCategory('');
     setAssetQuantity('1');
     setAssetUnit('pieces');
     setAssetLocation('');
@@ -1422,38 +1437,62 @@ export default function TreasurerView({
               </div>
 
               {/* Category */}
-              <div>
-                <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">
-                  {txType === 'income' ? 'Income Category' : 'Expense Category'}
-                </label>
-                <select
-                  value={txCategory}
-                  onChange={(e) => {
-                    const nextCat = e.target.value;
-                    setTxCategory(nextCat);
-                    if (txType === 'expense') {
-                      if (nextCat === 'Rental Asset Purchase') {
-                        setIsAssetPurchase(true);
-                        setAssetType('rental');
-                        setAssetCategory('Rental Assets');
-                      } else if (nextCat === 'Equipment Purchase' || nextCat === 'Office Supplies') {
-                        setIsAssetPurchase(true);
-                        setAssetType('usable');
-                        setAssetCategory(nextCat === 'Office Supplies' ? 'Office Supplies' : 'IGP Equipment');
-                      }
-                    }
-                  }}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
-                >
-                  {availableCategories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-                <button type="button" onClick={() => setShowCategoryModal(true)} className="shrink-0 inline-flex items-center gap-1 rounded-xl border-[#2D6A4F] bg-[#EAF6EE] px-3 py-2 text-sm font-bold text-[#1B4332] hover:bg-[#D6EFD9]" aria-label="Add a custom transaction category" title="Add a custom category">
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Add category</span>
-                </button>
-                <p className="mt-1 text-xs text-[#4B6259] hidden">Choose a category or add one for this role, such as Budget Source Allocation.</p>
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                    {txType === 'income' ? 'Income Category' : 'Expense Category'}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={txCategory}
+                      onChange={(e) => {
+                        const nextCat = e.target.value;
+                        setTxCategory(nextCat);
+                        if (nextCat !== 'Other Income' && nextCat !== 'Other Expense' && nextCat !== 'Other') {
+                          setTxCustomCategory('');
+                        }
+                        if (txType === 'expense') {
+                          if (nextCat === 'Rental Asset Purchase') {
+                            setIsAssetPurchase(true);
+                            setAssetType('rental');
+                            setAssetCategory('Rental Assets');
+                          } else if (nextCat === 'Equipment Purchase' || nextCat === 'Office Supplies') {
+                            setIsAssetPurchase(true);
+                            setAssetType('usable');
+                            setAssetCategory(nextCat === 'Office Supplies' ? 'Office Supplies' : 'IGP Equipment');
+                          }
+                        }
+                      }}
+                      className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      {availableCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => setShowCategoryModal(true)} className="shrink-0 inline-flex items-center gap-1 rounded-xl border border-[#2D6A4F] bg-[#EAF6EE] px-3 py-2 text-sm font-bold text-[#1B4332] hover:bg-[#D6EFD9] cursor-pointer" aria-label="Add a custom transaction category" title="Add a custom category">
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Add category</span>
+                    </button>
+                  </div>
+                </div>
+
+                {isOtherTxCategory && (
+                  <div>
+                    <label htmlFor="tx-custom-category" className="block text-xs font-bold text-[#18372D] uppercase mb-1">
+                      {txType === 'income' ? 'Specify What This Income Is For' : 'Specify What This Expense Is For'}
+                    </label>
+                    <input
+                      id="tx-custom-category"
+                      type="text"
+                      required
+                      maxLength={100}
+                      value={txCustomCategory}
+                      onChange={(e) => setTxCustomCategory(e.target.value)}
+                      placeholder={txType === 'income' ? 'e.g., Bank Interest, Raffle Proceeds, Equipment Rental...' : 'e.g., Tarpaulin Printing, Barangay Permit, Transport Fare...'}
+                      className="w-full px-3.5 py-2 text-sm bg-slate-900 border border-slate-750 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1671,6 +1710,21 @@ export default function TreasurerView({
                               </select>
                             </div>
                           </div>
+
+                          {assetType === 'usable' && assetCategory === 'Other' && (
+                            <div>
+                              <label className="block text-[11px] font-bold uppercase text-[#18372D] mb-1">Specify Asset Category</label>
+                              <input
+                                type="text"
+                                required
+                                maxLength={100}
+                                value={assetCustomCategory}
+                                onChange={(e) => setAssetCustomCategory(e.target.value)}
+                                placeholder="e.g., Audio Equipment, Kitchen Utensils, Furniture..."
+                                className="w-full rounded-xl border border-[#8FA99A] bg-white px-3 py-2 text-xs text-[#1B4332]"
+                              />
+                            </div>
+                          )}
 
                           <div className="grid grid-cols-3 gap-2">
                             <div>

@@ -196,6 +196,10 @@ export default function LivestockMonitor({
   const net = totalRevenue - totalExpenses;
 
   // ---------- Ledger Table (with CRUD) ----------
+  const STANDARD_SALE_STAGES = useMemo(
+    () => new Set(['fattening', 'breeding', 'gestation', 'lactating', 'dispersal', 'rtl', 'eggs', 'general']),
+    []
+  );
   const ledger = useMemo(() => [
     ...expenses.map((e) => ({
       id: e.id,
@@ -210,20 +214,23 @@ export default function LivestockMonitor({
       amount: -e.amount,
       by: e.recordedBy
     })),
-    ...sales.map((s) => ({
-      id: s.id,
-      itemType: 'sale' as const,
-      rawSale: s,
-      date: s.date,
-      kind: 'Income' as const,
-      stage: s.stage,
-      label: isRental(selected) ? 'Rental' : 'Sale',
-      detail: s.notes || '',
-      qty: s.quantity,
-      amount: s.revenue,
-      by: s.recordedBy
-    })),
-  ].sort((a, b) => b.date.localeCompare(a.date)), [expenses, sales, selected]);
+    ...sales.map((s) => {
+      const customSaleLabel = s.stage && !STANDARD_SALE_STAGES.has(s.stage.toLowerCase()) ? s.stage : null;
+      return {
+        id: s.id,
+        itemType: 'sale' as const,
+        rawSale: s,
+        date: s.date,
+        kind: 'Income' as const,
+        stage: s.stage,
+        label: customSaleLabel || (isRental(selected) ? 'Rental' : 'Sale'),
+        detail: s.notes || '',
+        qty: s.quantity,
+        amount: s.revenue,
+        by: s.recordedBy
+      };
+    }),
+  ].sort((a, b) => b.date.localeCompare(a.date)), [expenses, sales, selected, STANDARD_SALE_STAGES]);
 
   const [view, setView] = useState<'ledger' | 'report'>('ledger');
   const [reportYear, setReportYear] = useState<number>(new Date().getFullYear());
@@ -283,6 +290,7 @@ export default function LivestockMonitor({
 
   // Sale Form Fields
   const [saleStage, setSaleStage] = useState<IgpStage>('Fattening');
+  const [saleCustomStage, setSaleCustomStage] = useState('');
   const [saleQty, setSaleQty] = useState('');
   const [saleRevenue, setSaleRevenue] = useState('');
   const [saleDate, setSaleDate] = useState(today());
@@ -346,9 +354,15 @@ export default function LivestockMonitor({
 
   const openEditExpense = (expense: IgpExpense) => {
     setEditingExpense(expense);
-    setExpCategory(expense.category);
+    const knownCategories = getExpenseCategories(expense.produce || selected);
+    if (knownCategories.includes(expense.category) && expense.category !== 'Other') {
+      setExpCategory(expense.category);
+      setExpCustom('');
+    } else {
+      setExpCategory('Other');
+      setExpCustom(expense.category === 'Other' ? '' : expense.category);
+    }
     setExpStage(expense.stage || (isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'RTL' : 'General'));
-    setExpCustom('');
     setExpQty(expense.quantity ? String(expense.quantity) : '');
     setExpDesc(expense.description);
     setExpAmount(String(expense.amount));
@@ -361,6 +375,7 @@ export default function LivestockMonitor({
   const openAddSale = () => {
     setEditingSale(null);
     setSaleStage(isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'Eggs' : 'General');
+    setSaleCustomStage('');
     setSaleQty('');
     setSaleRevenue('');
     setSaleNotes('');
@@ -372,7 +387,25 @@ export default function LivestockMonitor({
 
   const openEditSale = (sale: IgpSale) => {
     setEditingSale(sale);
-    setSaleStage(sale.stage || (isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'Eggs' : 'General'));
+    const standardStages = isSwine
+      ? ['Fattening', 'Breeding', 'Dispersal']
+      : isCattle
+        ? ['Fattening', 'Dispersal']
+        : isPoultry
+          ? ['Eggs', 'RTL']
+          : null;
+    if (standardStages) {
+      if (sale.stage && standardStages.includes(sale.stage)) {
+        setSaleStage(sale.stage);
+        setSaleCustomStage('');
+      } else {
+        setSaleStage('Other');
+        setSaleCustomStage(sale.stage && sale.stage !== 'Other' ? sale.stage : '');
+      }
+    } else {
+      setSaleStage(sale.stage || 'General');
+      setSaleCustomStage('');
+    }
     setSaleQty(String(sale.quantity || ''));
     setSaleRevenue(String(sale.revenue));
     setSaleNotes(sale.notes || '');
@@ -398,7 +431,10 @@ export default function LivestockMonitor({
     const closed = closedMsg(expDate);
     if (closed) return setFormError(closed);
 
-    const cat = expCategory === 'Other' ? (expCustom.trim() || 'Other') : expCategory;
+    if (expCategory === 'Other' && !expCustom.trim()) {
+      return setFormError('Please specify what this expense is for.');
+    }
+    const cat = expCategory === 'Other' ? expCustom.trim() : expCategory;
     // Quantity only means "heads purchased" for stock categories; ignore it everywhere else.
     const qty = expQty && isIgpStockPurchaseCategory(cat) ? parseInt(expQty, 10) : undefined;
 
@@ -435,7 +471,13 @@ export default function LivestockMonitor({
     if (!funds.some(fund => fundSourceValue(fund) === saleFundSource)) {
       return setFormError('Select a registered deposit destination before recording this income.');
     }
-    const isDispersalSale = saleStage === 'Dispersal';
+    const isCustomSaleStage = (isSwine || isCattle || isPoultry) && saleStage === 'Other';
+    if (isCustomSaleStage && !saleCustomStage.trim()) {
+      return setFormError('Please specify what this income is for.');
+    }
+    const resolvedSaleStage = isCustomSaleStage ? saleCustomStage.trim() : saleStage;
+
+    const isDispersalSale = resolvedSaleStage === 'Dispersal';
     const revenue = saleRevenue.trim() === '' && isDispersalSale ? 0 : parseFloat(saleRevenue);
     const qty = parseInt(saleQty, 10);
     if (!(revenue >= (isDispersalSale ? 0 : 0.01)) || !(qty >= 1)) {
@@ -445,7 +487,7 @@ export default function LivestockMonitor({
           : 'Please enter a valid quantity and amount.'
       );
     }
-    if (isPoultry && saleStage === 'Eggs') {
+    if (isPoultry && resolvedSaleStage === 'Eggs') {
       const availableEggs = getAvailableEggCount(
         state.eggHarvests || [],
         state.sales || [],
@@ -463,7 +505,7 @@ export default function LivestockMonitor({
       onUpdateSale?.({
         ...editingSale,
         produce: selected,
-        stage: saleStage,
+        stage: resolvedSaleStage,
         date: saleDate,
         quantity: qty,
         revenue,
@@ -473,7 +515,7 @@ export default function LivestockMonitor({
     } else {
       onAddSale({
         produce: selected,
-        stage: saleStage,
+        stage: resolvedSaleStage,
         date: saleDate,
         quantity: qty,
         revenue,
@@ -1214,9 +1256,9 @@ export default function LivestockMonitor({
             {/* Stage Selector */}
             {isSwine && (
               <div>
-                <label className={labelCls}>Swine Stage Sold</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(['Fattening', 'Breeding', 'Dispersal'] as IgpStage[]).map((stg) => (
+                <label className={labelCls}>Swine Stage / Income Type</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {(['Fattening', 'Breeding', 'Dispersal', 'Other'] as IgpStage[]).map((stg) => (
                     <button
                       key={stg}
                       type="button"
@@ -1226,7 +1268,7 @@ export default function LivestockMonitor({
                         saleStage === stg ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-white text-[#1B4332] border-[#D5CFC1]'
                       }`}
                     >
-                      {stg}
+                      {stg === 'Other' ? 'Other income' : stg}
                     </button>
                   ))}
                 </div>
@@ -1235,9 +1277,9 @@ export default function LivestockMonitor({
 
             {isCattle && (
               <div>
-                <label className={labelCls}>Cattle Stage Sold</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['Fattening', 'Dispersal'] as IgpStage[]).map((stg) => (
+                <label className={labelCls}>Cattle Stage / Income Type</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['Fattening', 'Dispersal', 'Other'] as IgpStage[]).map((stg) => (
                     <button
                       key={stg}
                       type="button"
@@ -1247,7 +1289,7 @@ export default function LivestockMonitor({
                         saleStage === stg ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-white text-[#1B4332] border-[#D5CFC1]'
                       }`}
                     >
-                      {stg === 'Fattening' ? 'Cattle Fattening' : 'Cattle Dispersal'}
+                      {stg === 'Fattening' ? 'Cattle Fattening' : stg === 'Dispersal' ? 'Cattle Dispersal' : 'Other income'}
                     </button>
                   ))}
                 </div>
@@ -1272,6 +1314,21 @@ export default function LivestockMonitor({
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {(isSwine || isCattle || isPoultry) && saleStage === 'Other' && (
+              <div>
+                <label className={labelCls}>Specify What This Income Is For</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={100}
+                  value={saleCustomStage}
+                  onChange={(e) => setSaleCustomStage(e.target.value)}
+                  placeholder="e.g., Organic Manure Fertilizer, Culled Stock, By-products..."
+                  className={inputCls}
+                />
               </div>
             )}
 
