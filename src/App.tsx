@@ -2572,6 +2572,34 @@ export default function App() {
     }
   };
 
+  const buildActivityAnnouncement = (act: AssociationActivity, existingDatePosted?: string): Announcement => {
+    const schedDate = act.scheduledDate || act.dateScheduled || 'TBA';
+    const schedTime = act.scheduledTime || act.timeScheduled || 'TBA';
+    const isDisrupted = act.status === 'Cancelled' || act.status === 'Postponed';
+    const statusPrefix = isDisrupted
+      ? `[${act.status.toUpperCase()}] `
+      : act.status === 'Completed'
+        ? '[Completed Activity] '
+        : '[Upcoming Activity] ';
+    const detailsLines = [
+      `📅 Date & Time: ${schedDate} • ${schedTime}`,
+      `📍 Location: ${act.location || 'Barangay Alegria'}`,
+      ...(act.targetAudience ? [`👥 Target Audience: ${act.targetAudience}`] : []),
+      ...(isDisrupted && act.statusReason ? [`⚠️ ${act.status} Reason: ${act.statusReason}`] : []),
+      '',
+      act.description || ''
+    ];
+    return {
+      id: `ann-act-${act.id}`,
+      title: `${statusPrefix}${act.title}`,
+      category: (act.category || 'General') as Announcement['category'],
+      content: detailsLines.join('\n').trim(),
+      datePosted: existingDatePosted || new Date().toISOString().split('T')[0],
+      priority: isDisrupted ? 'High' : 'Medium',
+      postedBy: act.organizer || (currentUser ? `${currentRole.replace('_', ' ')} (${currentUser.name})` : 'PIO')
+    };
+  };
+
   const handleAddActivity = (newAct: Omit<AssociationActivity, 'id'>) => {
     const activity: AssociationActivity = {
       ...newAct,
@@ -2581,12 +2609,18 @@ export default function App() {
     setActivities(updated);
     updateStorage('bafa_activities', updated);
 
+    const linkedAnnouncement = buildActivityAnnouncement(activity);
+    const updatedAnnouncements = [linkedAnnouncement, ...announcements.filter(a => a.id !== linkedAnnouncement.id)];
+    setAnnouncements(updatedAnnouncements);
+    updateStorage('bafa_announcements', updatedAnnouncements);
+
     if (isOnline) {
-      logAction('Scheduled Activity', `Created association activity: "${activity.title}" scheduled for ${activity.dateScheduled}`);
-      showToastMessage(`Gipasa ang bag-ong kalihokan "${activity.title}"!`, 'success');
-      pushAllDataToCloud({ activities: updated }, { silent: true });
+      logAction('Scheduled Activity', `Created association activity & announcement: "${activity.title}" scheduled for ${activity.scheduledDate || activity.dateScheduled}`);
+      showToastMessage(`Gipasa ang bag-ong kalihokan ug pahibalo "${activity.title}"!`, 'success');
+      pushAllDataToCloud({ activities: updated, announcements: updatedAnnouncements }, { silent: true });
     } else {
       addToSyncQueue('create', 'activity', activity);
+      addToSyncQueue('create', 'announcement', linkedAnnouncement);
     }
   };
 
@@ -2595,12 +2629,22 @@ export default function App() {
     setActivities(updated);
     updateStorage('bafa_activities', updated);
 
+    const linkedAnnId = `ann-act-${updatedAct.id}`;
+    const existingAnn = announcements.find(a => a.id === linkedAnnId);
+    const syncedAnnouncement = buildActivityAnnouncement(updatedAct, existingAnn?.datePosted);
+    const updatedAnnouncements = existingAnn
+      ? announcements.map(a => a.id === linkedAnnId ? syncedAnnouncement : a)
+      : [syncedAnnouncement, ...announcements];
+    setAnnouncements(updatedAnnouncements);
+    updateStorage('bafa_announcements', updatedAnnouncements);
+
     if (isOnline) {
-      logAction('Updated Activity', `Updated activity status/details for "${updatedAct.title}"`);
-      showToastMessage(`Gi-update ang kalihokan "${updatedAct.title}"!`, 'success');
-      pushAllDataToCloud({ activities: updated }, { silent: true });
+      logAction('Updated Activity', `Updated activity & announcement for "${updatedAct.title}"`);
+      showToastMessage(`Gi-update ang kalihokan ug pahibalo "${updatedAct.title}"!`, 'success');
+      pushAllDataToCloud({ activities: updated, announcements: updatedAnnouncements }, { silent: true });
     } else {
       addToSyncQueue('update', 'activity', updatedAct);
+      addToSyncQueue(existingAnn ? 'update' : 'create', 'announcement', syncedAnnouncement);
     }
   };
 
@@ -2611,15 +2655,31 @@ export default function App() {
     updateStorage('bafa_activities', updated);
     storeDeletedId('activities', id);
 
+    const linkedAnnId = `ann-act-${id}`;
+    const hasLinkedAnn = announcements.some(a => a.id === linkedAnnId);
+    const updatedAnnouncements = hasLinkedAnn
+      ? announcements.filter(a => a.id !== linkedAnnId)
+      : announcements;
+    if (hasLinkedAnn) {
+      setAnnouncements(updatedAnnouncements);
+      updateStorage('bafa_announcements', updatedAnnouncements);
+      storeDeletedId('announcements', linkedAnnId);
+      deleteFromDatabase('announcement', linkedAnnId);
+    }
+
     // Direct and permanent removal from PostgreSQL Cloud Database
     deleteFromDatabase('activity', id);
 
     if (isOnline) {
       logAction('Deleted Activity', `Removed activity: "${target?.title || id}"`);
       showToastMessage('Gipapas ang kalihokan!', 'info');
-      pushAllDataToCloud({ activities: updated }, { silent: true, source: 'Activity Deletion' });
+      pushAllDataToCloud({
+        activities: updated,
+        ...(hasLinkedAnn ? { announcements: updatedAnnouncements } : {})
+      }, { silent: true, source: 'Activity Deletion' });
     } else {
       addToSyncQueue('delete', 'activity', { id });
+      if (hasLinkedAnn) addToSyncQueue('delete', 'announcement', { id: linkedAnnId });
     }
   };
 
