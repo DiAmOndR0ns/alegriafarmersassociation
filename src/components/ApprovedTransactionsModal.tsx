@@ -1,10 +1,10 @@
+
 import React, { useMemo, useState } from 'react';
 import { FinancialTransaction, AssociationActivity, Meeting } from '../types';
 import {
-  ShieldCheck, CheckCircle, X, Search, Printer,
+  ShieldCheck, CheckCircle, X, Search,
   ArrowUpRight, ArrowDownRight, Calendar, Landmark, FileText, Coins, Filter
 } from 'lucide-react';
-import { escapeHtml, triggerPrintWindow } from '../utils/htmlEscape';
 
 interface ApprovedTransactionsModalProps {
   isOpen: boolean;
@@ -111,126 +111,6 @@ export default function ApprovedTransactionsModal({
   const formatPhp = (value: number) =>
     `PHP ${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const handlePrintApprovedLedger = () => {
-    const yearLabel = selectedYear === 'ALL' ? 'All Recorded Years' : `Calendar Year ${selectedYear}`;
-    const typeLabel =
-      selectedType === 'ALL'
-        ? 'All Approved Income & Expenses'
-        : selectedType === 'income'
-          ? 'Approved Income Only'
-          : 'Approved Expenses Only';
-
-    const rowsHtml = filteredTransactions.length === 0
-      ? `<tr><td colspan="7" style="text-align:center;padding:18px;color:#64748b;">No dual-approved financial transactions match the selected filters.</td></tr>`
-      : filteredTransactions
-          .map((tx, idx) => {
-            const linkedAct = tx.activityId ? activityById.get(tx.activityId)?.title : '';
-            const linkedMtg = tx.meetingId ? meetingById.get(tx.meetingId)?.title : '';
-            const detailParts = [
-              tx.purpose && tx.purpose !== tx.description ? `Purpose: ${tx.purpose}` : '',
-              tx.description || '',
-              linkedAct ? `Activity: ${linkedAct}` : '',
-              linkedMtg ? `Meeting: ${linkedMtg}` : ''
-            ].filter(Boolean);
-
-            return `
-              <tr>
-                <td style="text-align:center;">${idx + 1}</td>
-                <td style="white-space:nowrap;font-family:monospace;">${escapeHtml(tx.date || '—')}</td>
-                <td>
-                  <span style="font-weight:700;text-transform:uppercase;color:${tx.type === 'income' ? '#166534' : '#991b1b'};">
-                    ${escapeHtml(tx.type === 'income' ? 'INCOME' : 'EXPENSE')}
-                  </span>
-                </td>
-                <td style="font-weight:700;">${escapeHtml(tx.category || '—')}</td>
-                <td>${escapeHtml(detailParts.join(' • ') || '—')}</td>
-                <td>${escapeHtml(tx.fundSource || 'Unspecified')}</td>
-                <td style="text-align:right;white-space:nowrap;font-family:monospace;font-weight:700;color:${tx.type === 'income' ? '#166534' : '#991b1b'};">
-                  ${tx.type === 'income' ? '+' : '-'}${escapeHtml(formatPhp(tx.amount))}
-                </td>
-              </tr>
-            `;
-          })
-          .join('');
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Approved Financial Transactions Ledger — Alegria Farmers Association</title>
-  <style>
-    body { font-family: Georgia, 'Times New Roman', serif; color: #0f172a; margin: 24px; }
-    .header { text-align: center; border-bottom: 2px solid #1B4332; padding-bottom: 12px; margin-bottom: 16px; }
-    .header h1 { margin: 0; font-size: 18px; text-transform: uppercase; color: #1B4332; }
-    .header p { margin: 3px 0; font-size: 12px; color: #334155; }
-    .badge { display: inline-block; margin-top: 6px; padding: 3px 10px; font-size: 11px; font-weight: bold; background: #EAF4EC; color: #1B4332; border: 1px solid #1B4332; border-radius: 999px; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; font-family: Arial, sans-serif; }
-    .kpi-box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #f8fafc; }
-    .kpi-label { font-size: 10px; text-transform: uppercase; color: #475569; font-weight: bold; }
-    .kpi-value { font-size: 14px; font-weight: bold; margin-top: 4px; font-family: monospace; }
-    table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; }
-    th, td { border: 1px solid #cbd5e1; padding: 7px 8px; text-align: left; vertical-align: top; }
-    th { background: #1B4332; color: #ffffff; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
-    tr:nth-child(even) { background: #f8fafc; }
-    .footer { margin-top: 18px; font-size: 11px; color: #475569; display: flex; justify-content: space-between; font-family: Arial, sans-serif; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>Alegria Farmers Association (AFA)</h1>
-    <p>Barangay Alegria, Tuburan, Cebu • DOLE Registration No. 2315</p>
-    <div class="badge">AUDITOR-VERIFIED &amp; PRESIDENT-APPROVED FINANCIAL TRANSPARENCY LEDGER</div>
-    <p style="margin-top:6px;">Filter Scope: <strong>${escapeHtml(yearLabel)}</strong> • <strong>${escapeHtml(typeLabel)}</strong></p>
-  </div>
-  <div class="kpi-grid">
-    <div class="kpi-box">
-      <div class="kpi-label">Approved Income</div>
-      <div class="kpi-value" style="color:#166534;">${escapeHtml(formatPhp(summary.totalIncome))}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Approved Expenses</div>
-      <div class="kpi-value" style="color:#991b1b;">${escapeHtml(formatPhp(summary.totalExpense))}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Net Approved Balance</div>
-      <div class="kpi-value" style="color:${summary.netBalance >= 0 ? '#1B4332' : '#991b1b'};">${escapeHtml(formatPhp(summary.netBalance))}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Verified Entries</div>
-      <div class="kpi-value">${summary.count} Record(s)</div>
-    </div>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:32px;text-align:center;">#</th>
-        <th style="width:86px;">Date</th>
-        <th style="width:76px;">Type</th>
-        <th style="width:140px;">Category</th>
-        <th>Purpose &amp; Description</th>
-        <th style="width:130px;">Fund Source</th>
-        <th style="width:120px;text-align:right;">Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rowsHtml}
-    </tbody>
-  </table>
-  <div class="footer">
-    <span>Dual-Control Verification: Every listed transaction is Audited by the AFA Auditor and Approved by the AFA President.</span>
-    <span>Printed on ${escapeHtml(new Date().toLocaleDateString('en-PH'))}</span>
-  </div>
-</body>
-</html>`;
-
-    const printWin = window.open('', '_blank', 'width=960,height=720');
-    if (!printWin) return;
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
-    triggerPrintWindow(printWin);
-  };
-
   return (
     <div
       id="approved-transactions-modal"
@@ -265,15 +145,6 @@ export default function ApprovedTransactionsModal({
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={handlePrintApprovedLedger}
-              className="hidden sm:inline-flex items-center gap-1.5 bg-[#2D6A4F] hover:bg-[#40916C] text-white border border-[#7EC79F]/40 px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer"
-              title="Print Approved Financial Ledger"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print Ledger</span>
-            </button>
-            <button
-              type="button"
               onClick={onClose}
               aria-label="Close Approved Financial Ledger"
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
@@ -286,25 +157,15 @@ export default function ApprovedTransactionsModal({
         {/* MODAL BODY */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
           {/* TRANSPARENCY NOTICE BANNER */}
-          <div className="bg-[#EAF4EC] border border-[#7EC79F] rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start sm:items-center gap-3">
-              <div className="p-2 rounded-xl bg-[#1B4332] text-[#FFF0C2] shrink-0">
-                <Coins className="w-4.5 h-4.5" />
-              </div>
-              <div className="text-xs text-[#163327] leading-relaxed">
-                <strong className="font-extrabold text-[#1B4332]">Dual-Verification Transparency Policy:</strong>{' '}
-                Ang gipakita dinhi mao lamang ang mga transaksyon nga human na <span className="font-bold underline">na-audit sa Auditor</span> ug{' '}
-                <span className="font-bold underline">na-aprobahan sa Presidente</span>. Ang mga wala pa masusi o gi-uli alang sa koreksyon dili makita dinhi.
-              </div>
+          <div className="bg-[#EAF4EC] border border-[#7EC79F] rounded-2xl p-3.5 sm:p-4 flex items-start sm:items-center gap-3">
+            <div className="p-2 rounded-xl bg-[#1B4332] text-[#FFF0C2] shrink-0">
+              <Coins className="w-4.5 h-4.5" />
             </div>
-            <button
-              type="button"
-              onClick={handlePrintApprovedLedger}
-              className="sm:hidden inline-flex items-center justify-center gap-1.5 bg-[#1B4332] text-white px-3.5 py-2 rounded-xl text-xs font-extrabold cursor-pointer shrink-0"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print Approved Ledger</span>
-            </button>
+            <div className="text-xs text-[#163327] leading-relaxed">
+              <strong className="font-extrabold text-[#1B4332]">Dual-Verification Transparency Policy:</strong>{' '}
+              Ang gipakita dinhi mao lamang ang mga transaksyon nga human na <span className="font-bold underline">na-audit sa Auditor</span> ug{' '}
+              <span className="font-bold underline">na-aprobahan sa Presidente</span>. Ang mga wala pa masusi o gi-uli alang sa koreksyon dili makita dinhi.
+            </div>
           </div>
 
           {/* SUMMARY KPI CARDS */}
@@ -372,11 +233,10 @@ export default function ApprovedTransactionsModal({
                   key={tab.id}
                   type="button"
                   onClick={() => setSelectedType(tab.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                    selectedType === tab.id
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${selectedType === tab.id
                       ? 'bg-[#1B4332] text-white shadow-xs'
                       : 'bg-[#F3FAF5] text-[#1B4332] hover:bg-[#D6EFD9]'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -465,11 +325,10 @@ export default function ApprovedTransactionsModal({
                           </td>
                           <td className="py-3.5 px-3.5 whitespace-nowrap">
                             <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                isIncome
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${isIncome
                                   ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                                   : 'bg-rose-100 text-rose-900 border border-rose-300'
-                              }`}
+                                }`}
                             >
                               {isIncome ? (
                                 <ArrowUpRight className="w-3 h-3 text-emerald-700" />
@@ -510,9 +369,8 @@ export default function ApprovedTransactionsModal({
                             </span>
                           </td>
                           <td
-                            className={`py-3.5 px-3.5 text-right font-mono font-black whitespace-nowrap text-sm ${
-                              isIncome ? 'text-emerald-800' : 'text-rose-800'
-                            }`}
+                            className={`py-3.5 px-3.5 text-right font-mono font-black whitespace-nowrap text-sm ${isIncome ? 'text-emerald-800' : 'text-rose-800'
+                              }`}
                           >
                             {isIncome ? '+' : '-'}{formatPhp(tx.amount)}
                           </td>
