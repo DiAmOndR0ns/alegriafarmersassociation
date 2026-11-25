@@ -54,11 +54,43 @@ function scopeDataForMember(data: any, user: { id: string; name: string; memberI
     (userName && norm(p?.memberName) === userName)
   );
 
+  // Plain Member accounts only receive financial transactions that have passed both
+  // Auditor verification ('Audited') and President approval ('Approved'), with internal
+  // audit/return remarks omitted.
+  const rawTransactions = Array.isArray(data.transactions)
+    ? data.transactions
+    : Array.isArray(data.financialTransactions)
+      ? data.financialTransactions
+      : [];
+  const scopedApprovedTransactions = rawTransactions
+    .filter((tx: any) => tx && tx.auditedStatus === 'Audited' && tx.presidentApprovalStatus === 'Approved')
+    .map((tx: any) => ({
+      id: tx.id,
+      type: tx.type,
+      category: tx.category,
+      amount: tx.amount,
+      date: tx.date,
+      description: tx.description,
+      purpose: tx.purpose,
+      fundSource: tx.fundSource,
+      activityId: tx.activityId,
+      meetingId: tx.meetingId,
+      recordedBy: tx.recordedBy,
+      auditedStatus: tx.auditedStatus,
+      auditedBy: tx.auditedBy,
+      auditedDate: tx.auditedDate,
+      presidentApprovalStatus: tx.presidentApprovalStatus,
+      presidentApprovedBy: tx.presidentApprovedBy,
+      presidentApprovedDate: tx.presidentApprovedDate
+    }));
+
   return {
     ...data,
     users: scopedUsers,
     members: scopedMembers,
     membershipPayments: scopedPayments,
+    transactions: scopedApprovedTransactions,
+    financialTransactions: scopedApprovedTransactions,
     delegationRequests: [],
     systemLogs: [],
     logs: []

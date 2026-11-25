@@ -31,6 +31,7 @@ const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 const OfficerReportModal = lazy(() => import('./components/OfficerReportModal'));
 const PresidentReport = lazy(() => import('./components/PresidentReport'));
 const ProductManagementModal = lazy(() => import('./components/ProductManagementModal'));
+const ApprovedTransactionsModal = lazy(() => import('./components/ApprovedTransactionsModal'));
 import { buildReportData } from './components/PresidentReport';
 import PasswordChangePrompt from './components/PasswordChangePrompt';
 import ConfirmationModal from './components/ConfirmationModal';
@@ -247,6 +248,7 @@ export default function App() {
   const [showReportModal, setShowReportModal] = useState<boolean>(false);
   const [showPresidentReport, setShowPresidentReport] = useState<boolean>(false);
   const [showProductModal, setShowProductModal] = useState<boolean>(false);
+  const [showApprovedLedgerModal, setShowApprovedLedgerModal] = useState<boolean>(false);
   const [showClearCacheConfirmModal, setShowClearCacheConfirmModal] = useState<boolean>(false);
 
   // Core App Data States (hydrated from localStorage or initials)
@@ -4512,6 +4514,19 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+              <button
+                id="header-member-approved-ledger-btn"
+                type="button"
+                onClick={() => setShowApprovedLedgerModal(true)}
+                className="bg-[#2D6A4F] hover:bg-[#40916C] text-[#FFF0C2] border border-[#7EC79F]/40 px-2.5 sm:px-3 py-2 rounded-xl font-extrabold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors"
+                title="View Auditor-Verified & President-Approved Financial Transactions"
+              >
+                <Coins className="w-4 h-4 shrink-0 text-[#F4C76D]" aria-hidden="true" />
+                <span className="hidden md:inline">Approved Ledger</span>
+                <span className="text-[10px] font-mono bg-[#0F2D24] text-[#D6EFD9] px-1.5 py-0.5 rounded-full">
+                  {transactions.filter(tx => tx.auditedStatus === 'Audited' && tx.presidentApprovalStatus === 'Approved').length}
+                </span>
+              </button>
               <div className="hidden md:block">
                 <OfflineIndicator dbStatus={dbStatus} />
               </div>
@@ -4577,9 +4592,25 @@ export default function App() {
               users={users}
               membershipPayments={membershipPayments}
               duesAmount={duesAmount}
+              onOpenApprovedLedger={() => setShowApprovedLedgerModal(true)}
+              approvedTransactionsCount={
+                transactions.filter(tx => tx.auditedStatus === 'Audited' && tx.presidentApprovalStatus === 'Approved').length
+              }
             />
           </Suspense>
         </main>
+
+        {showApprovedLedgerModal && (
+          <Suspense fallback={null}>
+            <ApprovedTransactionsModal
+              isOpen={showApprovedLedgerModal}
+              onClose={() => setShowApprovedLedgerModal(false)}
+              transactions={transactions}
+              activities={activities}
+              meetings={meetings}
+            />
+          </Suspense>
+        )}
 
         {toast && (
           <div className="fixed bottom-20 md:bottom-6 right-4 left-4 sm:left-auto z-50 flex justify-center sm:justify-end pointer-events-none">
@@ -4658,6 +4689,19 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            <button
+              id="header-officer-approved-ledger-btn"
+              type="button"
+              onClick={() => setShowApprovedLedgerModal(true)}
+              className="bg-[#2D6A4F] hover:bg-[#40916C] text-[#FFF0C2] border border-[#7EC79F]/40 px-2.5 sm:px-3 py-2 rounded-xl font-extrabold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors"
+              title="View Auditor-Verified & President-Approved Financial Transactions"
+            >
+              <Coins className="w-4 h-4 shrink-0 text-[#F4C76D]" aria-hidden="true" />
+              <span className="hidden xl:inline">Approved Ledger</span>
+              <span className="text-[10px] font-mono bg-[#0F2D24] text-[#D6EFD9] px-1.5 py-0.5 rounded-full">
+                {transactions.filter(tx => tx.auditedStatus === 'Audited' && tx.presidentApprovalStatus === 'Approved').length}
+              </span>
+            </button>
             <div className="hidden sm:block">
               <OfflineIndicator dbStatus={dbStatus} />
             </div>
@@ -4749,6 +4793,19 @@ export default function App() {
             })}
 
             <p className="px-3 pt-4 pb-1 text-[11px] font-extrabold uppercase tracking-wider text-[#95D5B2]">System</p>
+            <button
+              id="sidebar-nav-approved-ledger"
+              type="button"
+              onClick={() => setShowApprovedLedgerModal(true)}
+              className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-left bg-transparent text-[#D6EFD9] border border-transparent hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+              title="View transactions verified by the Auditor and approved by the President"
+            >
+              <Coins className="w-4.5 h-4.5 shrink-0 text-[#F4C76D]" />
+              <span className="truncate">Approved Ledger</span>
+              <span className="ml-auto min-w-6 text-center bg-[#2D6A4F] text-[#FFF0C2] border border-[#7EC79F]/40 text-[11px] font-extrabold px-1.5 py-0.5 rounded-full font-mono">
+                {transactions.filter(tx => tx.auditedStatus === 'Audited' && tx.presidentApprovalStatus === 'Approved').length}
+              </span>
+            </button>
             <button
               id="sidebar-nav-sync"
               type="button"
@@ -5131,6 +5188,10 @@ export default function App() {
                   users={users}
                   membershipPayments={membershipPayments}
                   duesAmount={duesAmount}
+                  onOpenApprovedLedger={() => setShowApprovedLedgerModal(true)}
+                  approvedTransactionsCount={
+                    transactions.filter(tx => tx.auditedStatus === 'Audited' && tx.presidentApprovalStatus === 'Approved').length
+                  }
                 />
               </div>
             )}
@@ -5236,6 +5297,19 @@ export default function App() {
             onDeleteProduct={handleDeleteProduct}
             onClose={() => setShowProductModal(false)}
             users={users}
+          />
+        </Suspense>
+      )}
+
+      {/* APPROVED FINANCIAL TRANSACTIONS TRANSPARENCY MODAL */}
+      {showApprovedLedgerModal && (
+        <Suspense fallback={null}>
+          <ApprovedTransactionsModal
+            isOpen={showApprovedLedgerModal}
+            onClose={() => setShowApprovedLedgerModal(false)}
+            transactions={transactions}
+            activities={activities}
+            meetings={meetings}
           />
         </Suspense>
       )}

@@ -30,6 +30,8 @@ interface MemberDashboardProps {
   /** Dues receipts for the member's own record, and the amount set by the Treasurer. */
   membershipPayments?: MembershipPayment[];
   duesAmount?: number;
+  onOpenApprovedLedger?: () => void;
+  approvedTransactionsCount?: number;
 }
 
 const SITIOS = [
@@ -73,7 +75,9 @@ export default function MemberDashboard({
   activities = [],
   users = [],
   membershipPayments = [],
-  duesAmount = DEFAULT_MEMBERSHIP_DUES
+  duesAmount = DEFAULT_MEMBERSHIP_DUES,
+  onOpenApprovedLedger,
+  approvedTransactionsCount = 0
 }: MemberDashboardProps) {
   // The member's own dues standing for the current calendar year.
   const currentMembershipYear = new Date().getFullYear();
@@ -360,6 +364,22 @@ export default function MemberDashboard({
               </span>
             )}
           </button>
+
+          {onOpenApprovedLedger && (
+            <button
+              id="member-open-approved-ledger-btn"
+              type="button"
+              onClick={onOpenApprovedLedger}
+              className="flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap shrink-0 bg-[#EAF4EC] text-[#1B4332] border border-[#7EC79F] hover:bg-[#1B4332] hover:text-white ml-auto"
+              title="Tan-awa ang mga transaksyon nga gi-audit sa Auditor ug gi-aprobahan sa Presidente"
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              <span>Approved Financial Ledger</span>
+              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full font-mono bg-[#1B4332] text-[#FFF0C2]">
+                {approvedTransactionsCount}
+              </span>
+            </button>
+          )}
         </div>
       </nav>
 

@@ -1782,11 +1782,33 @@ function scopeDataForMember(data, user) {
   const scopedPayments = (Array.isArray(data.membershipPayments) ? data.membershipPayments : []).filter(
     (p) => ownMemberIds.has(String(p?.memberId || "")) || userMemberIdNo && norm(p?.memberIdNumber) === userMemberIdNo || userName && norm(p?.memberName) === userName
   );
+  const rawTransactions = Array.isArray(data.transactions) ? data.transactions : Array.isArray(data.financialTransactions) ? data.financialTransactions : [];
+  const scopedApprovedTransactions = rawTransactions.filter((tx) => tx && tx.auditedStatus === "Audited" && tx.presidentApprovalStatus === "Approved").map((tx) => ({
+    id: tx.id,
+    type: tx.type,
+    category: tx.category,
+    amount: tx.amount,
+    date: tx.date,
+    description: tx.description,
+    purpose: tx.purpose,
+    fundSource: tx.fundSource,
+    activityId: tx.activityId,
+    meetingId: tx.meetingId,
+    recordedBy: tx.recordedBy,
+    auditedStatus: tx.auditedStatus,
+    auditedBy: tx.auditedBy,
+    auditedDate: tx.auditedDate,
+    presidentApprovalStatus: tx.presidentApprovalStatus,
+    presidentApprovedBy: tx.presidentApprovedBy,
+    presidentApprovedDate: tx.presidentApprovedDate
+  }));
   return {
     ...data,
     users: scopedUsers,
     members: scopedMembers,
     membershipPayments: scopedPayments,
+    transactions: scopedApprovedTransactions,
+    financialTransactions: scopedApprovedTransactions,
     delegationRequests: [],
     systemLogs: [],
     logs: []
