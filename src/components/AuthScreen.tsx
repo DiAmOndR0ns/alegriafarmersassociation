@@ -988,20 +988,6 @@ export default function AuthScreen({
                     <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
                   </button>
 
-                  <button
-                    type="button"
-                    id="member-self-register-btn"
-                    onClick={() => {
-                      setShowSelfRegister(true);
-                      setShowResetForm(false);
-                      setShowAdminSetup(false);
-                    }}
-                    className="btn-bevel-secondary w-full py-3 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <UserPlus className="w-4 h-4 text-[#1B4332] shrink-0" aria-hidden="true" />
-                    <span>{t('Magparehistro isip Bag-ong Miyembro (Member Self-Registration)', 'New Member Self-Registration (Fill Up Form)')}</span>
-                  </button>
-
                   {!hasPresidentAccount && (
                     <button
                       type="button"
@@ -1028,6 +1014,22 @@ export default function AuthScreen({
                       <span>{t('Balik sa Publiko nga Portal', 'Back to Public Portal')}</span>
                     </button>
                   )}
+
+                  <p className="text-center text-sm text-[#455C50] font-medium pt-1">
+                    {t('Gusto mahimong miyembro?', 'Want to be a member?')}{' '}
+                    <button
+                      type="button"
+                      id="member-self-register-btn"
+                      onClick={() => {
+                        setShowSelfRegister(true);
+                        setShowResetForm(false);
+                        setShowAdminSetup(false);
+                      }}
+                      className="font-extrabold text-[#1B4332] hover:text-[#2D6A4F] underline underline-offset-4 cursor-pointer"
+                    >
+                      {t('Magparehistro dinhi', 'Sign up here')}
+                    </button>
+                  </p>
                 </form>
 
                 {!hasPresidentAccount && showAdminSetup && (
