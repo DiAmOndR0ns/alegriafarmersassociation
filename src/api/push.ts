@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { ensureDatabaseSchema, getPool, isDatabaseConfigured, saveFullStateToPostgres } from './db';
-import { isPresidentRole, isSecretaryRole, isTreasurerRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
+import { isMemberRole, isPresidentRole, isSecretaryRole, isTreasurerRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
 import { parseRequestBody, sendResponse } from './helper';
 import { sanitizeUserRows } from './sanitize';
 import { DelegationRequest, DelegationScope } from '../types';
@@ -390,8 +390,21 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       }
       return sendResponse(res, 200, { success: true, offlineMode: false, message: 'Officer role designation saved.' });
     }
-    if (state.deleteItem && ['user', 'users', 'officer', 'officers'].includes(String(state.deleteItem.entity).toLowerCase())) {
+    if (state.deleteItem && ['officer', 'officers'].includes(String(state.deleteItem.entity).toLowerCase())) {
       return sendResponse(res, 403, { success: false, message: 'User accounts cannot be deleted through bulk synchronization.' });
+    }
+    if (state.deleteItem && ['user', 'users'].includes(String(state.deleteItem.entity).toLowerCase())) {
+      if (!isPresidentRole(user.role) && !isSecretaryRole(user.role)) {
+        return sendResponse(res, 403, { success: false, message: 'User accounts cannot be deleted through bulk synchronization.' });
+      }
+      const targetUserId = typeof state.deleteItem.id === 'string' ? state.deleteItem.id.trim() : '';
+      if (!targetUserId || targetUserId === user.id) {
+        return sendResponse(res, 403, { success: false, message: 'User accounts cannot be deleted through bulk synchronization.' });
+      }
+      const targetRes = await getPool().query('SELECT id, role FROM users WHERE id = $1', [targetUserId]);
+      if (targetRes.rows.some((r: any) => !isMemberRole(r.role))) {
+        return sendResponse(res, 403, { success: false, message: 'User accounts cannot be deleted through bulk synchronization.' });
+      }
     }
     // Accounts, roles, hashes, MFA, lockout, and policy state are managed only by dedicated auth endpoints.
     let safeState: PushSyncState = { ...state };
@@ -638,8 +651,29 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === 'object') {
-      const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds as Record<string, unknown>;
-      safeState.deletedIds = safeDeletedIds;
+      const rawDeletedUsers = (safeState.deletedIds as Record<string, unknown>).users;
+      const candidateUserIds = Array.isArray(rawDeletedUsers)
+        ? rawDeletedUsers.filter((id): id is string => typeof id === 'string' && Boolean(id.trim()) && id !== user.id)
+        : [];
+      if (candidateUserIds.length > 0 && (isPresidentRole(user.role) || isSecretaryRole(user.role))) {
+        const memberRows = await getPool().query(
+          "SELECT id FROM users WHERE id = ANY($1) AND lower(replace(role, ' ', '_')) = 'member'",
+          [candidateUserIds]
+        );
+        const safeMemberUserIds = memberRows.rows.map((r: { id: string }) => r.id);
+        if (safeMemberUserIds.length > 0) {
+          safeState.deletedIds = {
+            ...(safeState.deletedIds as Record<string, unknown>),
+            users: safeMemberUserIds
+          };
+        } else {
+          const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds as Record<string, unknown>;
+          safeState.deletedIds = safeDeletedIds;
+        }
+      } else {
+        const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds as Record<string, unknown>;
+        safeState.deletedIds = safeDeletedIds;
+      }
     }
     // Annual dues are money in the hands of the association: only the Treasurer
     // (or Assistant Treasurer) may record, verify-as-paid, void, or close a year.

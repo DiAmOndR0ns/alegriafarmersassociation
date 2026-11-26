@@ -1,12 +1,34 @@
 import { getPool, isDatabaseConfigured, deleteEntityFromPostgres, lookupEntityTable } from './db';
-import { isPresidentRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
+import { isMemberRole, isPresidentRole, isSecretaryRole, isTreasurerRole, rejectCrossOriginMutation, requireAuthenticated } from './auth';
 import { parseRequestBody, sendResponse } from './helper';
 
-async function assertSafeUserDeletion(pool: any, actorId: string, ids: string[]) {
+const KNOWN_DELETE_ERROR_MESSAGES = new Set([
+  'The active account cannot be deleted.',
+  'President accounts cannot be deleted through this endpoint.',
+  'Only the President may delete officer accounts.',
+  'President access is required for deletion.'
+]);
+
+function assertEntityDeletePermission(actorRole: string, table: string | undefined) {
+  if (!table) return;
+  if (isPresidentRole(actorRole)) return;
+  if (isSecretaryRole(actorRole) && ['members', 'pending_members', 'users', 'meetings', 'resolutions'].includes(table)) {
+    return;
+  }
+  if (isTreasurerRole(actorRole) && ['members', 'pending_members'].includes(table)) {
+    return;
+  }
+  throw new Error('President access is required for deletion.');
+}
+
+async function assertSafeUserDeletion(pool: any, actorId: string, actorRole: string, ids: string[]) {
   if (ids.includes(actorId)) throw new Error('The active account cannot be deleted.');
   const result = await pool.query('SELECT id, role FROM users WHERE id = ANY($1)', [ids]);
   if (result.rows.some((row: any) => isPresidentRole(row.role))) {
     throw new Error('President accounts cannot be deleted through this endpoint.');
+  }
+  if (!isPresidentRole(actorRole) && result.rows.some((row: any) => !isMemberRole(row.role))) {
+    throw new Error('Only the President may delete officer accounts.');
   }
 }
 
@@ -15,8 +37,9 @@ export default async function handler(req: any, res: any) {
   if (rejectCrossOriginMutation(req)) return sendResponse(res, 403, { success: false, message: 'Cross-origin requests are not allowed.' });
   const user = await requireAuthenticated(req, res);
   if (!user) return;
-  // Business-record deletion is also fail-closed until per-role authorization is implemented.
-  if (!isPresidentRole(user.role)) return sendResponse(res, 403, { success: false, message: 'President access is required for deletion.' });
+  if (!isPresidentRole(user.role) && !isSecretaryRole(user.role) && !isTreasurerRole(user.role)) {
+    return sendResponse(res, 403, { success: false, message: 'President access is required for deletion.' });
+  }
   if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: 'Database is not configured.' });
   const pool = getPool();
   try {
@@ -26,7 +49,9 @@ export default async function handler(req: any, res: any) {
       for (const [entity, value] of Object.entries(body.deletedIds)) {
         const ids = Array.isArray(value) ? value.filter((id) => typeof id === 'string' && id) as string[] : [];
         if (!ids.length) continue;
-        if (lookupEntityTable(entity) === 'users') await assertSafeUserDeletion(pool, user.id, ids);
+        const table = lookupEntityTable(entity);
+        assertEntityDeletePermission(user.role, table);
+        if (table === 'users') await assertSafeUserDeletion(pool, user.id, user.role, ids);
         totalDeleted += (await deleteEntityFromPostgres(pool, entity, ids)).deletedCount;
       }
       return sendResponse(res, 200, { success: true, deletedCount: totalDeleted });
@@ -38,12 +63,14 @@ export default async function handler(req: any, res: any) {
     if (typeof entity !== 'string' || !ids.length) {
       return sendResponse(res, 400, { success: false, message: "Missing 'entity' or 'id'/'ids' parameter." });
     }
-    if (lookupEntityTable(entity) === 'users') await assertSafeUserDeletion(pool, user.id, ids);
+    const table = lookupEntityTable(entity);
+    assertEntityDeletePermission(user.role, table);
+    if (table === 'users') await assertSafeUserDeletion(pool, user.id, user.role, ids);
     const result = await deleteEntityFromPostgres(pool, entity, ids);
     return sendResponse(res, 200, { success: true, deletedCount: result.deletedCount, table: result.table });
   } catch (error: any) {
     console.error('[Cloud DB Delete Error]:', error?.message || error);
-    const status = ['The active account cannot be deleted.', 'President accounts cannot be deleted through this endpoint.'].includes(error?.message) ? 403 : 500;
+    const status = KNOWN_DELETE_ERROR_MESSAGES.has(error?.message) ? 403 : 500;
     return sendResponse(res, status, { success: false, message: status === 403 ? error.message : 'Unable to delete records.' });
   }
 }

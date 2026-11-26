@@ -903,7 +903,24 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
             RAISE NOTICE 'Preserving non-empty legacy sync_queue table';
           END IF;
         END IF;
-      END $$; `
+      END $$; `,
+
+    // Clean up orphaned plain Member accounts in `users` whose corresponding member
+    // or pending_member record was already deleted earlier.
+    `DELETE FROM users u
+     WHERE lower(replace(u.role, ' ', '_')) = 'member'
+       AND NOT EXISTS (
+         SELECT 1 FROM members m
+         WHERE m.id = u.id
+            OR (u.member_id_number IS NOT NULL AND u.member_id_number <> '' AND m.member_id_number = u.member_id_number)
+            OR lower(trim(m.name)) = lower(trim(u.name))
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM pending_members pm
+         WHERE pm.id = u.id
+            OR (pm.username IS NOT NULL AND pm.username <> '' AND lower(trim(pm.username)) = lower(trim(u.username)))
+            OR lower(trim(pm.name)) = lower(trim(u.name))
+       );`
   ];
 
   const failures: Array<{ statement: string; error: string }> = [];
@@ -1481,7 +1498,42 @@ export async function deleteEntityFromPostgres(
 
   const client = await pool.connect();
   try {
+    let deletedMemberIdNumbers: string[] = [];
+    let deletedMemberNames: string[] = [];
+    if (tableName === 'members' || tableName === 'pending_members') {
+      try {
+        const lookupCol = tableName === 'members' ? 'id, name, member_id_number' : 'id, name';
+        const existing = await client.query(`SELECT ${lookupCol} FROM ${tableName} WHERE id = ANY($1)`, [idList]);
+        deletedMemberIdNumbers = existing.rows
+          .map((r: any) => typeof r.member_id_number === 'string' ? r.member_id_number.trim() : '')
+          .filter(Boolean);
+        deletedMemberNames = existing.rows
+          .map((r: any) => typeof r.name === 'string' ? r.name.trim().toLowerCase() : '')
+          .filter(Boolean);
+      } catch {
+        // Ignore lookup error and proceed with primary deletion
+      }
+    }
+
     const res = await client.query(`DELETE FROM ${tableName} WHERE id = ANY($1)`, [idList]);
+
+    if (tableName === 'members' || tableName === 'pending_members') {
+      // Cascade-delete linked plain Member portal accounts in `users` (never officers)
+      await client.query(
+        `DELETE FROM users
+         WHERE lower(replace(role, ' ', '_')) = 'member'
+           AND (
+             id = ANY($1)
+             OR (member_id_number IS NOT NULL AND member_id_number <> '' AND member_id_number = ANY($2))
+             OR (lower(trim(name)) = ANY($3))
+           )`,
+        [idList, deletedMemberIdNumbers, deletedMemberNames]
+      );
+      if (tableName === 'members') {
+        await client.query('DELETE FROM membership_payments WHERE member_id = ANY($1)', [idList]);
+      }
+    }
+
     console.log(`[DB DELETE] Removed ${res.rowCount || 0} record(s) from "${tableName}"(IDs: ${idList.join(', ')})`);
     return { success: true, deletedCount: res.rowCount || 0, entity, table: tableName };
   } finally {
@@ -2299,13 +2351,48 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         console.log('[DB DELETE] Batch deleted users:', d.users);
       }
       if (Array.isArray(d.members) && d.members.length > 0) {
-        d.members.forEach((id: string) => deletedMemberIds.add(id));
+        d.members.forEach((id: string) => {
+          deletedMemberIds.add(id);
+          deletedUserIds.add(id);
+        });
+        await client.query(
+          `DELETE FROM users
+           WHERE lower(replace(role, ' ', '_')) = 'member'
+             AND (
+               id = ANY($1)
+               OR EXISTS (
+                 SELECT 1 FROM members m
+                 WHERE m.id = ANY($1)
+                   AND (
+                     (m.member_id_number IS NOT NULL AND m.member_id_number <> '' AND users.member_id_number = m.member_id_number)
+                     OR lower(trim(users.name)) = lower(trim(m.name))
+                   )
+               )
+             )`,
+          [d.members]
+        );
         await client.query('DELETE FROM members WHERE id = ANY($1)', [d.members]);
         console.log('[DB DELETE] Batch deleted members:', d.members);
       }
       const pms = d.pendingMembers || d.pending_members;
       if (Array.isArray(pms) && pms.length > 0) {
-        pms.forEach((id: string) => deletedPendingMemberIds.add(id));
+        pms.forEach((id: string) => {
+          deletedPendingMemberIds.add(id);
+          deletedUserIds.add(id);
+        });
+        await client.query(
+          `DELETE FROM users
+           WHERE lower(replace(role, ' ', '_')) = 'member'
+             AND (
+               id = ANY($1)
+               OR EXISTS (
+                 SELECT 1 FROM pending_members pm
+                 WHERE pm.id = ANY($1)
+                   AND lower(trim(users.name)) = lower(trim(pm.name))
+               )
+             )`,
+          [pms]
+        );
         await client.query('DELETE FROM pending_members WHERE id = ANY($1)', [pms]);
         console.log('[DB DELETE] Batch deleted pending_members:', pms);
       }
@@ -2376,10 +2463,45 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     if (state.deleteItem && state.deleteItem.entity && state.deleteItem.id) {
       const tbl = lookupEntityTable(state.deleteItem.entity);
       if (tbl) {
+        if (tbl === 'members') {
+          deletedMemberIds.add(state.deleteItem.id);
+          deletedUserIds.add(state.deleteItem.id);
+          await client.query(
+            `DELETE FROM users
+             WHERE lower(replace(role, ' ', '_')) = 'member'
+               AND (
+                 id = $1
+                 OR EXISTS (
+                   SELECT 1 FROM members m
+                   WHERE m.id = $1
+                     AND (
+                       (m.member_id_number IS NOT NULL AND m.member_id_number <> '' AND users.member_id_number = m.member_id_number)
+                       OR lower(trim(users.name)) = lower(trim(m.name))
+                     )
+                 )
+               )`,
+            [state.deleteItem.id]
+          );
+        }
+        if (tbl === 'pending_members') {
+          deletedPendingMemberIds.add(state.deleteItem.id);
+          deletedUserIds.add(state.deleteItem.id);
+          await client.query(
+            `DELETE FROM users
+             WHERE lower(replace(role, ' ', '_')) = 'member'
+               AND (
+                 id = $1
+                 OR EXISTS (
+                   SELECT 1 FROM pending_members pm
+                   WHERE pm.id = $1
+                     AND lower(trim(users.name)) = lower(trim(pm.name))
+                 )
+               )`,
+            [state.deleteItem.id]
+          );
+        }
         await client.query(`DELETE FROM ${tbl} WHERE id = $1`, [state.deleteItem.id]);
         if (tbl === 'users') deletedUserIds.add(state.deleteItem.id);
-        if (tbl === 'members') deletedMemberIds.add(state.deleteItem.id);
-        if (tbl === 'pending_members') deletedPendingMemberIds.add(state.deleteItem.id);
         if (tbl === 'meetings') deletedMeetingIds.add(state.deleteItem.id);
         if (tbl === 'resolutions') deletedResolutionIds.add(state.deleteItem.id);
         if (tbl === 'financial_transactions') deletedTxIds.add(state.deleteItem.id);

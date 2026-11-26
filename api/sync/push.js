@@ -960,7 +960,23 @@ async function runSchemaMigrations(client) {
             RAISE NOTICE 'Preserving non-empty legacy sync_queue table';
           END IF;
         END IF;
-      END $$; `
+      END $$; `,
+    // Clean up orphaned plain Member accounts in `users` whose corresponding member
+    // or pending_member record was already deleted earlier.
+    `DELETE FROM users u
+     WHERE lower(replace(u.role, ' ', '_')) = 'member'
+       AND NOT EXISTS (
+         SELECT 1 FROM members m
+         WHERE m.id = u.id
+            OR (u.member_id_number IS NOT NULL AND u.member_id_number <> '' AND m.member_id_number = u.member_id_number)
+            OR lower(trim(m.name)) = lower(trim(u.name))
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM pending_members pm
+         WHERE pm.id = u.id
+            OR (pm.username IS NOT NULL AND pm.username <> '' AND lower(trim(pm.username)) = lower(trim(u.username)))
+            OR lower(trim(pm.name)) = lower(trim(u.name))
+       );`
   ];
   const failures = [];
   for (const stmt of statements) {
@@ -1674,13 +1690,48 @@ async function saveFullStateToPostgres(pool, state) {
         console.log("[DB DELETE] Batch deleted users:", d.users);
       }
       if (Array.isArray(d.members) && d.members.length > 0) {
-        d.members.forEach((id) => deletedMemberIds.add(id));
+        d.members.forEach((id) => {
+          deletedMemberIds.add(id);
+          deletedUserIds.add(id);
+        });
+        await client.query(
+          `DELETE FROM users
+           WHERE lower(replace(role, ' ', '_')) = 'member'
+             AND (
+               id = ANY($1)
+               OR EXISTS (
+                 SELECT 1 FROM members m
+                 WHERE m.id = ANY($1)
+                   AND (
+                     (m.member_id_number IS NOT NULL AND m.member_id_number <> '' AND users.member_id_number = m.member_id_number)
+                     OR lower(trim(users.name)) = lower(trim(m.name))
+                   )
+               )
+             )`,
+          [d.members]
+        );
         await client.query("DELETE FROM members WHERE id = ANY($1)", [d.members]);
         console.log("[DB DELETE] Batch deleted members:", d.members);
       }
       const pms = d.pendingMembers || d.pending_members;
       if (Array.isArray(pms) && pms.length > 0) {
-        pms.forEach((id) => deletedPendingMemberIds.add(id));
+        pms.forEach((id) => {
+          deletedPendingMemberIds.add(id);
+          deletedUserIds.add(id);
+        });
+        await client.query(
+          `DELETE FROM users
+           WHERE lower(replace(role, ' ', '_')) = 'member'
+             AND (
+               id = ANY($1)
+               OR EXISTS (
+                 SELECT 1 FROM pending_members pm
+                 WHERE pm.id = ANY($1)
+                   AND lower(trim(users.name)) = lower(trim(pm.name))
+               )
+             )`,
+          [pms]
+        );
         await client.query("DELETE FROM pending_members WHERE id = ANY($1)", [pms]);
         console.log("[DB DELETE] Batch deleted pending_members:", pms);
       }
@@ -1747,10 +1798,45 @@ async function saveFullStateToPostgres(pool, state) {
     if (state.deleteItem && state.deleteItem.entity && state.deleteItem.id) {
       const tbl = lookupEntityTable(state.deleteItem.entity);
       if (tbl) {
+        if (tbl === "members") {
+          deletedMemberIds.add(state.deleteItem.id);
+          deletedUserIds.add(state.deleteItem.id);
+          await client.query(
+            `DELETE FROM users
+             WHERE lower(replace(role, ' ', '_')) = 'member'
+               AND (
+                 id = $1
+                 OR EXISTS (
+                   SELECT 1 FROM members m
+                   WHERE m.id = $1
+                     AND (
+                       (m.member_id_number IS NOT NULL AND m.member_id_number <> '' AND users.member_id_number = m.member_id_number)
+                       OR lower(trim(users.name)) = lower(trim(m.name))
+                     )
+                 )
+               )`,
+            [state.deleteItem.id]
+          );
+        }
+        if (tbl === "pending_members") {
+          deletedPendingMemberIds.add(state.deleteItem.id);
+          deletedUserIds.add(state.deleteItem.id);
+          await client.query(
+            `DELETE FROM users
+             WHERE lower(replace(role, ' ', '_')) = 'member'
+               AND (
+                 id = $1
+                 OR EXISTS (
+                   SELECT 1 FROM pending_members pm
+                   WHERE pm.id = $1
+                     AND lower(trim(users.name)) = lower(trim(pm.name))
+                 )
+               )`,
+            [state.deleteItem.id]
+          );
+        }
         await client.query(`DELETE FROM ${tbl} WHERE id = $1`, [state.deleteItem.id]);
         if (tbl === "users") deletedUserIds.add(state.deleteItem.id);
-        if (tbl === "members") deletedMemberIds.add(state.deleteItem.id);
-        if (tbl === "pending_members") deletedPendingMemberIds.add(state.deleteItem.id);
         if (tbl === "meetings") deletedMeetingIds.add(state.deleteItem.id);
         if (tbl === "resolutions") deletedResolutionIds.add(state.deleteItem.id);
         if (tbl === "financial_transactions") deletedTxIds.add(state.deleteItem.id);
@@ -2935,6 +3021,9 @@ function isTreasurerRole(role) {
   const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
   return normalized === "treasurer" || normalized === "assistant_treasurer";
 }
+function isMemberRole(role) {
+  return String(role ?? "").trim().toLowerCase().replace(/\s+/g, "_") === "member";
+}
 function errorResponse(res, status, message) {
   return sendResponse(res, status, { success: false, message });
 }
@@ -3211,8 +3300,21 @@ async function handler(req, res) {
       }
       return sendResponse(res, 200, { success: true, offlineMode: false, message: "Officer role designation saved." });
     }
-    if (state.deleteItem && ["user", "users", "officer", "officers"].includes(String(state.deleteItem.entity).toLowerCase())) {
+    if (state.deleteItem && ["officer", "officers"].includes(String(state.deleteItem.entity).toLowerCase())) {
       return sendResponse(res, 403, { success: false, message: "User accounts cannot be deleted through bulk synchronization." });
+    }
+    if (state.deleteItem && ["user", "users"].includes(String(state.deleteItem.entity).toLowerCase())) {
+      if (!isPresidentRole(user.role) && !isSecretaryRole(user.role)) {
+        return sendResponse(res, 403, { success: false, message: "User accounts cannot be deleted through bulk synchronization." });
+      }
+      const targetUserId = typeof state.deleteItem.id === "string" ? state.deleteItem.id.trim() : "";
+      if (!targetUserId || targetUserId === user.id) {
+        return sendResponse(res, 403, { success: false, message: "User accounts cannot be deleted through bulk synchronization." });
+      }
+      const targetRes = await getPool().query("SELECT id, role FROM users WHERE id = $1", [targetUserId]);
+      if (targetRes.rows.some((r) => !isMemberRole(r.role))) {
+        return sendResponse(res, 403, { success: false, message: "User accounts cannot be deleted through bulk synchronization." });
+      }
     }
     let safeState = { ...state };
     if (!isPresidentRole(user.role)) {
@@ -3396,8 +3498,27 @@ async function handler(req, res) {
       }
     }
     if (safeState.deletedIds && typeof safeState.deletedIds === "object") {
-      const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds;
-      safeState.deletedIds = safeDeletedIds;
+      const rawDeletedUsers = safeState.deletedIds.users;
+      const candidateUserIds = Array.isArray(rawDeletedUsers) ? rawDeletedUsers.filter((id) => typeof id === "string" && Boolean(id.trim()) && id !== user.id) : [];
+      if (candidateUserIds.length > 0 && (isPresidentRole(user.role) || isSecretaryRole(user.role))) {
+        const memberRows = await getPool().query(
+          "SELECT id FROM users WHERE id = ANY($1) AND lower(replace(role, ' ', '_')) = 'member'",
+          [candidateUserIds]
+        );
+        const safeMemberUserIds = memberRows.rows.map((r) => r.id);
+        if (safeMemberUserIds.length > 0) {
+          safeState.deletedIds = {
+            ...safeState.deletedIds,
+            users: safeMemberUserIds
+          };
+        } else {
+          const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds;
+          safeState.deletedIds = safeDeletedIds;
+        }
+      } else {
+        const { users: _deletedUsers, ...safeDeletedIds } = safeState.deletedIds;
+        safeState.deletedIds = safeDeletedIds;
+      }
     }
     if (!isTreasurerRole(user.role)) {
       const duesFields = ["membershipPayments", "membershipYearSnapshots"].filter((key) => key in state);

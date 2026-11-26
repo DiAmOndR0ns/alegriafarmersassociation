@@ -808,7 +808,23 @@ async function runSchemaMigrations(client) {
             RAISE NOTICE 'Preserving non-empty legacy sync_queue table';
           END IF;
         END IF;
-      END $$; `
+      END $$; `,
+    // Clean up orphaned plain Member accounts in `users` whose corresponding member
+    // or pending_member record was already deleted earlier.
+    `DELETE FROM users u
+     WHERE lower(replace(u.role, ' ', '_')) = 'member'
+       AND NOT EXISTS (
+         SELECT 1 FROM members m
+         WHERE m.id = u.id
+            OR (u.member_id_number IS NOT NULL AND u.member_id_number <> '' AND m.member_id_number = u.member_id_number)
+            OR lower(trim(m.name)) = lower(trim(u.name))
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM pending_members pm
+         WHERE pm.id = u.id
+            OR (pm.username IS NOT NULL AND pm.username <> '' AND lower(trim(pm.username)) = lower(trim(u.username)))
+            OR lower(trim(pm.name)) = lower(trim(u.name))
+       );`
   ];
   const failures = [];
   for (const stmt of statements) {

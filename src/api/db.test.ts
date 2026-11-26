@@ -640,6 +640,35 @@ describe('IGP expense persistence', () => {
     expect(livestockDelete?.sql).not.toContain('\\x00');
     expect(JSON.stringify(livestockDelete?.values || [])).not.toContain('\\u0000');
   });
+
+  it('cascade-deletes linked plain Member user accounts when members or pending_members are deleted', async () => {
+    const queries: Array<{ sql: string; values?: unknown[] }> = [];
+    const pool = {
+      connect: async () => ({
+        query: async (sql: string, values?: unknown[]) => {
+          queries.push({ sql, values });
+          return { rows: [], rowCount: 1 };
+        },
+        release: () => undefined
+      })
+    };
+
+    await saveFullStateToPostgres(pool as any, {
+      deletedIds: {
+        members: ['mem-1'],
+        pendingMembers: ['pm-1']
+      }
+    });
+
+    const memberUserCascade = queries.find(
+      q => q.sql.includes('DELETE FROM users') && q.sql.includes('FROM members m')
+    );
+    const pendingUserCascade = queries.find(
+      q => q.sql.includes('DELETE FROM users') && q.sql.includes('FROM pending_members pm')
+    );
+    expect(memberUserCascade?.values).toEqual([['mem-1']]);
+    expect(pendingUserCascade?.values).toEqual([['pm-1']]);
+  });
 });
 
 async function callStatusHandler() {

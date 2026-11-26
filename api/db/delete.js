@@ -808,7 +808,23 @@ async function runSchemaMigrations(client) {
             RAISE NOTICE 'Preserving non-empty legacy sync_queue table';
           END IF;
         END IF;
-      END $$; `
+      END $$; `,
+    // Clean up orphaned plain Member accounts in `users` whose corresponding member
+    // or pending_member record was already deleted earlier.
+    `DELETE FROM users u
+     WHERE lower(replace(u.role, ' ', '_')) = 'member'
+       AND NOT EXISTS (
+         SELECT 1 FROM members m
+         WHERE m.id = u.id
+            OR (u.member_id_number IS NOT NULL AND u.member_id_number <> '' AND m.member_id_number = u.member_id_number)
+            OR lower(trim(m.name)) = lower(trim(u.name))
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM pending_members pm
+         WHERE pm.id = u.id
+            OR (pm.username IS NOT NULL AND pm.username <> '' AND lower(trim(pm.username)) = lower(trim(u.username)))
+            OR lower(trim(pm.name)) = lower(trim(u.name))
+       );`
   ];
   const failures = [];
   for (const stmt of statements) {
@@ -1295,7 +1311,33 @@ async function deleteEntityFromPostgres(pool, entity, ids) {
   }
   const client = await pool.connect();
   try {
+    let deletedMemberIdNumbers = [];
+    let deletedMemberNames = [];
+    if (tableName === "members" || tableName === "pending_members") {
+      try {
+        const lookupCol = tableName === "members" ? "id, name, member_id_number" : "id, name";
+        const existing = await client.query(`SELECT ${lookupCol} FROM ${tableName} WHERE id = ANY($1)`, [idList]);
+        deletedMemberIdNumbers = existing.rows.map((r) => typeof r.member_id_number === "string" ? r.member_id_number.trim() : "").filter(Boolean);
+        deletedMemberNames = existing.rows.map((r) => typeof r.name === "string" ? r.name.trim().toLowerCase() : "").filter(Boolean);
+      } catch {
+      }
+    }
     const res = await client.query(`DELETE FROM ${tableName} WHERE id = ANY($1)`, [idList]);
+    if (tableName === "members" || tableName === "pending_members") {
+      await client.query(
+        `DELETE FROM users
+         WHERE lower(replace(role, ' ', '_')) = 'member'
+           AND (
+             id = ANY($1)
+             OR (member_id_number IS NOT NULL AND member_id_number <> '' AND member_id_number = ANY($2))
+             OR (lower(trim(name)) = ANY($3))
+           )`,
+        [idList, deletedMemberIdNumbers, deletedMemberNames]
+      );
+      if (tableName === "members") {
+        await client.query("DELETE FROM membership_payments WHERE member_id = ANY($1)", [idList]);
+      }
+    }
     console.log(`[DB DELETE] Removed ${res.rowCount || 0} record(s) from "${tableName}"(IDs: ${idList.join(", ")})`);
     return { success: true, deletedCount: res.rowCount || 0, entity, table: tableName };
   } finally {
@@ -1523,6 +1565,17 @@ function safeUser(row) {
 function isPresidentRole(role) {
   return role.trim().toLowerCase().replace(/\s+/g, "_") === "president";
 }
+function isSecretaryRole(role) {
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
+  return normalized === "secretary" || normalized === "assistant_secretary";
+}
+function isTreasurerRole(role) {
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
+  return normalized === "treasurer" || normalized === "assistant_treasurer";
+}
+function isMemberRole(role) {
+  return String(role ?? "").trim().toLowerCase().replace(/\s+/g, "_") === "member";
+}
 function errorResponse(res, status, message) {
   return sendResponse(res, status, { success: false, message });
 }
@@ -1539,11 +1592,31 @@ async function requireAuthenticated(req, res) {
 }
 
 // src/api/delete.ts
-async function assertSafeUserDeletion(pool, actorId, ids) {
+var KNOWN_DELETE_ERROR_MESSAGES = /* @__PURE__ */ new Set([
+  "The active account cannot be deleted.",
+  "President accounts cannot be deleted through this endpoint.",
+  "Only the President may delete officer accounts.",
+  "President access is required for deletion."
+]);
+function assertEntityDeletePermission(actorRole, table) {
+  if (!table) return;
+  if (isPresidentRole(actorRole)) return;
+  if (isSecretaryRole(actorRole) && ["members", "pending_members", "users", "meetings", "resolutions"].includes(table)) {
+    return;
+  }
+  if (isTreasurerRole(actorRole) && ["members", "pending_members"].includes(table)) {
+    return;
+  }
+  throw new Error("President access is required for deletion.");
+}
+async function assertSafeUserDeletion(pool, actorId, actorRole, ids) {
   if (ids.includes(actorId)) throw new Error("The active account cannot be deleted.");
   const result = await pool.query("SELECT id, role FROM users WHERE id = ANY($1)", [ids]);
   if (result.rows.some((row) => isPresidentRole(row.role))) {
     throw new Error("President accounts cannot be deleted through this endpoint.");
+  }
+  if (!isPresidentRole(actorRole) && result.rows.some((row) => !isMemberRole(row.role))) {
+    throw new Error("Only the President may delete officer accounts.");
   }
 }
 async function handler(req, res) {
@@ -1551,7 +1624,9 @@ async function handler(req, res) {
   if (rejectCrossOriginMutation(req)) return sendResponse(res, 403, { success: false, message: "Cross-origin requests are not allowed." });
   const user = await requireAuthenticated(req, res);
   if (!user) return;
-  if (!isPresidentRole(user.role)) return sendResponse(res, 403, { success: false, message: "President access is required for deletion." });
+  if (!isPresidentRole(user.role) && !isSecretaryRole(user.role) && !isTreasurerRole(user.role)) {
+    return sendResponse(res, 403, { success: false, message: "President access is required for deletion." });
+  }
   if (!isDatabaseConfigured()) return sendResponse(res, 503, { success: false, message: "Database is not configured." });
   const pool = getPool();
   try {
@@ -1561,7 +1636,9 @@ async function handler(req, res) {
       for (const [entity2, value] of Object.entries(body.deletedIds)) {
         const ids2 = Array.isArray(value) ? value.filter((id) => typeof id === "string" && id) : [];
         if (!ids2.length) continue;
-        if (lookupEntityTable(entity2) === "users") await assertSafeUserDeletion(pool, user.id, ids2);
+        const table2 = lookupEntityTable(entity2);
+        assertEntityDeletePermission(user.role, table2);
+        if (table2 === "users") await assertSafeUserDeletion(pool, user.id, user.role, ids2);
         totalDeleted += (await deleteEntityFromPostgres(pool, entity2, ids2)).deletedCount;
       }
       return sendResponse(res, 200, { success: true, deletedCount: totalDeleted });
@@ -1573,12 +1650,14 @@ async function handler(req, res) {
     if (typeof entity !== "string" || !ids.length) {
       return sendResponse(res, 400, { success: false, message: "Missing 'entity' or 'id'/'ids' parameter." });
     }
-    if (lookupEntityTable(entity) === "users") await assertSafeUserDeletion(pool, user.id, ids);
+    const table = lookupEntityTable(entity);
+    assertEntityDeletePermission(user.role, table);
+    if (table === "users") await assertSafeUserDeletion(pool, user.id, user.role, ids);
     const result = await deleteEntityFromPostgres(pool, entity, ids);
     return sendResponse(res, 200, { success: true, deletedCount: result.deletedCount, table: result.table });
   } catch (error) {
     console.error("[Cloud DB Delete Error]:", error?.message || error);
-    const status = ["The active account cannot be deleted.", "President accounts cannot be deleted through this endpoint."].includes(error?.message) ? 403 : 500;
+    const status = KNOWN_DELETE_ERROR_MESSAGES.has(error?.message) ? 403 : 500;
     return sendResponse(res, status, { success: false, message: status === 403 ? error.message : "Unable to delete records." });
   }
 }
