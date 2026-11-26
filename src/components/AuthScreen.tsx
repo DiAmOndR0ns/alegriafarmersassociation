@@ -59,8 +59,9 @@ export default function AuthScreen({
   const hasPresidentAccount = Boolean(hasPresident || users.some(u => u.role?.toLowerCase() === 'president'));
   const [showAdminSetup, setShowAdminSetup] = useState(false);
   const [adminName, setAdminName] = useState('');
-  const [adminUsername, setAdminUsername] = useState('admin');
+  const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
 
   // Password reset request form state (unauthenticated text input + Sitio verification)
   const [showResetForm, setShowResetForm] = useState(false);
@@ -557,7 +558,7 @@ export default function AuthScreen({
             </div>
 
             {showSelfRegister ? (
-              <form onSubmit={handleSelfRegisterSubmit} className="space-y-3.5 animate-fade-in text-left max-h-[70vh] overflow-y-auto pr-1">
+              <form onSubmit={handleSelfRegisterSubmit} autoComplete="off" className="space-y-3.5 animate-fade-in text-left max-h-[70vh] overflow-y-auto pr-1">
                 <div className="dim-card-mint rounded-2xl p-3.5 text-xs text-[#1B4332] space-y-1">
                   <strong className="font-extrabold block">
                     {t('2-Step Onboarding Process:', '2-Step Member Onboarding:')}
@@ -575,15 +576,10 @@ export default function AuthScreen({
                     <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Unang Ngalan (First Name)', 'First Name')} *</label>
                     <input
                       type="text"
+                      autoComplete="off"
                       required
                       value={regFirstName}
-                      onChange={(e) => {
-                        setRegFirstName(e.target.value);
-                        if (!regUsername) {
-                          const gen = `${e.target.value}.${regSurname}`.toLowerCase().replace(/[^a-z0-9.]/g, '').replace(/^\.+|\.+$/g, '');
-                          if (gen.length >= 3) setRegUsername(gen);
-                        }
-                      }}
+                      onChange={(e) => setRegFirstName(e.target.value)}
                       className="form-input px-3 py-2 text-sm font-semibold"
                     />
                   </div>
@@ -591,6 +587,7 @@ export default function AuthScreen({
                     <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Tunga nga Ngalan (M.I.)', 'Middle Name')}</label>
                     <input
                       type="text"
+                      autoComplete="off"
                       value={regMiddleName}
                       onChange={(e) => setRegMiddleName(e.target.value)}
                       className="form-input px-3 py-2 text-sm font-semibold"
@@ -600,6 +597,7 @@ export default function AuthScreen({
                     <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Apelyido (Surname)', 'Surname')} *</label>
                     <input
                       type="text"
+                      autoComplete="off"
                       required
                       value={regSurname}
                       onChange={(e) => setRegSurname(e.target.value)}
@@ -625,7 +623,6 @@ export default function AuthScreen({
                     <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Numero sa Telepono', 'Contact Number')}</label>
                     <input
                       type="text"
-                      placeholder="09XX-XXX-XXXX"
                       value={regContact}
                       onChange={(e) => setRegContact(e.target.value)}
                       className="form-input px-3 py-2 text-sm font-semibold"
@@ -669,7 +666,6 @@ export default function AuthScreen({
                   {regIsRsbsa && (
                     <input
                       type="text"
-                      placeholder="RSBSA Number (e.g., 07-22-51-001-000123)"
                       value={regRsbsaNumber}
                       onChange={(e) => setRegRsbsaNumber(e.target.value)}
                       className="form-input px-3 py-1.5 text-xs font-mono"
@@ -702,8 +698,9 @@ export default function AuthScreen({
                     <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Gipili nga Username', 'Desired Username')} *</label>
                     <input
                       type="text"
+                      name="register-username"
+                      autoComplete="off"
                       required
-                      placeholder="e.g., juan.delacruz"
                       value={regUsername}
                       onChange={(e) => setRegUsername(e.target.value)}
                       className="form-input px-3 py-2 text-sm font-mono font-semibold"
@@ -716,7 +713,6 @@ export default function AuthScreen({
                         type="button"
                         onClick={() => {
                           setRegPassword(generateInitialPassword(regUsername || 'farmer', 'Member'));
-                          setShowRegPassword(true);
                         }}
                         className="text-[11px] font-bold text-[#2D6A4F] hover:underline cursor-pointer"
                       >
@@ -726,6 +722,8 @@ export default function AuthScreen({
                     <div className="relative">
                       <input
                         type={showRegPassword ? 'text' : 'password'}
+                        name="register-password"
+                        autoComplete="new-password"
                         required
                         value={regPassword}
                         onChange={(e) => setRegPassword(e.target.value)}
@@ -793,7 +791,6 @@ export default function AuthScreen({
                         type="text"
                         autoComplete="username"
                         required
-                        placeholder={t('Pananglitan: jdelacruz', 'e.g., jdelacruz')}
                         value={resetUsername}
                         onChange={(e) => setResetUsername(e.target.value)}
                         className="form-input pl-10 pr-4 py-3 text-base font-semibold"
@@ -932,7 +929,6 @@ export default function AuthScreen({
                         type="text"
                         autoComplete="username"
                         required
-                        placeholder={t('Isulod ang imong username', 'Enter your username')}
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         className="form-input pl-10 pr-4 py-3 text-base font-semibold"
@@ -964,7 +960,6 @@ export default function AuthScreen({
                         type={showPassword ? 'text' : 'password'}
                         autoComplete="current-password"
                         required
-                        placeholder={t('Isulod ang imong password', 'Enter your password')}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="form-input pl-10 pr-12 py-3 text-base font-semibold"
@@ -994,9 +989,6 @@ export default function AuthScreen({
                       onClick={() => {
                         setShowAdminSetup(true);
                         setShowResetForm(false);
-                        if (!adminPassword) {
-                          setAdminPassword(generateInitialPassword(adminUsername || 'admin', 'President'));
-                        }
                       }}
                       className="btn-bevel-secondary w-full py-3 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer"
                     >
@@ -1021,6 +1013,15 @@ export default function AuthScreen({
                       type="button"
                       id="member-self-register-btn"
                       onClick={() => {
+                        setRegFirstName('');
+                        setRegMiddleName('');
+                        setRegSurname('');
+                        setRegContact('');
+                        setRegBirthDate('');
+                        setRegRsbsaNumber('');
+                        setRegUsername('');
+                        setRegPassword('');
+                        setShowRegPassword(false);
                         setShowSelfRegister(true);
                         setShowResetForm(false);
                         setShowAdminSetup(false);
@@ -1094,14 +1095,24 @@ export default function AuthScreen({
                         </div>
                         <div>
                           <label htmlFor="admin-password" className="block text-xs font-bold text-[#1B4332] mb-1">Password (12+ chars)</label>
-                          <input
-                            id="admin-password"
-                            type="text"
-                            required
-                            value={adminPassword}
-                            onChange={(e) => setAdminPassword(e.target.value)}
-                            className="form-input px-3 py-2 text-sm font-mono font-semibold"
-                          />
+                          <div className="relative">
+                            <input
+                              id="admin-password"
+                              type={showAdminPassword ? 'text' : 'password'}
+                              autoComplete="new-password"
+                              required
+                              value={adminPassword}
+                              onChange={(e) => setAdminPassword(e.target.value)}
+                              className="form-input pl-3 pr-9 py-2 text-sm font-mono font-semibold"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowAdminPassword(v => !v)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-[#455C50] hover:text-[#1B4332] cursor-pointer"
+                            >
+                              {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
