@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Member, MembershipPayment } from '../types';
 import { getDerivedMemberStatus } from '../utils/membership';
-import { 
-  CheckCircle2, XCircle, AlertCircle, Search, 
-  MapPin, Check, RefreshCw, Star, HelpCircle, 
+import {
+  CheckCircle2, XCircle, AlertCircle, Search,
+  MapPin, Check, RefreshCw, Star, HelpCircle,
   Users, UserCheck, UserX, UserMinus, ShieldAlert
 } from 'lucide-react';
 
@@ -40,7 +40,7 @@ export default function RollCallModal({
   useEffect(() => {
     if (isOpen) {
       const defaultRecord: Record<string, 'Present' | 'Absent' | 'Excused'> = {};
-      
+
       activeMembers.forEach(member => {
         if (initialRecord && initialRecord[member.id]) {
           defaultRecord[member.id] = initialRecord[member.id];
@@ -58,8 +58,8 @@ export default function RollCallModal({
 
   // Filter members based on search and sitio
   const filteredMembers = activeMembers.filter(m => {
-    const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          m.farmLocation.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      m.farmLocation.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSitio = selectedSitio === 'All' || m.farmLocation.includes(selectedSitio);
     return matchesSearch && matchesSitio;
   });
@@ -96,7 +96,7 @@ export default function RollCallModal({
   const presentCount = Object.values(record).filter(v => v === 'Present').length;
   const absentCount = Object.values(record).filter(v => v === 'Absent').length;
   const excusedCount = Object.values(record).filter(v => v === 'Excused').length;
-  
+
   const presentPercent = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
   const absentPercent = totalCount > 0 ? Math.round((absentCount / totalCount) * 100) : 0;
   const excusedPercent = totalCount > 0 ? Math.round((excusedCount / totalCount) * 100) : 0;
@@ -104,7 +104,7 @@ export default function RollCallModal({
   return (
     <div className="fixed inset-0 bg-[#F7F4EF] backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-[60] animate-fade-in text-left">
       <div className="bg-white border border-[#D5CFC1] w-full max-w-6xl h-[96vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-        
+
         {/* MODAL HEADER */}
         <div className="bg-[#1B4332] text-white px-5 py-4 border-b border-[#2D6A4F] flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2.5">
@@ -118,7 +118,7 @@ export default function RollCallModal({
               </p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-all font-bold text-xl"
             aria-label="Close"
@@ -236,17 +236,16 @@ export default function RollCallModal({
             <div className="flex flex-col gap-2">
               {filteredMembers.map((member, idx) => {
                 const currentStatus = record[member.id] || 'Present';
-                
+
                 return (
-                  <div 
-                    key={member.id} 
-                    className={`p-3 rounded-xl border transition-all flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                      currentStatus === 'Present' 
-                        ? 'bg-white border-emerald-500/30 hover:border-emerald-500/50'
-                        : currentStatus === 'Absent'
+                  <div
+                    key={member.id}
+                    className={`p-3 rounded-xl border transition-all flex-col sm:flex-row sm:items-center justify-between gap-3 ${currentStatus === 'Present'
+                      ? 'bg-white border-emerald-500/30 hover:border-emerald-500/50'
+                      : currentStatus === 'Absent'
                         ? 'bg-white border-rose-500/30 hover:border-rose-500/50'
                         : 'bg-white border-amber-500/30 hover:border-amber-500/50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-7 h-7 rounded-full bg-[#EAF4EC] border border-[#B7CDBB] flex items-center justify-center text-xs font-black text-[#365447] select-none shrink-0 font-mono">
@@ -268,11 +267,10 @@ export default function RollCallModal({
                       <button
                         type="button"
                         onClick={() => handleMarkStatus(member.id, 'Present')}
-                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${
-                          currentStatus === 'Present'
-                            ? 'bg-emerald-600 text-white'
-                            : 'text-[#365447] hover:text-[#1B4332]'
-                        }`}
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${currentStatus === 'Present'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-[#365447] hover:text-[#1B4332]'
+                          }`}
                         title="Present"
                       >
                         <Check className="w-2.5 h-2.5" />
@@ -282,11 +280,10 @@ export default function RollCallModal({
                       <button
                         type="button"
                         onClick={() => handleMarkStatus(member.id, 'Absent')}
-                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${
-                          currentStatus === 'Absent'
-                            ? 'bg-rose-600 text-white'
-                            : 'text-[#365447] hover:text-[#1B4332]'
-                        }`}
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${currentStatus === 'Absent'
+                          ? 'bg-rose-600 text-white'
+                          : 'text-[#365447] hover:text-[#1B4332]'
+                          }`}
                         title="Absent"
                       >
                         <XCircle className="w-2.5 h-2.5" />
@@ -296,11 +293,10 @@ export default function RollCallModal({
                       <button
                         type="button"
                         onClick={() => handleMarkStatus(member.id, 'Excused')}
-                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${
-                          currentStatus === 'Excused'
-                            ? 'bg-amber-600 text-white'
-                            : 'text-[#365447] hover:text-[#1B4332]'
-                        }`}
+                        className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all flex items-center gap-0.5 ${currentStatus === 'Excused'
+                          ? 'bg-amber-600 text-white'
+                          : 'text-[#365447] hover:text-[#1B4332]'
+                          }`}
                         title="Excused"
                       >
                         <AlertCircle className="w-2.5 h-2.5" />

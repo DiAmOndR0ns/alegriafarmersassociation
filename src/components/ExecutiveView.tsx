@@ -8,6 +8,7 @@ import {
   Sprout, MapPin, Search, Lock, Download, ShieldAlert, Shield, Upload, Database, RefreshCw
 } from 'lucide-react';
 import { buildAuditChain } from '../utils/audit';
+import { getActiveDelegationScopes } from '../utils/delegation';
 import { getInitialFund } from '../utils/fundBalance';
 import { generateInitialPassword } from '../utils/passwordPolicy';
 import PrintMinutesModal from './PrintMinutesModal';
@@ -268,14 +269,16 @@ export default function ExecutiveView({
   // Authority rules:
   // Only the President (system admin) may appoint members into officer roles.
   const canAppointOfficers = currentRole === 'President';
+  const activeDelegationScopes = getActiveDelegationScopes(delegationRequests, currentUserId || '');
+  const hasDelegatedPasswordChange = currentRole === 'Vice_President' && activeDelegationScopes.has('password_change');
 
   // Roles the server enforces MFA for; only these may self-reset their authenticator.
   const MFA_ENFORCED_ROLE_SET = new Set<string>([
     'President', 'Vice_President', 'Treasurer', 'Assistant_Treasurer', 'Secretary', 'Auditor'
   ]);
 
-  // The President may reset another officer's password; both President and Vice President can manage credentials.
-  const canResetPasswords = currentRole === 'President' || currentRole === 'Vice_President';
+  // The President may reset another officer's or member's password; the Vice President may do so ONLY when delegated ('password_change').
+  const canResetPasswords = currentRole === 'President' || hasDelegatedPasswordChange;
 
   const isRoleSeatUnavailable = (role: OfficerRole, exceptUserId?: string) =>
     role !== 'Board_Member' &&
@@ -611,108 +614,108 @@ export default function ExecutiveView({
       </div>
 
       {/* OVERVIEW SCOREBOARD */}
-{(() => {
-  // Shared card style: same height/padding/layout for every box
-  const card =
-    "bg-white border border-[#E9E4D9] p-4 rounded-2xl shadow-sm text-left h-32 flex flex-col justify-between min-w-0";
-  const clickable =
-    " cursor-pointer transition-all group select-none hover:bg-[#FAF9F5]";
-  const label =
-    "text-[11px] font-bold uppercase tracking-wider leading-tight line-clamp-2";
-  const value = "text-2xl font-black font-display truncate";
+      {(() => {
+        // Shared card style: same height/padding/layout for every box
+        const card =
+          "bg-white border border-[#E9E4D9] p-4 rounded-2xl shadow-sm text-left h-32 flex flex-col justify-between min-w-0";
+        const clickable =
+          " cursor-pointer transition-all group select-none hover:bg-[#FAF9F5]";
+        const label =
+          "text-[11px] font-bold uppercase tracking-wider leading-tight line-clamp-2";
+        const value = "text-2xl font-black font-display truncate";
 
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      {/* Total Members */}
-      <div className={card}>
-        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
-          <span className={label}>Total Members</span>
-          <Users className="w-5 h-5 shrink-0 text-[#1B4332]" />
-        </div>
-        <div className={`${value} text-[#1B4332]`}>{totalMembers}</div>
-      </div>
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {/* Total Members */}
+            <div className={card}>
+              <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+                <span className={label}>Total Members</span>
+                <Users className="w-5 h-5 shrink-0 text-[#1B4332]" />
+              </div>
+              <div className={`${value} text-[#1B4332]`}>{totalMembers}</div>
+            </div>
 
-      {/* Association Funds */}
-{(() => {
-  const fundNumber = totalRegisteredFundBalance.toLocaleString('en-US', {
-    maximumFractionDigits: 0,
-  });
+            {/* Association Funds */}
+            {(() => {
+              const fundNumber = totalRegisteredFundBalance.toLocaleString('en-US', {
+                maximumFractionDigits: 0,
+              });
 
-  // Shrink the font as the number gets longer so it never gets cut off
-  const fundSize =
-    fundNumber.length <= 7 ? "text-2xl" :
-    fundNumber.length <= 9 ? "text-xl" :
-    fundNumber.length <= 11 ? "text-lg" :
-    "text-base";
+              // Shrink the font as the number gets longer so it never gets cut off
+              const fundSize =
+                fundNumber.length <= 7 ? "text-2xl" :
+                  fundNumber.length <= 9 ? "text-xl" :
+                    fundNumber.length <= 11 ? "text-lg" :
+                      "text-base";
 
-  return (
-    <div className={card} title={`PHP ${fundNumber}`}>
-      <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
-        <span className="text-[10px] font-bold uppercase tracking-wider leading-tight line-clamp-2">
-          Fund Balances
-        </span>
-        <Coins className="w-5 h-5 shrink-0 text-[#E65100]" />
-      </div>
-      <div className="flex items-baseline gap-1 whitespace-nowrap text-[#1B4332]">
-        <span className="text-xs font-bold text-[#5D6B54]">PHP</span>
-        <span className={`${fundSize} font-black font-display tracking-tight tabular-nums`}>
-          {fundNumber}
-        </span>
-      </div>
-    </div>
-  );
-})()}
+              return (
+                <div className={card} title={`PHP ${fundNumber}`}>
+                  <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider leading-tight line-clamp-2">
+                      Fund Balances
+                    </span>
+                    <Coins className="w-5 h-5 shrink-0 text-[#E65100]" />
+                  </div>
+                  <div className="flex items-baseline gap-1 whitespace-nowrap text-[#1B4332]">
+                    <span className="text-xs font-bold text-[#5D6B54]">PHP</span>
+                    <span className={`${fundSize} font-black font-display tracking-tight tabular-nums`}>
+                      {fundNumber}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
-      {/* Assemblies */}
-      <div
-        onClick={() => setShowMeetingsModal(true)}
-        className={`${card}${clickable} hover:border-[#1B4332]`}
-      >
-        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
-          <span className={`${label} group-hover:text-[#1B4332]`}>General Assembly</span>
-          <BookOpen className="w-5 h-5 shrink-0 text-[#0D47A1] group-hover:scale-110 transition-transform" />
-        </div>
-        <div className={`${value} text-[#1B4332] flex items-baseline gap-2`}>
-          <span>{meetings.length}</span>
-          <span className="text-[10px] font-bold text-[#0D47A1] hover:underline">View / Print</span>
-        </div>
-      </div>
+            {/* Assemblies */}
+            <div
+              onClick={() => setShowMeetingsModal(true)}
+              className={`${card}${clickable} hover:border-[#1B4332]`}
+            >
+              <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+                <span className={`${label} group-hover:text-[#1B4332]`}>General Assembly</span>
+                <BookOpen className="w-5 h-5 shrink-0 text-[#0D47A1] group-hover:scale-110 transition-transform" />
+              </div>
+              <div className={`${value} text-[#1B4332] flex items-baseline gap-2`}>
+                <span>{meetings.length}</span>
+                <span className="text-[10px] font-bold text-[#0D47A1] hover:underline">View / Print</span>
+              </div>
+            </div>
 
-      {/* Resolutions */}
-      <div className={card}>
-        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
-          <span className={label}>Resolutions</span>
-          <FileCheck className="w-5 h-5 shrink-0 text-[#E65100]" />
-        </div>
-        <div className={`${value} text-[#E65100]`}>{pendingResolutions.length}</div>
-      </div>
+            {/* Resolutions */}
+            <div className={card}>
+              <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+                <span className={label}>Resolutions</span>
+                <FileCheck className="w-5 h-5 shrink-0 text-[#E65100]" />
+              </div>
+              <div className={`${value} text-[#E65100]`}>{pendingResolutions.length}</div>
+            </div>
 
-      {/* Minutes for Approval (Secretary drafts → President approves) */}
-      <div
-        onClick={() => setShowMeetingsModal(true)}
-        className={`${card}${clickable} hover:border-[#1B4332]`}
-      >
-        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
-          <span className={`${label} group-hover:text-[#1B4332]`}>Minutes for Approval</span>
-          <BookOpen className="w-5 h-5 shrink-0 text-purple-700 group-hover:scale-110 transition-transform" />
-        </div>
-        <div className={`${value} text-purple-700`}>{pendingMinutesMeetings.length}</div>
-      </div>
+            {/* Minutes for Approval (Secretary drafts → President approves) */}
+            <div
+              onClick={() => setShowMeetingsModal(true)}
+              className={`${card}${clickable} hover:border-[#1B4332]`}
+            >
+              <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+                <span className={`${label} group-hover:text-[#1B4332]`}>Minutes for Approval</span>
+                <BookOpen className="w-5 h-5 shrink-0 text-purple-700 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className={`${value} text-purple-700`}>{pendingMinutesMeetings.length}</div>
+            </div>
 
-      {/* Financial Approvals (Auditor → President) */}
-      <div
-        onClick={() => setShowFinancialApprovalsModal(true)}
-        className={`${card}${clickable} hover:border-emerald-700`}
-      >
-        <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
-          <span className={`${label} group-hover:text-emerald-700`}>Financial Approvals</span>
-          <Coins className="w-5 h-5 shrink-0 text-emerald-700 group-hover:scale-110 transition-transform" />
-        </div>
-        <div className={`${value} text-emerald-700`}>{auditedPendingTx.length}</div>
-      </div>
-    </div>
-  );
-})()}
+            {/* Financial Approvals (Auditor → President) */}
+            <div
+              onClick={() => setShowFinancialApprovalsModal(true)}
+              className={`${card}${clickable} hover:border-emerald-700`}
+            >
+              <div className="flex justify-between items-start gap-2 text-[#5D6B54]">
+                <span className={`${label} group-hover:text-emerald-700`}>Financial Approvals</span>
+                <Coins className="w-5 h-5 shrink-0 text-emerald-700 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className={`${value} text-emerald-700`}>{auditedPendingTx.length}</div>
+            </div>
+          </div>
+        );
+      })()}
 
       <section className="space-y-4 text-left" aria-labelledby="executive-analytics-title">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
@@ -754,288 +757,286 @@ export default function ExecutiveView({
           </div>
         </div>
 
-{(() => {
-  const compact = (v: number) =>
-    new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
-  const peso = (v: number) => `PHP ${Number(v).toLocaleString('en-US')}`;
-  const truncate = (s: string, max = 22) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
-  const rowHeight = 36;
-  const chartHeight = (n: number) => Math.max(180, n * rowHeight + 40);
+        {(() => {
+          const compact = (v: number) =>
+            new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+          const peso = (v: number) => `PHP ${Number(v).toLocaleString('en-US')}`;
+          const truncate = (s: string, max = 22) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+          const rowHeight = 36;
+          const chartHeight = (n: number) => Math.max(180, n * rowHeight + 40);
 
-  // Y-axis label: truncated text, full name on hover
-const CategoryTick = ({ x, y, payload }: any) => (
-  <g transform={`translate(${x},${y})`}>
-    <title>{payload.value}</title>
-    <text
-      x={0}
-      y={0}
-      dy={10}
-      textAnchor="end"
-      transform="rotate(-35)"
-      fill="#5D6B54"
-      fontSize={10}
-    >
-      {truncate(String(payload.value), 16)}
-    </text>
-  </g>
-);
-
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      {/* Expenses linked to events */}
-      <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
-        <h4 className="text-sm font-extrabold text-[#1B4332] mb-3">Expenses linked to events</h4>
-        {eventExpenseData.length ? (
-          <div className="w-full" style={{ height: chartHeight(eventExpenseData.length) }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={eventExpenseData}
-                layout="vertical"
-                margin={{ top: 4, right: 56, left: 4, bottom: 4 }}
-                barCategoryGap="25%"
+          // Y-axis label: truncated text, full name on hover
+          const CategoryTick = ({ x, y, payload }: any) => (
+            <g transform={`translate(${x},${y})`}>
+              <title>{payload.value}</title>
+              <text
+                x={0}
+                y={0}
+                dy={10}
+                textAnchor="end"
+                transform="rotate(-35)"
+                fill="#5D6B54"
+                fontSize={10}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={[0, 'dataMax']}
-                  tick={{ fill: '#5D6B54', fontSize: 10 }}
-                  tickFormatter={(v: number) => `₱${compact(v)}`}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={130}
-                  tick={<CategoryTick />}
-                  interval={0}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  cursor={{ fill: '#FAF9F5' }}
-                  formatter={(v) => [peso(Number(v)), 'Event expenses']}
-                  contentStyle={{ borderRadius: 12, border: '1px solid #E9E4D9', fontSize: 12 }}
-                />
-                <Bar dataKey="expenses" name="Event expenses" fill="#D97706" radius={[0, 4, 4, 0]} barSize={18}>
-                  <LabelList
-                    dataKey="expenses"
-                    position="right"
-                    formatter={(v: unknown) => `₱${compact(Number(v) || 0)}`}
-                    style={{ fill: '#1B4332', fontSize: 10, fontWeight: 700 }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
-            No event-linked expenses recorded for {analyticsYear}.
-          </p>
-        )}
-      </div>
-      
-{/* Livestock expenses */}
-{(() => {
-  const PREVIEW_COUNT = 2;
-  const sorted = [...livestockExpenseData].sort((a, b) => b.expenses - a.expenses);
-  const total = sorted.reduce((sum, d) => sum + d.expenses, 0);
-  const max = sorted[0]?.expenses || 1;
-  const fmt = (v: number) => Number(v).toLocaleString('en-US');
+                {truncate(String(payload.value), 16)}
+              </text>
+            </g>
+          );
 
-  const preview = sorted.slice(0, PREVIEW_COUNT);
-  const rest = sorted.slice(PREVIEW_COUNT);
+          return (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {/* Expenses linked to events */}
+              <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl p-4 sm:p-5 shadow-sm">
+                <h4 className="text-sm font-extrabold text-[#1B4332] mb-3">Expenses linked to events</h4>
+                {eventExpenseData.length ? (
+                  <div className="w-full" style={{ height: chartHeight(eventExpenseData.length) }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={eventExpenseData}
+                        layout="vertical"
+                        margin={{ top: 4, right: 56, left: 4, bottom: 4 }}
+                        barCategoryGap="25%"
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E9E4D9" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          domain={[0, 'dataMax']}
+                          tick={{ fill: '#5D6B54', fontSize: 10 }}
+                          tickFormatter={(v: number) => `₱${compact(v)}`}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={130}
+                          tick={<CategoryTick />}
+                          interval={0}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <Tooltip
+                          cursor={{ fill: '#FAF9F5' }}
+                          formatter={(v) => [peso(Number(v)), 'Event expenses']}
+                          contentStyle={{ borderRadius: 12, border: '1px solid #E9E4D9', fontSize: 12 }}
+                        />
+                        <Bar dataKey="expenses" name="Event expenses" fill="#D97706" radius={[0, 4, 4, 0]} barSize={18}>
+                          <LabelList
+                            dataKey="expenses"
+                            position="right"
+                            formatter={(v: unknown) => `₱${compact(Number(v) || 0)}`}
+                            style={{ fill: '#1B4332', fontSize: 10, fontWeight: 700 }}
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
+                    No event-linked expenses recorded for {analyticsYear}.
+                  </p>
+                )}
+              </div>
 
-  const renderRow = (item: (typeof sorted)[number]) => {
-    const share = total ? (item.expenses / total) * 100 : 0;
-    return (
-      <li key={item.name} title={`${item.name}: PHP ${fmt(item.expenses)}`}>
-        <div className="flex items-baseline justify-between gap-3 mb-1">
-          <span className="text-xs font-bold text-[#1B4332] truncate">{item.name}</span>
-          <span className="text-xs font-bold text-[#5D6B54] tabular-nums shrink-0">
-            PHP {fmt(item.expenses)}
-            <span className="ml-1 text-[10px] font-semibold text-[#85947E]">
-              {share.toFixed(1)}%
-            </span>
-          </span>
-        </div>
-        <div className="h-2 w-full rounded-full bg-[#F1EDE3] overflow-hidden">
-          <div
-            className="h-full rounded-full bg-[#8B5CF6]"
-            style={{ width: `${(item.expenses / max) * 100}%` }}
-          />
-        </div>
-      </li>
-    );
-  };
+              {/* Livestock expenses */}
+              {(() => {
+                const PREVIEW_COUNT = 2;
+                const sorted = [...livestockExpenseData].sort((a, b) => b.expenses - a.expenses);
+                const total = sorted.reduce((sum, d) => sum + d.expenses, 0);
+                const max = sorted[0]?.expenses || 1;
+                const fmt = (v: number) => Number(v).toLocaleString('en-US');
 
-  return (
-    <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
-      <button
-        type="button"
-        onClick={() => rest.length && setLivestockOpen(o => !o)}
-        aria-expanded={livestockOpen}
-        aria-controls="livestock-expenses-panel"
-        disabled={!rest.length}
-        className="w-full flex items-start justify-between gap-3 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors disabled:cursor-default disabled:hover:bg-transparent"
-      >
-        <div className="min-w-0">
-          <h4 className="text-sm font-extrabold text-[#1B4332]">Livestock expenses</h4>
-          <p className="text-[11px] font-semibold text-[#85947E]">
-            {analyticsYear} · {sorted.length} {sorted.length === 1 ? 'category' : 'categories'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="text-right">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#5D6B54]">Total</div>
-            <div className="text-lg font-black font-display text-[#1B4332] tabular-nums">
-              PHP {fmt(total)}
+                const preview = sorted.slice(0, PREVIEW_COUNT);
+                const rest = sorted.slice(PREVIEW_COUNT);
+
+                const renderRow = (item: (typeof sorted)[number]) => {
+                  const share = total ? (item.expenses / total) * 100 : 0;
+                  return (
+                    <li key={item.name} title={`${item.name}: PHP ${fmt(item.expenses)}`}>
+                      <div className="flex items-baseline justify-between gap-3 mb-1">
+                        <span className="text-xs font-bold text-[#1B4332] truncate">{item.name}</span>
+                        <span className="text-xs font-bold text-[#5D6B54] tabular-nums shrink-0">
+                          PHP {fmt(item.expenses)}
+                          <span className="ml-1 text-[10px] font-semibold text-[#85947E]">
+                            {share.toFixed(1)}%
+                          </span>
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-[#F1EDE3] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[#8B5CF6]"
+                          style={{ width: `${(item.expenses / max) * 100}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                };
+
+                return (
+                  <div className="min-w-0 bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => rest.length && setLivestockOpen(o => !o)}
+                      aria-expanded={livestockOpen}
+                      aria-controls="livestock-expenses-panel"
+                      disabled={!rest.length}
+                      className="w-full flex items-start justify-between gap-3 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors disabled:cursor-default disabled:hover:bg-transparent"
+                    >
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-extrabold text-[#1B4332]">Livestock expenses</h4>
+                        <p className="text-[11px] font-semibold text-[#85947E]">
+                          {analyticsYear} · {sorted.length} {sorted.length === 1 ? 'category' : 'categories'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-[#5D6B54]">Total</div>
+                          <div className="text-lg font-black font-display text-[#1B4332] tabular-nums">
+                            PHP {fmt(total)}
+                          </div>
+                        </div>
+                        {rest.length > 0 && (
+                          <ChevronDown
+                            size={16}
+                            className={`text-[#1B4332] transition-transform duration-300 ${livestockOpen ? 'rotate-180' : ''}`}
+                          />
+                        )}
+                      </div>
+                    </button>
+
+                    <div id="livestock-expenses-panel" className="px-4 sm:px-5 pb-4 sm:pb-5">
+                      {sorted.length ? (
+                        <>
+                          <ul className="space-y-3">{preview.map(renderRow)}</ul>
+
+                          {rest.length > 0 && (
+                            <div
+                              className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${livestockOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                                }`}
+                            >
+                              <div className="overflow-hidden">
+                                <ul className="space-y-3 pt-3 max-h-[320px] overflow-y-auto pr-1">
+                                  {rest.map(renderRow)}
+                                </ul>
+                              </div>
+                            </div>
+                          )}
+
+                          {rest.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setLivestockOpen(o => !o)}
+                              className="mt-3 text-[11px] font-bold text-[#5D6B54] hover:text-[#1B4332] transition-colors"
+                            >
+                              {livestockOpen ? 'Show less' : `Show ${rest.length} more`}
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
+                          No livestock expenses recorded for {analyticsYear}.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
-          </div>
-          {rest.length > 0 && (
-            <ChevronDown
-              size={16}
-              className={`text-[#1B4332] transition-transform duration-300 ${livestockOpen ? 'rotate-180' : ''}`}
-            />
-          )}
-        </div>
-      </button>
+          );
+        })()}
 
-      <div id="livestock-expenses-panel" className="px-4 sm:px-5 pb-4 sm:pb-5">
-        {sorted.length ? (
-          <>
-            <ul className="space-y-3">{preview.map(renderRow)}</ul>
+        {/* Registered fund sources */}
+        {(() => {
+          const PREVIEW_COUNT = 2;
+          const preview = fundSourceAnalytics.slice(0, PREVIEW_COUNT);
+          const rest = fundSourceAnalytics.slice(PREVIEW_COUNT);
 
-            {rest.length > 0 && (
-              <div
-                className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-                  livestockOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                }`}
-              >
-                <div className="overflow-hidden">
-                  <ul className="space-y-3 pt-3 max-h-[320px] overflow-y-auto pr-1">
-                    {rest.map(renderRow)}
-                  </ul>
+          const renderSource = (source: (typeof fundSourceAnalytics)[number]) => (
+            <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
+              <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
+              {source.registered ? (
+                <>
+                  <div className="text-lg font-black font-mono text-[#1B4332]">
+                    PHP {(source.balance || 0).toLocaleString('en-US')}
+                  </div>
+                  <p className="text-[10px] text-[#5D6B54]">
+                    Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}
+                  </p>
+                </>
+              ) : (
+                <div className="text-sm font-black font-mono text-[#5D6B54]">
+                  Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
                 </div>
+              )}
+              <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
+                <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
               </div>
-            )}
+            </div>
+          );
 
-            {rest.length > 0 && (
+          const gridClass = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3';
+
+          return (
+            <div className="bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
               <button
                 type="button"
-                onClick={() => setLivestockOpen(o => !o)}
-                className="mt-3 text-[11px] font-bold text-[#5D6B54] hover:text-[#1B4332] transition-colors"
+                onClick={() => rest.length && setFundSourcesOpen(o => !o)}
+                aria-expanded={fundSourcesOpen}
+                aria-controls="fund-sources-panel"
+                disabled={!rest.length}
+                className="w-full flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors disabled:cursor-default disabled:hover:bg-transparent"
               >
-                {livestockOpen ? 'Show less' : `Show ${rest.length} more`}
-              </button>
-            )}
-          </>
-        ) : (
-          <p className="py-12 text-center text-xs font-semibold text-[#85947E]">
-            No livestock expenses recorded for {analyticsYear}.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-})()}
-    </div>
-  );
-})()}
-
-{/* Registered fund sources */}
-{(() => {
-  const PREVIEW_COUNT = 2;
-  const preview = fundSourceAnalytics.slice(0, PREVIEW_COUNT);
-  const rest = fundSourceAnalytics.slice(PREVIEW_COUNT);
-
-  const renderSource = (source: (typeof fundSourceAnalytics)[number]) => (
-    <div key={source.name} className="rounded-xl border border-[#E9E4D9] bg-[#FAF8F5] p-3.5 space-y-2">
-      <h5 className="text-xs font-extrabold text-[#1B4332] break-words">{source.name}</h5>
-      {source.registered ? (
-        <>
-          <div className="text-lg font-black font-mono text-[#1B4332]">
-            PHP {(source.balance || 0).toLocaleString('en-US')}
-          </div>
-          <p className="text-[10px] text-[#5D6B54]">
-            Current registered balance · Allocated PHP {(source.allocated || 0).toLocaleString('en-US')}
-          </p>
-        </>
-      ) : (
-        <div className="text-sm font-black font-mono text-[#5D6B54]">
-          Recorded net flow: PHP {(source.income - source.expenses).toLocaleString('en-US')}
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
-        <span className="text-emerald-700">Income PHP {source.income.toLocaleString('en-US')}</span>
-        <span className="text-rose-700">Expenses PHP {source.expenses.toLocaleString('en-US')}</span>
-      </div>
-    </div>
-  );
-
-  const gridClass = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3';
-
-  return (
-    <div className="bg-white border border-[#E9E4D9] rounded-2xl shadow-sm overflow-hidden">
-      <button
-        type="button"
-        onClick={() => rest.length && setFundSourcesOpen(o => !o)}
-        aria-expanded={fundSourcesOpen}
-        aria-controls="fund-sources-panel"
-        disabled={!rest.length}
-        className="w-full flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 text-left hover:bg-[#FAF8F5] transition-colors disabled:cursor-default disabled:hover:bg-transparent"
-      >
-        <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
-            {funds.length} registered · {fundSourceAnalytics.length} sources tracked
-          </span>
-          {rest.length > 0 && (
-            <ChevronDown
-              size={16}
-              className={`text-[#1B4332] transition-transform duration-300 ${fundSourcesOpen ? 'rotate-180' : ''}`}
-            />
-          )}
-        </div>
-      </button>
-
-      <div id="fund-sources-panel" className="px-4 sm:px-5 pb-4 sm:pb-5">
-        {fundSourceAnalytics.length ? (
-          <>
-            <div className={gridClass}>{preview.map(renderSource)}</div>
-
-            {rest.length > 0 && (
-              <div
-                className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-                  fundSourcesOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                }`}
-              >
-                <div className="overflow-hidden">
-                  <div className={`${gridClass} pt-3`}>{rest.map(renderSource)}</div>
+                <h4 className="text-sm font-extrabold text-[#1B4332]">Registered fund sources</h4>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-[#1B4332] bg-[#EAF4EC] px-3 py-1 rounded-full">
+                    {funds.length} registered · {fundSourceAnalytics.length} sources tracked
+                  </span>
+                  {rest.length > 0 && (
+                    <ChevronDown
+                      size={16}
+                      className={`text-[#1B4332] transition-transform duration-300 ${fundSourcesOpen ? 'rotate-180' : ''}`}
+                    />
+                  )}
                 </div>
-              </div>
-            )}
-
-            {rest.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setFundSourcesOpen(o => !o)}
-                className="mt-3 text-[11px] font-bold text-[#5D6B54] hover:text-[#1B4332] transition-colors"
-              >
-                {fundSourcesOpen ? 'Show less' : `Show ${rest.length} more`}
               </button>
-            )}
-          </>
-        ) : (
-          <p className="py-8 text-center text-xs font-semibold text-[#85947E]">
-            No registered fund sources or attributed transactions yet.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-})()}
-</section>
+
+              <div id="fund-sources-panel" className="px-4 sm:px-5 pb-4 sm:pb-5">
+                {fundSourceAnalytics.length ? (
+                  <>
+                    <div className={gridClass}>{preview.map(renderSource)}</div>
+
+                    {rest.length > 0 && (
+                      <div
+                        className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${fundSourcesOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                          }`}
+                      >
+                        <div className="overflow-hidden">
+                          <div className={`${gridClass} pt-3`}>{rest.map(renderSource)}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {rest.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFundSourcesOpen(o => !o)}
+                        className="mt-3 text-[11px] font-bold text-[#5D6B54] hover:text-[#1B4332] transition-colors"
+                      >
+                        {fundSourcesOpen ? 'Show less' : `Show ${rest.length} more`}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <p className="py-8 text-center text-xs font-semibold text-[#85947E]">
+                    No registered fund sources or attributed transactions yet.
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </section>
 
       {showAdminTasksModal && (
         <div
@@ -1104,925 +1105,933 @@ const CategoryTick = ({ x, y, payload }: any) => (
               )}
             </div>
             <div className="overflow-y-auto p-3 sm:p-5">
-      <div className="order-2 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
-        {/* OFFICER ROSTER & ROLE GOVERNANCE DESK */}
-        <div id="officer-governance-card" className="self-start lg:col-span-12 bg-white border border-[#E9E4D9] rounded-3xl p-5 shadow-sm space-y-4 text-left">
-          <div className="border-b border-[#F0EBE1] pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
-                <ShieldAlert className="w-5.5 h-5.5 text-[#1B4332]" />
-                <span>Admin Desk</span>
-              </h3>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-              {isAdminUnlocked ? (
-                <button
-                  type="button"
-                  onClick={() => setIsAdminUnlocked(false)}
-                  className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-                >
-                  <Lock className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Lock Admin Desk</span>
-                </button>
-              ) : null}
-
-              {isAdminUnlocked && canAppointOfficers && onAddOfficer && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextOpen = !showAddOfficerForm;
-                    setShowAddOfficerForm(nextOpen);
-                    if (nextOpen && !newOfficerPassword) {
-                      setNewOfficerPassword(generateInitialPassword(newOfficerUsername || 'officer', newOfficerRole));
-                    }
-                  }}
-                  className="px-3.5 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-xs"
-                >
-                  {showAddOfficerForm ? 'Cancel' : '+ Add Officer Account'}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {!isAdminUnlocked ? (
-            <div className="p-6 bg-[#FAF8F5] border-2 border-dashed border-[#D5CFC1] rounded-2xl flex flex-col items-center text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center border border-amber-300 shadow-inner">
-                <Lock className="w-6 h-6" />
-              </div>
-              <div className="max-w-md space-y-1">
-                <h4 className="font-extrabold text-[#1B4332] text-sm">Dedicated Admin Security Gate</h4>
-                <p className="text-xs text-[#5D6B54]">
-                  Re-enter your signed-in account password to open backup, delegated President access, and officer administration tools.
-                </p>
-              </div>
-              <form onSubmit={handleAdminPasswordSubmit} className="flex flex-col gap-2 w-full max-w-sm pt-2">
-                <input
-                  ref={adminPasswordInputRef}
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="Enter your account password"
-                  value={adminPasswordInput}
-                  onChange={(e) => setAdminPasswordInput(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
-                  required
-                />
-                {requiresAdminTotp && (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="6-digit authenticator code"
-                    value={adminTotpCode}
-                    onChange={(e) => setAdminTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
-                    required
-                    minLength={6}
-                    maxLength={6}
-                  />
-                )}
-                <button
-                  type="submit"
-                  disabled={isVerifyingAdminPassword || !onVerifyAdminPassword}
-                  className="w-full px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:opacity-60 text-white text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all"
-                >
-                  {isVerifyingAdminPassword ? 'Verifying…' : requiresAdminTotp ? 'Verify & Open Admin Tasks' : 'Verify Password'}
-                </button>
-              </form>
-              {adminGateError && <p role="alert" className="text-xs font-bold text-rose-600">{adminGateError}</p>}
-            </div>
-          ) : (
-            <>
-          {isAdminUnlocked && (
-            (() => {
-              const presUser = (currentRole === 'President' && currentUserId ? users.find(u => u.id === currentUserId) : null)
-                || (currentUserId ? users.find(u => u.id === currentUserId) : null)
-                || users.find(u => u.role === 'President')
-                || users.find(u => u.role?.toLowerCase() === 'president');
-              const activeSecret = presUser?.totpSecret;
-              return (
-                <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col justify-between gap-3 text-xs">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <span className="font-extrabold text-[#1B4332] flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                        President Two-Factor Authentication (TOTP MFA) — Enforced
-                      </span>
-                      <p className="text-[11px] text-[#5D6B54]">
-                        2FA is permanently enforced on the President account. An authenticator app (Google Authenticator, Microsoft Authenticator, etc.) is required at every login.
-                      </p>
+              <div className="order-2 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
+                {/* OFFICER ROSTER & ROLE GOVERNANCE DESK */}
+                <div id="officer-governance-card" className="self-start lg:col-span-12 bg-white border border-[#E9E4D9] rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                  <div className="border-b border-[#F0EBE1] pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-extrabold font-display text-[#1B4332] flex items-center gap-2">
+                        <ShieldAlert className="w-5.5 h-5.5 text-[#1B4332]" />
+                        <span>Admin Desk</span>
+                      </h3>
                     </div>
-                    <span className="px-3 py-1.5 rounded-xl font-bold text-xs border border-emerald-300 bg-emerald-50 text-emerald-800 shrink-0">
-                      ✓ Enforced &amp; Active
-                    </span>
-                  </div>
-                  {activeSecret ? (
-                    <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-black text-[#1B4332] text-xs sm:text-sm select-all break-all bg-[#FAF8F5] px-2 py-1 rounded border border-[#D8E7D9]">
-                          {activeSecret}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">
-                        Scan or enter this key into your Google Authenticator, Microsoft Authenticator, or 2FA app to generate the 6-digit login codes.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
-                      <p className="text-[11px] text-amber-700 font-semibold">
-                        No authenticator enrolled yet. Sign in online once to complete 2FA enrollment — a unique secret will be generated then.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()
-          )}
-
-          {isAdminUnlocked && onRequestDelegation && onReviewDelegation && onRevokeDelegation && onRefreshDelegations && (
-            <DelegationAccessPanel
-              currentRole={currentRole}
-              currentUserId={currentUserId}
-              users={users}
-              requests={delegationRequests}
-              isOnline={isOnline}
-              isRefreshing={isRefreshingDelegations}
-              onRefresh={onRefreshDelegations}
-              onRequest={onRequestDelegation}
-              onReview={onReviewDelegation}
-              onRevoke={onRevokeDelegation}
-            />
-          )}
-
-          {canAppointOfficers && showAddOfficerForm && (
-            <form onSubmit={handleCreateOfficerSubmit} className="bg-[#FAF8F5] border-2 border-[#1B4332]/20 rounded-2xl p-4 space-y-3 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-extrabold text-[#1B4332] uppercase tracking-wider">
-                  Create New Officer Account
-                </h4>
-                <button
-                  ref={adminTasksCloseRef}
-                  type="button"
-                  onClick={() => setNewOfficerPassword(generateInitialPassword(newOfficerUsername || 'officer', newOfficerRole))}
-                  className="text-[11px] font-bold text-[#2D6A4F] hover:underline cursor-pointer"
-                >
-                  Generate Strong Password
-                </button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Juan Dela Cruz"
-                    value={newOfficerName}
-                    onChange={(e) => setNewOfficerName(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Governance Role</label>
-                  <select
-                    value={newOfficerRole}
-                    onChange={(e) => setNewOfficerRole(e.target.value as OfficerRole)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
-                  >
-                    <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President')}>Vice President{isRoleSeatUnavailable('Vice_President') ? ' (Filled)' : ''}</option>
-                    <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary')}>Secretary{isRoleSeatUnavailable('Secretary') ? ' (Filled)' : ''}</option>
-                    <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary')}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary') ? ' (Filled)' : ''}</option>
-                    <option value="Board_Member">Board Member</option>
-                    <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer')}>Treasurer{isRoleSeatUnavailable('Treasurer') ? ' (Filled)' : ''}</option>
-                    <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer')}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer') ? ' (Filled)' : ''}</option>
-                    <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor')}>Auditor{isRoleSeatUnavailable('Auditor') ? ' (Filled)' : ''}</option>
-                    <option value="PIO" disabled={isRoleSeatUnavailable('PIO')}>PIO{isRoleSeatUnavailable('PIO') ? ' (Filled)' : ''}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Username</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. secretary"
-                    value={newOfficerUsername}
-                    onChange={(e) => setNewOfficerUsername(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Initial Password</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="12+ chars, upper/lower/num/symbol"
-                    value={newOfficerPassword}
-                    onChange={(e) => setNewOfficerPassword(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowAddOfficerForm(false)}
-                  className="px-4 py-1.5 bg-white border border-[#D5CFC1] text-[#5D6B54] text-xs font-bold rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-extrabold rounded-xl cursor-pointer shadow-xs"
-                >
-                  Save & Provision Officer
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Officers Roster List */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-extrabold text-[#4F5E46] uppercase tracking-wider">
-              Association Officers ({users.filter(u => ['President', 'Vice_President', 'Secretary', 'Assistant_Secretary', 'Board_Member', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(u.role)).length})
-            </h4>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {users.filter(u => ['President', 'Vice_President', 'Secretary', 'Assistant_Secretary', 'Board_Member', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(u.role)).map((officer) => {
-                const isEditingRole = editingRoleOfficerId === officer.id;
-                const isEditingPass = editingUserId === officer.id;
-                // Whether THIS officer row is the President (protected account)
-                const isTargetPresident = officer.role === 'President';
-
-                // Authority rules:
-                //  - The President and Vice President may reset another officer's password.
-                //  - Nobody may reset the President's own password from this desk.
-                //  - Only the President may reassign roles or delete officers.
-                const canResetThisOfficer = canResetPasswords && !isTargetPresident;
-                const canManageThisOfficer = canAppointOfficers && !isTargetPresident;
-
-                return (
-                  <div
-                    key={officer.id}
-                    className="p-4 rounded-2xl border border-[#E9E4D9] bg-[#FAF8F5] text-left transition-all space-y-3 flex flex-col justify-between"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-start gap-2">
-                        <div>
-                          <span className="inline-block text-[10px] font-extrabold font-mono uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#1B4332] text-white">
-                            {officer.role.replace('_', ' ')}
-                          </span>
-                          <h4 className="font-extrabold text-sm text-[#1B4332] mt-1.5">{officer.name}</h4>
-                          <p className="text-[11px] text-[#5D6B54] font-mono">@{officer.username}</p>
-                        </div>
-                        {isTargetPresident && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
-                              Chief Executive
-                            </span>
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-300" title="2FA is required for President sign-in">
-                              ✓ 2FA Enforced
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Inline Role Changer */}
-                      {isEditingRole && canManageThisOfficer && (
-                        <div className="bg-white p-2.5 rounded-xl border border-[#D5CFC1] space-y-2 animate-fade-in">
-                          <label className="block text-[10px] font-bold text-[#4F5E46] uppercase">Select New Governance Role:</label>
-                          <select
-                            value={selectedNewRole}
-                            onChange={(e) => setSelectedNewRole(e.target.value as any)}
-                            className="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800"
-                          >
-                            <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President', officer.id)}>Vice President{isRoleSeatUnavailable('Vice_President', officer.id) ? ' (Filled)' : ''}</option>
-                            <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary', officer.id)}>Secretary{isRoleSeatUnavailable('Secretary', officer.id) ? ' (Filled)' : ''}</option>
-                            <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary', officer.id)}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary', officer.id) ? ' (Filled)' : ''}</option>
-                            <option value="Board_Member">Board Member</option>
-                            <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer', officer.id)}>Treasurer{isRoleSeatUnavailable('Treasurer', officer.id) ? ' (Filled)' : ''}</option>
-                            <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer', officer.id)}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer', officer.id) ? ' (Filled)' : ''}</option>
-                            <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor', officer.id)}>Auditor{isRoleSeatUnavailable('Auditor', officer.id) ? ' (Filled)' : ''}</option>
-                            <option value="PIO" disabled={isRoleSeatUnavailable('PIO', officer.id)}>PIO{isRoleSeatUnavailable('PIO', officer.id) ? ' (Filled)' : ''}</option>
-                            <option value="Member">Demote to Member</option>
-                          </select>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setEditingRoleOfficerId(null)}
-                              className="flex-1 py-1 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 cursor-pointer"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (onUpdateUserRole) {
-                                  onUpdateUserRole(officer.id, selectedNewRole);
-                                }
-                                setEditingRoleOfficerId(null);
-                              }}
-                              className="flex-1 py-1 text-[10px] font-bold bg-[#1B4332] text-white rounded-lg hover:bg-[#2D6A4F] cursor-pointer"
-                            >
-                              Save Role
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Inline Password Reset Form */}
-                      {isEditingPass && stepUpUserId !== officer.id && (
-                        <form onSubmit={(e) => handleResetPasswordSubmit(e, officer.id)} className="bg-white p-2.5 rounded-xl border border-[#E9E4D9] space-y-2 animate-fade-in">
-                          <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">New Officer Password:</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. afa2026"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full px-2 py-1 text-xs bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setEditingUserId(null)}
-                              className="flex-1 py-1 bg-white border border-[#D5CFC1] text-[#85947E] text-[10px] font-bold rounded-lg cursor-pointer text-center"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="submit"
-                              className="flex-1 py-1 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
-                            >
-                              Save Pass
-                            </button>
-                          </div>
-                        </form>
-                      )}
-
-                      {/* Step-up confirmation: re-enter the officer's own password before applying the reset */}
-                      {isEditingPass && stepUpUserId === officer.id && (
-                        <form onSubmit={(e) => handleStepUpConfirm(e, officer.id)} className="bg-[#FFF7ED] p-2.5 rounded-xl border border-[#F0C08A] space-y-2 animate-fade-in">
-                          <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
-                            <ShieldAlert className="w-3.5 h-3.5" />
-                            Confirm your own password to authorize this reset
-                          </p>
-                          <input
-                            type="password"
-                            required
-                            autoComplete="current-password"
-                            placeholder="Your password"
-                            value={stepUpPassword}
-                            onChange={(e) => setStepUpPassword(e.target.value)}
-                            className="w-full px-2 py-1 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
-                          />
-                          {stepUpError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{stepUpError}</p>}
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => { setStepUpUserId(null); setStepUpPassword(''); setStepUpError(''); }}
-                              className="flex-1 py-1 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
-                            >
-                              Back
-                            </button>
-                            <button
-                              type="submit"
-                              className="flex-1 py-1 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
-                            >
-                              Confirm Reset
-                            </button>
-                          </div>
-                        </form>
-                      )}
-
-                      {/* Two-factor reset: confirms the acting officer's password, then
-                          destroys the target's authenticator so it re-enrols at next sign-in. */}
-                      {mfaResetTarget === officer.id && (
-                        <form
-                          onSubmit={async (e) => {
-                            e.preventDefault();
-                            if (!onResetMfa || mfaResetBusy) return;
-                            setMfaResetBusy(true);
-                            setMfaResetError('');
-                            const result = await onResetMfa(officer.id, mfaResetPassword);
-                            setMfaResetBusy(false);
-                            if (!result.success) {
-                              setMfaResetError(result.message || 'The two-factor reset was rejected.');
-                              return;
-                            }
-                            setMfaResetTarget(null);
-                            setMfaResetPassword('');
-                            setMfaResetDone(officer.id);
-                          }}
-                          className="bg-[#FFF7ED] p-2.5 rounded-xl border border-[#F0C08A] space-y-2 animate-fade-in"
-                        >
-                          <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
-                            <ShieldAlert className="w-3.5 h-3.5" />
-                            Reset {officer.name}&apos;s authenticator
-                          </p>
-                          <p className="text-[10px] text-[#8A4B08] leading-relaxed">
-                            The current authenticator key is destroyed. This officer gets a fresh key when they open the sign-in screen,
-                            so confirm their identity before continuing.
-                          </p>
-                          <input
-                            type="password"
-                            required
-                            autoComplete="current-password"
-                            placeholder="Your password"
-                            value={mfaResetPassword}
-                            onChange={(e) => setMfaResetPassword(e.target.value)}
-                            className="w-full px-2 py-1 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
-                          />
-                          {mfaResetError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{mfaResetError}</p>}
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => { setMfaResetTarget(null); setMfaResetPassword(''); setMfaResetError(''); }}
-                              className="flex-1 py-1 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
-                            >
-                              Back
-                            </button>
-                            <button
-                              type="submit"
-                              disabled={mfaResetBusy}
-                              className="flex-1 py-1 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center disabled:opacity-60"
-                            >
-                              {mfaResetBusy ? 'Resetting…' : 'Reset 2FA'}
-                            </button>
-                          </div>
-                        </form>
-                      )}
-
-                      {mfaResetDone === officer.id && (
-                        <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl text-[10px] font-bold text-emerald-900 flex items-start justify-between gap-2 animate-fade-in">
-                          <span className="flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            Authenticator reset. {officer.name} must enrol a new authenticator at next sign-in.
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setMfaResetDone(null)}
-                            className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer shrink-0"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      )}
-
-                      {lastResetCredential?.userId === officer.id && (
-                        <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl space-y-2 animate-fade-in">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-extrabold text-emerald-900 uppercase flex items-center gap-1">
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              New Officer Password Active
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setLastResetCredential(null)}
-                              className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                          <div className="bg-white border border-emerald-200 px-2.5 py-1.5 rounded-lg font-mono text-xs font-black text-[#1B4332] select-all break-all">
-                            {lastResetCredential.password}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void navigator.clipboard.writeText(lastResetCredential.password);
-                              setCopiedResetPassword(true);
-                            }}
-                            className="w-full py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center transition-all"
-                          >
-                            {copiedResetPassword ? '✓ Copied to Clipboard!' : 'Copy New Password'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action Buttons for Officer */}
-                    <div className="pt-2 border-t border-[#E9E4D9] flex flex-wrap items-center gap-1.5 justify-between">
-                      <div className="flex items-center gap-1">
-                        {canResetThisOfficer ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setLastResetCredential(null);
-                              setEditingUserId(officer.id);
-                              setNewPassword(generateInitialPassword(officer.username, officer.role));
-                            }}
-                            className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
-                            title="Reset password"
-                          >
-                            <KeyRound className="w-3 h-3 text-[#E65100]" />
-                            <span>Reset</span>
-                          </button>
-                        ) : isTargetPresident ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setLastResetCredential(null);
-                              setEditingUserId(officer.id);
-                              setNewPassword(generateInitialPassword(officer.username, officer.role));
-                            }}
-                            className="px-2 py-1 text-[10px] font-bold bg-amber-50 border border-amber-300 text-amber-900 rounded-lg hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
-                            title="Change President password with step-up verification"
-                          >
-                            <KeyRound className="w-3 h-3 text-[#E65100]" />
-                            <span>Change Pass</span>
-                          </button>
-                        ) : null}
-
-                        {onResetMfa && !isTargetPresident && (canResetThisOfficer || (currentUserId === officer.id && MFA_ENFORCED_ROLE_SET.has(officer.role))) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMfaResetDone(null);
-                              setMfaResetPassword('');
-                              setMfaResetError('');
-                              setMfaResetTarget(officer.id);
-                            }}
-                            className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
-                            title="Reset two-factor authentication (lost or replaced phone)"
-                          >
-                            <ShieldAlert className="w-3 h-3 text-[#B42318]" />
-                            <span>Reset 2FA</span>
-                          </button>
-                        )}
-
-                        {canManageThisOfficer && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingRoleOfficerId(officer.id);
-                              setSelectedNewRole(officer.role as any);
-                            }}
-                            className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
-                            title="Modify or reassign role"
-                          >
-                            <Shield className="w-3 h-3 text-emerald-700" />
-                            <span>Role</span>
-                          </button>
-                        )}
-                      </div>
-
-                      {canManageThisOfficer ? (
+                    <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                      {isAdminUnlocked ? (
                         <button
                           type="button"
-                          onClick={() => setOfficerToDelete(officer)}
-                          className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-xs"
-                          title="Delete officer and revoke role"
+                          onClick={() => setIsAdminUnlocked(false)}
+                          className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
                         >
-                          <Trash2 className="w-3 h-3 text-rose-600" />
-                          <span>Delete Officer</span>
+                          <Lock className="w-3.5 h-3.5 text-amber-700" />
+                          <span>Lock Admin Desk</span>
                         </button>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 font-medium italic">
-                          {isTargetPresident ? 'Chief Executive' : 'Assigned Officer'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                      ) : null}
 
-          {/* Member Portal Accounts Desk */}
-          <div className="pt-3 border-t border-[#F0EBE1] space-y-2">
-            <h4 className="text-xs font-extrabold text-[#4F5E46] uppercase tracking-wider">
-              Farmer Member Portal Accounts ({users.filter(u => u.role === 'Member').length})
-            </h4>
-
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {users.filter(u => u.role === 'Member').map((user) => {
-                const isEditing = editingUserId === user.id;
-                const isAppointing = appointingMemberId === user.id;
-                const canAppointThisMember = canAppointOfficers && user.isApproved;
-                return (
-                  <div
-                    key={user.id}
-                    className={`p-3 rounded-2xl border text-left transition-all text-xs space-y-2 ${
-                      user.resetRequested
-                        ? 'bg-[#FFF3E0] border-[#FFE082] ring-1 ring-[#FFB300]'
-                        : 'bg-[#FAF8F5] border-[#E9E4D9]'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start gap-3">
-                      <div>
-                        <div className="font-extrabold text-[#1B4332] flex items-center gap-1.5 flex-wrap">
-                          <span>{user.name}</span>
-                          {user.resetRequested && (
-                            <span className="text-[8px] bg-[#E65100] text-white px-2 py-0.5 rounded-full font-black uppercase tracking-widest animate-pulse">
-                              PASSWORD RESET REQUESTED
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-[#5D6B54] font-medium mt-0.5">
-                          Member Login • Username: <strong className="font-mono text-[#1B4332]">@{user.username}</strong>
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        {canAppointThisMember && (
-                          <button
-                            onClick={() => {
-                              setAppointingMemberId(isAppointing ? null : user.id);
-                              setAppointRole('Secretary');
-                            }}
-                            className="px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border bg-[#1B4332] text-white border-[#1B4332] hover:bg-[#2D6A4F]"
-                            title="Appoint this member as an association officer"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Appoint</span>
-                          </button>
-                        )}
-
-                        {canResetPasswords && (
-                          <button
-                            onClick={() => {
-                              setLastResetCredential(null);
-                              setEditingUserId(user.id);
-                              setNewPassword(generateInitialPassword(user.username, user.role));
-                            }}
-                            className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border ${
-                              user.resetRequested
-                                ? 'bg-[#E65100] text-white border-[#E65100]'
-                                : 'bg-white text-[#1B4332] border-[#D5CFC1] hover:bg-white'
-                            }`}
-                            title="Reset password"
-                          >
-                            <KeyRound className="w-3.5 h-3.5" />
-                            <span>Reset</span>
-                          </button>
-                        )}
-
-                        {canAppointOfficers && (
-                          <button
-                            onClick={() => onDeleteUser && onDeleteUser(user.id)}
-                            className="p-1.5 text-[#85947E] hover:text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg transition-all cursor-pointer"
-                            title="Remove user account"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Inline Appoint-as-Officer panel (President / system admin only) */}
-                    {canAppointThisMember && isAppointing && (
-                      <div className="bg-white p-3 rounded-xl border border-[#1B4332]/30 space-y-2.5 animate-fade-in">
-                        <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">
-                          Appoint {user.name} as Officer:
-                        </label>
-                        <select
-                          value={appointRole}
-                          onChange={(e) => setAppointRole(e.target.value as OfficerRole)}
-                          className="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800"
-                        >
-                          <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President', user.id)}>Vice President{isRoleSeatUnavailable('Vice_President', user.id) ? ' (Filled)' : ''}</option>
-                          <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary', user.id)}>Secretary{isRoleSeatUnavailable('Secretary', user.id) ? ' (Filled)' : ''}</option>
-                          <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary', user.id)}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary', user.id) ? ' (Filled)' : ''}</option>
-                          <option value="Board_Member">Board Member</option>
-                          <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer', user.id)}>Treasurer{isRoleSeatUnavailable('Treasurer', user.id) ? ' (Filled)' : ''}</option>
-                          <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer', user.id)}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer', user.id) ? ' (Filled)' : ''}</option>
-                          <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor', user.id)}>Auditor{isRoleSeatUnavailable('Auditor', user.id) ? ' (Filled)' : ''}</option>
-                          <option value="PIO" disabled={isRoleSeatUnavailable('PIO', user.id)}>PIO{isRoleSeatUnavailable('PIO', user.id) ? ' (Filled)' : ''}</option>
-                        </select>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setAppointingMemberId(null)}
-                            className="flex-1 py-1.5 bg-white border border-[#D5CFC1] text-[#85947E] text-[10px] font-bold rounded-lg cursor-pointer text-center"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { void handleAppointMember(user.id); }}
-                            className="flex-1 py-1.5 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
-                          >
-                            Confirm Appointment
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Inline password edit form */}
-                    {isEditing && stepUpUserId !== user.id && (
-                      <form onSubmit={(e) => handleResetPasswordSubmit(e, user.id)} className="bg-white p-3 rounded-xl border border-[#E9E4D9] space-y-2.5">
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">New Password:</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. afa2026"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full px-2 py-1.5 text-xs bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditingUserId(null)}
-                            className="flex-1 py-1.5 bg-white border border-[#D5CFC1] text-[#85947E] text-[10px] font-bold rounded-lg cursor-pointer text-center"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            className="flex-1 py-1.5 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
-                          >
-                            Save Password
-                          </button>
-                        </div>
-                      </form>
-                    )}
-
-                    {/* Step-up confirmation: re-enter the officer's own password before applying the reset */}
-                    {isEditing && stepUpUserId === user.id && (
-                      <form onSubmit={(e) => handleStepUpConfirm(e, user.id)} className="bg-[#FFF7ED] p-3 rounded-xl border border-[#F0C08A] space-y-2.5">
-                        <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
-                          <ShieldAlert className="w-3.5 h-3.5" />
-                          Confirm your own password to authorize this reset
-                        </p>
-                        <input
-                          type="password"
-                          required
-                          autoComplete="current-password"
-                          placeholder="Your password"
-                          value={stepUpPassword}
-                          onChange={(e) => setStepUpPassword(e.target.value)}
-                          className="w-full px-2 py-1.5 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
-                        />
-                        {stepUpError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{stepUpError}</p>}
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => { setStepUpUserId(null); setStepUpPassword(''); setStepUpError(''); }}
-                            className="flex-1 py-1.5 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
-                          >
-                            Back
-                          </button>
-                          <button
-                            type="submit"
-                            className="flex-1 py-1.5 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
-                          >
-                            Confirm Reset
-                          </button>
-                        </div>
-                      </form>
-                    )}
-
-                    {lastResetCredential?.userId === user.id && (
-                      <div className="bg-emerald-50 border border-emerald-300 p-3 rounded-xl space-y-2 animate-fade-in">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-extrabold text-emerald-900 uppercase flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            New Member Password Active
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setLastResetCredential(null)}
-                            className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                        <div className="bg-white border border-emerald-200 px-2.5 py-1.5 rounded-lg font-mono text-xs font-black text-[#1B4332] select-all break-all">
-                          {lastResetCredential.password}
-                        </div>
+                      {isAdminUnlocked && canAppointOfficers && onAddOfficer && (
                         <button
                           type="button"
                           onClick={() => {
-                            void navigator.clipboard.writeText(lastResetCredential.password);
-                            setCopiedResetPassword(true);
+                            const nextOpen = !showAddOfficerForm;
+                            setShowAddOfficerForm(nextOpen);
+                            if (nextOpen && !newOfficerPassword) {
+                              setNewOfficerPassword(generateInitialPassword(newOfficerUsername || 'officer', newOfficerRole));
+                            }
                           }}
-                          className="w-full py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center transition-all"
+                          className="px-3.5 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-full text-xs font-extrabold transition-all cursor-pointer shadow-xs"
                         >
-                          {copiedResetPassword ? '✓ Copied to Clipboard!' : 'Copy New Password'}
+                          {showAddOfficerForm ? 'Cancel' : '+ Add Officer Account'}
                         </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {!isAdminUnlocked ? (
+                    <div className="p-6 bg-[#FAF8F5] border-2 border-dashed border-[#D5CFC1] rounded-2xl flex flex-col items-center text-center space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center border border-amber-300 shadow-inner">
+                        <Lock className="w-6 h-6" />
+                      </div>
+                      <div className="max-w-md space-y-1">
+                        <h4 className="font-extrabold text-[#1B4332] text-sm">Dedicated Admin Security Gate</h4>
+                        <p className="text-xs text-[#5D6B54]">
+                          Re-enter your signed-in account password to open backup, delegated President access, and officer administration tools.
+                        </p>
+                      </div>
+                      <form onSubmit={handleAdminPasswordSubmit} className="flex flex-col gap-2 w-full max-w-sm pt-2">
+                        <input
+                          ref={adminPasswordInputRef}
+                          type="password"
+                          autoComplete="current-password"
+                          placeholder="Enter your account password"
+                          value={adminPasswordInput}
+                          onChange={(e) => setAdminPasswordInput(e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                          required
+                        />
+                        {requiresAdminTotp && (
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            placeholder="6-digit authenticator code"
+                            value={adminTotpCode}
+                            onChange={(e) => setAdminTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                            required
+                            minLength={6}
+                            maxLength={6}
+                          />
+                        )}
+                        <button
+                          type="submit"
+                          disabled={isVerifyingAdminPassword || !onVerifyAdminPassword}
+                          className="w-full px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:opacity-60 text-white text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all"
+                        >
+                          {isVerifyingAdminPassword ? 'Verifying…' : requiresAdminTotp ? 'Verify & Open Admin Tasks' : 'Verify Password'}
+                        </button>
+                      </form>
+                      {adminGateError && <p role="alert" className="text-xs font-bold text-rose-600">{adminGateError}</p>}
+                    </div>
+                  ) : (
+                    <>
+                      {isAdminUnlocked && (
+                        { isAdminUnlocked && currentRole === 'President' && (
+                          (() => {
+                            const presUser = (currentRole === 'President' && currentUserId ? users.find(u => u.id === currentUserId) : null)
+                              || (currentUserId ? users.find(u => u.id === currentUserId) : null)
+                            const presUser = (currentUserId ? users.find(u => u.id === currentUserId) : null)
+                              || users.find(u => u.role === 'President')
+                              || users.find(u => u.role?.toLowerCase() === 'president');
+                            const activeSecret = presUser?.totpSecret;
+                            return (
+                              <div className="bg-[#FAF8F5] border border-[#D5CFC1] rounded-2xl p-4 flex flex-col justify-between gap-3 text-xs">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                  <div className="space-y-0.5">
+                                    <span className="font-extrabold text-[#1B4332] flex items-center gap-1.5">
+                                      <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                                      President Two-Factor Authentication (TOTP MFA) — Enforced
+                                    </span>
+                                    <p className="text-[11px] text-[#5D6B54]">
+                                      2FA is permanently enforced on the President account. An authenticator app (Google Authenticator, Microsoft Authenticator, etc.) is required at every login.
+                                    </p>
+                                  </div>
+                                  <span className="px-3 py-1.5 rounded-xl font-bold text-xs border border-emerald-300 bg-emerald-50 text-emerald-800 shrink-0">
+                                    ✓ Enforced &amp; Active
+                                  </span>
+                                </div>
+                                {activeSecret ? (
+                                  <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
+                                    <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-black text-[#1B4332] text-xs sm:text-sm select-all break-all bg-[#FAF8F5] px-2 py-1 rounded border border-[#D8E7D9]">
+                                        {activeSecret}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500">
+                                      Scan or enter this key into your Google Authenticator, Microsoft Authenticator, or 2FA app to generate the 6-digit login codes.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="p-3 bg-white border border-[#D5CFC1] rounded-xl text-[11px] space-y-1.5">
+                                    <span className="text-[10px] font-bold uppercase text-[#4A5F57] block">Authenticator Secret Key (TOTP):</span>
+                                    <p className="text-[11px] text-amber-700 font-semibold">
+                                      No authenticator enrolled yet. Sign in online once to complete 2FA enrollment — a unique secret will be generated then.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        )}
+
+                      {isAdminUnlocked && onRequestDelegation && onReviewDelegation && onRevokeDelegation && onRefreshDelegations && (
+                        <DelegationAccessPanel
+                          currentRole={currentRole}
+                          currentUserId={currentUserId}
+                          users={users}
+                          requests={delegationRequests}
+                          isOnline={isOnline}
+                          isRefreshing={isRefreshingDelegations}
+                          onRefresh={onRefreshDelegations}
+                          onRequest={onRequestDelegation}
+                          onReview={onReviewDelegation}
+                          onRevoke={onRevokeDelegation}
+                        />
+                      )}
+
+                      {canAppointOfficers && showAddOfficerForm && (
+                        <form onSubmit={handleCreateOfficerSubmit} className="bg-[#FAF8F5] border-2 border-[#1B4332]/20 rounded-2xl p-4 space-y-3 animate-fade-in">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-extrabold text-[#1B4332] uppercase tracking-wider">
+                              Create New Officer Account
+                            </h4>
+                            <button
+                              ref={adminTasksCloseRef}
+                              type="button"
+                              onClick={() => setNewOfficerPassword(generateInitialPassword(newOfficerUsername || 'officer', newOfficerRole))}
+                              className="text-[11px] font-bold text-[#2D6A4F] hover:underline cursor-pointer"
+                            >
+                              Generate Strong Password
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Full Name</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. Juan Dela Cruz"
+                                value={newOfficerName}
+                                onChange={(e) => setNewOfficerName(e.target.value)}
+                                className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Governance Role</label>
+                              <select
+                                value={newOfficerRole}
+                                onChange={(e) => setNewOfficerRole(e.target.value as OfficerRole)}
+                                className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                              >
+                                <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President')}>Vice President{isRoleSeatUnavailable('Vice_President') ? ' (Filled)' : ''}</option>
+                                <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary')}>Secretary{isRoleSeatUnavailable('Secretary') ? ' (Filled)' : ''}</option>
+                                <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary')}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary') ? ' (Filled)' : ''}</option>
+                                <option value="Board_Member">Board Member</option>
+                                <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer')}>Treasurer{isRoleSeatUnavailable('Treasurer') ? ' (Filled)' : ''}</option>
+                                <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer')}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer') ? ' (Filled)' : ''}</option>
+                                <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor')}>Auditor{isRoleSeatUnavailable('Auditor') ? ' (Filled)' : ''}</option>
+                                <option value="PIO" disabled={isRoleSeatUnavailable('PIO')}>PIO{isRoleSeatUnavailable('PIO') ? ' (Filled)' : ''}</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Username</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. secretary"
+                                value={newOfficerUsername}
+                                onChange={(e) => setNewOfficerUsername(e.target.value)}
+                                className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase mb-1">Initial Password</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="12+ chars, upper/lower/num/symbol"
+                                value={newOfficerPassword}
+                                onChange={(e) => setNewOfficerPassword(e.target.value)}
+                                className="w-full px-3 py-2 text-xs bg-white border border-[#D5CFC1] rounded-xl font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setShowAddOfficerForm(false)}
+                              className="px-4 py-1.5 bg-white border border-[#D5CFC1] text-[#5D6B54] text-xs font-bold rounded-xl cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-4 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-extrabold rounded-xl cursor-pointer shadow-xs"
+                            >
+                              Save & Provision Officer
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      {/* Officers Roster List */}
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-extrabold text-[#4F5E46] uppercase tracking-wider">
+                          Association Officers ({users.filter(u => ['President', 'Vice_President', 'Secretary', 'Assistant_Secretary', 'Board_Member', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(u.role)).length})
+                        </h4>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {users.filter(u => ['President', 'Vice_President', 'Secretary', 'Assistant_Secretary', 'Board_Member', 'Treasurer', 'Assistant_Treasurer', 'Auditor', 'PIO'].includes(u.role)).map((officer) => {
+                            const isEditingRole = editingRoleOfficerId === officer.id;
+                            const isEditingPass = editingUserId === officer.id;
+                            // Whether THIS officer row is the President (protected account)
+                            const isTargetPresident = officer.role === 'President';
+
+                            // Authority rules:
+                            //  - The President and Vice President may reset another officer's password.
+                            //  - Nobody may reset the President's own password from this desk.
+                            //  - The President, or a Vice President with active 'password_change' delegation, may reset another officer's password.
+                            //  - Nobody may reset or change the President's password from a Vice President session.
+                            //  - Only the President may reassign roles or delete officers.
+                            const canResetThisOfficer = canResetPasswords && !isTargetPresident;
+                            const canChangePresidentOwnPassword = isTargetPresident && currentRole === 'President';
+                            const canManageThisOfficer = canAppointOfficers && !isTargetPresident;
+
+                            return (
+                              <div
+                                key={officer.id}
+                                className="p-4 rounded-2xl border border-[#E9E4D9] bg-[#FAF8F5] text-left transition-all space-y-3 flex flex-col justify-between"
+                              >
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div>
+                                      <span className="inline-block text-[10px] font-extrabold font-mono uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#1B4332] text-white">
+                                        {officer.role.replace('_', ' ')}
+                                      </span>
+                                      <h4 className="font-extrabold text-sm text-[#1B4332] mt-1.5">{officer.name}</h4>
+                                      <p className="text-[11px] text-[#5D6B54] font-mono">@{officer.username}</p>
+                                    </div>
+                                    {isTargetPresident && (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
+                                          Chief Executive
+                                        </span>
+                                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-300" title="2FA is required for President sign-in">
+                                          ✓ 2FA Enforced
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Inline Role Changer */}
+                                  {isEditingRole && canManageThisOfficer && (
+                                    <div className="bg-white p-2.5 rounded-xl border border-[#D5CFC1] space-y-2 animate-fade-in">
+                                      <label className="block text-[10px] font-bold text-[#4F5E46] uppercase">Select New Governance Role:</label>
+                                      <select
+                                        value={selectedNewRole}
+                                        onChange={(e) => setSelectedNewRole(e.target.value as any)}
+                                        className="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800"
+                                      >
+                                        <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President', officer.id)}>Vice President{isRoleSeatUnavailable('Vice_President', officer.id) ? ' (Filled)' : ''}</option>
+                                        <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary', officer.id)}>Secretary{isRoleSeatUnavailable('Secretary', officer.id) ? ' (Filled)' : ''}</option>
+                                        <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary', officer.id)}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary', officer.id) ? ' (Filled)' : ''}</option>
+                                        <option value="Board_Member">Board Member</option>
+                                        <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer', officer.id)}>Treasurer{isRoleSeatUnavailable('Treasurer', officer.id) ? ' (Filled)' : ''}</option>
+                                        <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer', officer.id)}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer', officer.id) ? ' (Filled)' : ''}</option>
+                                        <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor', officer.id)}>Auditor{isRoleSeatUnavailable('Auditor', officer.id) ? ' (Filled)' : ''}</option>
+                                        <option value="PIO" disabled={isRoleSeatUnavailable('PIO', officer.id)}>PIO{isRoleSeatUnavailable('PIO', officer.id) ? ' (Filled)' : ''}</option>
+                                        <option value="Member">Demote to Member</option>
+                                      </select>
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingRoleOfficerId(null)}
+                                          className="flex-1 py-1 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 cursor-pointer"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (onUpdateUserRole) {
+                                              onUpdateUserRole(officer.id, selectedNewRole);
+                                            }
+                                            setEditingRoleOfficerId(null);
+                                          }}
+                                          className="flex-1 py-1 text-[10px] font-bold bg-[#1B4332] text-white rounded-lg hover:bg-[#2D6A4F] cursor-pointer"
+                                        >
+                                          Save Role
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Inline Password Reset Form */}
+                                  {isEditingPass && stepUpUserId !== officer.id && (
+                                    { isEditingPass && (canResetThisOfficer || canChangePresidentOwnPassword) && stepUpUserId !== officer.id && (
+                                      <form onSubmit={(e) => handleResetPasswordSubmit(e, officer.id)} className="bg-white p-2.5 rounded-xl border border-[#E9E4D9] space-y-2 animate-fade-in">
+                                        <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">New Officer Password:</label>
+                                        <input
+                                          type="text"
+                                          required
+                                          placeholder="e.g. afa2026"
+                                          value={newPassword}
+                                          onChange={(e) => setNewPassword(e.target.value)}
+                                          className="w-full px-2 py-1 text-xs bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
+                                        />
+                                        <div className="flex gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditingUserId(null)}
+                                            className="flex-1 py-1 bg-white border border-[#D5CFC1] text-[#85947E] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            type="submit"
+                                            className="flex-1 py-1 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
+                                          >
+                                            Save Pass
+                                          </button>
+                                        </div>
+                                      </form>
+                                    )}
+
+                                  {/* Step-up confirmation: re-enter the officer's own password before applying the reset */}
+                                  {isEditingPass && stepUpUserId === officer.id && (
+                                    { isEditingPass && (canResetThisOfficer || canChangePresidentOwnPassword) && stepUpUserId === officer.id && (
+                                      <form onSubmit={(e) => handleStepUpConfirm(e, officer.id)} className="bg-[#FFF7ED] p-2.5 rounded-xl border border-[#F0C08A] space-y-2 animate-fade-in">
+                                        <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
+                                          <ShieldAlert className="w-3.5 h-3.5" />
+                                          Confirm your own password to authorize this reset
+                                        </p>
+                                        <input
+                                          type="password"
+                                          required
+                                          autoComplete="current-password"
+                                          placeholder="Your password"
+                                          value={stepUpPassword}
+                                          onChange={(e) => setStepUpPassword(e.target.value)}
+                                          className="w-full px-2 py-1 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
+                                        />
+                                        {stepUpError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{stepUpError}</p>}
+                                        <div className="flex gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => { setStepUpUserId(null); setStepUpPassword(''); setStepUpError(''); }}
+                                            className="flex-1 py-1 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                                          >
+                                            Back
+                                          </button>
+                                          <button
+                                            type="submit"
+                                            className="flex-1 py-1 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
+                                          >
+                                            Confirm Reset
+                                          </button>
+                                        </div>
+                                      </form>
+                                    )}
+
+                                  {/* Two-factor reset: confirms the acting officer's password, then
+                          destroys the target's authenticator so it re-enrols at next sign-in. */}
+                                  {mfaResetTarget === officer.id && (
+                                    <form
+                                      onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        if (!onResetMfa || mfaResetBusy) return;
+                                        setMfaResetBusy(true);
+                                        setMfaResetError('');
+                                        const result = await onResetMfa(officer.id, mfaResetPassword);
+                                        setMfaResetBusy(false);
+                                        if (!result.success) {
+                                          setMfaResetError(result.message || 'The two-factor reset was rejected.');
+                                          return;
+                                        }
+                                        setMfaResetTarget(null);
+                                        setMfaResetPassword('');
+                                        setMfaResetDone(officer.id);
+                                      }}
+                                      className="bg-[#FFF7ED] p-2.5 rounded-xl border border-[#F0C08A] space-y-2 animate-fade-in"
+                                    >
+                                      <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
+                                        <ShieldAlert className="w-3.5 h-3.5" />
+                                        Reset {officer.name}&apos;s authenticator
+                                      </p>
+                                      <p className="text-[10px] text-[#8A4B08] leading-relaxed">
+                                        The current authenticator key is destroyed. This officer gets a fresh key when they open the sign-in screen,
+                                        so confirm their identity before continuing.
+                                      </p>
+                                      <input
+                                        type="password"
+                                        required
+                                        autoComplete="current-password"
+                                        placeholder="Your password"
+                                        value={mfaResetPassword}
+                                        onChange={(e) => setMfaResetPassword(e.target.value)}
+                                        className="w-full px-2 py-1 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
+                                      />
+                                      {mfaResetError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{mfaResetError}</p>}
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => { setMfaResetTarget(null); setMfaResetPassword(''); setMfaResetError(''); }}
+                                          className="flex-1 py-1 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                                        >
+                                          Back
+                                        </button>
+                                        <button
+                                          type="submit"
+                                          disabled={mfaResetBusy}
+                                          className="flex-1 py-1 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center disabled:opacity-60"
+                                        >
+                                          {mfaResetBusy ? 'Resetting…' : 'Reset 2FA'}
+                                        </button>
+                                      </div>
+                                    </form>
+                                  )}
+
+                                  {mfaResetDone === officer.id && (
+                                    <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl text-[10px] font-bold text-emerald-900 flex items-start justify-between gap-2 animate-fade-in">
+                                      <span className="flex items-center gap-1">
+                                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                        Authenticator reset. {officer.name} must enrol a new authenticator at next sign-in.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setMfaResetDone(null)}
+                                        className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer shrink-0"
+                                      >
+                                        Dismiss
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {lastResetCredential?.userId === officer.id && (
+                                    <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded-xl space-y-2 animate-fade-in">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-extrabold text-emerald-900 uppercase flex items-center gap-1">
+                                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                          New Officer Password Active
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setLastResetCredential(null)}
+                                          className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                                        >
+                                          Dismiss
+                                        </button>
+                                      </div>
+                                      <div className="bg-white border border-emerald-200 px-2.5 py-1.5 rounded-lg font-mono text-xs font-black text-[#1B4332] select-all break-all">
+                                        {lastResetCredential.password}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          void navigator.clipboard.writeText(lastResetCredential.password);
+                                          setCopiedResetPassword(true);
+                                        }}
+                                        className="w-full py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center transition-all"
+                                      >
+                                        {copiedResetPassword ? '✓ Copied to Clipboard!' : 'Copy New Password'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Action Buttons for Officer */}
+                                <div className="pt-2 border-t border-[#E9E4D9] flex flex-wrap items-center gap-1.5 justify-between">
+                                  <div className="flex items-center gap-1">
+                                    {canResetThisOfficer ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setLastResetCredential(null);
+                                          setEditingUserId(officer.id);
+                                          setNewPassword(generateInitialPassword(officer.username, officer.role));
+                                        }}
+                                        className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
+                                        title="Reset password"
+                                      >
+                                        <KeyRound className="w-3 h-3 text-[#E65100]" />
+                                        <span>Reset</span>
+                                      </button>
+                                    ) : isTargetPresident ? (
+                                    ): canChangePresidentOwnPassword ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLastResetCredential(null);
+                                        setEditingUserId(officer.id);
+                                        setNewPassword(generateInitialPassword(officer.username, officer.role));
+                                      }}
+                                      className="px-2 py-1 text-[10px] font-bold bg-amber-50 border border-amber-300 text-amber-900 rounded-lg hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
+                                      title="Change President password with step-up verification"
+                                    >
+                                      <KeyRound className="w-3 h-3 text-[#E65100]" />
+                                      <span>Change Pass</span>
+                                    </button>
+                        ) : null}
+
+                                    {onResetMfa && !isTargetPresident && (canResetThisOfficer || (currentUserId === officer.id && MFA_ENFORCED_ROLE_SET.has(officer.role))) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setMfaResetDone(null);
+                                          setMfaResetPassword('');
+                                          setMfaResetError('');
+                                          setMfaResetTarget(officer.id);
+                                        }}
+                                        className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
+                                        title="Reset two-factor authentication (lost or replaced phone)"
+                                      >
+                                        <ShieldAlert className="w-3 h-3 text-[#B42318]" />
+                                        <span>Reset 2FA</span>
+                                      </button>
+                                    )}
+
+                                    {canManageThisOfficer && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingRoleOfficerId(officer.id);
+                                          setSelectedNewRole(officer.role as any);
+                                        }}
+                                        className="px-2 py-1 text-[10px] font-bold bg-white border border-[#D5CFC1] text-[#1B4332] rounded-lg hover:bg-[#F2EFE9] flex items-center gap-1 cursor-pointer"
+                                        title="Modify or reassign role"
+                                      >
+                                        <Shield className="w-3 h-3 text-emerald-700" />
+                                        <span>Role</span>
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {canManageThisOfficer ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setOfficerToDelete(officer)}
+                                      className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                                      title="Delete officer and revoke role"
+                                    >
+                                      <Trash2 className="w-3 h-3 text-rose-600" />
+                                      <span>Delete Officer</span>
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-medium italic">
+                                      {isTargetPresident ? 'Chief Executive' : 'Assigned Officer'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Member Portal Accounts Desk */}
+                      <div className="pt-3 border-t border-[#F0EBE1] space-y-2">
+                        <h4 className="text-xs font-extrabold text-[#4F5E46] uppercase tracking-wider">
+                          Farmer Member Portal Accounts ({users.filter(u => u.role === 'Member').length})
+                        </h4>
+
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {users.filter(u => u.role === 'Member').map((user) => {
+                            const isEditing = editingUserId === user.id;
+                            const isAppointing = appointingMemberId === user.id;
+                            const canAppointThisMember = canAppointOfficers && user.isApproved;
+                            return (
+                              <div
+                                key={user.id}
+                                className={`p-3 rounded-2xl border text-left transition-all text-xs space-y-2 ${user.resetRequested
+                                    ? 'bg-[#FFF3E0] border-[#FFE082] ring-1 ring-[#FFB300]'
+                                    : 'bg-[#FAF8F5] border-[#E9E4D9]'
+                                  }`}
+                              >
+                                <div className="flex justify-between items-start gap-3">
+                                  <div>
+                                    <div className="font-extrabold text-[#1B4332] flex items-center gap-1.5 flex-wrap">
+                                      <span>{user.name}</span>
+                                      {user.resetRequested && (
+                                        <span className="text-[8px] bg-[#E65100] text-white px-2 py-0.5 rounded-full font-black uppercase tracking-widest animate-pulse">
+                                          PASSWORD RESET REQUESTED
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-[#5D6B54] font-medium mt-0.5">
+                                      Member Login • Username: <strong className="font-mono text-[#1B4332]">@{user.username}</strong>
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {canAppointThisMember && (
+                                      <button
+                                        onClick={() => {
+                                          setAppointingMemberId(isAppointing ? null : user.id);
+                                          setAppointRole('Secretary');
+                                        }}
+                                        className="px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border bg-[#1B4332] text-white border-[#1B4332] hover:bg-[#2D6A4F]"
+                                        title="Appoint this member as an association officer"
+                                      >
+                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                        <span>Appoint</span>
+                                      </button>
+                                    )}
+
+                                    {canResetPasswords && (
+                                      <button
+                                        onClick={() => {
+                                          setLastResetCredential(null);
+                                          setEditingUserId(user.id);
+                                          setNewPassword(generateInitialPassword(user.username, user.role));
+                                        }}
+                                        className={`px-2.5 py-1.5 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1 border ${user.resetRequested
+                                            ? 'bg-[#E65100] text-white border-[#E65100]'
+                                            : 'bg-white text-[#1B4332] border-[#D5CFC1] hover:bg-white'
+                                          }`}
+                                        title="Reset password"
+                                      >
+                                        <KeyRound className="w-3.5 h-3.5" />
+                                        <span>Reset</span>
+                                      </button>
+                                    )}
+
+                                    {canAppointOfficers && (
+                                      <button
+                                        onClick={() => onDeleteUser && onDeleteUser(user.id)}
+                                        className="p-1.5 text-[#85947E] hover:text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg transition-all cursor-pointer"
+                                        title="Remove user account"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Inline Appoint-as-Officer panel (President / system admin only) */}
+                                {canAppointThisMember && isAppointing && (
+                                  <div className="bg-white p-3 rounded-xl border border-[#1B4332]/30 space-y-2.5 animate-fade-in">
+                                    <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">
+                                      Appoint {user.name} as Officer:
+                                    </label>
+                                    <select
+                                      value={appointRole}
+                                      onChange={(e) => setAppointRole(e.target.value as OfficerRole)}
+                                      className="w-full text-xs font-bold p-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-800"
+                                    >
+                                      <option value="Vice_President" disabled={isRoleSeatUnavailable('Vice_President', user.id)}>Vice President{isRoleSeatUnavailable('Vice_President', user.id) ? ' (Filled)' : ''}</option>
+                                      <option value="Secretary" disabled={isRoleSeatUnavailable('Secretary', user.id)}>Secretary{isRoleSeatUnavailable('Secretary', user.id) ? ' (Filled)' : ''}</option>
+                                      <option value="Assistant_Secretary" disabled={isRoleSeatUnavailable('Assistant_Secretary', user.id)}>Assistant Secretary{isRoleSeatUnavailable('Assistant_Secretary', user.id) ? ' (Filled)' : ''}</option>
+                                      <option value="Board_Member">Board Member</option>
+                                      <option value="Treasurer" disabled={isRoleSeatUnavailable('Treasurer', user.id)}>Treasurer{isRoleSeatUnavailable('Treasurer', user.id) ? ' (Filled)' : ''}</option>
+                                      <option value="Assistant_Treasurer" disabled={isRoleSeatUnavailable('Assistant_Treasurer', user.id)}>Assistant Treasurer{isRoleSeatUnavailable('Assistant_Treasurer', user.id) ? ' (Filled)' : ''}</option>
+                                      <option value="Auditor" disabled={isRoleSeatUnavailable('Auditor', user.id)}>Auditor{isRoleSeatUnavailable('Auditor', user.id) ? ' (Filled)' : ''}</option>
+                                      <option value="PIO" disabled={isRoleSeatUnavailable('PIO', user.id)}>PIO{isRoleSeatUnavailable('PIO', user.id) ? ' (Filled)' : ''}</option>
+                                    </select>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setAppointingMemberId(null)}
+                                        className="flex-1 py-1.5 bg-white border border-[#D5CFC1] text-[#85947E] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => { void handleAppointMember(user.id); }}
+                                        className="flex-1 py-1.5 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
+                                      >
+                                        Confirm Appointment
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Inline password edit form */}
+                                {isEditing && stepUpUserId !== user.id && (
+                                  { isEditing && canResetPasswords && stepUpUserId !== user.id && (
+                                    <form onSubmit={(e) => handleResetPasswordSubmit(e, user.id)} className="bg-white p-3 rounded-xl border border-[#E9E4D9] space-y-2.5">
+                                      <div className="space-y-1">
+                                        <label className="block text-[10px] font-extrabold text-[#4F5E46] uppercase">New Password:</label>
+                                        <input
+                                          type="text"
+                                          required
+                                          placeholder="e.g. afa2026"
+                                          value={newPassword}
+                                          onChange={(e) => setNewPassword(e.target.value)}
+                                          className="w-full px-2 py-1.5 text-xs bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none focus:border-[#1B4332]"
+                                        />
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingUserId(null)}
+                                          className="flex-1 py-1.5 bg-white border border-[#D5CFC1] text-[#85947E] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="submit"
+                                          className="flex-1 py-1.5 bg-[#1B4332] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
+                                        >
+                                          Save Password
+                                        </button>
+                                      </div>
+                                    </form>
+                                  )}
+
+                                {/* Step-up confirmation: re-enter the officer's own password before applying the reset */}
+                                {isEditing && stepUpUserId === user.id && (
+                                  { isEditing && canResetPasswords && stepUpUserId === user.id && (
+                                    <form onSubmit={(e) => handleStepUpConfirm(e, user.id)} className="bg-[#FFF7ED] p-3 rounded-xl border border-[#F0C08A] space-y-2.5">
+                                      <p className="text-[10px] font-extrabold text-[#8A4B08] uppercase flex items-center gap-1">
+                                        <ShieldAlert className="w-3.5 h-3.5" />
+                                        Confirm your own password to authorize this reset
+                                      </p>
+                                      <input
+                                        type="password"
+                                        required
+                                        autoComplete="current-password"
+                                        placeholder="Your password"
+                                        value={stepUpPassword}
+                                        onChange={(e) => setStepUpPassword(e.target.value)}
+                                        className="w-full px-2 py-1.5 text-xs bg-white border border-[#F0C08A] rounded-lg font-mono font-bold text-[#1B4332] focus:outline-none"
+                                      />
+                                      {stepUpError && <p role="alert" className="text-[10px] font-bold text-[#B42318]">{stepUpError}</p>}
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => { setStepUpUserId(null); setStepUpPassword(''); setStepUpError(''); }}
+                                          className="flex-1 py-1.5 bg-white border border-[#F0C08A] text-[#8A4B08] text-[10px] font-bold rounded-lg cursor-pointer text-center"
+                                        >
+                                          Back
+                                        </button>
+                                        <button
+                                          type="submit"
+                                          className="flex-1 py-1.5 bg-[#B42318] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center"
+                                        >
+                                          Confirm Reset
+                                        </button>
+                                      </div>
+                                    </form>
+                                  )}
+
+                                {lastResetCredential?.userId === user.id && (
+                                  <div className="bg-emerald-50 border border-emerald-300 p-3 rounded-xl space-y-2 animate-fade-in">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[10px] font-extrabold text-emerald-900 uppercase flex items-center gap-1">
+                                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                        New Member Password Active
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setLastResetCredential(null)}
+                                        className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                                      >
+                                        Dismiss
+                                      </button>
+                                    </div>
+                                    <div className="bg-white border border-emerald-200 px-2.5 py-1.5 rounded-lg font-mono text-xs font-black text-[#1B4332] select-all break-all">
+                                      {lastResetCredential.password}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void navigator.clipboard.writeText(lastResetCredential.password);
+                                        setCopiedResetPassword(true);
+                                      }}
+                                      className="w-full py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-[10px] font-extrabold rounded-lg cursor-pointer text-center transition-all"
+                                    >
+                                      {copiedResetPassword ? '✓ Copied to Clipboard!' : 'Copy New Password'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+              </div>
+
+              {/* SYSTEM AUDIT TRAIL follows the Presidential Turnover Desk */}
+              <section className="order-4 bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
+                <div className="flex items-center justify-between text-left">
+                  <h3 className="text-sm font-extrabold font-display text-[#1B4332] flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-[#1B4332]" />
+                    <span>System Audit Trail</span>
+                  </h3>
+                  <span className="text-[10px] font-black text-[#1B4332] bg-[#EAF4EC] px-2 py-0.5 rounded-full">{filteredLogs.length}</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-[#85947E]" />
+                    <input
+                      type="text"
+                      placeholder={t('Pangitaa sa logs...', 'Search logs...')}
+                      value={logSearch}
+                      onChange={(e) => setLogSearch(e.target.value)}
+                      className="w-full pl-8 pr-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      value={selectedLogYear}
+                      onChange={(e) => setSelectedLogYear(e.target.value)}
+                      className="w-full px-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans font-bold cursor-pointer"
+                    >
+                      <option value="All">{t('Tanan nga Tuig', 'All Years')}</option>
+                      {availableYears.map(yr => (
+                        <option key={yr} value={yr}>{yr} {closedLogYears.includes(yr) ? '🔒' : '🔓'}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {selectedLogYear !== 'All' && (
+                  <div className="text-left animate-fade-in">
+                    {closedLogYears.includes(parseInt(selectedLogYear)) ? (
+                      <div className="bg-[#EFEBE9] border border-[#D7CCC8] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#5D4037]">
+                          <Lock className="w-3.5 h-3.5 text-[#5D4037] shrink-0" />
+                          <span>{t(`${selectedLogYear} sirado na.`, `${selectedLogYear} is sealed.`)}</span>
+                        </div>
+                        <span className="bg-[#5D4037] text-white text-[8px] tracking-wider px-1.5 py-0.5 rounded-full font-bold shrink-0 uppercase">SEALED</span>
+                      </div>
+                    ) : (
+                      <div className="bg-[#FFF3E0] border border-[#FFE082] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
+                        <div className="text-[11px] font-semibold text-[#E65100]">
+                          {t(`${selectedLogYear} aktibo pa.`, `${selectedLogYear} is still active.`)}
+                        </div>
+                        {currentRole === 'President' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSealYearInput('');
+                              setShowSealConfirm(true);
+                            }}
+                            className="px-2 py-1 bg-[#BF360C] hover:bg-[#8D2300] text-white text-[10px] font-black rounded-lg transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                          >
+                            <Lock className="w-3 h-3" />
+                            <span>{t('I-SEAL', 'SEAL')}</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-          </>
-          )}
-        </div>
-
-      </div>
-
-      {/* SYSTEM AUDIT TRAIL follows the Presidential Turnover Desk */}
-      <section className="order-4 bg-white border border-[#E9E4D9] rounded-2xl p-4 shadow-sm space-y-2.5">
-        <div className="flex items-center justify-between text-left">
-          <h3 className="text-sm font-extrabold font-display text-[#1B4332] flex items-center gap-2">
-            <Activity className="w-4 h-4 text-[#1B4332]" />
-            <span>System Audit Trail</span>
-          </h3>
-          <span className="text-[10px] font-black text-[#1B4332] bg-[#EAF4EC] px-2 py-0.5 rounded-full">{filteredLogs.length}</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-[#85947E]" />
-            <input
-              type="text"
-              placeholder={t('Pangitaa sa logs...', 'Search logs...')}
-              value={logSearch}
-              onChange={(e) => setLogSearch(e.target.value)}
-              className="w-full pl-8 pr-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans"
-            />
-          </div>
-          <div>
-            <select
-              value={selectedLogYear}
-              onChange={(e) => setSelectedLogYear(e.target.value)}
-              className="w-full px-2 py-1.5 text-[11px] bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#2D3A22] focus:outline-none focus:border-[#1B4332] font-sans font-bold cursor-pointer"
-            >
-              <option value="All">{t('Tanan nga Tuig', 'All Years')}</option>
-              {availableYears.map(yr => (
-                <option key={yr} value={yr}>{yr} {closedLogYears.includes(yr) ? '🔒' : '🔓'}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {selectedLogYear !== 'All' && (
-          <div className="text-left animate-fade-in">
-            {closedLogYears.includes(parseInt(selectedLogYear)) ? (
-              <div className="bg-[#EFEBE9] border border-[#D7CCC8] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#5D4037]">
-                  <Lock className="w-3.5 h-3.5 text-[#5D4037] shrink-0" />
-                  <span>{t(`${selectedLogYear} sirado na.`, `${selectedLogYear} is sealed.`)}</span>
-                </div>
-                <span className="bg-[#5D4037] text-white text-[8px] tracking-wider px-1.5 py-0.5 rounded-full font-bold shrink-0 uppercase">SEALED</span>
-              </div>
-            ) : (
-              <div className="bg-[#FFF3E0] border border-[#FFE082] px-2.5 py-2 rounded-lg flex items-center justify-between text-left gap-2">
-                <div className="text-[11px] font-semibold text-[#E65100]">
-                  {t(`${selectedLogYear} aktibo pa.`, `${selectedLogYear} is still active.`)}
-                </div>
-                {currentRole === 'President' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSealYearInput('');
-                      setShowSealConfirm(true);
-                    }}
-                    className="px-2 py-1 bg-[#BF360C] hover:bg-[#8D2300] text-white text-[10px] font-black rounded-lg transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                  >
-                    <Lock className="w-3 h-3" />
-                    <span>{t('I-SEAL', 'SEAL')}</span>
-                  </button>
                 )}
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* Horizontal log rows */}
-        <div className="flex flex-col gap-1.5 max-h-[360px] overflow-y-auto pr-1">
-          {filteredLogs.length > 0 ? (
-            filteredLogs.map((log) => (
-              <div
-                key={log.id}
-                title={log.details}
-                className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-1.5 text-left transition-all hover:border-[#85947E] flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-0.5"
-              >
-                {/* Timestamp */}
-                <span className="flex items-center gap-1 font-mono text-[9px] text-[#85947E] font-semibold shrink-0 sm:w-[135px]">
-                  <Clock className="w-2.5 h-2.5 shrink-0" />
-                  {new Date(log.timestamp).toLocaleDateString()}{' '}
-                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                {/* Horizontal log rows */}
+                <div className="flex flex-col gap-1.5 max-h-[360px] overflow-y-auto pr-1">
+                  {filteredLogs.length > 0 ? (
+                    filteredLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        title={log.details}
+                        className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-lg px-2.5 py-1.5 text-left transition-all hover:border-[#85947E] flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-0.5"
+                      >
+                        {/* Timestamp */}
+                        <span className="flex items-center gap-1 font-mono text-[9px] text-[#85947E] font-semibold shrink-0 sm:w-[135px]">
+                          <Clock className="w-2.5 h-2.5 shrink-0" />
+                          {new Date(log.timestamp).toLocaleDateString()}{' '}
+                          {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
 
-                {/* Role badge */}
-                <span className="bg-[#EAF4EC] text-[#1B4332] text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0 sm:w-[84px] sm:text-center truncate">
-                  {log.role.replace('_', ' ')}
-                </span>
+                        {/* Role badge */}
+                        <span className="bg-[#EAF4EC] text-[#1B4332] text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-extrabold shrink-0 sm:w-[84px] sm:text-center truncate">
+                          {log.role.replace('_', ' ')}
+                        </span>
 
-                {/* User • action */}
-                <span className="text-[11px] font-extrabold text-[#2D3A22] truncate min-w-0 sm:w-[190px] sm:shrink-0">
-                  {log.user} • <span className="text-[#2E7D32]">{log.action}</span>
-                </span>
+                        {/* User • action */}
+                        <span className="text-[11px] font-extrabold text-[#2D3A22] truncate min-w-0 sm:w-[190px] sm:shrink-0">
+                          {log.user} • <span className="text-[#2E7D32]">{log.action}</span>
+                        </span>
 
-                {/* Details */}
-                <p className="text-[#5D6B54] text-[10px] font-sans leading-snug break-words w-full sm:w-auto sm:flex-1 sm:min-w-0 line-clamp-2 sm:line-clamp-1">
-                  {log.details}
-                </p>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-4 text-[#85947E] text-[11px]">
-              {t('Walay nakit-an nga logs.', 'No logs found.')}
-            </div>
-          )}
-        </div>
-      </section>
+                        {/* Details */}
+                        <p className="text-[#5D6B54] text-[10px] font-sans leading-snug break-words w-full sm:w-auto sm:flex-1 sm:min-w-0 line-clamp-2 sm:line-clamp-1">
+                          {log.details}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-[#85947E] text-[11px]">
+                      {t('Walay nakit-an nga logs.', 'No logs found.')}
+                    </div>
+                  )}
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -2062,6 +2071,15 @@ const CategoryTick = ({ x, y, payload }: any) => (
                     <Check className="w-3 h-3" />
                     <span>{t('Pirmahi', 'Sign')}</span>
                   </button>
+                  {onApproveResolution && (
+                    <button
+                      onClick={() => onApproveResolution(res.id)}
+                      className="px-3 py-1.5 bg-[#1B4332] hover:bg-[#143326] text-white text-[11px] font-extrabold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    >
+                      <Check className="w-3 h-3" />
+                      <span>{t('Pirmahi', 'Sign')}</span>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -2255,7 +2273,7 @@ const CategoryTick = ({ x, y, payload }: any) => (
                   <h3 className="font-extrabold text-white text-sm">Assemblies and Meetings</h3>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setShowMeetingsModal(false)}
                 className="text-[#B7E4C7] hover:text-white text-lg font-bold p-1 bg-[#2D6A4F] hover:bg-[#40916C] rounded-xl transition-all"
               >
@@ -2397,145 +2415,145 @@ const CategoryTick = ({ x, y, payload }: any) => (
                   }}
                   className="flex-1 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl cursor-pointer text-center"
                 >
-                              Approve Minutes
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  Approve Minutes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-                  {/* AUDITED FINANCIAL RECORDS LIST MODAL (Auditor → President) */}
-                  {showFinancialApprovalsModal && (
-                    <div className="fixed inset-0 bg-[#1B4332]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in no-print text-left">
-                      <div className="bg-white border-[#E9E4D9] w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-                        <div className="bg-[#1B4332] text-[#F4EFE6] px-6 py-4 flex justify-between items-center">
-                   <div className="flex items-center gap-2">
-                            <Coins className="w-5 h-5 text-[#D8F3DC]" />
-                            <h3 className="font-extrabold text-white text-sm">Audited Financial Records for Approval</h3>
-                          </div>
-                          <button
-                            onClick={() => setShowFinancialApprovalsModal(false)}
-                            className="text-[#B7E4C7] hover:text-white text-lg font-bold p-1 bg-[#2D6A4F] hover:bg-[#40916C] rounded-xl transition-all cursor-pointer"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
-                        <div className="p-6 space-y-3 overflow-y-auto">
-                          {auditedPendingTx.length > 0 ? (
-                     auditedPendingTx.map((tx) => (
-                       <div key={tx.id} className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-[#85947E] transition-all">
-                         <div className="space-y-1">
-                           <div className="flex flex-wrap items-center gap-2">
-                             <span className={`text-sm font-black font-mono ${tx.type === 'income' ? 'text-emerald-700' : 'text-rose-600'}`}>
-                        {tx.type === 'income' ? '+' : '-'} PHP {tx.amount.toLocaleString()}
-                      </span>
-                             <span className="text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
-                        Audited
-                      </span>
-                           </div>
-                           <p className="text-xs font-extrabold text-[#1B4332]">{tx.category}</p>
-                           <p className="text-[11px] text-[#5D6B54] font-medium">{tx.description}</p>
-                           <p className="text-[10px] text-[#5D6B54] font-medium">
-                      {tx.date} • Recorded by {tx.recordedBy}{tx.auditedBy ? ` • Audited by ${tx.auditedBy}` : ''}
-                    </p>
-                         </div>
-                         {onPresidentApproveTransaction && (
-                    <button
-                             onClick={() => { setFinancialApprovalTarget(tx); setFinancialApprovalRemarks(''); }}
-                             className="flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-sm shrink-0"
-                    >
-                      <FileCheck className="w-3.5 h-3.5" />
-                      <span>Review</span>
-                           </button>
-                         )}
-                       </div>
-                            ))
-                   ) : (
-                     <p className="text-center text-xs text-[#5D6B54] font-medium py-8">
-                       No audited financial records are awaiting approval.
-                            </p>
-                          )}
-                        </div>
+      {/* AUDITED FINANCIAL RECORDS LIST MODAL (Auditor → President) */}
+      {showFinancialApprovalsModal && (
+        <div className="fixed inset-0 bg-[#1B4332]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in no-print text-left">
+          <div className="bg-white border-[#E9E4D9] w-full max-w-2xl max-h-[85vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-[#1B4332] text-[#F4EFE6] px-6 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Coins className="w-5 h-5 text-[#D8F3DC]" />
+                <h3 className="font-extrabold text-white text-sm">Audited Financial Records for Approval</h3>
+              </div>
+              <button
+                onClick={() => setShowFinancialApprovalsModal(false)}
+                className="text-[#B7E4C7] hover:text-white text-lg font-bold p-1 bg-[#2D6A4F] hover:bg-[#40916C] rounded-xl transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-3 overflow-y-auto">
+              {auditedPendingTx.length > 0 ? (
+                auditedPendingTx.map((tx) => (
+                  <div key={tx.id} className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-[#85947E] transition-all">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`text-sm font-black font-mono ${tx.type === 'income' ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {tx.type === 'income' ? '+' : '-'} PHP {tx.amount.toLocaleString()}
+                        </span>
+                        <span className="text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
+                          Audited
+                        </span>
                       </div>
+                      <p className="text-xs font-extrabold text-[#1B4332]">{tx.category}</p>
+                      <p className="text-[11px] text-[#5D6B54] font-medium">{tx.description}</p>
+                      <p className="text-[10px] text-[#5D6B54] font-medium">
+                        {tx.date} • Recorded by {tx.recordedBy}{tx.auditedBy ? ` • Audited by ${tx.auditedBy}` : ''}
+                      </p>
                     </div>
-                  )}
+                    {onPresidentApproveTransaction && (
+                      <button
+                        onClick={() => { setFinancialApprovalTarget(tx); setFinancialApprovalRemarks(''); }}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-sm shrink-0"
+                      >
+                        <FileCheck className="w-3.5 h-3.5" />
+                        <span>Review</span>
+                      </button>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-xs text-[#5D6B54] font-medium py-8">
+                  No audited financial records are awaiting approval.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-                  {/* FINANCIAL RECORD APPROVAL MODAL (Auditor → President) */}
-                  {financialApprovalTarget && (
-                    <div className="fixed inset-0 bg-[#1B4332]/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in no-print text-left">
-                      <div className="bg-white border-[#E9E4D9] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-                        <div className="bg-[#1B4332] text-[#F4EFE6] px-6 py-4 flex justify-between items-center">
-                   <div className="flex items-center gap-2">
-                            <FileCheck className="w-5 h-5 text-[#D8F3DC]" />
-                            <h3 className="font-extrabold text-white text-sm">Review Audited Financial Record</h3>
-                          </div>
-                          <button
-                     onClick={() => setFinancialApprovalTarget(null)}
-                            className="text-[#B7E4C7] hover:text-white text-lg font-bold p-1 bg-[#2D6A4F] hover:bg-[#40916C] rounded-xl transition-all cursor-pointer"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                          <div className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-4 space-y-1">
-                     <p className={`text-sm font-black font-mono ${financialApprovalTarget.type === 'income' ? 'text-emerald-700' : 'text-rose-600'}`}>
-                       {financialApprovalTarget.type === 'income' ? 'Income' : 'Expense'}: PHP {financialApprovalTarget.amount.toLocaleString()}
-                     </p>
-                            <p className="text-xs font-black text-[#1B4332]">{financialApprovalTarget.category}</p>
-                            <p className="text-[11px] text-[#5D6B54] font-medium">{financialApprovalTarget.description}</p>
-                     {financialApprovalTarget.fundSource && (
-                              <p className="text-[11px] text-[#5D6B54] font-medium">Fund: {financialApprovalTarget.fundSource}</p>
-                            )}
-                            <p className="text-[11px] text-[#5D6B54] font-medium">
-                       {financialApprovalTarget.date} • Recorded by {financialApprovalTarget.recordedBy}
-                            </p>
-                            {financialApprovalTarget.auditNotes && (
-                       <p className="text-[11px] text-[#5D6B54] font-medium italic">Audit notes: {financialApprovalTarget.auditNotes}</p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-[#5D6B54] uppercase tracking-wider mb-1">Remarks (optional)</label>
-                            <textarea
-                       value={financialApprovalRemarks}
-                       onChange={(e) => setFinancialApprovalRemarks(e.target.value)}
-                       rows={3}
-                       placeholder="Add remarks or reason for return..."
-                              className="w-full px-3.5 py-2.5 bg-[#FAF8F5] border border-[#D5CFC1] rounded-xl text-xs font-medium text-[#1B4332] focus:outline-none focus:border-[#2D6A4F]"
-                     />
-                          </div>
-                          <div className="flex gap-3">
-                            {onPresidentReturnTransaction && (
-                       <button
-                         type="button"
-                         onClick={() => {
-                           onPresidentReturnTransaction(financialApprovalTarget.id, financialApprovalRemarks.trim() || 'Returned for revision.');
-                           setFinancialApprovalTarget(null);
-                           setFinancialApprovalRemarks('');
-                         }}
-                         className="flex-1 py-2.5 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold rounded-xl cursor-pointer text-center"
-                              >
-                         Return for Revision
-                       </button>
-                            )}
-                     <button
-                       type="button"
-                       onClick={() => {
-                         if (onPresidentApproveTransaction) {
-                    onPresidentApproveTransaction(financialApprovalTarget.id, financialApprovalRemarks.trim() || undefined);
-                         }
-                         setFinancialApprovalTarget(null);
-                         setFinancialApprovalRemarks('');
-                              }}
-                              className="flex-1 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl cursor-pointer text-center"
-                     >
-                       Approve Record
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+      {/* FINANCIAL RECORD APPROVAL MODAL (Auditor → President) */}
+      {financialApprovalTarget && (
+        <div className="fixed inset-0 bg-[#1B4332]/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in no-print text-left">
+          <div className="bg-white border-[#E9E4D9] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-[#1B4332] text-[#F4EFE6] px-6 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-[#D8F3DC]" />
+                <h3 className="font-extrabold text-white text-sm">Review Audited Financial Record</h3>
+              </div>
+              <button
+                onClick={() => setFinancialApprovalTarget(null)}
+                className="text-[#B7E4C7] hover:text-white text-lg font-bold p-1 bg-[#2D6A4F] hover:bg-[#40916C] rounded-xl transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-[#FAF8F5] border border-[#E9E4D9] rounded-2xl p-4 space-y-1">
+                <p className={`text-sm font-black font-mono ${financialApprovalTarget.type === 'income' ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  {financialApprovalTarget.type === 'income' ? 'Income' : 'Expense'}: PHP {financialApprovalTarget.amount.toLocaleString()}
+                </p>
+                <p className="text-xs font-black text-[#1B4332]">{financialApprovalTarget.category}</p>
+                <p className="text-[11px] text-[#5D6B54] font-medium">{financialApprovalTarget.description}</p>
+                {financialApprovalTarget.fundSource && (
+                  <p className="text-[11px] text-[#5D6B54] font-medium">Fund: {financialApprovalTarget.fundSource}</p>
+                )}
+                <p className="text-[11px] text-[#5D6B54] font-medium">
+                  {financialApprovalTarget.date} • Recorded by {financialApprovalTarget.recordedBy}
+                </p>
+                {financialApprovalTarget.auditNotes && (
+                  <p className="text-[11px] text-[#5D6B54] font-medium italic">Audit notes: {financialApprovalTarget.auditNotes}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-[#5D6B54] uppercase tracking-wider mb-1">Remarks (optional)</label>
+                <textarea
+                  value={financialApprovalRemarks}
+                  onChange={(e) => setFinancialApprovalRemarks(e.target.value)}
+                  rows={3}
+                  placeholder="Add remarks or reason for return..."
+                  className="w-full px-3.5 py-2.5 bg-[#FAF8F5] border border-[#D5CFC1] rounded-xl text-xs font-medium text-[#1B4332] focus:outline-none focus:border-[#2D6A4F]"
+                />
+              </div>
+              <div className="flex gap-3">
+                {onPresidentReturnTransaction && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onPresidentReturnTransaction(financialApprovalTarget.id, financialApprovalRemarks.trim() || 'Returned for revision.');
+                      setFinancialApprovalTarget(null);
+                      setFinancialApprovalRemarks('');
+                    }}
+                    className="flex-1 py-2.5 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold rounded-xl cursor-pointer text-center"
+                  >
+                    Return for Revision
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onPresidentApproveTransaction) {
+                      onPresidentApproveTransaction(financialApprovalTarget.id, financialApprovalRemarks.trim() || undefined);
+                    }
+                    setFinancialApprovalTarget(null);
+                    setFinancialApprovalRemarks('');
+                  }}
+                  className="flex-1 py-2.5 bg-[#1B4332] hover:bg-[#143326] text-white text-xs font-extrabold rounded-xl cursor-pointer text-center"
+                >
+                  Approve Record
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CONFIRM SEAL LOG YEAR MODAL */}
       {showSealConfirm && (
@@ -2551,7 +2569,7 @@ const CategoryTick = ({ x, y, payload }: any) => (
 
             <div className="p-6 space-y-4">
               <p className="text-xs text-slate-700 leading-relaxed font-semibold">
-                Sigurado ka ba nga i-seal ug i-lock ang kinatibuk-ang digital audit trail alang sa tuig <strong className="text-[#BF360C] text-sm font-display">{selectedLogYear}</strong>? 
+                Sigurado ka ba nga i-seal ug i-lock ang kinatibuk-ang digital audit trail alang sa tuig <strong className="text-[#BF360C] text-sm font-display">{selectedLogYear}</strong>?
                 Human niini, wala nay dugang nga system log entry, retroactive nga transaksyon, o pag-update nga mamahimo sa sistema alang sa tuig {selectedLogYear}.
               </p>
 
@@ -2772,7 +2790,7 @@ const CategoryTick = ({ x, y, payload }: any) => (
       )}
 
       {/* PRINT MINUTES DIALOG */}
-      <PrintMinutesModal 
+      <PrintMinutesModal
         meeting={selectedMeetingForPrint}
         onClose={() => setSelectedMeetingForPrint(null)}
         users={users}

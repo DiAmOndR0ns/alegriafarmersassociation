@@ -32,6 +32,8 @@ interface LivestockMonitorProps {
   isTreasurerOrOfficer: boolean;
   /** Only the treasurer may record, edit or delete expenses. Pass e.g. currentUser.role === 'Treasurer'. */
   isTreasurer: boolean;
+  /** Whether the user can add or remove IGP projects (Treasurer, Assistant Treasurer, President, or delegated Vice President). */
+  canManageProjects?: boolean;
   currentUser: User;
   isOfficerMode?: boolean;
   users?: User[];
@@ -100,6 +102,7 @@ export default function LivestockMonitor({
   onDeleteProduce,
   isTreasurerOrOfficer,
   isTreasurer,
+  canManageProjects = isTreasurer,
   currentUser,
   users = [],
   membershipPayments = [],
@@ -546,7 +549,7 @@ export default function LivestockMonitor({
             </h2>
           </div>
 
-          {isTreasurerOrOfficer && (
+          {canManageProjects && (
             <button
               type="button"
               onClick={() => setShowAddProject(true)}
@@ -563,7 +566,7 @@ export default function LivestockMonitor({
           <div className="rounded-xl border border-dashed border-[#D5CFC1] bg-[#FAF8F5] p-6 text-center space-y-2">
             <p className="text-sm font-bold text-[#1B4332]">No active IGP projects registered yet.</p>
             <p className="text-xs text-[#4A5F57]">
-              {isTreasurerOrOfficer
+              {canManageProjects
                 ? 'Click "Add New IGP" above to add an association livelihood project (such as RTL Chickens, Swine Raising, or Chairs Rental). Egg harvest tracking automatically appears when an RTL Chicken / Poultry IGP is added.'
                 : 'Association officers have not registered any active IGP projects yet.'}
             </p>
@@ -723,7 +726,7 @@ export default function LivestockMonitor({
           ))}
         </div>
 
-        {isTreasurerOrOfficer && (
+        {canManageProjects && (
           <button
             type="button"
             onClick={() => setShowAddProject(true)}
@@ -743,7 +746,7 @@ export default function LivestockMonitor({
           <h3 className="text-sm font-black uppercase tracking-wider text-[#1B4332]">
             {getProjectDisplayTitle(selected)} — Active Status
           </h3>
-          {isTreasurerOrOfficer && onDeleteProduce && Boolean(selected) && (
+          {canManageProjects && onDeleteProduce && Boolean(selected) && (
             <button
               type="button"
               onClick={() => {
@@ -1479,7 +1482,7 @@ export default function LivestockMonitor({
       {/* ========================================================================= */}
       {/* 8b. MODAL: ADD IGP PROJECT                                                */}
       {/* ========================================================================= */}
-      {showAddProject && (
+      {showAddProject && canManageProjects && (
         <Modal title="Add New Association IGP Project" onClose={() => setShowAddProject(false)}>
           <form
             onSubmit={(e) => {

@@ -2687,6 +2687,31 @@ async function parseRequestBody(req) {
   });
 }
 
+// src/utils/delegation.ts
+var DELEGATION_SCOPES = [
+  "password_change",
+  "record_approval",
+  "announcements_activities"
+];
+function getActiveDelegationScopes(requests, userId, at = /* @__PURE__ */ new Date()) {
+  const today = at.toISOString().slice(0, 10);
+  const activeScopes = /* @__PURE__ */ new Set();
+  for (const request of requests) {
+    if (request.requestedBy !== userId || request.status !== "Approved" || request.effectiveStart > today || request.effectiveEnd < today) {
+      continue;
+    }
+    for (const scope of request.scopes || []) {
+      if (DELEGATION_SCOPES.includes(scope)) activeScopes.add(scope);
+    }
+  }
+  return activeScopes;
+}
+function isValidDelegationDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = /* @__PURE__ */ new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 // src/utils/passwordPolicy.ts
 import bcrypt from "bcryptjs";
 var LOCKOUT_DURATION_MS = 15 * 60 * 1e3;
@@ -2817,31 +2842,6 @@ async function requireAuthenticated(req, res) {
     errorResponse(res, 503, "Authentication service is temporarily unavailable.");
     return null;
   }
-}
-
-// src/utils/delegation.ts
-var DELEGATION_SCOPES = [
-  "password_change",
-  "record_approval",
-  "announcements_activities"
-];
-function getActiveDelegationScopes(requests, userId, at = /* @__PURE__ */ new Date()) {
-  const today = at.toISOString().slice(0, 10);
-  const activeScopes = /* @__PURE__ */ new Set();
-  for (const request of requests) {
-    if (request.requestedBy !== userId || request.status !== "Approved" || request.effectiveStart > today || request.effectiveEnd < today) {
-      continue;
-    }
-    for (const scope of request.scopes || []) {
-      if (DELEGATION_SCOPES.includes(scope)) activeScopes.add(scope);
-    }
-  }
-  return activeScopes;
-}
-function isValidDelegationDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = /* @__PURE__ */ new Date(`${value}T00:00:00.000Z`);
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 // src/api/push.ts
@@ -3255,11 +3255,11 @@ async function handler(req, res) {
       const delegatedRecordApproval = isVicePresident && delegationScopes.has("record_approval");
       const presidentApproval = extractPresidentFinancialApproval(state, user.role, delegatedRecordApproval);
       const auditorReview = extractAuditorReview(state, user.role);
-      const isOfficer = normalizedPushRole !== "member";
+      const canManageIgpProduces = isTreasurerRole(user.role) || isPresidentRole(user.role) || isVicePresident && delegationScopes.size > 0;
       const incomingIgp = state.livestockIgp && typeof state.livestockIgp === "object" ? state.livestockIgp : null;
       const incomingIgpKeys = incomingIgp ? Object.keys(incomingIgp) : [];
       const isIgpProducesOnly = Boolean(
-        isOfficer && incomingIgp && incomingIgpKeys.length === 1 && incomingIgpKeys[0] === "produces" && Array.isArray(incomingIgp.produces)
+        canManageIgpProduces && incomingIgp && incomingIgpKeys.length === 1 && incomingIgpKeys[0] === "produces" && Array.isArray(incomingIgp.produces)
       );
       safeState = separateEggHarvestsFromFinancialState(safeState, user.role, user.name, delegatedRecordApproval);
       if (isIgpProducesOnly && incomingIgp) {
@@ -3365,11 +3365,18 @@ async function handler(req, res) {
         message: "Only the President or Secretary may delete meeting records."
       });
     }
-    const canWriteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role);
-    if (!canWriteResolutions && ("resolutions" in state || hasDeletedKey(["resolutions"]) || ["resolution", "resolutions"].includes(deleteItemEntity))) {
+    const canWriteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role) || isVicePresident && delegationScopes.has("record_approval");
+    const canDeleteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role);
+    if (!canWriteResolutions && "resolutions" in state) {
       return sendResponse(res, 403, {
         success: false,
-        message: "Only the President or Secretary may create, update, or delete resolutions."
+        message: "Only the President, Secretary, or a delegated Vice President may create or approve resolutions."
+      });
+    }
+    if (!canDeleteResolutions && (hasDeletedKey(["resolutions"]) || ["resolution", "resolutions"].includes(deleteItemEntity))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: "Only the President or Secretary may delete resolutions."
       });
     }
     await saveFullStateToPostgres(getPool(), safeState);

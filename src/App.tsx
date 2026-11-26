@@ -163,7 +163,15 @@ export function buildSyncPayload(params: {
       payload.membershipYearSnapshots = overrides!.membershipYearSnapshots;
     }
     if (canWriteFinancials && overrides!.funds !== undefined) payload.funds = overrides!.funds;
-    if (canWriteFinancials && overrides!.livestockIgp !== undefined) payload.livestockIgp = overrides!.livestockIgp;
+    const isProducesOnlyIgpOverride =
+      overrides!.livestockIgp !== undefined &&
+      typeof overrides!.livestockIgp === 'object' &&
+      overrides!.livestockIgp !== null &&
+      Object.keys(overrides!.livestockIgp).length === 1 &&
+      Array.isArray((overrides!.livestockIgp as { produces?: unknown }).produces);
+    if ((canWriteFinancials || isProducesOnlyIgpOverride) && overrides!.livestockIgp !== undefined) {
+      payload.livestockIgp = overrides!.livestockIgp;
+    }
     if (overrides!.systemLogs !== undefined) payload.systemLogs = overrides!.systemLogs;
     payload.deletedIds = deletedIds;
     return payload;
@@ -272,8 +280,14 @@ export default function App() {
   const [delegationRequests, setDelegationRequests] = useState<DelegationRequest[]>([]);
   const [isRefreshingDelegations, setIsRefreshingDelegations] = useState(false);
   const activeDelegationScopes = getActiveDelegationScopes(delegationRequests, currentUser?.id || '');
+  const hasDelegatedPasswordChange = currentRole === 'Vice_President' && activeDelegationScopes.has('password_change');
   const hasDelegatedRecordApproval = currentRole === 'Vice_President' && activeDelegationScopes.has('record_approval');
   const hasDelegatedContentPosting = currentRole === 'Vice_President' && activeDelegationScopes.has('announcements_activities');
+  const canManageIgpProjects =
+    currentRole === 'Treasurer' ||
+    currentRole === 'Assistant_Treasurer' ||
+    currentRole === 'President' ||
+    (currentRole === 'Vice_President' && activeDelegationScopes.size > 0);
   const [isHydrating, setIsHydrating] = useState(true);
   const [hasPendingCloudSync, setHasPendingCloudSync] = useState(false);
 
@@ -2953,6 +2967,7 @@ export default function App() {
   };
 
   const handleAddProduce = (produceName: string) => {
+    if (!canManageIgpProjects) return;
     const cleanName = produceName.trim();
     if (!cleanName) return;
     const updatedState: LivestockIgpState = {
@@ -2970,6 +2985,7 @@ export default function App() {
   };
 
   const handleDeleteProduce = (produceName: string) => {
+    if (!canManageIgpProjects) return;
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
       produces: (livestockIgp.produces || []).filter(p => p !== produceName)
@@ -3044,8 +3060,12 @@ export default function App() {
     }
   };
 
-  // EXECUTIVE ACTION HANDLERS (PRESIDENT / VP)
+  // EXECUTIVE ACTION HANDLERS (PRESIDENT / DELEGATED VP)
   const handleApproveResolution = (id: string) => {
+    if (currentRole !== 'President' && !hasDelegatedRecordApproval) {
+      showToastMessage('An active record-approval delegation from the President is required to sign resolutions.', 'error');
+      return;
+    }
     const updated = resolutions.map(r => r.id === id ? { ...r, status: 'Approved' as const } : r);
     setResolutions(updated);
     updateStorage('bafa_resolutions', updated);
@@ -3064,6 +3084,10 @@ export default function App() {
 
   // PRESIDENT APPROVAL WORKFLOW FOR SECRETARY MINUTES OF MEETING
   const handleApproveMeetingMinutes = (id: string, remarks?: string) => {
+    if (currentRole !== 'President' && !hasDelegatedRecordApproval) {
+      showToastMessage('An active record-approval delegation from the President is required to approve meeting minutes.', 'error');
+      return;
+    }
     const targetMeeting = meetings.find(m => m.id === id);
     const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = meetings.map(m => m.id === id
@@ -3088,6 +3112,10 @@ export default function App() {
   };
 
   const handleReturnMeetingMinutes = (id: string, remarks: string) => {
+    if (currentRole !== 'President' && !hasDelegatedRecordApproval) {
+      showToastMessage('An active record-approval delegation from the President is required to return meeting minutes.', 'error');
+      return;
+    }
     const targetMeeting = meetings.find(m => m.id === id);
     const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = meetings.map(m => m.id === id
@@ -3113,6 +3141,10 @@ export default function App() {
 
   // PRESIDENT APPROVAL WORKFLOW FOR AUDITED FINANCIAL REPORTS / RECORDS (Auditor → President)
   const handlePresidentApproveTransaction = (id: string, remarks?: string) => {
+    if (currentRole !== 'President' && !hasDelegatedRecordApproval) {
+      showToastMessage('An active record-approval delegation from the President is required to approve financial records.', 'error');
+      return;
+    }
     const targetTx = transactions.find(t => t.id === id);
     const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = transactions.map(t => t.id === id
@@ -3142,6 +3174,10 @@ export default function App() {
   };
 
   const handlePresidentReturnTransaction = (id: string, remarks: string) => {
+    if (currentRole !== 'President' && !hasDelegatedRecordApproval) {
+      showToastMessage('An active record-approval delegation from the President is required to return financial records.', 'error');
+      return;
+    }
     const targetTx = transactions.find(t => t.id === id);
     const approvingOfficer = currentRole === 'Vice_President' ? 'Vice President' : 'President';
     const updated = transactions.map(t => t.id === id
@@ -3726,16 +3762,20 @@ export default function App() {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return { success: false, message: 'That account could not be found.' };
 
-    // The President may reset officer credentials; the Secretary may reset member credentials.
-    // but the President's own account can never be reset from this desk.
+    // The President may reset officer or member credentials; the Vice President may do so ONLY with an active 'password_change' delegation;
+    // the Secretary may reset member credentials; and the President's own account can never be reset from this desk.
     const canResetPasswords =
       !!currentUser && (
         currentUser.role === 'President' ||
+        (currentUser.role === 'Vice_President' && hasDelegatedPasswordChange) ||
         (['Secretary', 'Assistant_Secretary'].includes(currentUser.role) && targetUser.role === 'Member')
       );
     if (!canResetPasswords) {
-      showToastMessage('Only the President may reset officer credentials; the Secretary may reset member credentials.', 'error');
-      return { success: false, message: 'Only the President may reset officer credentials; the Secretary may reset member credentials.' };
+      const msg = currentUser?.role === 'Vice_President'
+        ? 'An active password-change delegation from the President is required to reset passwords.'
+        : 'Only the President (or a delegated Vice President) may reset officer credentials; the Secretary may reset member credentials.';
+      showToastMessage(msg, 'error');
+      return { success: false, message: msg };
     }
     if (targetUser.role === 'President') {
       showToastMessage('Dili ma-reset ang password sa Presidente. (The President\'s password cannot be reset.)', 'error');
@@ -4895,7 +4935,7 @@ export default function App() {
                     members={members}
                     meetings={meetings}
                     resolutions={resolutions}
-                    onApproveResolution={handleApproveResolution}
+                    onApproveResolution={currentRole === 'President' || hasDelegatedRecordApproval ? handleApproveResolution : undefined}
                     transactions={transactions}
                     logs={logs}
                     currentRole={currentRole}
@@ -4908,7 +4948,7 @@ export default function App() {
                     onAddOfficer={handleAddOfficer}
                     onDeleteUser={handleDeleteUser}
                     onUpdateUserRole={handleUpdateUserRole}
-                    onResetPassword={handleResetPassword}
+                    onResetPassword={currentRole === 'President' || hasDelegatedPasswordChange ? handleResetPassword : undefined}
                     onResetMfa={handleResetMfa}
                     onPresidentTurnover={handlePresidentTurnover}
                     onOpenReportModal={() => setShowReportModal(true)}
@@ -4918,8 +4958,8 @@ export default function App() {
                     activities={activities}
                     livestockIgp={livestockIgp}
                     funds={funds}
-                    onApproveMeetingMinutes={handleApproveMeetingMinutes}
-                    onReturnMeetingMinutes={handleReturnMeetingMinutes}
+                    onApproveMeetingMinutes={currentRole === 'President' || hasDelegatedRecordApproval ? handleApproveMeetingMinutes : undefined}
+                    onReturnMeetingMinutes={currentRole === 'President' || hasDelegatedRecordApproval ? handleReturnMeetingMinutes : undefined}
                     onPresidentReturnTransaction={currentRole === 'President' || hasDelegatedRecordApproval ? handlePresidentReturnTransaction : undefined}
                     onPresidentApproveTransaction={currentRole === 'President' || hasDelegatedRecordApproval ? handlePresidentApproveTransaction : undefined}
                     delegationRequests={delegationRequests}
@@ -5086,6 +5126,7 @@ export default function App() {
                   onDeleteProduce={handleDeleteProduce}
                   isTreasurerOrOfficer={['Auditor', 'Treasurer', 'Assistant_Treasurer', 'President', 'Vice_President'].includes(currentRole || '')}
                   isTreasurer={currentRole === 'Treasurer' || currentRole === 'Assistant_Treasurer'}
+                  canManageProjects={canManageIgpProjects}
                   currentUser={currentUser!}
                   isOfficerMode={true}
                   users={users}

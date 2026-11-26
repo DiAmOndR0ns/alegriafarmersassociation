@@ -1455,6 +1455,26 @@ async function parseRequestBody(req) {
   });
 }
 
+// src/utils/delegation.ts
+var DELEGATION_SCOPES = [
+  "password_change",
+  "record_approval",
+  "announcements_activities"
+];
+function getActiveDelegationScopes(requests, userId, at = /* @__PURE__ */ new Date()) {
+  const today = at.toISOString().slice(0, 10);
+  const activeScopes = /* @__PURE__ */ new Set();
+  for (const request of requests) {
+    if (request.requestedBy !== userId || request.status !== "Approved" || request.effectiveStart > today || request.effectiveEnd < today) {
+      continue;
+    }
+    for (const scope of request.scopes || []) {
+      if (DELEGATION_SCOPES.includes(scope)) activeScopes.add(scope);
+    }
+  }
+  return activeScopes;
+}
+
 // src/utils/passwordPolicy.ts
 import bcrypt from "bcryptjs";
 
@@ -1788,6 +1808,34 @@ var MFA_ENFORCED_ROLES = [
 function isPresidentRole(role) {
   return role.trim().toLowerCase().replace(/\s+/g, "_") === "president";
 }
+function isVicePresidentRole(role) {
+  return role.trim().toLowerCase().replace(/\s+/g, "_") === "vice_president";
+}
+async function getUserDelegationScopes(pool, userId) {
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const result = await pool.query(
+    `SELECT id, requested_by, reason, scopes, requested_date, effective_start, effective_end,
+            status, reviewed_by, reviewed_date, remarks
+     FROM delegation_requests
+     WHERE requested_by = $1 AND status = 'Approved'
+       AND effective_start <= $2 AND effective_end >= $2`,
+    [userId, today]
+  );
+  const requests = result.rows.map((row) => ({
+    id: String(row.id),
+    requestedBy: String(row.requested_by),
+    reason: String(row.reason || ""),
+    scopes: Array.isArray(row.scopes) ? row.scopes : [],
+    requestedDate: String(row.requested_date || ""),
+    effectiveStart: String(row.effective_start || ""),
+    effectiveEnd: String(row.effective_end || ""),
+    status: row.status,
+    reviewedBy: row.reviewed_by || void 0,
+    reviewedDate: row.reviewed_date || void 0,
+    remarks: row.remarks || void 0
+  }));
+  return getActiveDelegationScopes(requests, userId);
+}
 function isSecretaryRole(role) {
   const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
   return normalized === "secretary" || normalized === "assistant_secretary";
@@ -2077,14 +2125,20 @@ async function mfaResetHandler(req, res) {
   if (!body || typeof body.targetUserId !== "string" || typeof body.currentPassword !== "string") {
     return errorResponse(res, 400, "Target account and your current password are required.");
   }
-  const managesOfficers = isPresidentRole(actor.role);
-  const managesMembers = isSecretaryRole(actor.role);
+  const delegationScopes = isVicePresidentRole(actor.role) ? await getUserDelegationScopes(pool, actor.id).catch(() => /* @__PURE__ */ new Set()) : /* @__PURE__ */ new Set();
+  const hasDelegatedPasswordChange = isVicePresidentRole(actor.role) && delegationScopes.has("password_change");
+  const managesOfficers = isPresidentRole(actor.role) || hasDelegatedPasswordChange;
+  const managesMembers = isSecretaryRole(actor.role) || hasDelegatedPasswordChange;
   const canEnrolSelf = MFA_ENFORCED_ROLES.includes(
     actor.role.trim().toLowerCase().replace(/\s+/g, "_")
   );
   const isSelf = body.targetUserId === actor.id && canEnrolSelf;
   if (!managesOfficers && !managesMembers && !isSelf) {
-    return errorResponse(res, 403, "President or Secretary access is required.");
+    return errorResponse(
+      res,
+      403,
+      isVicePresidentRole(actor.role) ? "An active password-change delegation from the President is required." : "President or Secretary access is required."
+    );
   }
   try {
     const actorRow = (await pool.query("SELECT * FROM users WHERE id = $1", [actor.id])).rows[0];
@@ -2338,7 +2392,15 @@ async function passwordResetHandler(req, res) {
     return errorResponse(res, 503, "Authentication is not configured or unavailable.");
   }
   if (!actor) return errorResponse(res, 401, "Authentication required.");
-  if (!isPresidentRole(actor.role) && !isSecretaryRole(actor.role)) return errorResponse(res, 403, "President or Secretary access is required.");
+  const delegationScopes = isVicePresidentRole(actor.role) ? await getUserDelegationScopes(pool, actor.id).catch(() => /* @__PURE__ */ new Set()) : /* @__PURE__ */ new Set();
+  const hasDelegatedPasswordChange = isVicePresidentRole(actor.role) && delegationScopes.has("password_change");
+  if (!isPresidentRole(actor.role) && !isSecretaryRole(actor.role) && !hasDelegatedPasswordChange) {
+    return errorResponse(
+      res,
+      403,
+      isVicePresidentRole(actor.role) ? "An active password-change delegation from the President is required to reset passwords." : "President or Secretary access is required."
+    );
+  }
   const body = await readBody(req);
   if (!body || typeof body.targetUserId !== "string" || typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
     return errorResponse(res, 400, "Current password, target user, and new password are required.");

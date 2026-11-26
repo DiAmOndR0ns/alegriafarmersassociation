@@ -14,6 +14,7 @@ import { generateTotpCode } from '../utils/totp';
  */
 
 const users = new Map<string, any>();
+let activeDelegations: any[] = [];
 
 function clientFor() {
   const client: any = {
@@ -45,6 +46,12 @@ const pool = {
         row.must_change_password = true;
       }
       return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
+    }
+    if (text.includes('from delegation_requests')) {
+      const rows = activeDelegations.filter(
+        d => d.requested_by === params[0] && d.status === 'Approved'
+      );
+      return { rows, rowCount: rows.length };
     }
     return { rows: [], rowCount: 0 };
   }),
@@ -145,7 +152,10 @@ describe('isMemberRole', () => {
 });
 
 describe('Secretary-initiated password reset', () => {
-  beforeEach(() => users.clear());
+  beforeEach(() => {
+    users.clear();
+    activeDelegations = [];
+  });
 
   const seedSecretary = () => seed({
     id: 'user-secretary',
@@ -204,5 +214,60 @@ describe('Secretary-initiated password reset', () => {
     expect(res.statusCode).toBe(401);
     expect(res.payload.message).toBe('Current password is incorrect.');
     expect(users.get(member.id)!.must_change_password).toBe(false);
+  });
+
+  it('rejects a Vice President password reset without an active password_change delegation', async () => {
+    const vp = seed({ id: 'user-vp', username: 'vicepresident', name: 'Vice President', role: 'Vice_President' });
+    const member = seed({ id: 'user-member', username: 'member1', name: 'Member One', role: 'Member' });
+    const cookie = await cookieFor(vp);
+
+    const res = makeRes();
+    await passwordResetHandler(
+      makeReq({ targetUserId: member.id, currentPassword: PLAIN, newPassword: 'Nw8$rTyU2iOo' }, { cookie }),
+      res
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(res.payload.message).toBe('An active password-change delegation from the President is required to reset passwords.');
+    expect(users.get(member.id)!.must_change_password).toBe(false);
+  });
+
+  it('allows a delegated Vice President to reset officer/member passwords but never the President password', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const expiry = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const vp = seed({ id: 'user-vp', username: 'vicepresident', name: 'Vice President', role: 'Vice_President' });
+    const president = seed({ id: 'user-president', username: 'president', name: 'President', role: 'President' });
+    const auditor = seed({ id: 'user-auditor', username: 'auditor', name: 'Auditor', role: 'Auditor' });
+    activeDelegations = [{
+      id: 'delegation-1',
+      requested_by: vp.id,
+      reason: 'President travel',
+      scopes: ['password_change'],
+      requested_date: today,
+      effective_start: today,
+      effective_end: expiry,
+      status: 'Approved',
+    }];
+    const cookie = await cookieFor(vp);
+
+    // 1. Attempting to reset the President's password is always forbidden
+    const presRes = makeRes();
+    await passwordResetHandler(
+      makeReq({ targetUserId: president.id, currentPassword: PLAIN, newPassword: 'Nw8$rTyU2iOo' }, { cookie }),
+      presRes
+    );
+    expect(presRes.statusCode).toBe(403);
+    expect(presRes.payload.message).toBe('President accounts cannot be reset through this endpoint.');
+    expect(users.get(president.id)!.must_change_password).toBe(false);
+
+    // 2. Resetting a non-President officer succeeds when delegated
+    const audRes = makeRes();
+    await passwordResetHandler(
+      makeReq({ targetUserId: auditor.id, currentPassword: PLAIN, newPassword: 'Nw8$rTyU2iOo' }, { cookie }),
+      audRes
+    );
+    expect(audRes.statusCode).toBe(200);
+    expect(audRes.payload.success).toBe(true);
+    expect(users.get(auditor.id)!.must_change_password).toBe(true);
   });
 });

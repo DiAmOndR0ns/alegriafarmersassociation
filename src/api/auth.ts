@@ -6,6 +6,8 @@ import { verifyTotpCode } from '../utils/totp';
 import type { Pool } from 'pg';
 import { getPool, ensureDatabaseSchema, isDatabaseConfigured } from './db';
 import { sendResponse, parseRequestBody } from './helper';
+import { getActiveDelegationScopes } from '../utils/delegation';
+import type { DelegationRequest, DelegationScope } from '../types';
 import {
   BCRYPT_COST,
   PASSWORD_HISTORY_LIMIT,
@@ -209,6 +211,36 @@ export const MFA_ENFORCED_ROLES: readonly string[] = [
 
 export function isPresidentRole(role: string): boolean {
   return role.trim().toLowerCase().replace(/\s+/g, '_') === 'president';
+}
+
+export function isVicePresidentRole(role: string): boolean {
+  return role.trim().toLowerCase().replace(/\s+/g, '_') === 'vice_president';
+}
+
+async function getUserDelegationScopes(pool: Pool, userId: string): Promise<Set<DelegationScope>> {
+  const today = new Date().toISOString().slice(0, 10);
+  const result = await pool.query(
+    `SELECT id, requested_by, reason, scopes, requested_date, effective_start, effective_end,
+            status, reviewed_by, reviewed_date, remarks
+     FROM delegation_requests
+     WHERE requested_by = $1 AND status = 'Approved'
+       AND effective_start <= $2 AND effective_end >= $2`,
+    [userId, today]
+  );
+  const requests: DelegationRequest[] = result.rows.map((row: Record<string, any>) => ({
+    id: String(row.id),
+    requestedBy: String(row.requested_by),
+    reason: String(row.reason || ''),
+    scopes: Array.isArray(row.scopes) ? row.scopes : [],
+    requestedDate: String(row.requested_date || ''),
+    effectiveStart: String(row.effective_start || ''),
+    effectiveEnd: String(row.effective_end || ''),
+    status: row.status,
+    reviewedBy: row.reviewed_by || undefined,
+    reviewedDate: row.reviewed_date || undefined,
+    remarks: row.remarks || undefined
+  }));
+  return getActiveDelegationScopes(requests, userId);
 }
 
 export function isSecretaryRole(role: string): boolean {
@@ -574,15 +606,25 @@ export async function mfaResetHandler(req: any, res: any) {
     return errorResponse(res, 400, 'Target account and your current password are required.');
   }
 
-  const managesOfficers = isPresidentRole(actor.role);
-  const managesMembers = isSecretaryRole(actor.role);
+  const delegationScopes = isVicePresidentRole(actor.role)
+    ? await getUserDelegationScopes(pool, actor.id).catch(() => new Set<DelegationScope>())
+    : new Set<DelegationScope>();
+  const hasDelegatedPasswordChange = isVicePresidentRole(actor.role) && delegationScopes.has('password_change');
+  const managesOfficers = isPresidentRole(actor.role) || hasDelegatedPasswordChange;
+  const managesMembers = isSecretaryRole(actor.role) || hasDelegatedPasswordChange;
   // Self-service re-enrolment is limited to accounts whose role requires MFA.
   const canEnrolSelf = MFA_ENFORCED_ROLES.includes(
     actor.role.trim().toLowerCase().replace(/\s+/g, '_')
   );
   const isSelf = body.targetUserId === actor.id && canEnrolSelf;
   if (!managesOfficers && !managesMembers && !isSelf) {
-    return errorResponse(res, 403, 'President or Secretary access is required.');
+    return errorResponse(
+      res,
+      403,
+      isVicePresidentRole(actor.role)
+        ? 'An active password-change delegation from the President is required.'
+        : 'President or Secretary access is required.'
+    );
   }
 
   try {
@@ -841,7 +883,19 @@ export async function passwordResetHandler(req: any, res: any) {
     return errorResponse(res, 503, 'Authentication is not configured or unavailable.');
   }
   if (!actor) return errorResponse(res, 401, 'Authentication required.');
-  if (!isPresidentRole(actor.role) && !isSecretaryRole(actor.role)) return errorResponse(res, 403, 'President or Secretary access is required.');
+  const delegationScopes = isVicePresidentRole(actor.role)
+    ? await getUserDelegationScopes(pool, actor.id).catch(() => new Set<DelegationScope>())
+    : new Set<DelegationScope>();
+  const hasDelegatedPasswordChange = isVicePresidentRole(actor.role) && delegationScopes.has('password_change');
+  if (!isPresidentRole(actor.role) && !isSecretaryRole(actor.role) && !hasDelegatedPasswordChange) {
+    return errorResponse(
+      res,
+      403,
+      isVicePresidentRole(actor.role)
+        ? 'An active password-change delegation from the President is required to reset passwords.'
+        : 'President or Secretary access is required.'
+    );
+  }
   const body = await readBody(req);
   if (!body || typeof body.targetUserId !== 'string' || typeof body.currentPassword !== 'string'
     || typeof body.newPassword !== 'string') {
