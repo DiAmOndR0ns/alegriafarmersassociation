@@ -276,6 +276,24 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS gender VARCHAR(20);`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS birth_date VARCHAR(50);`,
+    `CREATE TABLE IF NOT EXISTS pending_members(
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      username VARCHAR(100),
+      farm_location TEXT,
+      primary_crops TEXT[],
+      contact_number VARCHAR(50),
+      joined_date VARCHAR(50),
+      rsbsa_number VARCHAR(100),
+      is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+      avatar_url TEXT,
+      gender VARCHAR(20),
+      birth_date VARCHAR(50),
+      affiliations JSONB DEFAULT '[]'::jsonb,
+      registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+      approved_by_secretary TEXT,
+      approved_by_secretary_date VARCHAR(50)
+    );`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS rsbsa_number VARCHAR(100);`,
@@ -1026,6 +1044,26 @@ async function initDatabaseSchema(pool) {
     avatar_url TEXT,
     gender VARCHAR(20),
     birth_date VARCHAR(50)
+  );
+  `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pending_members(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    username VARCHAR(100),
+    farm_location TEXT,
+    primary_crops TEXT[],
+    contact_number VARCHAR(50),
+    joined_date VARCHAR(50),
+    rsbsa_number VARCHAR(100),
+    is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+    avatar_url TEXT,
+    gender VARCHAR(20),
+    birth_date VARCHAR(50),
+    affiliations JSONB DEFAULT '[]'::jsonb,
+    registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+    approved_by_secretary TEXT,
+    approved_by_secretary_date VARCHAR(50)
   );
   `);
     await client.query(`
@@ -2601,6 +2639,126 @@ async function passwordResetRequestHandler(req, res) {
   }
   return sendResponse(res, 200, { success: true, message: uniformMessage });
 }
+async function selfRegisterHandler(req, res) {
+  if (req.method && req.method !== "POST") return errorResponse(res, 405, "Method not allowed.");
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  if (isAuthRateLimited(req, "self-register")) return errorResponse(res, 429, "Too many registration requests. Please try again shortly.");
+  const body = await readBody(req);
+  if (!body || typeof body.username !== "string" || typeof body.password !== "string" || typeof body.name !== "string") {
+    return errorResponse(res, 400, "Full name, username, and password are required.");
+  }
+  const username = body.username.trim().toLowerCase();
+  const name = body.name.trim();
+  const farmLocation = typeof body.farmLocation === "string" && body.farmLocation.trim() ? body.farmLocation.trim().slice(0, 120) : "Sitio Tapon";
+  const contactNumber = typeof body.contactNumber === "string" ? body.contactNumber.trim().slice(0, 50) : "";
+  const rsbsaNumber = typeof body.rsbsaNumber === "string" && body.rsbsaNumber.trim() ? body.rsbsaNumber.trim().slice(0, 100) : null;
+  const isRsbsaRegistered = Boolean(body.isRsbsaRegistered);
+  const gender = typeof body.gender === "string" && body.gender.trim() ? body.gender.trim().slice(0, 20) : "Male";
+  const birthDate = typeof body.birthDate === "string" && body.birthDate.trim() ? body.birthDate.trim().slice(0, 50) : null;
+  const primaryCrops = Array.isArray(body.primaryCrops) ? body.primaryCrops.filter((c) => typeof c === "string" && c.trim().length > 0).map((c) => c.trim().slice(0, 80)).slice(0, 15) : ["Vegetables"];
+  if (!/^[a-z0-9._-]{3,100}$/.test(username) || !name || name.length > 200) {
+    return errorResponse(res, 400, "Enter a valid full name and username (3+ letters/numbers).");
+  }
+  const policyError = validatePasswordPolicy(body.password, username, "Member", []);
+  if (policyError) return errorResponse(res, 400, policyError);
+  if (!isDatabaseConfigured()) {
+    return sendResponse(res, 200, {
+      success: true,
+      offlineMode: true,
+      message: "Registration submitted. Awaiting Secretary approval and Treasurer membership fee verification."
+    });
+  }
+  let pool;
+  try {
+    pool = getPool();
+    await initialize(pool);
+  } catch {
+    return errorResponse(res, 503, "Registration service is temporarily unavailable.");
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const existing = await client.query("SELECT id FROM users WHERE lower(username) = lower($1) LIMIT 1", [username]);
+    if (existing.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return errorResponse(res, 409, "That username is already in use.");
+    }
+    const id = `member-${Date.now()}-${randomBytes(3).toString("hex")}`;
+    const memberIdNumber = null;
+    const todayStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const hash = await bcrypt2.hash(body.password, BCRYPT_COST);
+    await client.query(
+      `INSERT INTO users
+        (id, username, password, name, role, is_approved, joined_date, farm_location, primary_crops,
+         contact_number, status, member_id_number, rsbsa_number, is_rsbsa_registered, password_history,
+         password_changed_at, must_change_password, failed_login_attempts, locked_until, reset_requested, mfa_enabled)
+       VALUES ($1, $2, $3, $4, 'Member', FALSE, $5, $6, $7, $8, 'Inactive', $9, $10, $11, '[]'::jsonb, NOW(), FALSE, 0, NULL, FALSE, FALSE)`,
+      [id, username, hash, name, todayStr, farmLocation, primaryCrops, contactNumber || "None", memberIdNumber, rsbsaNumber, isRsbsaRegistered]
+    );
+    await client.query(
+      `INSERT INTO pending_members
+        (id, name, username, farm_location, primary_crops, contact_number, joined_date,
+         rsbsa_number, is_rsbsa_registered, gender, birth_date, registration_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Pending Secretary Approval')`,
+      [id, name, username, farmLocation, primaryCrops, contactNumber || "None", todayStr, rsbsaNumber, isRsbsaRegistered, gender, birthDate]
+    );
+    await client.query("COMMIT");
+    return sendResponse(res, 200, {
+      success: true,
+      id,
+      memberIdNumber,
+      message: "Registration submitted! The Secretary will review and approve your registration, and the Treasurer will verify your membership fee."
+    });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {
+    });
+    console.error("[Auth self-register failure]", error);
+    return errorResponse(res, 500, "Unable to submit registration right now.");
+  } finally {
+    client.release();
+  }
+}
+async function memberApproveHandler(req, res) {
+  if (req.method && req.method !== "POST") return errorResponse(res, 405, "Method not allowed.");
+  if (rejectCrossOriginMutation(req)) return errorResponse(res, 403, "Cross-origin requests are not allowed.");
+  let actor;
+  let pool;
+  try {
+    actor = await getAuthenticatedUser(req);
+    pool = getPool();
+    await initialize(pool);
+  } catch {
+    return errorResponse(res, 503, "Authentication is not configured or unavailable.");
+  }
+  if (!actor) return errorResponse(res, 401, "Authentication required.");
+  if (!isPresidentRole(actor.role) && !isSecretaryRole(actor.role)) {
+    return errorResponse(res, 403, "Secretary or President access is required to approve member registrations.");
+  }
+  const body = await readBody(req);
+  const targetId = typeof body?.memberId === "string" ? body.memberId.trim() : "";
+  if (!targetId) return errorResponse(res, 400, "A valid member ID is required.");
+  try {
+    await pool.query(
+      `UPDATE users SET is_approved = TRUE WHERE id = $1 AND lower(replace(role, ' ', '_')) = 'member'`,
+      [targetId]
+    );
+    await pool.query(
+      `UPDATE pending_members
+       SET registration_status = 'Awaiting Treasurer Fee',
+           approved_by_secretary = $2,
+           approved_by_secretary_date = $3
+       WHERE id = $1`,
+      [targetId, actor.name, (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)]
+    );
+    return sendResponse(res, 200, {
+      success: true,
+      message: "Member registration approved by Secretary. Awaiting Treasurer membership fee payment to activate."
+    });
+  } catch (error) {
+    console.error("[Auth member approve failure]", error);
+    return errorResponse(res, 500, "Unable to approve member registration.");
+  }
+}
 var AUTH_ROUTES = [
   ["POST", "/api/auth/login", loginHandler],
   ["POST", "/api/auth/logout", logoutHandler],
@@ -2612,7 +2770,9 @@ var AUTH_ROUTES = [
   ["POST", "/api/auth/password/change", passwordChangeHandler],
   ["POST", "/api/auth/password/reset", passwordResetHandler],
   ["POST", "/api/auth/password/request", passwordResetRequestHandler],
-  ["POST", "/api/auth/accounts/provision", accountProvisionHandler]
+  ["POST", "/api/auth/accounts/provision", accountProvisionHandler],
+  ["POST", "/api/auth/register", selfRegisterHandler],
+  ["POST", "/api/auth/accounts/approve", memberApproveHandler]
 ];
 function resolveAuthPath(req) {
   const candidates = [req?.headers?.["x-vercel-rewrite"], req?.headers?.["x-original-url"], req?.url];

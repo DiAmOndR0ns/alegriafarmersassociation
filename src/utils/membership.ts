@@ -12,6 +12,41 @@ export const DEFAULT_MEMBERSHIP_DUES = 100;
 /** The `inactiveReason` an officer's year-close writes; a later payment clears it. */
 export const UNPAID_DUES_REASON = 'Unpaid dues';
 
+/** Placeholder shown before the Treasurer confirms the member's membership fee. */
+export const PENDING_MEMBER_ID_LABEL = 'Pending Treasurer Confirmation';
+
+/** True when the member has been issued a real AFA Member ID code (not blank or pending). */
+export function hasAssignedMemberId(memberIdNumber?: string | null): boolean {
+  if (!memberIdNumber) return false;
+  const trimmed = memberIdNumber.trim();
+  if (!trimmed) return false;
+  return !/^pending\b/i.test(trimmed);
+}
+
+/** Generates the next sequential `AFA-YYYY-NNN` Member ID upon Treasurer confirmation. */
+export function assignNextMemberId(members: readonly Member[], year: number = new Date().getFullYear()): string {
+  const prefix = `AFA-${year}-`;
+  let maxSeq = 0;
+  const used = new Set<string>();
+  for (const m of members) {
+    const code = m.memberIdNumber?.trim();
+    if (!code || !hasAssignedMemberId(code)) continue;
+    used.add(code.toUpperCase());
+    if (code.toUpperCase().startsWith(prefix.toUpperCase())) {
+      const tail = code.slice(prefix.length).replace(/[^0-9]/g, '');
+      const num = parseInt(tail, 10);
+      if (Number.isFinite(num) && num > maxSeq) maxSeq = num;
+    }
+  }
+  let next = maxSeq + 1;
+  let candidate = `${prefix}${String(next).padStart(3, '0')}`;
+  while (used.has(candidate.toUpperCase())) {
+    next += 1;
+    candidate = `${prefix}${String(next).padStart(3, '0')}`;
+  }
+  return candidate;
+}
+
 /** "Now" as YYYY-MM-DD in local time, the same format the rest of the app stores. */
 export function todayIso(now: Date = new Date()): string {
   const year = now.getFullYear();

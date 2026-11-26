@@ -262,6 +262,24 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS gender VARCHAR(20);`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS birth_date VARCHAR(50);`,
+    `CREATE TABLE IF NOT EXISTS pending_members(
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      username VARCHAR(100),
+      farm_location TEXT,
+      primary_crops TEXT[],
+      contact_number VARCHAR(50),
+      joined_date VARCHAR(50),
+      rsbsa_number VARCHAR(100),
+      is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+      avatar_url TEXT,
+      gender VARCHAR(20),
+      birth_date VARCHAR(50),
+      affiliations JSONB DEFAULT '[]'::jsonb,
+      registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+      approved_by_secretary TEXT,
+      approved_by_secretary_date VARCHAR(50)
+    );`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS rsbsa_number VARCHAR(100);`,
@@ -1015,6 +1033,26 @@ async function initDatabaseSchema(pool) {
   );
   `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS pending_members(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    username VARCHAR(100),
+    farm_location TEXT,
+    primary_crops TEXT[],
+    contact_number VARCHAR(50),
+    joined_date VARCHAR(50),
+    rsbsa_number VARCHAR(100),
+    is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+    avatar_url TEXT,
+    gender VARCHAR(20),
+    birth_date VARCHAR(50),
+    affiliations JSONB DEFAULT '[]'::jsonb,
+    registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+    approved_by_secretary TEXT,
+    approved_by_secretary_date VARCHAR(50)
+  );
+  `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS meetings(
     id VARCHAR(100) PRIMARY KEY,
     title TEXT NOT NULL,
@@ -1346,6 +1384,10 @@ var ENTITY_TABLE_MAP = {
   officers: "users",
   member: "members",
   members: "members",
+  pendingmember: "pending_members",
+  pendingmembers: "pending_members",
+  pending_member: "pending_members",
+  pending_members: "pending_members",
   meeting: "meetings",
   meetings: "meetings",
   resolution: "resolutions",
@@ -1605,6 +1647,7 @@ async function saveFullStateToPostgres(pool, state) {
     await client.query("BEGIN");
     const deletedUserIds = /* @__PURE__ */ new Set();
     const deletedMemberIds = /* @__PURE__ */ new Set();
+    const deletedPendingMemberIds = /* @__PURE__ */ new Set();
     const deletedMeetingIds = /* @__PURE__ */ new Set();
     const deletedResolutionIds = /* @__PURE__ */ new Set();
     const deletedTxIds = /* @__PURE__ */ new Set();
@@ -1627,6 +1670,12 @@ async function saveFullStateToPostgres(pool, state) {
         d.members.forEach((id) => deletedMemberIds.add(id));
         await client.query("DELETE FROM members WHERE id = ANY($1)", [d.members]);
         console.log("[DB DELETE] Batch deleted members:", d.members);
+      }
+      const pms = d.pendingMembers || d.pending_members;
+      if (Array.isArray(pms) && pms.length > 0) {
+        pms.forEach((id) => deletedPendingMemberIds.add(id));
+        await client.query("DELETE FROM pending_members WHERE id = ANY($1)", [pms]);
+        console.log("[DB DELETE] Batch deleted pending_members:", pms);
       }
       if (Array.isArray(d.meetings) && d.meetings.length > 0) {
         d.meetings.forEach((id) => deletedMeetingIds.add(id));
@@ -1694,6 +1743,7 @@ async function saveFullStateToPostgres(pool, state) {
         await client.query(`DELETE FROM ${tbl} WHERE id = $1`, [state.deleteItem.id]);
         if (tbl === "users") deletedUserIds.add(state.deleteItem.id);
         if (tbl === "members") deletedMemberIds.add(state.deleteItem.id);
+        if (tbl === "pending_members") deletedPendingMemberIds.add(state.deleteItem.id);
         if (tbl === "meetings") deletedMeetingIds.add(state.deleteItem.id);
         if (tbl === "resolutions") deletedResolutionIds.add(state.deleteItem.id);
         if (tbl === "financial_transactions") deletedTxIds.add(state.deleteItem.id);
@@ -1810,6 +1860,55 @@ async function saveFullStateToPostgres(pool, state) {
         ]);
       }
       console.log("[DB DEBUG] Members saved");
+    }
+    const rawPendingMembers = state.pendingMembers || state.pending_members;
+    if (rawPendingMembers && Array.isArray(rawPendingMembers)) {
+      const activePending = rawPendingMembers.filter((pm) => pm?.id && !deletedPendingMemberIds.has(pm.id));
+      for (const pm of activePending) {
+        const pmName = cleanText(pm.name, 200);
+        if (!pmName) continue;
+        await client.query(`
+          INSERT INTO pending_members(
+            id, name, username, farm_location, primary_crops, contact_number, joined_date,
+            rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date, affiliations,
+            registration_status, approved_by_secretary, approved_by_secretary_date
+          )
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15, $16)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            username = COALESCE(EXCLUDED.username, pending_members.username),
+            farm_location = EXCLUDED.farm_location,
+            primary_crops = EXCLUDED.primary_crops,
+            contact_number = EXCLUDED.contact_number,
+            joined_date = EXCLUDED.joined_date,
+            rsbsa_number = EXCLUDED.rsbsa_number,
+            is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
+            avatar_url = EXCLUDED.avatar_url,
+            gender = EXCLUDED.gender,
+            birth_date = EXCLUDED.birth_date,
+            affiliations = EXCLUDED.affiliations,
+            registration_status = EXCLUDED.registration_status,
+            approved_by_secretary = EXCLUDED.approved_by_secretary,
+            approved_by_secretary_date = EXCLUDED.approved_by_secretary_date;
+        `, [
+          pm.id,
+          pmName,
+          cleanText(pm.username, 100),
+          cleanText(pm.farmLocation, 200),
+          cleanTextList(pm.primaryCrops),
+          cleanText(pm.contactNumber, 50),
+          cleanDateString(pm.joinedDate, 50),
+          cleanText(pm.rsbsaNumber, 100),
+          Boolean(pm.isRsbsaRegistered),
+          safeImageUrl(pm.avatarUrl),
+          cleanText(pm.gender, 20),
+          cleanDateString(pm.birthDate, 50),
+          JSON.stringify(Array.isArray(pm.affiliations) ? pm.affiliations : []),
+          pm.registrationStatus === "Awaiting Treasurer Fee" ? "Awaiting Treasurer Fee" : "Pending Secretary Approval",
+          cleanText(pm.approvedBySecretary, 200),
+          cleanDateString(pm.approvedBySecretaryDate, 50)
+        ]);
+      }
     }
     const rawTxList = state.financialTransactions || state.transactions;
     if (rawTxList && Array.isArray(rawTxList) && state.auditorReviewOnly === true) {
@@ -3338,17 +3437,17 @@ async function handler(req, res) {
       }
     }
     const canWriteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role) || isTreasurerRole(user.role);
-    const canDeleteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role);
-    if (!canWriteMembers && "members" in state) {
+    const canDeleteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role) || isTreasurerRole(user.role);
+    if (!canWriteMembers && ("members" in state || "pendingMembers" in state)) {
       return sendResponse(res, 403, {
         success: false,
         message: "Only the President, Secretary, or Treasurer may update the member registry."
       });
     }
-    if (!canDeleteMembers && (hasDeletedKey(["members"]) || ["member", "members"].includes(deleteItemEntity))) {
+    if (!canDeleteMembers && (hasDeletedKey(["members", "pendingMembers", "pending_members"]) || ["member", "members", "pending_member", "pending_members"].includes(deleteItemEntity))) {
       return sendResponse(res, 403, {
         success: false,
-        message: "Only the President or Secretary may remove member records."
+        message: "Only the President, Secretary, or Treasurer may remove member records."
       });
     }
     const canWriteMeetings = isPresidentRole(user.role) || isSecretaryRole(user.role) || isVicePresident && delegationScopes.has("record_approval");

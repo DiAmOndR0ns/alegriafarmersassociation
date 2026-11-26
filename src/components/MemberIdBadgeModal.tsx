@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Member } from '../types';
 import { escapeHtml, safePrintImageUrl, triggerPrintWindow } from '../utils/htmlEscape';
+import { hasAssignedMemberId, PENDING_MEMBER_ID_LABEL } from '../utils/membership';
 import { 
   Printer, X, ShieldCheck, CheckCircle2, AlertCircle, 
   MapPin, Phone, Calendar, User, QrCode, Tag, Award
@@ -126,7 +127,7 @@ export default function MemberIdBadgeModal({
                     <div class="member-name">${escapeHtml(m.name)}</div>
                     <div class="field-row">
                       <span class="field-label">Member ID:</span> 
-                      <span class="field-val" style="font-family:monospace; color:#1B4332;">${escapeHtml(m.memberIdNumber || 'Not assigned')}</span>
+                      <span class="field-val" style="font-family:monospace; color:#1B4332;">${escapeHtml(hasAssignedMemberId(m.memberIdNumber) ? m.memberIdNumber! : PENDING_MEMBER_ID_LABEL)}</span>
                     </div>
                     <div class="field-row">
                       <span class="field-label">Sitio Address:</span> 
@@ -248,7 +249,7 @@ export default function MemberIdBadgeModal({
                 <div className="text-xs">
                   <span className="text-[9px] font-bold text-[#365447] block uppercase">Member ID:</span>
                   <span className="font-mono font-black text-emerald-800 text-[11px]">
-                    {member.memberIdNumber || 'Not assigned'}
+                    {hasAssignedMemberId(member.memberIdNumber) ? member.memberIdNumber : PENDING_MEMBER_ID_LABEL}
                   </span>
                 </div>
 

@@ -18,6 +18,7 @@ export type PushApiResponse = Response | ServerResponse;
 
 export interface PushSyncState {
   members?: unknown[];
+  pendingMembers?: unknown[];
   meetings?: unknown[];
   resolutions?: unknown[];
   transactions?: unknown[];
@@ -704,19 +705,19 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       }
     }
 
-    // Member roster writes: President, Secretary, Assistant Secretary, Treasurer, Assistant Treasurer.
+    // Member roster & pending registration writes: President, Secretary, Assistant Secretary, Treasurer, Assistant Treasurer.
     const canWriteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role) || isTreasurerRole(user.role);
-    const canDeleteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role);
-    if (!canWriteMembers && 'members' in state) {
+    const canDeleteMembers = isPresidentRole(user.role) || isSecretaryRole(user.role) || isTreasurerRole(user.role);
+    if (!canWriteMembers && ('members' in state || 'pendingMembers' in state)) {
       return sendResponse(res, 403, {
         success: false,
         message: 'Only the President, Secretary, or Treasurer may update the member registry.',
       });
     }
-    if (!canDeleteMembers && (hasDeletedKey(['members']) || ['member', 'members'].includes(deleteItemEntity))) {
+    if (!canDeleteMembers && (hasDeletedKey(['members', 'pendingMembers', 'pending_members']) || ['member', 'members', 'pending_member', 'pending_members'].includes(deleteItemEntity))) {
       return sendResponse(res, 403, {
         success: false,
-        message: 'Only the President or Secretary may remove member records.',
+        message: 'Only the President, Secretary, or Treasurer may remove member records.',
       });
     }
 

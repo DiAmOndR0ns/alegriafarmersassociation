@@ -50,6 +50,8 @@ export interface MemberRow {
   /** Printed text, e.g. "June 03, 1968". */
   dob?: string;
   contact?: string;
+  /** Active (membership fee paid for the year) or Inactive (unpaid / delisted). */
+  status?: 'Active' | 'Inactive';
 }
 
 export type PageDef =
@@ -136,12 +138,17 @@ export function buildOfficerRows(users: User[]): OfficerRow[] {
 }
 
 /** Member roster rows from the live member records, ordered by surname. */
-export function buildMemberRows(members: Member[]): MemberRow[] {
+export function buildMemberRows(
+  members: Member[],
+  membershipPayments: readonly MembershipPayment[] = [],
+  year: number = new Date().getFullYear()
+): MemberRow[] {
   const sorted = [...members].sort((a, b) =>
     getSurname(a.name).localeCompare(getSurname(b.name)) || a.name.localeCompare(b.name)
   );
   return sorted.map((m, i) => {
     const { first, mi, last } = splitName(m.name);
+    const status = getDerivedMemberStatus(m, membershipPayments, year);
     return {
       no: i + 1,
       last,
@@ -151,6 +158,7 @@ export function buildMemberRows(members: Member[]): MemberRow[] {
         ? new Date(m.birthDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
         : undefined,
       contact: m.contactNumber,
+      status,
     };
   });
 }
@@ -159,23 +167,31 @@ export function buildDefaultPages(
   users: User[],
   members: Member[],
   membershipPayments: readonly MembershipPayment[] = [],
-  year: number = new Date().getFullYear()
+  year: number = new Date().getFullYear(),
+  statusFilter: 'Active' | 'Inactive' | 'All' = 'Active'
 ): PageDef[] {
-  // The printed roster is the list of members who have settled dues for the
-  // year — the same list the book is closed against. Unpaid members are not
-  // "updated members" of that year and must not appear on the official list.
-  const listed = members.filter(member => getDerivedMemberStatus(member, membershipPayments, year) === 'Active');
-  const rows = buildMemberRows(listed);
+  const filtered = members.filter(member => {
+    const status = getDerivedMemberStatus(member, membershipPayments, year);
+    if (statusFilter === 'All') return true;
+    return status === statusFilter;
+  });
+  const rows = buildMemberRows(filtered, membershipPayments, year);
   const chunkSize = 26;
   const chunks: MemberRow[][] = [];
   for (let i = 0; i < rows.length; i += chunkSize) chunks.push(rows.slice(i, i + chunkSize));
+  const titleBase =
+    statusFilter === 'Inactive'
+      ? `List of Updated Members in ${year} — Inactive / Unpaid`
+      : statusFilter === 'All'
+        ? `List of Updated Members in ${year} — Active & Inactive`
+        : `List of Updated Members in ${year}`;
   return [
     { kind: "officers", title: "List of Officers with Contact Information", rows: buildOfficerRows(users) },
     ...(chunks.length === 0
-      ? [{ kind: "members" as const, title: `List of Updated Members in ${year}`, rows: [] }]
+      ? [{ kind: "members" as const, title: titleBase, rows: [] }]
       : chunks.map((c, i) => ({
         kind: "members" as const,
-        title: `List of Updated Members in ${year}${chunks.length > 1 ? ` (cont. ${i + 1})` : ""}`,
+        title: `${titleBase}${chunks.length > 1 ? ` (cont. ${i + 1})` : ""}`,
         columnHeaders: i === 0,
         rows: c,
       }))),
@@ -330,11 +346,12 @@ function MembersTable({ rows, columnHeaders }: { rows: MemberRow[]; columnHeader
   return (
     <table className="afa-table">
       <colgroup>
-        <col style={{ width: "34%" }} />
-        <col style={{ width: "26%" }} />
-        <col style={{ width: "7%" }} />
-        <col style={{ width: "18%" }} />
-        <col style={{ width: "15%" }} />
+        <col style={{ width: "30%" }} />
+        <col style={{ width: "22%" }} />
+        <col style={{ width: "6%" }} />
+        <col style={{ width: "16%" }} />
+        <col style={{ width: "14%" }} />
+        <col style={{ width: "12%" }} />
       </colgroup>
       {columnHeaders && (
         <thead>
@@ -344,6 +361,7 @@ function MembersTable({ rows, columnHeaders }: { rows: MemberRow[]; columnHeader
             <th />
             <th>Date of Birth</th>
             <th>Contact Number</th>
+            <th>Status</th>
           </tr>
         </thead>
       )}
@@ -355,6 +373,9 @@ function MembersTable({ rows, columnHeaders }: { rows: MemberRow[]; columnHeader
             <td>{r.mi}</td>
             <td>{r.dob}</td>
             <td>{r.contact}</td>
+            <td style={{ fontWeight: 700, color: r.status === 'Inactive' ? '#991b1b' : '#166534' }}>
+              {r.status || 'Active'}
+            </td>
           </tr>
         ))}
       </tbody>
@@ -429,6 +450,7 @@ export default function AFAMemberLists({
   onClose,
 }: Props & { users?: User[]; members?: Member[]; membershipPayments?: MembershipPayment[]; membershipYear?: number }) {
   const [paper, setPaper] = useState<PaperKey>(initialPaper);
+  const [statusFilter, setStatusFilter] = useState<'Active' | 'Inactive' | 'All'>('All');
   const [logoOk, setLogoOk] = useState(true);
 
   useEffect(() => {
@@ -447,7 +469,7 @@ export default function AFAMemberLists({
     attestedBy ?? { name: resolveOfficerName(users, "President"), role: "President" };
 
   const membershipYear = requestedYear ?? new Date().getFullYear();
-  const resolvedPages = pages ?? buildDefaultPages(users, members, membershipPayments, membershipYear);
+  const resolvedPages = pages ?? buildDefaultPages(users, members, membershipPayments, membershipYear, statusFilter);
 
   return (
     <div className="afa-root">
@@ -462,6 +484,14 @@ export default function AFAMemberLists({
                 {PAPER[k].label}
               </option>
             ))}
+          </select>
+        </label>
+        <label>
+          Member Status{" "}
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'Active' | 'Inactive' | 'All')}>
+            <option value="All">Active &amp; Inactive (All Members)</option>
+            <option value="Active">Active Only (Dues Paid)</option>
+            <option value="Inactive">Inactive Only (Unpaid / Delisted)</option>
           </select>
         </label>
         <button type="button" onClick={() => window.print()}>

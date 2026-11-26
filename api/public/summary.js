@@ -110,6 +110,24 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS gender VARCHAR(20);`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS birth_date VARCHAR(50);`,
+    `CREATE TABLE IF NOT EXISTS pending_members(
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      username VARCHAR(100),
+      farm_location TEXT,
+      primary_crops TEXT[],
+      contact_number VARCHAR(50),
+      joined_date VARCHAR(50),
+      rsbsa_number VARCHAR(100),
+      is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+      avatar_url TEXT,
+      gender VARCHAR(20),
+      birth_date VARCHAR(50),
+      affiliations JSONB DEFAULT '[]'::jsonb,
+      registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+      approved_by_secretary TEXT,
+      approved_by_secretary_date VARCHAR(50)
+    );`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS rsbsa_number VARCHAR(100);`,
@@ -860,6 +878,26 @@ async function initDatabaseSchema(pool) {
     avatar_url TEXT,
     gender VARCHAR(20),
     birth_date VARCHAR(50)
+  );
+  `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pending_members(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    username VARCHAR(100),
+    farm_location TEXT,
+    primary_crops TEXT[],
+    contact_number VARCHAR(50),
+    joined_date VARCHAR(50),
+    rsbsa_number VARCHAR(100),
+    is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+    avatar_url TEXT,
+    gender VARCHAR(20),
+    birth_date VARCHAR(50),
+    affiliations JSONB DEFAULT '[]'::jsonb,
+    registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+    approved_by_secretary TEXT,
+    approved_by_secretary_date VARCHAR(50)
   );
   `);
     await client.query(`

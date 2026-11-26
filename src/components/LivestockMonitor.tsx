@@ -775,9 +775,9 @@ export default function LivestockMonitor({
 
           {isPoultry && (
             <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/70">
-              <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 block">Eggs Available</span>
+              <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 block">Eggs Available for Sale</span>
               <div className="text-2xl font-black text-[#1B4332] font-mono mt-1">{currentEggInventory} eggs</div>
-              <p className="mt-1 text-[10px] font-semibold text-amber-900">Verified harvests minus eggs sold</p>
+              <p className="mt-1 text-[10px] font-semibold text-amber-900">Approved &amp; signed harvests minus eggs sold</p>
             </div>
           )}
 
@@ -922,10 +922,14 @@ export default function LivestockMonitor({
                       </td>
                       <td className="py-2.5 pr-3 text-slate-500 text-[10px] font-bold whitespace-nowrap">{r.by || 'Officer'}</td>
 
-                      {/* CRUD Actions: Edit & Delete (both blocked for closed years) */}
+                      {/* CRUD Actions: Edit & Delete (Expenses only; Sales are final & cannot be edited; no sales approval required) */}
                       {isTreasurerOrOfficer && (
                         <td className="py-2.5 text-center whitespace-nowrap">
-                        {isTreasurer ? (
+                        {r.itemType === 'sale' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold" title="Sales are final upon recording — cannot be edited and require no separate approval">
+                            <Lock className="w-2.5 h-2.5" /> Final Sale
+                          </span>
+                        ) : isTreasurer ? (
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
@@ -935,11 +939,10 @@ export default function LivestockMonitor({
                                   window.alert(locked);
                                   return;
                                 }
-                                if (r.itemType === 'expense') openEditExpense(r.rawExpense);
-                                else openEditSale(r.rawSale);
+                                openEditExpense(r.rawExpense);
                               }}
                               className="p-1 rounded-lg hover:bg-slate-200 text-[#1B4332] transition-colors cursor-pointer"
-                              title="Edit transaction"
+                              title="Edit expense"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
@@ -952,12 +955,11 @@ export default function LivestockMonitor({
                                   return;
                                 }
                                 if (window.confirm(`Delete this ${r.kind.toLowerCase()} record of ${peso(Math.abs(r.amount))}?`)) {
-                                  if (r.itemType === 'expense') onDeleteExpense?.(r.id);
-                                  else onDeleteSale?.(r.id);
+                                  onDeleteExpense?.(r.id);
                                 }
                               }}
                               className="p-1 rounded-lg hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer"
-                              title="Delete transaction"
+                              title="Delete expense"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>

@@ -88,6 +88,9 @@ function scopeDataForMember(data: any, user: { id: string; name: string; memberI
     ...data,
     users: scopedUsers,
     members: scopedMembers,
+    pendingMembers: (Array.isArray(data.pendingMembers) ? data.pendingMembers : []).filter((pm: any) =>
+      pm?.id === user.id || (userName && norm(pm?.name) === userName)
+    ),
     membershipPayments: scopedPayments,
     transactions: scopedApprovedTransactions,
     financialTransactions: scopedApprovedTransactions,

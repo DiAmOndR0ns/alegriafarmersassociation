@@ -79,6 +79,39 @@ export interface Member {
   membershipPaidThrough?: number;
   /** Reason recorded when an officer closes a membership year without this member paying. */
   inactiveReason?: string;
+  /** Whether the member self-registered and is awaiting Secretary approval before Treasurer fee settlement. */
+  registrationStatus?: 'Pending Secretary Approval' | 'Approved';
+}
+
+export interface PendingMember {
+  id: string;
+  name: string;
+  username?: string;
+  rsbsaNumber?: string;
+  isRsbsaRegistered?: boolean;
+  farmLocation: string;
+  primaryCrops: string[];
+  contactNumber: string;
+  joinedDate: string;
+  avatarUrl?: string;
+  gender?: 'Male' | 'Female' | 'Other' | string;
+  birthDate?: string;
+  affiliations?: MemberAffiliation[];
+  /** Stage 1 = 'Pending Secretary Approval'; Stage 2 = 'Awaiting Treasurer Fee'. */
+  registrationStatus: 'Pending Secretary Approval' | 'Awaiting Treasurer Fee';
+  approvedBySecretary?: string;
+  approvedBySecretaryDate?: string;
+}
+
+export interface DeletedRecordArchive {
+  id: string;
+  entityType: 'Member' | 'Meeting' | 'Resolution' | 'Transaction' | 'Announcement' | 'Activity' | 'Inventory' | 'Product' | 'IGP Expense' | 'IGP Sale' | 'Officer' | 'Fund' | string;
+  entityId: string;
+  title: string;
+  details: string;
+  deletedBy: string;
+  deletedAt: string;
+  snapshot?: Record<string, unknown>;
 }
 
 // ANNUAL MEMBERSHIP DUES

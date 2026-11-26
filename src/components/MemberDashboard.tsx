@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Announcement, LivestockIgpState, EggHarvestLog, Member, Product, AssociationActivity, MemberAffiliation, MembershipPayment } from '../types';
 import { resolveOfficerName } from '../utils/officers';
-import { DEFAULT_MEMBERSHIP_DUES, getMembershipStanding, hasPaymentForYear } from '../utils/membership';
+import { DEFAULT_MEMBERSHIP_DUES, PENDING_MEMBER_ID_LABEL, getMembershipStanding, hasAssignedMemberId, hasPaymentForYear } from '../utils/membership';
 import {
   User as UserIcon, MapPin, Smartphone, Layers, Tag, Calendar,
   Printer, Upload, LogOut, FileText, CheckCircle, CreditCard,
@@ -149,8 +149,10 @@ export default function MemberDashboard({
     });
   };
 
-  // Generate a membership code based on signup date or user id
-  const memberCode = `AFA-${currentUser.joinedDate?.replace(/-/g, '').substring(2, 6) || '2026'}-${currentUser.id.split('-')[1]?.substring(0, 4).toUpperCase() || 'M024'}`;
+  // Member IDs are only assigned once the Treasurer confirms the membership fee.
+  const assignedId = myRosterRecord?.memberIdNumber || currentUser.memberIdNumber || myPayment?.memberIdNumber;
+  const hasOfficialMemberId = duesSettled && hasAssignedMemberId(assignedId);
+  const memberCode = hasOfficialMemberId ? assignedId! : PENDING_MEMBER_ID_LABEL;
 
   // Form submit handler
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -260,10 +262,17 @@ export default function MemberDashboard({
             <span className="bg-[#1B4332] text-[#FFF0C2] text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
               AFA Regular Member
             </span>
-            <span className="bg-[#FFF0C2] text-[#7A4904] border border-[#E9B34A]/60 text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              Active Member
-            </span>
+            {membershipStanding === 'Paid' ? (
+              <span className="bg-[#FFF0C2] text-[#7A4904] border border-[#E9B34A]/60 text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                Active Member • {memberCode}
+              </span>
+            ) : (
+              <span className="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                ID Pending Treasurer Confirmation
+              </span>
+            )}
             <span className="bg-white/90 text-[#1B4332] border border-[#1B4332]/20 text-xs font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-[#C2410C] shrink-0" aria-hidden="true" />
               {currentUser.farmLocation || 'Tuburan, Cebu'}

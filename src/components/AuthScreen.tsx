@@ -68,6 +68,108 @@ export default function AuthScreen({
   const [resetSitio, setResetSitio] = useState<string>('');
   const [isSubmittingReset, setIsSubmittingReset] = useState(false);
 
+  // Farmer Member Self-Registration form state
+  const [showSelfRegister, setShowSelfRegister] = useState(false);
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regMiddleName, setRegMiddleName] = useState('');
+  const [regSurname, setRegSurname] = useState('');
+  const [regSitio, setRegSitio] = useState<string>(OFFICIAL_ALEGRIA_SITIOS[0]);
+  const [regContact, setRegContact] = useState('');
+  const [regGender, setRegGender] = useState<'Male' | 'Female' | 'Other'>('Male');
+  const [regBirthDate, setRegBirthDate] = useState('');
+  const [regIsRsbsa, setRegIsRsbsa] = useState(false);
+  const [regRsbsaNumber, setRegRsbsaNumber] = useState('');
+  const [regCrops, setRegCrops] = useState<string[]>(['Vegetables']);
+  const [regUsername, setRegUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
+
+  const SELF_REG_CROPS = [
+    'Corn', 'Coconut', 'Banana', 'Cacao', 'Tuburan Coffee',
+    'Vegetables', 'Cassava', 'Livestock', 'Poultry Raising', 'Goat Raising'
+  ];
+
+  const handleSelfRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const f = regFirstName.trim();
+    const m = regMiddleName.trim().replace(/\.$/, '');
+    const s = regSurname.trim();
+    if (!f || !s || !regUsername.trim() || !regPassword.trim()) {
+      toast(t('Palihug kompletoha ang imong ngalan, username, ug password.', 'Please complete your name, username, and password.'), 'error');
+      return;
+    }
+    const forename = m ? `${f} ${m[0].toUpperCase()}.` : f;
+    const fullName = `${s}, ${forename}`;
+    const cleanUsername = regUsername.trim().toLowerCase();
+    const policyErr = validatePasswordPolicy(regPassword.trim(), cleanUsername, 'Member', []);
+    if (policyErr) {
+      toast(policyErr, 'error');
+      return;
+    }
+    setIsSubmittingRegister(true);
+    try {
+      if (serverAuthRequired) {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: fullName,
+            username: cleanUsername,
+            password: regPassword.trim(),
+            farmLocation: regSitio,
+            contactNumber: regContact.trim() || 'None',
+            gender: regGender,
+            birthDate: regBirthDate || undefined,
+            isRsbsaRegistered: regIsRsbsa,
+            rsbsaNumber: regIsRsbsa && regRsbsaNumber.trim() ? regRsbsaNumber.trim() : undefined,
+            primaryCrops: regCrops.length > 0 ? regCrops : ['Vegetables']
+          })
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.success) {
+          toast(result?.message || 'Registration could not be completed.', 'error');
+          return;
+        }
+      }
+      if (onRegister) {
+        await onRegister({
+          name: fullName,
+          username: cleanUsername,
+          password: regPassword.trim(),
+          role: 'Member',
+          farmLocation: regSitio,
+          contactNumber: regContact.trim() || 'None',
+          isRsbsaRegistered: regIsRsbsa,
+          rsbsaNumber: regIsRsbsa && regRsbsaNumber.trim() ? regRsbsaNumber.trim() : undefined,
+          primaryCrops: regCrops.length > 0 ? regCrops : ['Vegetables'],
+          status: 'Inactive',
+          inactiveReason: 'Pending Secretary Approval'
+        });
+      }
+      toast(
+        t(
+          'Nadawat na ang imong pagparehistro! I-review ug aprobahan kini sa Secretary, ug i-verify sa Treasurer ang imong Membership Fee.',
+          'Registration submitted! The Secretary will approve your application and the Treasurer will verify your Membership Fee.'
+        ),
+        'success'
+      );
+      setShowSelfRegister(false);
+      setRegFirstName('');
+      setRegMiddleName('');
+      setRegSurname('');
+      setRegContact('');
+      setRegBirthDate('');
+      setRegRsbsaNumber('');
+      setRegUsername('');
+      setRegPassword('');
+    } catch {
+      toast('Unable to submit registration right now.', 'error');
+    } finally {
+      setIsSubmittingRegister(false);
+    }
+  };
+
   const { isEnglish: en, t } = useLanguage();
 
   const resolvedPresidentName =
@@ -443,16 +545,222 @@ export default function AuthScreen({
             <div className="flex items-center justify-between border-b border-[#E3EFE6] pb-3">
               <div>
                 <h2 className="font-display text-lg sm:text-xl font-bold text-[#1B4332]">
-                  {showResetForm
-                    ? t('Hangyo sa Bag-ong Password', 'Password Reset Request')
-                    : authChallenge
-                      ? t('Two-Factor Verification', 'Two-Factor Verification')
-                      : t('Pagsulod sa Account', 'Sign In to FAMS')}
+                  {showSelfRegister
+                    ? t('Pagparehistro sa Bag-ong Miyembro', 'New Farmer Member Self-Registration')
+                    : showResetForm
+                      ? t('Hangyo sa Bag-ong Password', 'Password Reset Request')
+                      : authChallenge
+                        ? t('Two-Factor Verification', 'Two-Factor Verification')
+                        : t('Pagsulod sa Account', 'Sign In to FAMS')}
                 </h2>
               </div>
             </div>
 
-            {showResetForm ? (
+            {showSelfRegister ? (
+              <form onSubmit={handleSelfRegisterSubmit} className="space-y-3.5 animate-fade-in text-left max-h-[70vh] overflow-y-auto pr-1">
+                <div className="dim-card-mint rounded-2xl p-3.5 text-xs text-[#1B4332] space-y-1">
+                  <strong className="font-extrabold block">
+                    {t('2-Step Onboarding Process:', '2-Step Member Onboarding:')}
+                  </strong>
+                  <p className="text-[#354B40]">
+                    {t(
+                      '1. Kompletuha kini nga porma aron ma-aprobahan sa Secretary.\n2. Bayri ang Membership Fee ngadto sa Treasurer aron ma-aktibo ang imong account.',
+                      '1. Fill up this form for Secretary review & approval.\n2. Settle your Membership Fee with the Treasurer to activate your membership.'
+                    )}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Unang Ngalan (First Name)', 'First Name')} *</label>
+                    <input
+                      type="text"
+                      required
+                      value={regFirstName}
+                      onChange={(e) => {
+                        setRegFirstName(e.target.value);
+                        if (!regUsername) {
+                          const gen = `${e.target.value}.${regSurname}`.toLowerCase().replace(/[^a-z0-9.]/g, '').replace(/^\.+|\.+$/g, '');
+                          if (gen.length >= 3) setRegUsername(gen);
+                        }
+                      }}
+                      className="form-input px-3 py-2 text-sm font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Tunga nga Ngalan (M.I.)', 'Middle Name')}</label>
+                    <input
+                      type="text"
+                      value={regMiddleName}
+                      onChange={(e) => setRegMiddleName(e.target.value)}
+                      className="form-input px-3 py-2 text-sm font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Apelyido (Surname)', 'Surname')} *</label>
+                    <input
+                      type="text"
+                      required
+                      value={regSurname}
+                      onChange={(e) => setRegSurname(e.target.value)}
+                      className="form-input px-3 py-2 text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Sitio / Lokasyon sa Uma', 'Sitio / Farm Location')} *</label>
+                    <select
+                      value={regSitio}
+                      onChange={(e) => setRegSitio(e.target.value)}
+                      className="form-control px-3 py-2 text-sm font-semibold"
+                    >
+                      {OFFICIAL_ALEGRIA_SITIOS.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Numero sa Telepono', 'Contact Number')}</label>
+                    <input
+                      type="text"
+                      placeholder="09XX-XXX-XXXX"
+                      value={regContact}
+                      onChange={(e) => setRegContact(e.target.value)}
+                      className="form-input px-3 py-2 text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Sekso (Gender)', 'Gender')}</label>
+                    <select
+                      value={regGender}
+                      onChange={(e) => setRegGender(e.target.value as 'Male' | 'Female' | 'Other')}
+                      className="form-control px-3 py-2 text-sm font-semibold"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Petsa sa Pagkatawo (Birth Date)', 'Birth Date')}</label>
+                    <input
+                      type="date"
+                      value={regBirthDate}
+                      onChange={(e) => setRegBirthDate(e.target.value)}
+                      className="form-input px-3 py-2 text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#FAF8F5] border border-[#D5CFC1] space-y-2">
+                  <label className="flex items-center gap-2 text-xs font-bold text-[#1B4332] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={regIsRsbsa}
+                      onChange={(e) => setRegIsRsbsa(e.target.checked)}
+                    />
+                    <span>{t('Rehistrado sa RSBSA (DA Registry)', 'Registered in RSBSA (DA Registry)')}</span>
+                  </label>
+                  {regIsRsbsa && (
+                    <input
+                      type="text"
+                      placeholder="RSBSA Number (e.g., 07-22-51-001-000123)"
+                      value={regRsbsaNumber}
+                      onChange={(e) => setRegRsbsaNumber(e.target.value)}
+                      className="form-input px-3 py-1.5 text-xs font-mono"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <span className="block text-xs font-bold text-[#1B4332] mb-1">{t('Mga Tanom ug Hayop (Primary Crops / Livestock)', 'Primary Crops & Livestock')}</span>
+                  <div className="grid grid-cols-2 gap-1.5 bg-[#FAF8F5] p-2.5 rounded-xl border border-[#D5CFC1]">
+                    {SELF_REG_CROPS.map((crop) => (
+                      <label key={crop} className="flex items-center gap-1.5 text-xs font-semibold text-[#1B4332] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={regCrops.includes(crop)}
+                          onChange={() =>
+                            setRegCrops((prev) =>
+                              prev.includes(crop) ? prev.filter((c) => c !== crop) : [...prev, crop]
+                            )
+                          }
+                        />
+                        <span className="truncate">{crop}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-[#E3EFE6]">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1B4332] mb-1">{t('Gipili nga Username', 'Desired Username')} *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g., juan.delacruz"
+                      value={regUsername}
+                      onChange={(e) => setRegUsername(e.target.value)}
+                      className="form-input px-3 py-2 text-sm font-mono font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-xs font-bold text-[#1B4332]">{t('Password (12+ chars)', 'Password (12+ chars)')} *</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegPassword(generateInitialPassword(regUsername || 'farmer', 'Member'));
+                          setShowRegPassword(true);
+                        }}
+                        className="text-[11px] font-bold text-[#2D6A4F] hover:underline cursor-pointer"
+                      >
+                        Generate
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showRegPassword ? 'text' : 'password'}
+                        required
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        className="form-input pl-3 pr-9 py-2 text-sm font-mono font-semibold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegPassword((v) => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#455C50] hover:text-[#1B4332] cursor-pointer"
+                      >
+                        {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSelfRegister(false)}
+                    className="btn-bevel-secondary py-2.5 px-4 rounded-xl font-extrabold text-sm cursor-pointer text-center"
+                  >
+                    {t('Balik sa Login', 'Back to Login')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingRegister}
+                    className="btn-bevel-forest py-2.5 px-4 rounded-xl font-extrabold text-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                  >
+                    <UserPlus className="w-4 h-4 shrink-0" />
+                    <span>{isSubmittingRegister ? t('Nagpadala...', 'Submitting...') : t('Isumite ang Rehistrasyon', 'Submit Registration')}</span>
+                  </button>
+                </div>
+              </form>
+            ) : showResetForm ? (
               <div className="space-y-4 animate-fade-in text-left">
                 <div className="dim-card-warm rounded-2xl p-4 flex gap-3 text-[#18372D]">
                   <HelpCircle className="w-5 h-5 text-[#C2410C] shrink-0 mt-0.5" aria-hidden="true" />
@@ -678,6 +986,20 @@ export default function AuthScreen({
                   >
                     <span>{t('Pagsulod (Log In)', 'Log In')}</span>
                     <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    id="member-self-register-btn"
+                    onClick={() => {
+                      setShowSelfRegister(true);
+                      setShowResetForm(false);
+                      setShowAdminSetup(false);
+                    }}
+                    className="btn-bevel-secondary w-full py-3 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4 text-[#1B4332] shrink-0" aria-hidden="true" />
+                    <span>{t('Magparehistro isip Bag-ong Miyembro (Member Self-Registration)', 'New Member Self-Registration (Fill Up Form)')}</span>
                   </button>
 
                   {!hasPresidentAccount && (

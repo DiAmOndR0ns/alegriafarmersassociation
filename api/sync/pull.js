@@ -110,6 +110,24 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS gender VARCHAR(20);`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS birth_date VARCHAR(50);`,
+    `CREATE TABLE IF NOT EXISTS pending_members(
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      username VARCHAR(100),
+      farm_location TEXT,
+      primary_crops TEXT[],
+      contact_number VARCHAR(50),
+      joined_date VARCHAR(50),
+      rsbsa_number VARCHAR(100),
+      is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+      avatar_url TEXT,
+      gender VARCHAR(20),
+      birth_date VARCHAR(50),
+      affiliations JSONB DEFAULT '[]'::jsonb,
+      registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+      approved_by_secretary TEXT,
+      approved_by_secretary_date VARCHAR(50)
+    );`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS rsbsa_number VARCHAR(100);`,
@@ -863,6 +881,26 @@ async function initDatabaseSchema(pool) {
   );
   `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS pending_members(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    username VARCHAR(100),
+    farm_location TEXT,
+    primary_crops TEXT[],
+    contact_number VARCHAR(50),
+    joined_date VARCHAR(50),
+    rsbsa_number VARCHAR(100),
+    is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+    avatar_url TEXT,
+    gender VARCHAR(20),
+    birth_date VARCHAR(50),
+    affiliations JSONB DEFAULT '[]'::jsonb,
+    registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+    approved_by_secretary TEXT,
+    approved_by_secretary_date VARCHAR(50)
+  );
+  `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS meetings(
     id VARCHAR(100) PRIMARY KEY,
     title TEXT NOT NULL,
@@ -1282,6 +1320,29 @@ async function fetchAllDataFromPostgres(pool) {
     const achievementsRes = await client.query("SELECT * FROM achievements ORDER BY year DESC, title ASC");
     const fundsRes = await client.query("SELECT * FROM organization_funds ORDER BY name ASC");
     let delegationRequests = [];
+    let pendingMembers = [];
+    try {
+      const pmRes = await client.query("SELECT * FROM pending_members ORDER BY joined_date DESC, name ASC");
+      pendingMembers = pmRes.rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        username: r.username || void 0,
+        farmLocation: r.farm_location || "Sitio Tapon",
+        primaryCrops: r.primary_crops || [],
+        contactNumber: r.contact_number || "None",
+        joinedDate: r.joined_date || "",
+        rsbsaNumber: r.rsbsa_number || void 0,
+        isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
+        avatarUrl: r.avatar_url || void 0,
+        gender: r.gender || void 0,
+        birthDate: r.birth_date || void 0,
+        affiliations: Array.isArray(r.affiliations) ? r.affiliations : [],
+        registrationStatus: r.registration_status === "Awaiting Treasurer Fee" ? "Awaiting Treasurer Fee" : "Pending Secretary Approval",
+        approvedBySecretary: r.approved_by_secretary || void 0,
+        approvedBySecretaryDate: r.approved_by_secretary_date || void 0
+      }));
+    } catch {
+    }
     try {
       const delRes = await client.query("SELECT * FROM delegation_requests ORDER BY requested_date DESC");
       delegationRequests = delRes.rows.map((r) => ({
@@ -1604,6 +1665,7 @@ async function fetchAllDataFromPostgres(pool) {
     return {
       users,
       members,
+      pendingMembers,
       meetings,
       resolutions,
       transactions,
@@ -1806,6 +1868,9 @@ function scopeDataForMember(data, user) {
     ...data,
     users: scopedUsers,
     members: scopedMembers,
+    pendingMembers: (Array.isArray(data.pendingMembers) ? data.pendingMembers : []).filter(
+      (pm) => pm?.id === user.id || userName && norm(pm?.name) === userName
+    ),
     membershipPayments: scopedPayments,
     transactions: scopedApprovedTransactions,
     financialTransactions: scopedApprovedTransactions,

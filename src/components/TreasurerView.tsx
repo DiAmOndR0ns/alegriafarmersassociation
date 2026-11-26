@@ -1,14 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   FinancialTransaction, OrganizationFund, LivestockIgpState, User, OfficerRole, InventoryItem, InventoryAssetType, AssociationActivity, Meeting,
-  Member, MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot
+  Member, PendingMember, MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot, DeletedRecordArchive
 } from '../types';
 import { getInventoryAssetType } from '../utils/inventory';
 import {
   DEFAULT_MEMBERSHIP_DUES,
+  PENDING_MEMBER_ID_LABEL,
   getDuesCollected,
   getMembershipReceiptLabel,
   getMembershipStanding,
+  hasAssignedMemberId,
   hasPaymentForYear,
   isEffectivePayment
 } from '../utils/membership';
@@ -53,6 +55,7 @@ interface TreasurerViewProps {
   // Annual membership dues (calendar year). Recording a payment is what puts a
   // member back on the roster; closing the year freezes that roster.
   members?: Member[];
+  pendingMembers?: PendingMember[];
   membershipPayments?: MembershipPayment[];
   membershipYearSnapshots?: MembershipYearSnapshot[];
   duesAmount?: number;
@@ -71,6 +74,7 @@ interface TreasurerViewProps {
   onVoidMembershipPayment?: (paymentId: string, reason: string) => void;
   onCloseMembershipYear?: (year: number, remarks?: string) => void;
   onUpdateDuesAmount?: (amount: number) => void;
+  deletedArchive?: DeletedRecordArchive[];
 }
 
 const getFundSourceValue = (fund: OrganizationFund) => `${fund.code} (${fund.name})`;
@@ -91,18 +95,23 @@ export default function TreasurerView({
   currentUser,
   currentRole = 'Treasurer',
   members = [],
+  pendingMembers = [],
   membershipPayments = [],
   membershipYearSnapshots = [],
   duesAmount = DEFAULT_MEMBERSHIP_DUES,
   onRecordMembershipPayment,
   onVoidMembershipPayment,
   onCloseMembershipYear,
-  onUpdateDuesAmount
+  onUpdateDuesAmount,
+  deletedArchive = []
 }: TreasurerViewProps) {
   // Membership dues year selector + payment form state
   const [duesYear, setDuesYear] = useState<number>(new Date().getFullYear());
   const [showDuesModal, setShowDuesModal] = useState(false);
   const [duesMemberId, setDuesMemberId] = useState('');
+  const [duesMemberSearch, setDuesMemberSearch] = useState('');
+  const [duesStandingFilter, setDuesStandingFilter] = useState<'All' | 'Unpaid' | 'Paid' | 'Pending Secretary' | 'Inactive'>('All');
+  const [duesTableSearch, setDuesTableSearch] = useState('');
   const [duesPaymentAmount, setDuesPaymentAmount] = useState(String(duesAmount));
   const [duesDatePaid, setDuesDatePaid] = useState(new Date().toISOString().split('T')[0]);
   const [duesMethod, setDuesMethod] = useState<MembershipPaymentMethod>('Cash');
@@ -222,22 +231,85 @@ export default function TreasurerView({
 
   // Dues ledger view for the selected membership year: one row per member with
   // their standing and the receipt that put them there (if any).
+  const isMemberPendingSecApproval = (member: Member) => {
+    const linked = users.find(u =>
+      u.id === member.id ||
+      (member.memberIdNumber && u.memberIdNumber === member.memberIdNumber) ||
+      (u.role === 'Member' && u.name.trim().toLowerCase() === member.name.trim().toLowerCase())
+    );
+    return (
+      member.registrationStatus === 'Pending Secretary Approval' ||
+      member.inactiveReason === 'Pending Secretary Approval' ||
+      Boolean(linked && linked.role === 'Member' && !linked.isApproved)
+    );
+  };
+
   const duesRows = useMemo(() => members.map(member => {
     const payment = membershipPayments.find(p =>
       p.memberId === member.id && Number(p.year) === duesYear && isEffectivePayment(p)
     );
-    return { member, payment, standing: getMembershipStanding(member, membershipPayments, duesYear) };
+    const pendingSecretary = isMemberPendingSecApproval(member);
+    const standing = getMembershipStanding(member, membershipPayments, duesYear);
+    return { member, payment, standing, pendingSecretary };
   }).sort((a, b) => {
     // Unpaid first: that is the list the Treasurer works through.
     const rank = (s: string) => (s === 'Unpaid' ? 0 : 1);
     return rank(a.standing) - rank(b.standing) || a.member.name.localeCompare(b.member.name);
-  }), [members, membershipPayments, duesYear]);
+  }), [members, membershipPayments, duesYear, users]);
 
-  const duesStats = useMemo(() => ({
-    paid: duesRows.filter(row => row.standing === 'Paid').length,
-    unpaid: duesRows.filter(row => row.standing === 'Unpaid').length,
-    collected: getDuesCollected(membershipPayments, duesYear)
-  }), [duesRows, membershipPayments, duesYear]);
+  const filteredDuesRows = useMemo(() => duesRows.filter(row => {
+    const q = duesTableSearch.trim().toLowerCase();
+    const matchesSearch = !q ||
+      row.member.name.toLowerCase().includes(q) ||
+      (row.member.memberIdNumber || '').toLowerCase().includes(q) ||
+      (row.member.farmLocation || '').toLowerCase().includes(q);
+    if (!matchesSearch) return false;
+    if (duesStandingFilter === 'All') return true;
+    if (duesStandingFilter === 'Pending Secretary') return row.pendingSecretary;
+    if (duesStandingFilter === 'Unpaid') return row.standing === 'Unpaid';
+    if (duesStandingFilter === 'Paid') return row.standing === 'Paid';
+    return row.standing === 'Inactive';
+  }), [duesRows, duesStandingFilter, duesTableSearch]);
+
+  const searchableDuesMembers = useMemo(() => {
+    const q = duesMemberSearch.trim().toLowerCase();
+    // Combine Secretary-approved pending applicants (awaiting Treasurer fee confirmation & ID assignment)
+    // and existing official members so the Treasurer can select either from the searchable dropdown.
+    const pendingAsCandidateMembers: Member[] = pendingMembers
+      .filter(pm => pm.registrationStatus === 'Awaiting Treasurer Fee')
+      .map(pm => ({
+        id: pm.id,
+        name: pm.name,
+        memberIdNumber: undefined,
+        rsbsaNumber: pm.rsbsaNumber,
+        isRsbsaRegistered: pm.isRsbsaRegistered,
+        farmLocation: pm.farmLocation,
+        primaryCrops: pm.primaryCrops,
+        contactNumber: pm.contactNumber,
+        status: 'Inactive',
+        joinedDate: pm.joinedDate,
+        gender: pm.gender,
+        birthDate: pm.birthDate,
+        affiliations: pm.affiliations
+      }));
+    const combined = [...pendingAsCandidateMembers, ...members];
+    return combined.filter(member => {
+      if (!q) return true;
+      return (
+        member.name.toLowerCase().includes(q) ||
+        (member.memberIdNumber || '').toLowerCase().includes(q) ||
+        (member.farmLocation || '').toLowerCase().includes(q)
+      );
+    });
+  }, [members, pendingMembers, duesMemberSearch]);
+
+  const duesStats = useMemo(() => {
+    const paid = duesRows.filter(row => row.standing === 'Paid').length;
+    const unpaid = duesRows.filter(row => row.standing === 'Unpaid').length;
+    const collected = getDuesCollected(membershipPayments, duesYear);
+    const collectibles = unpaid * duesAmount;
+    return { paid, unpaid, collected, collectibles };
+  }, [duesRows, membershipPayments, duesYear, duesAmount]);
 
   const closedYearSnapshot = membershipYearSnapshots.find(s => Number(s.year) === duesYear);
   const duesYearClosed = Boolean(closedYearSnapshot);
@@ -876,22 +948,141 @@ export default function TreasurerView({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <div className="bg-white border border-[#B8CDBE] p-3 rounded-xl">
-              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Listed / Paid</span>
+              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Active / Paid</span>
               <span className="text-lg font-black text-emerald-800 font-mono">{duesStats.paid.toLocaleString()}</span>
             </div>
             <div className="bg-white border border-[#B8CDBE] p-3 rounded-xl">
-              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Unpaid</span>
+              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Unpaid Members</span>
               <span className="text-lg font-black text-rose-800 font-mono">{duesStats.unpaid.toLocaleString()}</span>
+            </div>
+            <div className="bg-rose-50 border border-rose-300 p-3 rounded-xl">
+              <span className="text-[11px] font-bold text-rose-900 uppercase block">Collectibles (Unpaid)</span>
+              <span className="text-lg font-black text-rose-800 font-mono">PHP {duesStats.collectibles.toLocaleString()}</span>
+              <span className="block text-[10px] font-semibold text-rose-700">{duesStats.unpaid} unpaid × PHP {duesAmount.toLocaleString()}</span>
             </div>
             <div className="bg-white border border-[#B8CDBE] p-3 rounded-xl">
               <span className="text-[11px] font-bold text-[#33473D] uppercase block">Collected</span>
               <span className="text-lg font-black text-[#1B4332] font-mono">PHP {duesStats.collected.toLocaleString()}</span>
             </div>
             <div className="bg-white border border-[#B8CDBE] p-3 rounded-xl">
-              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Expected</span>
+              <span className="text-[11px] font-bold text-[#33473D] uppercase block">Expected Total</span>
               <span className="text-lg font-black text-[#1B4332] font-mono">PHP {(duesAmount * members.length).toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* SEPARATE PENDING NEW MEMBER REGISTRATIONS TABLE (Awaiting Treasurer Membership Fee Confirmation & Member ID Issuance) */}
+          {pendingMembers.length > 0 && (
+            <div id="treasurer-pending-members-table" className="bg-amber-50/80 border border-amber-300 rounded-xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-2">
+                    <span>Pending New Member Registrations ({pendingMembers.length})</span>
+                    <span className="text-[10px] font-mono bg-amber-200/80 text-amber-950 px-2 py-0.5 rounded-full border border-amber-400">
+                      Not Yet in Official Members Table
+                    </span>
+                  </h4>
+                  <p className="text-xs text-amber-900 mt-0.5">
+                    Confirming a pending applicant&apos;s Membership Fee automatically issues their official sequential <strong>AFA Member ID</strong> and moves them into the official <strong>Members</strong> table.
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto bg-white border border-amber-300 rounded-xl">
+                <table className="w-full min-w-[680px] text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-amber-100/80 text-amber-950 font-extrabold uppercase tracking-wider border-b border-amber-300">
+                      <th className="px-3 py-2">Applicant</th>
+                      <th className="px-3 py-2">Member ID Status</th>
+                      <th className="px-3 py-2">Sitio &amp; Crops</th>
+                      <th className="px-3 py-2">Secretary Review</th>
+                      <th className="px-3 py-2 text-right">Membership Fee Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-200 text-[#1B4332]">
+                    {pendingMembers.map(pm => {
+                      const awaitingSec = pm.registrationStatus === 'Pending Secretary Approval';
+                      return (
+                        <tr key={pm.id} className="hover:bg-amber-50/40">
+                          <td className="px-3 py-2.5">
+                            <span className="font-extrabold text-[#1B4332] text-sm">{pm.name}</span>
+                            <span className="block text-[10px] font-mono text-[#4A5F57]">Applied: {pm.joinedDate}</span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded">
+                              {PENDING_MEMBER_ID_LABEL}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="font-semibold">{pm.farmLocation}</span>
+                            <span className="block text-[10px] text-[#4A5F57]">{(pm.primaryCrops || []).join(', ')}</span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {awaitingSec ? (
+                              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                <AlertTriangle className="w-3 h-3" /> Awaiting Secretary Approval
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                <CheckCircle className="w-3 h-3" /> Approved by Secretary
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-right">
+                            {awaitingSec ? (
+                              <span className="text-[11px] text-amber-800 font-semibold">Waiting for Secretary</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => { setDuesMemberId(pm.id); setDuesMemberSearch(''); setShowDuesModal(true); }}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold cursor-pointer shadow-xs"
+                              >
+                                Confirm Fee &amp; Issue Member ID
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Search & Unpaid Filtering Toolbar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-white border border-[#D5CFC1] p-3 rounded-xl">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-[#4A5F57] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search member name, AFA ID, or Sitio..."
+                value={duesTableSearch}
+                onChange={(e) => setDuesTableSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg text-[#1B4332] font-semibold focus:outline-none focus:border-emerald-700"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([
+                { key: 'All', label: `All (${duesRows.length})` },
+                { key: 'Unpaid', label: `Unpaid Only (${duesStats.unpaid})` },
+                { key: 'Paid', label: `Paid / Active (${duesStats.paid})` },
+                { key: 'Pending Secretary', label: 'Awaiting Sec. Approval' },
+                { key: 'Inactive', label: 'Delisted / Inactive' }
+              ] as const).map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setDuesStandingFilter(tab.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${
+                    duesStandingFilter === tab.key
+                      ? 'bg-[#1B4332] text-white border-[#1B4332]'
+                      : 'bg-[#FAF8F5] text-[#1B4332] border-[#D5CFC1] hover:bg-[#EAF4EC]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -902,23 +1093,31 @@ export default function TreasurerView({
                   <th className="px-3 py-2">Member</th>
                   <th className="px-3 py-2">Standing</th>
                   <th className="px-3 py-2">Receipt</th>
-                  <th className="px-3 py-2 text-right">Amount</th>
+                  <th className="px-3 py-2 text-right">Paid / Collectible</th>
                   <th className="px-3 py-2 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D5CFC1]">
-                {duesRows.length === 0 ? (
-                  <tr><td colSpan={5} className="px-3 py-6 text-center text-[#4A5F57]">No members registered yet.</td></tr>
-                ) : duesRows.map(row => (
+                {filteredDuesRows.length === 0 ? (
+                  <tr><td colSpan={5} className="px-3 py-6 text-center text-[#4A5F57]">No members match the selected filter.</td></tr>
+                ) : filteredDuesRows.map(row => (
                   <tr key={row.member.id} className={row.payment ? 'bg-emerald-50/40' : ''}>
                     <td className="px-3 py-2.5">
                       <span className="font-bold text-[#1B4332]">{row.member.name}</span>
-                      <span className="block text-[10px] font-mono text-[#3A4A42]">{row.member.memberIdNumber || 'No AFA ID'} · {row.member.farmLocation}</span>
+                      <span className="block text-[10px] font-mono text-[#3A4A42]">
+                        {hasAssignedMemberId(row.member.memberIdNumber)
+                          ? row.member.memberIdNumber
+                          : `ID: ${PENDING_MEMBER_ID_LABEL}`} · {row.member.farmLocation}
+                      </span>
                     </td>
                     <td className="px-3 py-2.5">
-                      {row.standing === 'Paid' ? (
+                      {row.pendingSecretary ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full">
+                          <AlertTriangle className="w-3 h-3" /> Pending Secretary Approval
+                        </span>
+                      ) : row.standing === 'Paid' ? (
                         <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full">
-                          <CheckCircle className="w-3 h-3" /> Listed
+                          <CheckCircle className="w-3 h-3" /> Active / Fee Paid
                         </span>
                       ) : row.standing === 'Inactive' ? (
                         <span className="inline-flex items-center gap-1 bg-slate-200 text-slate-800 border border-slate-400 text-[10px] font-black px-2 py-0.5 rounded-full" title={row.member.inactiveReason}>
@@ -926,7 +1125,7 @@ export default function TreasurerView({
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-900 border border-rose-300 text-[10px] font-black px-2 py-0.5 rounded-full">
-                          <AlertTriangle className="w-3 h-3" /> Unpaid
+                          <AlertTriangle className="w-3 h-3" /> Unpaid Fee
                         </span>
                       )}
                     </td>
@@ -939,7 +1138,11 @@ export default function TreasurerView({
                       ) : <span className="text-[#8A9A92]">—</span>}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono font-bold text-[#1B4332]">
-                      {row.payment ? `PHP ${row.payment.amount.toLocaleString()}` : '—'}
+                      {row.payment ? (
+                        <span className="text-emerald-800">Paid PHP {row.payment.amount.toLocaleString()}</span>
+                      ) : row.standing === 'Unpaid' ? (
+                        <span className="text-rose-700">Collectible PHP {duesAmount.toLocaleString()}</span>
+                      ) : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       {row.payment && row.payment.status !== 'Voided' && onVoidMembershipPayment ? (
@@ -962,10 +1165,10 @@ export default function TreasurerView({
                       ) : (
                         <button
                           type="button"
-                          onClick={() => { setDuesMemberId(row.member.id); setShowDuesModal(true); }}
+                          onClick={() => { setDuesMemberId(row.member.id); setDuesMemberSearch(''); setShowDuesModal(true); }}
                           className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
                         >
-                          Record payment
+                          Approve &amp; Record Fee
                         </button>
                       )}
                     </td>
@@ -1036,18 +1239,28 @@ export default function TreasurerView({
               <button type="button" onClick={() => setShowDuesModal(false)} className="text-2xl leading-none text-[#33473D] hover:text-[#1B4332] cursor-pointer" aria-label="Close">&times;</button>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-[#18372D] uppercase mb-1">Member</label>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-[#18372D] uppercase">Member (Search &amp; Select)</label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-[#4A5F57] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Type name, AFA ID, or Sitio to filter dropdown..."
+                  value={duesMemberSearch}
+                  onChange={(e) => setDuesMemberSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-[#FAF8F5] border border-[#8FA99A] rounded-xl text-[#1B4332] font-semibold focus:outline-none focus:border-emerald-700"
+                />
+              </div>
               <select
                 required
                 value={duesMemberId}
                 onChange={(e) => setDuesMemberId(e.target.value)}
-                className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332]"
+                className="w-full min-h-12 px-3 py-2 bg-white border border-[#8FA99A] rounded-xl text-[#1B4332] font-semibold"
               >
-                <option value="">Select a registered member</option>
-                {members.map(member => (
+                <option value="">Select a registered member ({searchableDuesMembers.length} shown)</option>
+                {searchableDuesMembers.map(member => (
                   <option key={member.id} value={member.id}>
-                    {member.name} — {member.memberIdNumber || 'No AFA ID'}{hasPaymentForYear(membershipPayments, member.id, duesYear) ? ' (already paid)' : ''}
+                    {member.name} — {hasAssignedMemberId(member.memberIdNumber) ? member.memberIdNumber : 'ID Pending'} ({member.farmLocation}){hasPaymentForYear(membershipPayments, member.id, duesYear) ? ' [Already Paid]' : ' [Unpaid • Assigns Member ID]'}
                   </option>
                 ))}
               </select>

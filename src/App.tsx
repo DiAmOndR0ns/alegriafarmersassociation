@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import {
-  OfficerRole, Member, Meeting, Resolution,
+  OfficerRole, Member, PendingMember, Meeting, Resolution,
   FinancialTransaction, Announcement, SyncQueueItem, SystemLog, User, LivestockIgpState,
   IgpExpense, IgpSale, EggHarvestLog, Product, PublicProduct, AssociationActivity, AssociationAchievement, OrganizationFund, DatabaseStatus, InventoryItem,
   PasswordResetResult, DelegationRequest, DelegationScope,
-  MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot
+  MembershipPayment, MembershipPaymentMethod, MembershipYearSnapshot, DeletedRecordArchive
 } from './types';
 import type { PublicSummary } from './components/GuestPortal';
 import {
@@ -48,10 +48,13 @@ import { getAvailableInventoryQuantity, getRentalStockStatus } from './utils/inv
 import { getActiveDelegationScopes } from './utils/delegation';
 import {
   DEFAULT_MEMBERSHIP_DUES,
+  PENDING_MEMBER_ID_LABEL,
   UNPAID_DUES_REASON,
+  assignNextMemberId,
   buildMembershipYearSnapshot,
   canCloseMembershipYear,
   getPaidThroughYear,
+  hasAssignedMemberId,
   hasPaymentForYear
 } from './utils/membership';
 import {
@@ -74,6 +77,7 @@ export function mergeSyncRecordsById<T extends { id: string }>(
 interface StoredDeletedIds {
   users?: string[];
   members?: string[];
+  pendingMembers?: string[];
   meetings?: string[];
   resolutions?: string[];
   financialTransactions?: string[];
@@ -91,6 +95,7 @@ interface StoredDeletedIds {
 const SYNC_ENTITY_KEYS = [
   ['users', 'users'],
   ['members', 'members'],
+  ['pendingMembers', 'pendingMembers'],
   ['meetings', 'meetings'],
   ['resolutions', 'resolutions'],
   ['announcements', 'announcements'],
@@ -261,6 +266,7 @@ export default function App() {
 
   // Core App Data States (hydrated from localStorage or initials)
   const [members, setMembers] = useState<Member[]>([]);
+  const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [resolutions, setResolutions] = useState<Resolution[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
@@ -277,6 +283,7 @@ export default function App() {
   const [membershipPayments, setMembershipPayments] = useState<MembershipPayment[]>([]);
   const [membershipYearSnapshots, setMembershipYearSnapshots] = useState<MembershipYearSnapshot[]>([]);
   const [duesAmount, setDuesAmount] = useState<number>(DEFAULT_MEMBERSHIP_DUES);
+  const [deletedArchive, setDeletedArchive] = useState<DeletedRecordArchive[]>([]);
   const [delegationRequests, setDelegationRequests] = useState<DelegationRequest[]>([]);
   const [isRefreshingDelegations, setIsRefreshingDelegations] = useState(false);
   const activeDelegationScopes = getActiveDelegationScopes(delegationRequests, currentUser?.id || '');
@@ -299,6 +306,7 @@ export default function App() {
   const appDataRef = useRef({
     users: [] as User[],
     members: [] as Member[],
+    pendingMembers: [] as PendingMember[],
     meetings: [] as Meeting[],
     resolutions: [] as Resolution[],
     transactions: [] as FinancialTransaction[],
@@ -319,6 +327,7 @@ export default function App() {
     appDataRef.current = {
       users,
       members,
+      pendingMembers,
       meetings,
       resolutions,
       transactions,
@@ -333,7 +342,7 @@ export default function App() {
       membershipYearSnapshots,
       logs
     };
-  }, [users, members, meetings, resolutions, transactions, announcements, products, activities, achievements, livestockIgp, funds, inventory, membershipPayments, membershipYearSnapshots, logs]);
+  }, [users, members, pendingMembers, meetings, resolutions, transactions, announcements, products, activities, achievements, livestockIgp, funds, inventory, membershipPayments, membershipYearSnapshots, logs]);
 
   // Feedback State (Toasts)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' | 'error' } | null>(null);
@@ -352,12 +361,13 @@ export default function App() {
     let cancelled = false;
     const loadLocalData = async () => {
       try {
-        const storageKeys = ['bafa_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_delegation_requests', 'bafa_membership_payments', 'bafa_membership_year_snapshots', 'bafa_membership_dues_amount', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
+        const storageKeys = ['bafa_members', 'bafa_pending_members', 'bafa_meetings', 'bafa_resolutions', 'bafa_transactions', 'bafa_announcements', 'bafa_afa_igp', 'bafa_products', 'bafa_activities', 'bafa_achievements', 'bafa_funds', 'bafa_inventory', 'bafa_delegation_requests', 'bafa_membership_payments', 'bafa_membership_year_snapshots', 'bafa_membership_dues_amount', 'bafa_deleted_archive', 'bafa_sync_queue', 'bafa_deleted_ids', 'bafa_pending_cloud_sync', 'bafa_logs', 'bafa_users', 'bafa_current_user', 'bafa_read_announcements', 'bafa_closed_log_years', 'bafa_treasurer_categories'];
         clearSecureItems(['bafa_hog_raising']);
         await migrateSecureItems(storageKeys);
         if (cancelled) return;
-        const [storedMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedLivestockIgp, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests, storedMembershipPayments, storedMembershipYearSnapshots, storedDuesAmount] = await Promise.all([
+        const [storedMembers, storedPendingMembers, storedMeetings, storedResolutions, storedTransactions, storedAnnouncements, storedLivestockIgp, storedProducts, storedActivities, storedAchievements, storedFunds, storedInventory, storedQueue, storedLogs, storedUsers, storedPendingCloudSync, storedDeletedIds, storedDelegationRequests, storedMembershipPayments, storedMembershipYearSnapshots, storedDuesAmount, storedDeletedArchive] = await Promise.all([
           getSecureItem<Member[]>('bafa_members'),
+          getSecureItem<PendingMember[]>('bafa_pending_members'),
           getSecureItem<Meeting[]>('bafa_meetings'),
           getSecureItem<Resolution[]>('bafa_resolutions'),
           getSecureItem<FinancialTransaction[]>('bafa_transactions'),
@@ -376,7 +386,8 @@ export default function App() {
           getSecureItem<DelegationRequest[]>('bafa_delegation_requests'),
           getSecureItem<MembershipPayment[]>('bafa_membership_payments'),
           getSecureItem<MembershipYearSnapshot[]>('bafa_membership_year_snapshots'),
-          getSecureItem<number>('bafa_membership_dues_amount')
+          getSecureItem<number>('bafa_membership_dues_amount'),
+          getSecureItem<DeletedRecordArchive[]>('bafa_deleted_archive')
         ]);
         deletedIdsRef.current = storedDeletedIds || {};
         const hasStoredDeletions = Object.values(deletedIdsRef.current).some(ids => Array.isArray(ids) && ids.length > 0);
@@ -419,8 +430,10 @@ export default function App() {
           setInventory(storedInventory || []);
         }
         setDelegationRequests(Array.isArray(storedDelegationRequests) ? storedDelegationRequests : []);
+        setPendingMembers(Array.isArray(storedPendingMembers) ? storedPendingMembers : []);
         setMembershipPayments(Array.isArray(storedMembershipPayments) ? storedMembershipPayments : []);
         setMembershipYearSnapshots(Array.isArray(storedMembershipYearSnapshots) ? storedMembershipYearSnapshots : []);
+        setDeletedArchive(Array.isArray(storedDeletedArchive) ? storedDeletedArchive : []);
         const storedDues = Number(storedDuesAmount);
         setDuesAmount(Number.isFinite(storedDues) && storedDues > 0 ? storedDues : DEFAULT_MEMBERSHIP_DUES);
 
@@ -868,7 +881,8 @@ export default function App() {
       const id = item.payload.id;
       const entity = (item.entityType || '').toLowerCase();
       const keyByEntity: Record<string, keyof StoredDeletedIds> = {
-        member: 'members', user: 'users', officer: 'users', meeting: 'meetings',
+        member: 'members', pending_member: 'pendingMembers', pendingmember: 'pendingMembers',
+        user: 'users', officer: 'users', meeting: 'meetings',
         resolution: 'resolutions', transaction: 'financialTransactions',
         financialtransaction: 'financialTransactions', announcement: 'announcements',
         product: 'products', activity: 'activities', achievement: 'achievements', fund: 'funds', inventory: 'inventory'
@@ -927,6 +941,9 @@ export default function App() {
       officers: 'users',
       member: 'members',
       members: 'members',
+      pending_member: 'pendingMembers',
+      pending_members: 'pendingMembers',
+      pendingMembers: 'pendingMembers',
       meeting: 'meetings',
       meetings: 'meetings',
       resolution: 'resolutions',
@@ -1057,6 +1074,7 @@ export default function App() {
     overrides?: {
       users?: User[];
       members?: Member[];
+      pendingMembers?: PendingMember[];
       meetings?: Meeting[];
       resolutions?: Resolution[];
       financialTransactions?: FinancialTransaction[];
@@ -1150,6 +1168,7 @@ export default function App() {
           ...appDataRef.current,
           users: overrides?.users ?? appDataRef.current.users,
           members: overrides?.members ?? appDataRef.current.members,
+          pendingMembers: overrides?.pendingMembers ?? appDataRef.current.pendingMembers,
           meetings: overrides?.meetings ?? appDataRef.current.meetings,
           resolutions: overrides?.resolutions ?? appDataRef.current.resolutions,
           transactions: overrides?.financialTransactions ?? appDataRef.current.transactions,
@@ -1494,10 +1513,24 @@ export default function App() {
       }
     }
     const newId = `member-${Date.now()}`;
-    const newMember: Member = {
-      ...memberData,
+    const todayStr = new Date().toISOString().split('T')[0];
+    const newPendingMember: PendingMember = {
       id: newId,
-      joinedDate: new Date().toISOString().split('T')[0]
+      name: memberData.name,
+      username: loginCredentials?.username?.trim().toLowerCase() || undefined,
+      rsbsaNumber: memberData.rsbsaNumber,
+      isRsbsaRegistered: memberData.isRsbsaRegistered,
+      farmLocation: memberData.farmLocation,
+      primaryCrops: memberData.primaryCrops,
+      contactNumber: memberData.contactNumber,
+      joinedDate: todayStr,
+      avatarUrl: memberData.avatarUrl,
+      gender: memberData.gender,
+      birthDate: memberData.birthDate,
+      affiliations: memberData.affiliations,
+      registrationStatus: 'Awaiting Treasurer Fee',
+      approvedBySecretary: currentUser?.name || getOfficerName('Secretary'),
+      approvedBySecretaryDate: todayStr
     };
     let updatedUsers = users;
     let accountCreated = false;
@@ -1511,7 +1544,7 @@ export default function App() {
         id: newId,
         username: cleanUsername,
         password: initialPassword,
-        name: newMember.name,
+        name: newPendingMember.name,
         role: 'Member'
       });
       if (provision.status === 'rejected') {
@@ -1532,50 +1565,49 @@ export default function App() {
           passwordHistory: [],
           passwordChangedAt: credentialChangedAt,
           mustChangePassword: false,
-          name: newMember.name,
+          name: newPendingMember.name,
           role: 'Member',
           isApproved: true,
-          memberIdNumber: newMember.memberIdNumber,
-          rsbsaNumber: newMember.rsbsaNumber,
-          isRsbsaRegistered: newMember.isRsbsaRegistered,
-          farmLocation: newMember.farmLocation,
-          primaryCrops: newMember.primaryCrops,
-          contactNumber: newMember.contactNumber,
-          joinedDate: newMember.joinedDate,
-          status: newMember.status,
-          affiliations: newMember.affiliations
+          memberIdNumber: undefined,
+          rsbsaNumber: newPendingMember.rsbsaNumber,
+          isRsbsaRegistered: newPendingMember.isRsbsaRegistered,
+          farmLocation: newPendingMember.farmLocation,
+          primaryCrops: newPendingMember.primaryCrops,
+          contactNumber: newPendingMember.contactNumber,
+          joinedDate: newPendingMember.joinedDate,
+          status: 'Inactive',
+          inactiveReason: UNPAID_DUES_REASON,
+          affiliations: newPendingMember.affiliations
         };
 
         updatedUsers = [newMemberUser, ...users.filter(u => u.username.toLowerCase() !== cleanUsername && u.id !== newId)];
-        logAction('Created Member Portal Login', `Secretary enrolled ${newMember.name} and issued portal login: ${cleanUsername}`);
+        logAction('Created Member Portal Login', `Secretary enrolled ${newPendingMember.name} in Pending Registrations and issued portal login: ${cleanUsername}`);
       }
     }
 
-    const updated = [newMember, ...members];
-    setMembers(updated);
-    updateStorage('bafa_members', updated);
+    const updatedPending = [newPendingMember, ...pendingMembers];
+    setPendingMembers(updatedPending);
+    updateStorage('bafa_pending_members', updatedPending);
     if (accountCreated) {
       setUsers(updatedUsers);
       updateStorage('bafa_users', updatedUsers);
     }
 
     if (isOnline) {
-      logAction('Registered Farmer', `Registered new member: ${newMember.name} from ${newMember.farmLocation}`);
+      logAction('Queued Pending Farmer Registration', `Secretary registered ${newPendingMember.name} (${newPendingMember.farmLocation}) in Pending Registrations awaiting Treasurer membership fee confirmation.`);
       showToastMessage(
         accountCreated
-          ? `Registered ${newMember.name} & created portal login (${loginCredentials?.username})!`
+          ? `${newPendingMember.name} added to Pending Registrations & portal login created (${loginCredentials?.username}). Awaiting Treasurer fee confirmation for Member ID!`
           : loginCredentials
-            ? `Registered ${newMember.name} without portal login. Set up credentials when the server is available.${profileOnlyReason ? ` ${profileOnlyReason}` : ''}`
-            : `Registered ${newMember.name} successfully!`,
+            ? `${newPendingMember.name} added to Pending Registrations without portal login.${profileOnlyReason ? ` ${profileOnlyReason}` : ''}`
+            : `${newPendingMember.name} added to Pending Registrations! Awaiting Treasurer fee confirmation.`,
         loginCredentials && !accountCreated ? 'warning' : 'success'
       );
-      pushAllDataToCloud({ members: updated, users: updatedUsers }, { silent: true });
+      pushAllDataToCloud({ pendingMembers: updatedPending, users: updatedUsers }, { silent: true });
     } else {
-      addToSyncQueue('create', 'member', newMember);
+      addToSyncQueue('create', 'pending_member', newPendingMember);
       showToastMessage(
-        loginCredentials
-          ? `Registered ${newMember.name} offline without portal login. Set up credentials when connected.`
-          : `Registered ${newMember.name} offline. Ready to sync when connected.`,
+        `${newPendingMember.name} saved to Pending Registrations offline. Ready to sync when connected.`,
         'warning'
       );
     }
@@ -1756,9 +1788,33 @@ export default function App() {
       showToastMessage('Only the Treasurer or Assistant Treasurer may record membership dues.', 'error');
       return false;
     }
-    const member = members.find(m => m.id === input.memberId);
+    const existingMember = members.find(m => m.id === input.memberId);
+    const pendingApplicant = !existingMember ? pendingMembers.find(pm => pm.id === input.memberId) : undefined;
+    const member = existingMember || (pendingApplicant
+      ? {
+        id: pendingApplicant.id,
+        name: pendingApplicant.name,
+        memberIdNumber: undefined,
+        rsbsaNumber: pendingApplicant.rsbsaNumber,
+        isRsbsaRegistered: pendingApplicant.isRsbsaRegistered,
+        farmLocation: pendingApplicant.farmLocation,
+        primaryCrops: pendingApplicant.primaryCrops,
+        contactNumber: pendingApplicant.contactNumber,
+        status: 'Inactive' as const,
+        joinedDate: pendingApplicant.joinedDate,
+        avatarUrl: pendingApplicant.avatarUrl,
+        gender: pendingApplicant.gender,
+        birthDate: pendingApplicant.birthDate,
+        affiliations: pendingApplicant.affiliations,
+        inactiveReason: UNPAID_DUES_REASON
+      }
+      : undefined);
     if (!member) {
-      showToastMessage('Select a registered member before recording dues.', 'error');
+      showToastMessage('Select a registered or pending member before recording dues.', 'error');
+      return false;
+    }
+    if (pendingApplicant && pendingApplicant.registrationStatus === 'Pending Secretary Approval') {
+      showToastMessage(`${pendingApplicant.name} is still awaiting Secretary registration approval.`, 'warning');
       return false;
     }
     if (member.status === 'Inactive' && member.inactiveReason && member.inactiveReason !== UNPAID_DUES_REASON) {
@@ -1781,11 +1837,17 @@ export default function App() {
     }
 
     const now = new Date().toISOString();
+    // Member IDs are only issued upon confirmation by the Treasurer.
+    const issuedMemberId = hasAssignedMemberId(member.memberIdNumber)
+      ? member.memberIdNumber!
+      : assignNextMemberId(members, year);
+    const wasJustIssuedId = !hasAssignedMemberId(member.memberIdNumber) || Boolean(pendingApplicant);
+
     const newPayment: MembershipPayment = {
       id: `mp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       memberId: member.id,
       memberName: member.name,
-      memberIdNumber: member.memberIdNumber,
+      memberIdNumber: issuedMemberId,
       year,
       amount,
       datePaid: input.datePaid,
@@ -1802,31 +1864,45 @@ export default function App() {
     setMembershipPayments(updatedPayments);
     updateStorage('bafa_membership_payments', updatedPayments);
 
-    // Paying dues reinstates a member who was dropped for unpaid dues only. An
-    // officer-recorded removal (resigned, expelled) keeps its own reason.
-    const updatedMembers = members.map(m => m.id === member.id
-      ? {
-        ...m,
-        status: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.status : 'Active' as const,
-        membershipPaidThrough: getPaidThroughYear(updatedPayments, m.id),
-        inactiveReason: m.inactiveReason && m.inactiveReason !== UNPAID_DUES_REASON ? m.inactiveReason : undefined
-      }
-      : m);
+    // Paying dues promotes a PendingMember into the official `members` table with their
+    // newly assigned Member ID, or reinstates an existing member dropped for unpaid dues.
+    const confirmedMemberRecord: Member = {
+      ...member,
+      memberIdNumber: issuedMemberId,
+      status: member.inactiveReason && member.inactiveReason !== UNPAID_DUES_REASON ? member.status : 'Active',
+      membershipPaidThrough: getPaidThroughYear(updatedPayments, member.id),
+      inactiveReason: member.inactiveReason && member.inactiveReason !== UNPAID_DUES_REASON ? member.inactiveReason : undefined,
+      registrationStatus: 'Approved'
+    };
+    const updatedMembers = existingMember
+      ? members.map(m => m.id === member.id ? confirmedMemberRecord : m)
+      : [confirmedMemberRecord, ...members];
     setMembers(updatedMembers);
     updateStorage('bafa_members', updatedMembers);
 
-    // Mirror the dues on the member's portal account so sign-in and the
+    let updatedPendingMembers = pendingMembers;
+    let deletedIdsOverride: StoredDeletedIds | undefined;
+    if (pendingApplicant) {
+      updatedPendingMembers = pendingMembers.filter(pm => pm.id !== pendingApplicant.id);
+      setPendingMembers(updatedPendingMembers);
+      updateStorage('bafa_pending_members', updatedPendingMembers);
+      deletedIdsOverride = storeDeletedId('pendingMembers', pendingApplicant.id);
+      void deleteFromDatabase('pending_member', pendingApplicant.id);
+    }
+
+    // Mirror the dues and issued Member ID on the member's portal account so sign-in and the
     // dashboard agree with the roster.
     const linkedUserIds = new Set<string>();
     const updatedUsers = users.map(u => {
       const linked = u.id === member.id
-        || (member.memberIdNumber && u.memberIdNumber === member.memberIdNumber)
+        || (hasAssignedMemberId(member.memberIdNumber) && u.memberIdNumber === member.memberIdNumber)
         || (u.role === 'Member' && u.name.trim().toLowerCase() === member.name.trim().toLowerCase());
       if (!linked) return u;
       linkedUserIds.add(u.id);
       const keepsInactive = u.status === 'Inactive' && u.inactiveReason && u.inactiveReason !== UNPAID_DUES_REASON;
       return {
         ...u,
+        memberIdNumber: issuedMemberId,
         status: keepsInactive ? 'Inactive' as const : 'Active' as const,
         membershipPaidThrough: getPaidThroughYear(updatedPayments, member.id),
         inactiveReason: keepsInactive ? u.inactiveReason : undefined
@@ -1835,11 +1911,18 @@ export default function App() {
     if (linkedUserIds.size > 0) {
       setUsers(updatedUsers);
       updateStorage('bafa_users', updatedUsers);
+      if (currentUser && linkedUserIds.has(currentUser.id)) {
+        const refreshedSelf = updatedUsers.find(u => u.id === currentUser.id);
+        if (refreshedSelf) {
+          setCurrentUser(refreshedSelf);
+          updateStorage('bafa_current_user', refreshedSelf);
+        }
+      }
     }
 
     // Dues are income in the ledger, so the fund balance and the books agree.
     const duesFund = funds.find(f => f.code.toUpperCase() === 'DUES') || funds[0];
-    const label = `Membership dues ${year} - ${member.memberIdNumber || member.name}${input.referenceNo?.trim() ? ` (OR ${input.referenceNo.trim()})` : ''}`;
+    const label = `Membership dues ${year} - ${issuedMemberId || member.name}${input.referenceNo?.trim() ? ` (OR ${input.referenceNo.trim()})` : ''}`;
     if (duesFund) {
       handleAddTransaction({
         type: 'income',
@@ -1854,12 +1937,29 @@ export default function App() {
     }
 
     if (isOnline) {
-      logAction('Recorded Membership Dues', `${member.name} paid PHP ${amount.toLocaleString()} for membership year ${year}.`);
-      pushAllDataToCloud({ membershipPayments: updatedPayments, members: updatedMembers, users: updatedUsers }, { silent: true, source: 'Membership Dues Recorded' });
+      logAction(
+        'Recorded Membership Dues',
+        `${member.name} paid PHP ${amount.toLocaleString()} for membership year ${year}.${wasJustIssuedId ? ` Confirmed into Official Members & issued Member ID ${issuedMemberId}.` : ''}`
+      );
+      pushAllDataToCloud(
+        {
+          membershipPayments: updatedPayments,
+          members: updatedMembers,
+          pendingMembers: updatedPendingMembers,
+          users: updatedUsers,
+          ...(deletedIdsOverride ? { deletedIds: deletedIdsOverride } : {})
+        },
+        { silent: true, source: 'Membership Dues Recorded' }
+      );
     } else {
       addToSyncQueue('create', 'membership_payment', newPayment);
     }
-    showToastMessage(`${member.name} is now listed as a member for ${year}.`, 'success');
+    showToastMessage(
+      wasJustIssuedId
+        ? `${member.name} confirmed for ${year} and issued Member ID ${issuedMemberId}.`
+        : `${member.name} is now listed as a member for ${year}.`,
+      'success'
+    );
     return true;
   };
 
@@ -1968,9 +2068,145 @@ export default function App() {
     logAction('Set Annual Dues', `Annual membership dues set to PHP ${next.toLocaleString()}.`);
   };
 
+  const recordDeletedArchive = (
+    entityType: DeletedRecordArchive['entityType'],
+    entityId: string,
+    title: string,
+    details: string,
+    snapshot?: Record<string, unknown>
+  ) => {
+    const entry: DeletedRecordArchive = {
+      id: `del-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      entityType,
+      entityId,
+      title,
+      details,
+      deletedBy: `${currentRole.replace('_', ' ')} (${currentUser?.name || getOfficerName(currentRole)})`,
+      deletedAt: new Date().toISOString(),
+      snapshot
+    };
+    setDeletedArchive(prev => {
+      const next = [entry, ...prev];
+      updateStorage('bafa_deleted_archive', next);
+      return next;
+    });
+  };
+
+  const handleApproveMemberRegistration = async (memberId: string) => {
+    const targetPending = pendingMembers.find(pm => pm.id === memberId);
+    const targetMember = members.find(m => m.id === memberId);
+    const targetUser = users.find(u =>
+      u.id === memberId ||
+      (targetPending && u.role === 'Member' && u.name.trim().toLowerCase() === targetPending.name.trim().toLowerCase()) ||
+      (targetMember?.memberIdNumber && u.memberIdNumber === targetMember.memberIdNumber) ||
+      (targetMember && u.role === 'Member' && u.name.trim().toLowerCase() === targetMember.name.trim().toLowerCase())
+    );
+    if (!targetPending && !targetMember && !targetUser) return;
+
+    if (isOnline && (import.meta.env.PROD || dbStatus.configured)) {
+      try {
+        await fetch('/api/auth/accounts/approve', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memberId: targetUser?.id || memberId })
+        });
+      } catch {
+        // Proceed with local state update and sync queue
+      }
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const updatedPending = pendingMembers.map(pm =>
+      pm.id === memberId
+        ? {
+          ...pm,
+          registrationStatus: 'Awaiting Treasurer Fee' as const,
+          approvedBySecretary: currentUser?.name || getOfficerName('Secretary'),
+          approvedBySecretaryDate: todayStr
+        }
+        : pm
+    );
+    setPendingMembers(updatedPending);
+    updateStorage('bafa_pending_members', updatedPending);
+
+    const updatedUsers = users.map(u =>
+      (u.id === memberId || u.id === targetUser?.id)
+        ? {
+          ...u,
+          isApproved: true,
+          inactiveReason: u.inactiveReason === 'Pending Secretary Approval' ? UNPAID_DUES_REASON : u.inactiveReason
+        }
+        : u
+    );
+    setUsers(updatedUsers);
+    updateStorage('bafa_users', updatedUsers);
+
+    const memberLabel = targetPending?.name || targetMember?.name || targetUser?.name || 'Member';
+    logAction('Approved Member Registration', `Secretary approved registration for ${memberLabel} in Pending Registrations. Awaiting Treasurer membership fee confirmation to issue Member ID and move to Members table.`);
+    showToastMessage(`Approved registration for ${memberLabel}! Sent to Treasurer for Membership Fee confirmation & Member ID issuance.`, 'success');
+    if (isOnline) {
+      pushAllDataToCloud({ pendingMembers: updatedPending, users: updatedUsers }, { silent: true, source: 'Member Registration Approved' });
+    }
+  };
+
+  const handleDeletePendingMember = async (id: string) => {
+    const targetPending = pendingMembers.find(pm => pm.id === id);
+    const mName = targetPending ? targetPending.name : 'Pending Applicant';
+    if (targetPending) {
+      recordDeletedArchive(
+        'Pending Registration',
+        id,
+        `${targetPending.name} (Pending Registration)`,
+        `Sitio: ${targetPending.farmLocation} • Contact: ${targetPending.contactNumber || 'None'} • Status: ${targetPending.registrationStatus}`,
+        targetPending as unknown as Record<string, unknown>
+      );
+    }
+
+    const updatedPending = pendingMembers.filter(pm => pm.id !== id);
+    setPendingMembers(updatedPending);
+    updateStorage('bafa_pending_members', updatedPending);
+    storeDeletedId('pendingMembers', id);
+
+    const matchedUsers = users.filter(u =>
+      u.id === id ||
+      (targetPending?.name && u.role === 'Member' && u.name.trim().toLowerCase() === targetPending.name.trim().toLowerCase())
+    );
+    const matchedUserIds = matchedUsers.map(u => u.id);
+    const updatedUsers = users.filter(u => !matchedUserIds.includes(u.id));
+    if (matchedUserIds.length > 0) {
+      setUsers(updatedUsers);
+      updateStorage('bafa_users', updatedUsers);
+      matchedUserIds.forEach(uid => storeDeletedId('users', uid));
+    }
+
+    void deleteFromDatabase('pending_member', id);
+    matchedUserIds.forEach(uid => void deleteFromDatabase('user', uid));
+
+    if (isOnline) {
+      logAction('Removed Pending Registration', `Removed unconfirmed pending registration for: ${mName}`);
+      showToastMessage(`Removed ${mName} from Pending Registrations.`, 'warning');
+      pushAllDataToCloud(
+        { pendingMembers: updatedPending, users: updatedUsers, deletedIds: getStoredDeletedIds() },
+        { silent: true, source: 'Pending Member Deletion' }
+      );
+    } else {
+      addToSyncQueue('delete', 'pending_member', { id, name: mName });
+    }
+  };
+
   const handleDeleteMember = async (id: string) => {
     const targetMember = members.find(m => m.id === id);
     const mName = targetMember ? targetMember.name : 'Farmer';
+    if (targetMember) {
+      recordDeletedArchive(
+        'Member',
+        id,
+        `${targetMember.name} (${targetMember.memberIdNumber || 'No ID'})`,
+        `Sitio: ${targetMember.farmLocation} • Contact: ${targetMember.contactNumber || 'None'} • Crops: ${(targetMember.primaryCrops || []).join(', ')}`,
+        targetMember as unknown as Record<string, unknown>
+      );
+    }
 
     // 1. Immediately remove from local state and storage
     const updated = members.filter(m => m.id !== id);
@@ -2036,6 +2272,15 @@ export default function App() {
   const handleDeleteMeeting = (id: string) => {
     const targetMeeting = meetings.find(m => m.id === id);
     const title = targetMeeting ? targetMeeting.title : 'Assembly Record';
+    if (targetMeeting) {
+      recordDeletedArchive(
+        'Meeting',
+        id,
+        targetMeeting.title,
+        `Date: ${targetMeeting.date} • Location: ${targetMeeting.location} • Present: ${targetMeeting.attendanceCount}`,
+        targetMeeting as unknown as Record<string, unknown>
+      );
+    }
     const updated = meetings.filter(m => m.id !== id);
     setMeetings(updated);
     updateStorage('bafa_meetings', updated);
@@ -2058,6 +2303,15 @@ export default function App() {
   const handleDeleteResolution = (id: string) => {
     const targetRes = resolutions.find(r => r.id === id);
     const title = targetRes ? `${targetRes.resolutionNumber}: ${targetRes.title}` : 'Resolution';
+    if (targetRes) {
+      recordDeletedArchive(
+        'Resolution',
+        id,
+        `${targetRes.resolutionNumber}: ${targetRes.title}`,
+        `Date Agreed: ${targetRes.dateAgreed} • Status: ${targetRes.status}`,
+        targetRes as unknown as Record<string, unknown>
+      );
+    }
     const updated = resolutions.filter(r => r.id !== id);
     setResolutions(updated);
     updateStorage('bafa_resolutions', updated);
@@ -2085,6 +2339,15 @@ export default function App() {
     }
     const targetTx = transactions.find(t => t.id === id);
     const desc = targetTx ? `${targetTx.description} (PHP ${targetTx.amount.toLocaleString()})` : 'Transaction';
+    if (targetTx) {
+      recordDeletedArchive(
+        'Transaction',
+        id,
+        `${targetTx.category} — PHP ${targetTx.amount.toLocaleString()}`,
+        `${targetTx.type.toUpperCase()} on ${targetTx.date}: ${targetTx.description} (Fund: ${targetTx.fundSource || 'General'})`,
+        targetTx as unknown as Record<string, unknown>
+      );
+    }
     const updated = transactions.filter(t => t.id !== id);
     setTransactions(updated);
     updateStorage('bafa_transactions', updated);
@@ -2310,6 +2573,15 @@ export default function App() {
 
   const handleDeleteFund = (id: string) => {
     const target = funds.find(f => f.id === id);
+    if (target) {
+      recordDeletedArchive(
+        'Fund',
+        id,
+        `${target.code} — ${target.name}`,
+        `Balance: PHP ${target.currentBalance.toLocaleString()} • Custodian: ${target.custodian}`,
+        target as unknown as Record<string, unknown>
+      );
+    }
     const updated = funds.filter(f => f.id !== id);
     setFunds(updated);
     updateStorage('bafa_funds', updated);
@@ -2466,6 +2738,15 @@ export default function App() {
 
   const handleDeletePigExpense = (expenseId: string) => {
     const target = (livestockIgp.expenses || []).find((e) => e.id === expenseId);
+    if (target) {
+      recordDeletedArchive(
+        'IGP Expense',
+        expenseId,
+        `${target.produce || 'IGP'} — ${target.category} (PHP ${target.amount.toLocaleString()})`,
+        `Date: ${target.date} • ${target.description}`,
+        target as unknown as Record<string, unknown>
+      );
+    }
     const updatedExpenses = (livestockIgp.expenses || []).filter((e) => e.id !== expenseId);
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
@@ -2505,6 +2786,15 @@ export default function App() {
 
   const handleDeleteHogSale = (saleId: string) => {
     const target = (livestockIgp.sales || []).find((s) => s.id === saleId);
+    if (target) {
+      recordDeletedArchive(
+        'IGP Sale',
+        saleId,
+        `${target.produce || 'IGP'} Sale — PHP ${target.revenue.toLocaleString()}`,
+        `Date: ${target.date} • Qty: ${target.quantity} • Stage: ${target.stage || 'General'}`,
+        target as unknown as Record<string, unknown>
+      );
+    }
     const updatedSales = (livestockIgp.sales || []).filter((s) => s.id !== saleId);
     const updatedState: LivestockIgpState = {
       ...livestockIgp,
@@ -3364,6 +3654,7 @@ export default function App() {
         }))
         : usersFromPull;
       const nextMembers = reconcile(data.members, local.members, pendingDeletes.members);
+      const nextPendingMembers = reconcile(data.pendingMembers, local.pendingMembers, pendingDeletes.pendingMembers);
       const nextMeetings = reconcile(data.meetings, local.meetings, pendingDeletes.meetings);
       const nextResolutions = reconcile(data.resolutions, local.resolutions, pendingDeletes.resolutions);
       const nextTransactions = reconcile(
@@ -3390,6 +3681,8 @@ export default function App() {
       updateStorage('bafa_users', nextUsers);
       setMembers(nextMembers);
       updateStorage('bafa_members', nextMembers);
+      setPendingMembers(nextPendingMembers);
+      updateStorage('bafa_pending_members', nextPendingMembers);
       setMeetings(nextMeetings);
       updateStorage('bafa_meetings', nextMeetings);
       setResolutions(nextResolutions);
@@ -3591,22 +3884,45 @@ export default function App() {
     copy.passwordHash = hashPolicyPassword(rawPassword);
     copy.passwordChangedAt = new Date().toISOString();
     delete copy.password;
+    const newId = `member-${Date.now()}`;
+    const todayStr = new Date().toISOString().split('T')[0];
     const newUser: User = {
       ...copy,
-      id: `user-${Date.now()}`,
+      id: isInitialAdminBootstrap ? `user-${Date.now()}` : newId,
+      // Member IDs are only assigned upon confirmation by the Treasurer.
+      memberIdNumber: isInitialAdminBootstrap ? copy.memberIdNumber : undefined,
       username: copy.username.trim().toLowerCase(),
       passwordHistory: [],
       passwordChangedAt: copy.passwordChangedAt || new Date().toISOString(),
       mustChangePassword: false,
       failedLoginAttempts: 0,
       isApproved: isInitialAdminBootstrap,
-      joinedDate: new Date().toISOString().split('T')[0],
-      status: 'Active',
+      joinedDate: todayStr,
+      status: isInitialAdminBootstrap ? 'Active' : 'Inactive',
+      inactiveReason: isInitialAdminBootstrap ? undefined : 'Pending Secretary Approval',
       mfaEnabled: isInitialAdminBootstrap ? true : Boolean(copy.mfaEnabled)
     };
     const updated = [newUser, ...users];
     setUsers(updated);
     updateStorage('bafa_users', updated);
+
+    if (!isInitialAdminBootstrap) {
+      const selfRegPending: PendingMember = {
+        id: newId,
+        name: newUser.name,
+        username: newUser.username,
+        rsbsaNumber: newUser.rsbsaNumber,
+        isRsbsaRegistered: Boolean(newUser.isRsbsaRegistered),
+        farmLocation: newUser.farmLocation || 'Sitio Tapon',
+        primaryCrops: Array.isArray(newUser.primaryCrops) && newUser.primaryCrops.length > 0 ? newUser.primaryCrops : ['Vegetables'],
+        contactNumber: newUser.contactNumber || 'None',
+        registrationStatus: 'Pending Secretary Approval',
+        joinedDate: todayStr
+      };
+      const updatedPending = [selfRegPending, ...pendingMembers];
+      setPendingMembers(updatedPending);
+      updateStorage('bafa_pending_members', updatedPending);
+    }
 
     if (isOnline) {
       pushAllDataToCloud({ users: updated }, { silent: true, source: isInitialAdminBootstrap ? 'Admin Bootstrap' : 'User Registration' });
@@ -5010,6 +5326,7 @@ export default function App() {
                 {(currentRole === 'Secretary' || currentRole === 'Assistant_Secretary') && (
                   <SecretaryView
                     members={members}
+                    pendingMembers={pendingMembers}
                     users={users}
                     currentUser={currentUser!}
                     currentRole={currentRole}
@@ -5025,6 +5342,9 @@ export default function App() {
                     onUpdateMember={handleUpdateMember}
                     onUpdateMemberStatus={handleUpdateMemberStatus}
                     onDeleteMember={handleDeleteMember}
+                    onDeletePendingMember={handleDeletePendingMember}
+                    onApproveMemberRegistration={handleApproveMemberRegistration}
+                    deletedArchive={deletedArchive}
                     onManageMemberLogin={handleManageMemberLogin}
                     onResetMemberPassword={handleResetPassword}
                     meetings={meetings}
@@ -5056,6 +5376,7 @@ export default function App() {
                     currentUser={currentUser!}
                     currentRole={currentRole}
                     members={members}
+                    pendingMembers={pendingMembers}
                     membershipPayments={membershipPayments}
                     membershipYearSnapshots={membershipYearSnapshots}
                     duesAmount={duesAmount}
@@ -5063,6 +5384,7 @@ export default function App() {
                     onVoidMembershipPayment={handleVoidMembershipPayment}
                     onCloseMembershipYear={handleCloseMembershipYear}
                     onUpdateDuesAmount={handleUpdateDuesAmount}
+                    deletedArchive={deletedArchive}
                   />
                 )}
 

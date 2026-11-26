@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { Member, MembershipPayment } from '../types';
 import {
   DEFAULT_MEMBERSHIP_DUES,
+  PENDING_MEMBER_ID_LABEL,
+  assignNextMemberId,
   buildMembershipYearSnapshot,
   canCloseMembershipYear,
   getDerivedMemberStatus,
@@ -11,6 +13,7 @@ import {
   getPaidMembers,
   getPaidThroughYear,
   getUnpaidMembers,
+  hasAssignedMemberId,
   hasPaymentForYear,
   isDueForRenewal,
   isMemberActiveForYear,
@@ -164,5 +167,25 @@ describe('receipt labels', () => {
     expect(getMembershipReceiptLabel(payment({ referenceNo: 'OR-2026-0155' }))).toBe('OR-2026-0155');
     expect(getMembershipReceiptLabel(payment({ id: 'mp-123456', referenceNo: undefined })))
       .toBe('AFA-DUES-2026-123456');
+  });
+});
+
+describe('member ID issuance upon Treasurer confirmation', () => {
+  it('treats blank or pending member IDs as unassigned', () => {
+    expect(hasAssignedMemberId(undefined)).toBe(false);
+    expect(hasAssignedMemberId('')).toBe(false);
+    expect(hasAssignedMemberId(PENDING_MEMBER_ID_LABEL)).toBe(false);
+    expect(hasAssignedMemberId('Pending')).toBe(false);
+    expect(hasAssignedMemberId('AFA-2026-001')).toBe(true);
+  });
+
+  it('assigns the next sequential AFA-YYYY-NNN ID skipping pending members', () => {
+    const roster = [
+      member({ id: 'm-1', memberIdNumber: 'AFA-2026-001' }),
+      member({ id: 'm-2', memberIdNumber: undefined }),
+      member({ id: 'm-3', memberIdNumber: PENDING_MEMBER_ID_LABEL }),
+      member({ id: 'm-4', memberIdNumber: 'AFA-2026-004' })
+    ];
+    expect(assignNextMemberId(roster, 2026)).toBe('AFA-2026-005');
   });
 });

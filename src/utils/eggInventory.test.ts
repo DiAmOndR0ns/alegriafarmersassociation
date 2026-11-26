@@ -27,12 +27,13 @@ describe('getAvailableEggCount', () => {
     expect(getAvailableEggCount([harvest('h1', 300)], [sale('s1', 100)], 'Poultry Raising (RTL)')).toBe(200);
   });
 
-  it('does not count pending or returned harvests as available stock', () => {
+  it('does not count pending, returned, or un-signed harvests as available stock', () => {
     expect(getAvailableEggCount([
       harvest('h1', 100, 'Pending Audit'),
       harvest('h2', 75, 'Returned'),
-      harvest('h3', 40, 'Audited')
-    ], [], 'Poultry Raising (RTL)')).toBe(40);
+      harvest('h3', 40, 'Audited'),
+      harvest('h4', 60, 'Signed')
+    ], [], 'Poultry Raising (RTL)')).toBe(60);
   });
 
   it('does not deduct poultry birds sold from egg inventory', () => {
@@ -52,7 +53,7 @@ describe('getAvailableEggCount', () => {
   });
 
   it('links harvests with blank or legacy produce names to custom RTL/poultry projects', () => {
-    const blankProduceHarvest: EggHarvestLog = { ...harvest('h-blank', 120, 'Audited'), produce: undefined };
+    const blankProduceHarvest: EggHarvestLog = { ...harvest('h-blank', 120, 'Signed'), produce: undefined };
     const customProduceHarvest: EggHarvestLog = { ...harvest('h-custom', 80, 'Signed'), produce: 'RTL Chickens (Poultry / Eggs)' };
     expect(getAvailableEggCount([blankProduceHarvest, customProduceHarvest], [], 'RTL Chickens (Poultry / Eggs)')).toBe(200);
     expect(getTotalAvailableEggCount([blankProduceHarvest, customProduceHarvest], [])).toBe(200);

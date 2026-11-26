@@ -9,7 +9,7 @@ export const isPoultryProduceName = (produce?: string) =>
   Boolean(produce && /poultry|rtl|manok|chicken|egg|layer/i.test(produce));
 
 const isVerifiedHarvest = (harvest: EggHarvestLog) =>
-  harvest.status === 'Audited' || harvest.status === 'Signed';
+  harvest.status === 'Signed';
 
 const isEggSale = (sale: IgpSale) =>
   sale.stage === 'Eggs' || sale.stage === 'General' || sale.stage === undefined;

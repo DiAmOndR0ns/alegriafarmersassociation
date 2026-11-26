@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Member, Meeting, Resolution, User, MemberAffiliation, OfficerRole, PasswordResetResult, MembershipPayment } from '../types';
+import { Member, PendingMember, Meeting, Resolution, User, MemberAffiliation, OfficerRole, PasswordResetResult, MembershipPayment, DeletedRecordArchive } from '../types';
 import {
   Users, BookOpen, FileText, Plus, Search,
   MapPin, CheckCircle, FilePlus, Calendar,
   Trash2, UserPlus, Info, Tag, Printer, UserCheck,
   CheckCircle2, AlertCircle, XCircle, Award, Sparkles, ShieldCheck, Clock,
-  Key, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw, Edit3
+  Key, KeyRound, Copy, Check, Eye, EyeOff, RefreshCw, Edit3, Archive
 } from 'lucide-react';
 import PrintMinutesModal from './PrintMinutesModal';
 import PrintAttendanceModal from './PrintAttendanceModal';
@@ -15,11 +15,12 @@ import AFAMemberLists from './AFAMemberLists';
 import MemberIdBadgeModal from './MemberIdBadgeModal';
 import AffiliationManager from './AffiliationManager';
 import { splitName } from '../utils/names';
-import { getMembershipStanding } from '../utils/membership';
+import { getMembershipStanding, hasAssignedMemberId, PENDING_MEMBER_ID_LABEL, UNPAID_DUES_REASON } from '../utils/membership';
 import { generateInitialPassword, validatePasswordPolicy } from '../utils/passwordPolicy';
 
 interface SecretaryViewProps {
   members: Member[];
+  pendingMembers?: PendingMember[];
   users?: User[];
   currentUser?: User;
   currentRole?: OfficerRole;
@@ -30,6 +31,9 @@ interface SecretaryViewProps {
   onUpdateMember?: (member: Member) => void;
   onUpdateMemberStatus: (id: string, status: 'Active' | 'Inactive') => void;
   onDeleteMember: (id: string) => void;
+  onDeletePendingMember?: (id: string) => void;
+  onApproveMemberRegistration?: (memberId: string) => void | Promise<void>;
+  deletedArchive?: DeletedRecordArchive[];
   onManageMemberLogin?: (memberId: string, username: string, initialPassword: string) => boolean | void | Promise<boolean | void>;
   onResetMemberPassword?: (userId: string, newPass: string, currentPassword?: string) => void | Promise<PasswordResetResult | boolean | void>;
 
@@ -85,6 +89,7 @@ const buildFullName = (first: string, middle: string, surname: string) => {
 
 export default function SecretaryView({
   members,
+  pendingMembers = [],
   users = [],
   currentUser,
   currentRole,
@@ -92,6 +97,9 @@ export default function SecretaryView({
   onUpdateMember,
   onUpdateMemberStatus,
   onDeleteMember,
+  onDeletePendingMember,
+  onApproveMemberRegistration,
+  deletedArchive = [],
   onManageMemberLogin,
   onResetMemberPassword,
   meetings,
@@ -106,9 +114,10 @@ export default function SecretaryView({
   membershipPayments = [],
   membershipYear
 }: SecretaryViewProps) {
-  const [activeTab, setActiveTab] = useState<'members' | 'meetings' | 'resolutions'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'meetings' | 'resolutions' | 'history'>('members');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSitio, setSelectedSitio] = useState('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Unpaid' | 'Pending Approval' | 'Inactive'>('All');
   const [memberPage, setMemberPage] = useState(1);
   const membersPerPage = 25;
   const [selectedMeetingForPrint, setSelectedMeetingForPrint] = useState<Meeting | null>(null);
@@ -158,7 +167,7 @@ export default function SecretaryView({
   const [memberSurname, setMemberSurname] = useState('');
   const [memberContact, setMemberContact] = useState('');
   const [memberSitio, setMemberSitio] = useState('Sitio Tapon');
-  const [memberIdNum, setMemberIdNum] = useState(`AFA-2026-0${members.length + 1}`);
+  const [memberIdNum, setMemberIdNum] = useState('');
   const [memberRsbsa, setMemberRsbsa] = useState('');
   const [isRsbsaRegistered, setIsRsbsaRegistered] = useState(true);
   const [memberGender, setMemberGender] = useState<'Male' | 'Female' | 'Other'>('Male');
@@ -255,7 +264,6 @@ export default function SecretaryView({
     }
     setBirthDateError('');
 
-    const finalMemberId = memberIdNum || `AFA-2026-0${members.length + 1}`;
     const cleanUsername = (loginUsername.trim() || assembledName.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '.')).toLowerCase();
     const cleanPassword = loginPassword.trim() || generateInitialPassword(cleanUsername, 'Member');
     const passwordError = createLoginAccount ? validatePasswordPolicy(cleanPassword, cleanUsername, 'Member') : null;
@@ -270,7 +278,8 @@ export default function SecretaryView({
 
     const result = await onAddMember({
       name: assembledName,
-      memberIdNumber: finalMemberId,
+      // Member IDs are only issued upon confirmation by the Treasurer.
+      memberIdNumber: undefined,
       rsbsaNumber: memberRsbsa || undefined,
       isRsbsaRegistered: isRsbsaRegistered,
       contactNumber: memberContact || 'None',
@@ -278,7 +287,9 @@ export default function SecretaryView({
       primaryCrops: selectedCrops.length > 0 ? selectedCrops : ['Vegetables'],
       gender: resolvedMemberGender,
       birthDate: birthDate || undefined,
-      status: 'Active',
+      status: 'Inactive',
+      inactiveReason: UNPAID_DUES_REASON,
+      registrationStatus: 'Approved',
       affiliations: memberAffiliations.length > 0 ? memberAffiliations : undefined
     }, createLoginAccount ? {
       username: cleanUsername,
@@ -289,7 +300,7 @@ export default function SecretaryView({
     if (createLoginAccount && (!result || result.accountCreated)) {
       setCreatedCredentials({
         name: assembledName,
-        memberId: finalMemberId,
+        memberId: PENDING_MEMBER_ID_LABEL,
         username: cleanUsername,
         initialPassword: cleanPassword,
         sitio: memberSitio
@@ -302,7 +313,7 @@ export default function SecretaryView({
     setMemberSurname('');
     setMemberContact('');
     setMemberSitio('Sitio Tapon');
-    setMemberIdNum(`AFA-2026-0${members.length + 2}`);
+    setMemberIdNum('');
     setMemberRsbsa('');
     setIsRsbsaRegistered(true);
     setMemberGender('Male');
@@ -446,11 +457,38 @@ export default function SecretaryView({
   };
 
   // Filter Members
+  const currentYear = membershipYear ?? new Date().getFullYear();
+  const isMemberPendingSecretaryApproval = (member: Member) => {
+    const linked = users.find(u =>
+      u.id === member.id ||
+      (member.memberIdNumber && u.memberIdNumber === member.memberIdNumber) ||
+      (u.role === 'Member' && u.name.trim().toLowerCase() === member.name.trim().toLowerCase())
+    );
+    return (
+      member.registrationStatus === 'Pending Secretary Approval' ||
+      member.inactiveReason === 'Pending Secretary Approval' ||
+      Boolean(linked && linked.role === 'Member' && !linked.isApproved)
+    );
+  };
+  const pendingApprovalCount = members.filter(isMemberPendingSecretaryApproval).length;
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (member.memberIdNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           member.primaryCrops.some(c => c.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesSitio = selectedSitio === 'All' || member.farmLocation === selectedSitio;
-    return matchesSearch && matchesSitio;
+    const isPending = isMemberPendingSecretaryApproval(member);
+    const standing = getMembershipStanding(member, membershipPayments, currentYear);
+    const matchesStatus =
+      statusFilter === 'All'
+        ? true
+        : statusFilter === 'Pending Approval'
+          ? isPending
+          : statusFilter === 'Active'
+            ? !isPending && standing === 'Paid'
+            : statusFilter === 'Unpaid'
+              ? !isPending && standing === 'Unpaid'
+              : standing === 'Inactive' || isPending || standing === 'Unpaid';
+    return matchesSearch && matchesSitio && matchesStatus;
   });
   const memberPageCount = Math.max(1, Math.ceil(filteredMembers.length / membersPerPage));
   const paginatedMembers = filteredMembers.slice((memberPage - 1) * membersPerPage, memberPage * membersPerPage);
@@ -546,6 +584,18 @@ export default function SecretaryView({
             <FileText className="w-3.5 h-3.5 shrink-0" />
             <span>Resolutions ({resolutions.length})</span>
           </button>
+          <button
+            id="tab-history"
+            onClick={() => setActiveTab('history')}
+            className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === 'history'
+                ? 'bg-[#1B4332] text-white shadow-sm'
+                : 'text-[#1B4332] hover:bg-[#D8F3DC]'
+            }`}
+          >
+            <Archive className="w-3.5 h-3.5 shrink-0" />
+            <span>Deleted History ({deletedArchive.length})</span>
+          </button>
         </div>
       </div>
     </div>
@@ -563,13 +613,127 @@ export default function SecretaryView({
       {/* MEMBERS TAB */}
       {activeTab === 'members' && (
         <div id="members-tab-content" className="space-y-4">
+          {/* SEPARATE PENDING REGISTRATIONS TABLE (Not yet added to official members table) */}
+          <div id="pending-registrations-section" className="bg-amber-50/70 border border-amber-300 rounded-2xl p-4 space-y-3 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-start gap-2.5">
+                <Clock className="w-5 h-5 text-amber-800 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-extrabold text-amber-950 flex items-center gap-2">
+                    <span>Pending Member Registrations ({pendingMembers.length})</span>
+                    <span className="text-[10px] font-mono bg-amber-200/80 text-amber-950 px-2 py-0.5 rounded-full border border-amber-400">
+                      Separate Queue • Not Yet in Official Members Roster
+                    </span>
+                  </h3>
+                  <p className="text-xs text-amber-900 mt-0.5">
+                    New registrations stay in this separate <strong>Pending Members</strong> table with no Member ID until (1) the Secretary approves the application and (2) the Treasurer confirms their Membership Fee payment.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {pendingMembers.length === 0 ? (
+              <div className="bg-white/80 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-900 font-medium">
+                No pending member registrations right now. All confirmed members are listed in the official Members table below.
+              </div>
+            ) : (
+              <div className="bg-white border border-amber-300 rounded-xl overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[780px] text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-amber-100/80 border-b border-amber-300 text-amber-950 font-extrabold uppercase tracking-wider">
+                        <th className="px-3 py-2.5">Applicant Name</th>
+                        <th className="px-3 py-2.5">Member ID</th>
+                        <th className="px-3 py-2.5">Sitio &amp; Contact</th>
+                        <th className="px-3 py-2.5">Crops / Livestock</th>
+                        <th className="px-3 py-2.5">Onboarding Stage</th>
+                        <th className="px-3 py-2.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-200 text-[#1B4332]">
+                      {pendingMembers.map((pm) => {
+                        const needsSecApproval = pm.registrationStatus === 'Pending Secretary Approval';
+                        return (
+                          <tr key={pm.id} className="hover:bg-amber-50/50">
+                            <td className="px-3 py-2.5">
+                              <span className="font-extrabold text-[#1B4332] text-sm">{pm.name}</span>
+                              <span className="block text-[10px] font-mono text-[#4A5F57]">
+                                Applied: {pm.joinedDate || 'Recent'}{pm.username ? ` • @${pm.username}` : ''}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded font-mono font-bold text-[10px]">
+                                Pending Treasurer Confirmation
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className="font-semibold block">{pm.farmLocation}</span>
+                              <span className="text-[10px] font-mono text-[#4A5F57]">{pm.contactNumber || 'None'}</span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex flex-wrap gap-1">
+                                {(pm.primaryCrops || []).map((crop, idx) => (
+                                  <span key={idx} className="bg-[#FAF8F5] text-[#1B4332] text-[10px] px-2 py-0.5 rounded-full border border-[#D5CFC1]">
+                                    {crop}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {needsSecApproval ? (
+                                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-extrabold text-[10px] uppercase">
+                                  <Clock className="w-3 h-3" /> Step 1: Pending Secretary Approval
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 bg-sky-100 text-sky-900 border border-sky-300 px-2 py-0.5 rounded-full font-extrabold text-[10px] uppercase">
+                                  <CheckCircle2 className="w-3 h-3" /> Step 2: Awaiting Treasurer Fee &amp; ID
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {needsSecApproval && onApproveMemberRegistration && (
+                                  <button
+                                    id={`approve-pending-member-${pm.id}`}
+                                    type="button"
+                                    onClick={() => void onApproveMemberRegistration(pm.id)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold inline-flex items-center gap-1 cursor-pointer shadow-xs"
+                                    title="Approve registration and forward to Treasurer for membership fee confirmation"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Approve Application</span>
+                                  </button>
+                                )}
+                                {onDeletePendingMember && (
+                                  <button
+                                    id={`delete-pending-member-${pm.id}`}
+                                    type="button"
+                                    onClick={() => onDeletePendingMember(pm.id)}
+                                    className="text-rose-600 hover:text-rose-800 p-1.5 rounded-lg hover:bg-rose-50 border border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer"
+                                    title="Remove pending registration"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col sm:flex-row justify-between gap-3">
-            <div className="flex gap-2 flex-1">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-2 flex-1">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
                 <input
                   type="text"
-                  placeholder="Search members, crops, or livestock..."
+                  placeholder="Search members, IDs, crops, or livestock..."
                   value={searchTerm}
                   onChange={(e) => { setSearchTerm(e.target.value); setMemberPage(1); }}
                   className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] placeholder:text-[#4A5F57] focus:outline-none focus:border-emerald-500"
@@ -582,6 +746,18 @@ export default function SecretaryView({
               >
                 <option value="All">All Sitios</option>
                 {SITIOS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value as any); setMemberPage(1); }}
+                aria-label="Filter members by status"
+                className="px-3 py-2 text-sm font-bold bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] focus:outline-none focus:border-emerald-500"
+              >
+                <option value="All">All Statuses ({members.length})</option>
+                <option value="Active">Active / Fee Paid</option>
+                <option value="Unpaid">Unpaid Membership Fee</option>
+                <option value="Pending Approval">Pending Secretary Approval ({pendingApprovalCount})</option>
+                <option value="Inactive">Inactive / Unpaid</option>
               </select>
             </div>
 
@@ -624,17 +800,30 @@ export default function SecretaryView({
                             <span>{member.name}</span>
                           </div>
                           <div className="flex items-center gap-2 text-[10px] text-[#3A4A42] font-mono mt-0.5 flex-wrap">
-                            <span className="text-emerald-700 font-bold">{member.memberIdNumber || 'AFA-2026-000'}</span>
+                            {hasAssignedMemberId(member.memberIdNumber) ? (
+                              <span className="text-emerald-700 font-bold">{member.memberIdNumber}</span>
+                            ) : (
+                              <span className="text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded font-bold">
+                                ID: Pending Treasurer Confirmation
+                              </span>
+                            )}
                             <span>•</span>
                             <span>Joined: {member.joinedDate || 'Recent'}</span>
                             {(() => {
+                              if (isMemberPendingSecretaryApproval(member)) {
+                                return (
+                                  <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-bold uppercase">
+                                    <Clock className="w-2.5 h-2.5" /> Step 1: Pending Secretary Approval
+                                  </span>
+                                );
+                              }
                               // The authoritative roster status is the dues ledger for the
                               // year, not the stored flag.
                               const standing = getMembershipStanding(member, membershipPayments, membershipYear ?? new Date().getFullYear());
                               if (standing === 'Paid') {
                                 return (
                                   <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded font-bold uppercase">
-                                    <CheckCircle2 className="w-2.5 h-2.5" /> Dues {membershipYear ?? new Date().getFullYear()} paid
+                                    <CheckCircle2 className="w-2.5 h-2.5" /> Active • Fee {membershipYear ?? new Date().getFullYear()} Paid
                                   </span>
                                 );
                               }
@@ -647,7 +836,7 @@ export default function SecretaryView({
                               }
                               return (
                                 <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded font-bold uppercase">
-                                  <AlertCircle className="w-2.5 h-2.5" /> Dues unpaid
+                                  <AlertCircle className="w-2.5 h-2.5" /> Step 2: Awaiting Treasurer Fee
                                 </span>
                               );
                             })()}
@@ -736,6 +925,18 @@ export default function SecretaryView({
 
                         <td className="sticky right-0 bg-[#F7F4EF] px-3 py-4 text-right shadow-[-8px_0_12px_-10px_rgba(0,0,0,0.5)]">
                           <div className="flex items-center justify-end gap-1.5">
+                            {isMemberPendingSecretaryApproval(member) && onApproveMemberRegistration && (
+                              <button
+                                id={`approve-member-${member.id}`}
+                                type="button"
+                                onClick={() => void onApproveMemberRegistration(member.id)}
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold inline-flex items-center gap-1 cursor-pointer shadow-xs"
+                                title="Approve self-registered farmer (then Treasurer approves membership fee)"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Approve</span>
+                              </button>
+                            )}
                             <button
                               id={`edit-member-${member.id}`}
                               onClick={() => handleOpenEditMember(member)}
@@ -1002,6 +1203,65 @@ export default function SecretaryView({
         </div>
       )}
 
+      {/* HISTORICAL DELETION ARCHIVE TAB */}
+      {activeTab === 'history' && (
+        <div id="history-tab-content" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#F7F4EF] border border-[#D5CFC1] p-4 rounded-2xl">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-wider text-[#1B4332] flex items-center gap-2">
+                <Archive className="w-4 h-4 text-[#1B4332]" />
+                <span>Historical Data for Deleted Records</span>
+              </h3>
+              <p className="text-xs text-[#4A5F57] mt-0.5">
+                Permanent audit archive of removed members, meetings, resolutions, transactions, and IGP records.
+              </p>
+            </div>
+            <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-[#EAF4EC] text-[#1B4332] border border-[#B8CDBE]">
+              {deletedArchive.length} Archived Deletion{deletedArchive.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          <div className="bg-white border border-[#D5CFC1] rounded-2xl overflow-hidden shadow-sm">
+            {deletedArchive.length === 0 ? (
+              <div className="p-8 text-center text-sm text-[#4A5F57]">
+                No deleted records in historical archive yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#F0EAE1] border-b border-[#D5CFC1] text-[#4A5F57] font-extrabold uppercase tracking-wider">
+                      <th className="px-3.5 py-2.5">Date &amp; Time Deleted</th>
+                      <th className="px-3.5 py-2.5">Record Type</th>
+                      <th className="px-3.5 py-2.5">Record Title / Name</th>
+                      <th className="px-3.5 py-2.5">Historical Snapshot Details</th>
+                      <th className="px-3.5 py-2.5">Deleted By</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#D5CFC1] text-[#1B4332]">
+                    {deletedArchive.map((item) => (
+                      <tr key={item.id} className="hover:bg-[#FAF8F5]">
+                        <td className="px-3.5 py-3 font-mono whitespace-nowrap text-[#4A5F57]">
+                          {new Date(item.deletedAt).toLocaleString()}
+                        </td>
+                        <td className="px-3.5 py-3 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-200 font-bold uppercase text-[10px]">
+                            {item.entityType}
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-3 font-bold text-[#1B4332]">{item.title}</td>
+                        <td className="px-3.5 py-3 text-[#3A4A42]">{item.details}</td>
+                        <td className="px-3.5 py-3 font-semibold whitespace-nowrap">{item.deletedBy}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* MEMBER MODAL - Compact and Scrollable */}
       {showMemberModal && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 overflow-y-auto p-2 sm:p-4 flex items-start justify-center animate-fade-in">
@@ -1072,11 +1332,13 @@ export default function SecretaryView({
                     <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Member ID Code</label>
                     <input
                       type="text"
-                      required
-                      value={memberIdNum}
-                      onChange={(e) => setMemberIdNum(e.target.value)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-[#D5CFC1] rounded-xl text-[#1B4332] font-mono focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+                      readOnly
+                      value={PENDING_MEMBER_ID_LABEL}
+                      className="w-full px-3 py-2 text-xs sm:text-sm bg-amber-50 border border-amber-300 rounded-xl text-amber-900 font-mono font-bold cursor-not-allowed"
                     />
+                    <p className="text-[10px] text-[#4A5F57] mt-1">
+                      Official AFA Member ID is issued automatically upon Treasurer confirmation of the membership fee.
+                    </p>
                   </div>
                 </div>
 
@@ -1373,9 +1635,11 @@ export default function SecretaryView({
                     <label className="block text-xs font-bold text-[#1B4332] uppercase mb-1">Member ID Code</label>
                     <input
                       type="text"
-                      required
-                      value={editMemberIdNum}
-                      onChange={(e) => setEditMemberIdNum(e.target.value)}
+                      readOnly={!hasAssignedMemberId(editMemberIdNum)}
+                      value={hasAssignedMemberId(editMemberIdNum) ? editMemberIdNum : PENDING_MEMBER_ID_LABEL}
+                      onChange={(e) => {
+                        if (hasAssignedMemberId(editMemberIdNum)) setEditMemberIdNum(e.target.value);
+                      }}
                       className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-100 border border-[#D5CFC1] rounded-xl text-slate-900 font-mono focus:outline-none focus:border-emerald-500"
                     />
                   </div>

@@ -93,6 +93,8 @@ describe('auth route dispatcher', () => {
       '/api/auth/password/reset',
       '/api/auth/password/request',
       '/api/auth/accounts/provision',
+      '/api/auth/register',
+      '/api/auth/accounts/approve',
     ];
     for (const url of posts) {
       const res = makeRes();

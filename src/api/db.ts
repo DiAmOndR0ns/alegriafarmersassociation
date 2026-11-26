@@ -193,6 +193,24 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS gender VARCHAR(20);`,
     `ALTER TABLE members ADD COLUMN IF NOT EXISTS birth_date VARCHAR(50);`,
+    `CREATE TABLE IF NOT EXISTS pending_members(
+      id VARCHAR(100) PRIMARY KEY,
+      name TEXT NOT NULL,
+      username VARCHAR(100),
+      farm_location TEXT,
+      primary_crops TEXT[],
+      contact_number VARCHAR(50),
+      joined_date VARCHAR(50),
+      rsbsa_number VARCHAR(100),
+      is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+      avatar_url TEXT,
+      gender VARCHAR(20),
+      birth_date VARCHAR(50),
+      affiliations JSONB DEFAULT '[]'::jsonb,
+      registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+      approved_by_secretary TEXT,
+      approved_by_secretary_date VARCHAR(50)
+    );`,
 
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS member_id_number VARCHAR(100);`,
@@ -964,6 +982,28 @@ export async function initDatabaseSchema(pool: pg.Pool) {
   );
   `);
 
+    // 2b. Pending Members (Unconfirmed applications awaiting Secretary approval and/or Treasurer membership fee confirmation)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pending_members(
+    id VARCHAR(100) PRIMARY KEY,
+    name TEXT NOT NULL,
+    username VARCHAR(100),
+    farm_location TEXT,
+    primary_crops TEXT[],
+    contact_number VARCHAR(50),
+    joined_date VARCHAR(50),
+    rsbsa_number VARCHAR(100),
+    is_rsbsa_registered BOOLEAN DEFAULT FALSE,
+    avatar_url TEXT,
+    gender VARCHAR(20),
+    birth_date VARCHAR(50),
+    affiliations JSONB DEFAULT '[]'::jsonb,
+    registration_status VARCHAR(80) DEFAULT 'Pending Secretary Approval',
+    approved_by_secretary TEXT,
+    approved_by_secretary_date VARCHAR(50)
+  );
+  `);
+
     // 3. Meetings
     await client.query(`
       CREATE TABLE IF NOT EXISTS meetings(
@@ -1393,6 +1433,8 @@ let schemaInitialized = false;
 export const ENTITY_TABLE_MAP: Readonly<Record<string, string>> = {
   user: 'users', users: 'users', officer: 'users', officers: 'users',
   member: 'members', members: 'members',
+  pendingmember: 'pending_members', pendingmembers: 'pending_members',
+  pending_member: 'pending_members', pending_members: 'pending_members',
   meeting: 'meetings', meetings: 'meetings',
   resolution: 'resolutions', resolutions: 'resolutions',
   transaction: 'financial_transactions', transactions: 'financial_transactions',
@@ -1576,6 +1618,28 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     const fundsRes = await client.query('SELECT * FROM organization_funds ORDER BY name ASC');
 
     let delegationRequests: any[] = [];
+    let pendingMembers: any[] = [];
+    try {
+      const pmRes = await client.query('SELECT * FROM pending_members ORDER BY joined_date DESC, name ASC');
+      pendingMembers = pmRes.rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        username: r.username || undefined,
+        farmLocation: r.farm_location || 'Sitio Tapon',
+        primaryCrops: r.primary_crops || [],
+        contactNumber: r.contact_number || 'None',
+        joinedDate: r.joined_date || '',
+        rsbsaNumber: r.rsbsa_number || undefined,
+        isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
+        avatarUrl: r.avatar_url || undefined,
+        gender: r.gender || undefined,
+        birthDate: r.birth_date || undefined,
+        affiliations: Array.isArray(r.affiliations) ? r.affiliations : [],
+        registrationStatus: r.registration_status === 'Awaiting Treasurer Fee' ? 'Awaiting Treasurer Fee' : 'Pending Secretary Approval',
+        approvedBySecretary: r.approved_by_secretary || undefined,
+        approvedBySecretaryDate: r.approved_by_secretary_date || undefined
+      }));
+    } catch { }
 
     try {
       const delRes = await client.query('SELECT * FROM delegation_requests ORDER BY requested_date DESC');
@@ -1925,6 +1989,7 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
     return {
       users,
       members,
+      pendingMembers,
       meetings,
       resolutions,
       transactions,
@@ -2187,6 +2252,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     // Track all deleted IDs across entities so they are NEVER re-inserted in this transaction
     const deletedUserIds = new Set<string>();
     const deletedMemberIds = new Set<string>();
+    const deletedPendingMemberIds = new Set<string>();
     const deletedMeetingIds = new Set<string>();
     const deletedResolutionIds = new Set<string>();
     const deletedTxIds = new Set<string>();
@@ -2211,6 +2277,12 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         d.members.forEach((id: string) => deletedMemberIds.add(id));
         await client.query('DELETE FROM members WHERE id = ANY($1)', [d.members]);
         console.log('[DB DELETE] Batch deleted members:', d.members);
+      }
+      const pms = d.pendingMembers || d.pending_members;
+      if (Array.isArray(pms) && pms.length > 0) {
+        pms.forEach((id: string) => deletedPendingMemberIds.add(id));
+        await client.query('DELETE FROM pending_members WHERE id = ANY($1)', [pms]);
+        console.log('[DB DELETE] Batch deleted pending_members:', pms);
       }
       if (Array.isArray(d.meetings) && d.meetings.length > 0) {
         d.meetings.forEach((id: string) => deletedMeetingIds.add(id));
@@ -2282,6 +2354,7 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         await client.query(`DELETE FROM ${tbl} WHERE id = $1`, [state.deleteItem.id]);
         if (tbl === 'users') deletedUserIds.add(state.deleteItem.id);
         if (tbl === 'members') deletedMemberIds.add(state.deleteItem.id);
+        if (tbl === 'pending_members') deletedPendingMemberIds.add(state.deleteItem.id);
         if (tbl === 'meetings') deletedMeetingIds.add(state.deleteItem.id);
         if (tbl === 'resolutions') deletedResolutionIds.add(state.deleteItem.id);
         if (tbl === 'financial_transactions') deletedTxIds.add(state.deleteItem.id);
@@ -2395,6 +2468,57 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
         ]);
       }
       console.log('[DB DEBUG] Members saved');
+    }
+
+    // 2b. Pending Members (Unconfirmed registrations awaiting Secretary approval or Treasurer fee confirmation)
+    const rawPendingMembers = state.pendingMembers || state.pending_members;
+    if (rawPendingMembers && Array.isArray(rawPendingMembers)) {
+      const activePending = rawPendingMembers.filter((pm: any) => pm?.id && !deletedPendingMemberIds.has(pm.id));
+      for (const pm of activePending) {
+        const pmName = cleanText(pm.name, 200);
+        if (!pmName) continue;
+        await client.query(`
+          INSERT INTO pending_members(
+            id, name, username, farm_location, primary_crops, contact_number, joined_date,
+            rsbsa_number, is_rsbsa_registered, avatar_url, gender, birth_date, affiliations,
+            registration_status, approved_by_secretary, approved_by_secretary_date
+          )
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15, $16)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            username = COALESCE(EXCLUDED.username, pending_members.username),
+            farm_location = EXCLUDED.farm_location,
+            primary_crops = EXCLUDED.primary_crops,
+            contact_number = EXCLUDED.contact_number,
+            joined_date = EXCLUDED.joined_date,
+            rsbsa_number = EXCLUDED.rsbsa_number,
+            is_rsbsa_registered = EXCLUDED.is_rsbsa_registered,
+            avatar_url = EXCLUDED.avatar_url,
+            gender = EXCLUDED.gender,
+            birth_date = EXCLUDED.birth_date,
+            affiliations = EXCLUDED.affiliations,
+            registration_status = EXCLUDED.registration_status,
+            approved_by_secretary = EXCLUDED.approved_by_secretary,
+            approved_by_secretary_date = EXCLUDED.approved_by_secretary_date;
+        `, [
+          pm.id,
+          pmName,
+          cleanText(pm.username, 100),
+          cleanText(pm.farmLocation, 200),
+          cleanTextList(pm.primaryCrops),
+          cleanText(pm.contactNumber, 50),
+          cleanDateString(pm.joinedDate, 50),
+          cleanText(pm.rsbsaNumber, 100),
+          Boolean(pm.isRsbsaRegistered),
+          safeImageUrl(pm.avatarUrl),
+          cleanText(pm.gender, 20),
+          cleanDateString(pm.birthDate, 50),
+          JSON.stringify(Array.isArray(pm.affiliations) ? pm.affiliations : []),
+          pm.registrationStatus === 'Awaiting Treasurer Fee' ? 'Awaiting Treasurer Fee' : 'Pending Secretary Approval',
+          cleanText(pm.approvedBySecretary, 200),
+          cleanDateString(pm.approvedBySecretaryDate, 50)
+        ]);
+      }
     }
 
     // 3. Transactions (filtered to never re-insert deleted transactions)
