@@ -1225,27 +1225,34 @@ async function initDatabaseSchema(pool) {
   }
 }
 var schemaInitialized = false;
+var schemaInitInFlight = null;
 async function ensureDatabaseSchema(pool) {
   if (schemaInitialized) return;
-  try {
-    console.log("[DB DEBUG] Ensuring all database tables exist...");
-    await initDatabaseSchema(pool);
-    const client = await pool.connect();
+  if (schemaInitInFlight) return schemaInitInFlight;
+  schemaInitInFlight = (async () => {
     try {
-      await runSchemaMigrations(client);
+      console.log("[DB DEBUG] Ensuring all database tables exist...");
+      await initDatabaseSchema(pool);
+      const client = await pool.connect();
+      try {
+        await runSchemaMigrations(client);
+      } finally {
+        client.release();
+      }
+      schemaInitialized = true;
+    } catch (err) {
+      console.error("[DB DEBUG] ensureDatabaseSchema failed:", {
+        message: err?.message,
+        code: err?.code,
+        detail: err?.detail,
+        hint: err?.hint
+      });
+      throw err;
     } finally {
-      client.release();
+      schemaInitInFlight = null;
     }
-    schemaInitialized = true;
-  } catch (err) {
-    console.error("[DB DEBUG] ensureDatabaseSchema failed:", {
-      message: err?.message,
-      code: err?.code,
-      detail: err?.detail,
-      hint: err?.hint
-    });
-    throw err;
-  }
+  })();
+  return schemaInitInFlight;
 }
 
 // src/api/helper.ts

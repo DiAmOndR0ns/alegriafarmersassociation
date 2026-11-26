@@ -462,46 +462,50 @@ export default function App() {
             if (!copy.passwordHistory) copy.passwordHistory = [];
             return copy;
           });
-        let finalLocalUsers = sanitizedUsers;
+        setUsers(sanitizedUsers);
+        void setSecureItem('bafa_users', sanitizedUsers);
+
         if (import.meta.env.DEV) {
-          try {
-            const devRes = await fetch('/api/dev/local-officers');
-            if (devRes.ok) {
+          void fetch('/api/dev/local-officers')
+            .then(async (devRes) => {
+              if (!devRes.ok || cancelled) return;
               const devData = await devRes.json();
               if (devData?.success && Array.isArray(devData.officers) && devData.officers.length > 0) {
-                const merged = [...sanitizedUsers];
-                for (const devOfficer of devData.officers) {
-                  const existingIdx = merged.findIndex(
-                    (u: any) =>
-                      u.id === devOfficer.id ||
-                      String(u.username || '').toLowerCase() === String(devOfficer.username || '').toLowerCase()
-                  );
-                  if (existingIdx === -1) {
-                    const hasRoleAlready = devOfficer.role !== 'Board_Member' &&
-                      merged.some((u: any) => u.role === devOfficer.role);
-                    if (!hasRoleAlready) {
-                      merged.push(devOfficer);
+                setUsers((prevUsers) => {
+                  const merged = [...prevUsers];
+                  for (const devOfficer of devData.officers) {
+                    const existingIdx = merged.findIndex(
+                      (u: any) =>
+                        u.id === devOfficer.id ||
+                        String(u.username || '').toLowerCase() === String(devOfficer.username || '').toLowerCase()
+                    );
+                    if (existingIdx === -1) {
+                      const hasRoleAlready = devOfficer.role !== 'Board_Member' &&
+                        merged.some((u: any) => u.role === devOfficer.role);
+                      if (!hasRoleAlready) {
+                        merged.push(devOfficer);
+                      }
+                    } else if (String(merged[existingIdx].id || '').startsWith('local-officer-')) {
+                      const prev = merged[existingIdx];
+                      merged[existingIdx] = {
+                        ...devOfficer,
+                        ...prev,
+                        passwordHash: devOfficer.passwordHash,
+                        totpSecret: devOfficer.totpSecret ?? prev.totpSecret,
+                        mfaEnabled: devOfficer.mfaEnabled
+                      };
                     }
-                  } else if (String(merged[existingIdx].id || '').startsWith('local-officer-')) {
-                    const prev = merged[existingIdx];
-                    merged[existingIdx] = {
-                      ...devOfficer,
-                      ...prev,
-                      passwordHash: devOfficer.passwordHash,
-                      totpSecret: devOfficer.totpSecret ?? prev.totpSecret,
-                      mfaEnabled: devOfficer.mfaEnabled
-                    };
                   }
-                }
-                finalLocalUsers = merged;
+                  void setSecureItem('bafa_users', merged);
+                  return merged;
+                });
               }
-            }
-          } catch {
-            // Ignore when offline or outside local dev server.
-          }
+            })
+            .catch(() => {
+              // Ignore when offline or outside local dev server.
+            });
         }
-        setUsers(finalLocalUsers);
-        await setSecureItem('bafa_users', finalLocalUsers);
+        const finalLocalUsers = sanitizedUsers;
 
         const storedCurr = await getSecureItem<User>('bafa_current_user');
         if (storedCurr?.password) {
@@ -535,7 +539,13 @@ export default function App() {
         }
         setLogs(activeLogs);
 
-        // Check authenticated session before completing hydration
+        // Unblock initial UI rendering immediately once local state is hydrated,
+        // then verify the server session and database status asynchronously.
+        if (!cancelled) {
+          setIsHydrating(false);
+        }
+
+        // Check authenticated session in parallel without blocking initial UI paint
         const hydrationAuthEpoch = authEpochRef.current;
         try {
           const sessionRes = await fetch('/api/auth/session', {
@@ -578,9 +588,6 @@ export default function App() {
         // Initial database status check
         checkDatabaseConnection();
         void runNightlyBackupCheck();
-        if (!cancelled) {
-          setIsHydrating(false);
-        }
 
         // Attempt pulling fresh data from PostgreSQL Cloud Database if online
         fetch('/api/sync/pull')

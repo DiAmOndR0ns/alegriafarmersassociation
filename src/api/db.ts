@@ -1429,6 +1429,7 @@ export async function getTableStats(pool: pg.Pool): Promise<{
 }
 
 let schemaInitialized = false;
+let schemaInitInFlight: Promise<void> | null = null;
 
 export const ENTITY_TABLE_MAP: Readonly<Record<string, string>> = {
   user: 'users', users: 'users', officer: 'users', officers: 'users',
@@ -1491,26 +1492,31 @@ export async function deleteEntityFromPostgres(
 /** Ensures every base table exists, then applies additive migrations. */
 export async function ensureDatabaseSchema(pool: pg.Pool) {
   if (schemaInitialized) return;
-  try {
-    console.log('[DB DEBUG] Ensuring all database tables exist...');
-    await initDatabaseSchema(pool);
-    const client = await pool.connect();
+  if (schemaInitInFlight) return schemaInitInFlight;
+  schemaInitInFlight = (async () => {
     try {
-      await runSchemaMigrations(client);
+      console.log('[DB DEBUG] Ensuring all database tables exist...');
+      await initDatabaseSchema(pool);
+      const client = await pool.connect();
+      try {
+        await runSchemaMigrations(client);
+      } finally {
+        client.release();
+      }
+      schemaInitialized = true;
+    } catch (err: any) {
+      console.error('[DB DEBUG] ensureDatabaseSchema failed:', {
+        message: err?.message,
+        code: err?.code,
+        detail: err?.detail,
+        hint: err?.hint
+      });
+      throw err;
     } finally {
-      client.release();
+      schemaInitInFlight = null;
     }
-    schemaInitialized = true;
-  } catch (err: any) {
-    console.error('[DB DEBUG] ensureDatabaseSchema failed:', {
-      message: err?.message,
-      code: err?.code,
-      detail: err?.detail,
-      hint: err?.hint
-    });
-    // Don't swallow the error - rethrow it
-    throw err;
-  }
+  })();
+  return schemaInitInFlight;
 }
 
 export function mergeIgpExpenses(
@@ -1598,110 +1604,129 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
   await ensureDatabaseSchema(pool);
   const client = await pool.connect();
   try {
-    const usersRes = await client.query('SELECT * FROM users ORDER BY name ASC');
-    const membersRes = await client.query('SELECT * FROM members ORDER BY name ASC');
-    const meetingsRes = await client.query('SELECT * FROM meetings ORDER BY date DESC');
-    const resolutionsRes = await client.query('SELECT * FROM resolutions ORDER BY date_agreed DESC');
-    const transactionsRes = await client.query('SELECT * FROM financial_transactions ORDER BY date DESC');
-    const announcementsRes = await client.query('SELECT * FROM announcements ORDER BY date_posted DESC');
-    const logsRes = await client.query('SELECT * FROM system_logs ORDER BY timestamp DESC');
-    const hogQuery = await client.query("SELECT * FROM afa_igp WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1");
+    const safeQuery = async (sql: string) => {
+      try {
+        return await client.query(sql);
+      } catch {
+        return { rows: [] as any[] };
+      }
+    };
+
+    const [
+      usersRes,
+      membersRes,
+      meetingsRes,
+      resolutionsRes,
+      transactionsRes,
+      announcementsRes,
+      logsRes,
+      hogQuery,
+      igpLivestockRows,
+      igpExpenseRows,
+      igpSalesRows,
+      igpHarvestRows,
+      productsRes,
+      inventoryRes,
+      activitiesRes,
+      achievementsRes,
+      fundsRes,
+      pmRes,
+      delRes,
+      payRes,
+      snapRes
+    ] = await Promise.all([
+      client.query('SELECT * FROM users ORDER BY name ASC'),
+      client.query('SELECT * FROM members ORDER BY name ASC'),
+      client.query('SELECT * FROM meetings ORDER BY date DESC'),
+      client.query('SELECT * FROM resolutions ORDER BY date_agreed DESC'),
+      client.query('SELECT * FROM financial_transactions ORDER BY date DESC'),
+      client.query('SELECT * FROM announcements ORDER BY date_posted DESC'),
+      client.query('SELECT * FROM system_logs ORDER BY timestamp DESC'),
+      client.query("SELECT * FROM afa_igp WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main') ORDER BY (id = 'main_state') DESC LIMIT 1"),
+      client.query('SELECT produce, stage, head_count FROM afa_igp_livestocks ORDER BY produce ASC, stage ASC'),
+      client.query('SELECT * FROM afa_igp_expenses ORDER BY date DESC, id ASC'),
+      client.query('SELECT * FROM afa_igp_sales ORDER BY date DESC, id ASC'),
+      client.query('SELECT * FROM afa_igp_harvests ORDER BY date DESC, time DESC, id ASC'),
+      client.query('SELECT * FROM products ORDER BY name ASC'),
+      client.query('SELECT * FROM inventory ORDER BY name ASC'),
+      client.query('SELECT * FROM activities ORDER BY scheduled_date DESC'),
+      client.query('SELECT * FROM achievements ORDER BY year DESC, title ASC'),
+      client.query('SELECT * FROM organization_funds ORDER BY name ASC'),
+      safeQuery('SELECT * FROM pending_members ORDER BY joined_date DESC, name ASC'),
+      safeQuery('SELECT * FROM delegation_requests ORDER BY requested_date DESC'),
+      safeQuery('SELECT * FROM membership_payments ORDER BY year DESC, date_paid DESC'),
+      safeQuery('SELECT * FROM membership_year_snapshots ORDER BY year DESC')
+    ]);
     const hogRes = hogQuery.rows.length > 0 ? hogQuery : await client.query('SELECT * FROM afa_igp LIMIT 1');
-    const igpLivestockRows = await client.query('SELECT produce, stage, head_count FROM afa_igp_livestocks ORDER BY produce ASC, stage ASC');
-    const igpExpenseRows = await client.query('SELECT * FROM afa_igp_expenses ORDER BY date DESC, id ASC');
-    const igpSalesRows = await client.query('SELECT * FROM afa_igp_sales ORDER BY date DESC, id ASC');
-    const igpHarvestRows = await client.query('SELECT * FROM afa_igp_harvests ORDER BY date DESC, time DESC, id ASC');
-    const productsRes = await client.query('SELECT * FROM products ORDER BY name ASC');
-    const inventoryRes = await client.query('SELECT * FROM inventory ORDER BY name ASC');
-    const activitiesRes = await client.query('SELECT * FROM activities ORDER BY scheduled_date DESC');
-    const achievementsRes = await client.query('SELECT * FROM achievements ORDER BY year DESC, title ASC');
-    const fundsRes = await client.query('SELECT * FROM organization_funds ORDER BY name ASC');
 
-    let delegationRequests: any[] = [];
-    let pendingMembers: any[] = [];
-    try {
-      const pmRes = await client.query('SELECT * FROM pending_members ORDER BY joined_date DESC, name ASC');
-      pendingMembers = pmRes.rows.map(r => ({
-        id: r.id,
-        name: r.name,
-        username: r.username || undefined,
-        farmLocation: r.farm_location || 'Sitio Tapon',
-        primaryCrops: r.primary_crops || [],
-        contactNumber: r.contact_number || 'None',
-        joinedDate: r.joined_date || '',
-        rsbsaNumber: r.rsbsa_number || undefined,
-        isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
-        avatarUrl: r.avatar_url || undefined,
-        gender: r.gender || undefined,
-        birthDate: r.birth_date || undefined,
-        affiliations: Array.isArray(r.affiliations) ? r.affiliations : [],
-        registrationStatus: r.registration_status === 'Awaiting Treasurer Fee' ? 'Awaiting Treasurer Fee' : 'Pending Secretary Approval',
-        approvedBySecretary: r.approved_by_secretary || undefined,
-        approvedBySecretaryDate: r.approved_by_secretary_date || undefined
-      }));
-    } catch { }
+    const pendingMembers: any[] = pmRes.rows.map(r => ({
+      id: r.id,
+      name: r.name,
+      username: r.username || undefined,
+      farmLocation: r.farm_location || 'Sitio Tapon',
+      primaryCrops: r.primary_crops || [],
+      contactNumber: r.contact_number || 'None',
+      joinedDate: r.joined_date || '',
+      rsbsaNumber: r.rsbsa_number || undefined,
+      isRsbsaRegistered: Boolean(r.is_rsbsa_registered),
+      avatarUrl: r.avatar_url || undefined,
+      gender: r.gender || undefined,
+      birthDate: r.birth_date || undefined,
+      affiliations: Array.isArray(r.affiliations) ? r.affiliations : [],
+      registrationStatus: r.registration_status === 'Awaiting Treasurer Fee' ? 'Awaiting Treasurer Fee' : 'Pending Secretary Approval',
+      approvedBySecretary: r.approved_by_secretary || undefined,
+      approvedBySecretaryDate: r.approved_by_secretary_date || undefined
+    }));
 
-    try {
-      const delRes = await client.query('SELECT * FROM delegation_requests ORDER BY requested_date DESC');
-      delegationRequests = delRes.rows.map(r => ({
-        id: r.id,
-        requestedBy: r.requested_by,
-        reason: r.reason,
-        scopes: Array.isArray(r.scopes) ? r.scopes : [],
-        requestedDate: r.requested_date,
-        effectiveStart: r.effective_start,
-        effectiveEnd: r.effective_end,
-        status: r.status,
-        reviewedBy: r.reviewed_by,
-        reviewedDate: r.reviewed_date,
-        remarks: r.remarks
-      }));
-    } catch { }
+    const delegationRequests: any[] = delRes.rows.map(r => ({
+      id: r.id,
+      requestedBy: r.requested_by,
+      reason: r.reason,
+      scopes: Array.isArray(r.scopes) ? r.scopes : [],
+      requestedDate: r.requested_date,
+      effectiveStart: r.effective_start,
+      effectiveEnd: r.effective_end,
+      status: r.status,
+      reviewedBy: r.reviewed_by,
+      reviewedDate: r.reviewed_date,
+      remarks: r.remarks
+    }));
 
-    // Membership dues ledger + the roster snapshots of closed membership years.
-    let membershipPayments: MembershipPayment[] = [];
-    let membershipYearSnapshots: MembershipYearSnapshot[] = [];
-    try {
-      const payRes = await client.query('SELECT * FROM membership_payments ORDER BY year DESC, date_paid DESC');
-      membershipPayments = payRes.rows.map(r => ({
-        id: r.id,
-        memberId: r.member_id,
-        memberName: r.member_name,
-        memberIdNumber: r.member_id_number || undefined,
-        year: Number(r.year),
-        amount: Number(r.amount || 0),
-        datePaid: r.date_paid || '',
-        method: r.method || 'Cash',
-        referenceNo: r.reference_no || undefined,
-        status: r.status || 'Pending',
-        recordedBy: r.recorded_by || '',
-        recordedAt: r.recorded_at || '',
-        verifiedBy: r.verified_by || undefined,
-        verifiedDate: r.verified_date || undefined,
-        voidedBy: r.voided_by || undefined,
-        voidedDate: r.voided_date || undefined,
-        voidReason: r.void_reason || undefined,
-        notes: r.notes || undefined,
-        transactionId: r.transaction_id || undefined
-      }));
-    } catch { }
+    const membershipPayments: MembershipPayment[] = payRes.rows.map(r => ({
+      id: r.id,
+      memberId: r.member_id,
+      memberName: r.member_name,
+      memberIdNumber: r.member_id_number || undefined,
+      year: Number(r.year),
+      amount: Number(r.amount || 0),
+      datePaid: r.date_paid || '',
+      method: r.method || 'Cash',
+      referenceNo: r.reference_no || undefined,
+      status: r.status || 'Pending',
+      recordedBy: r.recorded_by || '',
+      recordedAt: r.recorded_at || '',
+      verifiedBy: r.verified_by || undefined,
+      verifiedDate: r.verified_date || undefined,
+      voidedBy: r.voided_by || undefined,
+      voidedDate: r.voided_date || undefined,
+      voidReason: r.void_reason || undefined,
+      notes: r.notes || undefined,
+      transactionId: r.transaction_id || undefined
+    }));
 
-    try {
-      const snapRes = await client.query('SELECT * FROM membership_year_snapshots ORDER BY year DESC');
-      membershipYearSnapshots = snapRes.rows.map(r => ({
-        year: Number(r.year),
-        closedBy: r.closed_by || '',
-        closedAt: r.closed_at || '',
-        duesAmount: Number(r.dues_amount || 0),
-        totalMembers: Number(r.total_members || 0),
-        paidMembers: Number(r.paid_members || 0),
-        unpaidMembers: Number(r.unpaid_members || 0),
-        totalCollected: Number(r.total_collected || 0),
-        listedMembers: Array.isArray(r.listed_members) ? r.listed_members : [],
-        unpaidMemberIds: Array.isArray(r.unpaid_member_ids) ? r.unpaid_member_ids : [],
-        remarks: r.remarks || undefined
-      }));
-    } catch { }
+    const membershipYearSnapshots: MembershipYearSnapshot[] = snapRes.rows.map(r => ({
+      year: Number(r.year),
+      closedBy: r.closed_by || '',
+      closedAt: r.closed_at || '',
+      duesAmount: Number(r.dues_amount || 0),
+      totalMembers: Number(r.total_members || 0),
+      paidMembers: Number(r.paid_members || 0),
+      unpaidMembers: Number(r.unpaid_members || 0),
+      totalCollected: Number(r.total_collected || 0),
+      listedMembers: Array.isArray(r.listed_members) ? r.listed_members : [],
+      unpaidMemberIds: Array.isArray(r.unpaid_member_ids) ? r.unpaid_member_ids : [],
+      remarks: r.remarks || undefined
+    }));
 
     let hogState: {
       livestockInventory: IgpLivestockInventory[];

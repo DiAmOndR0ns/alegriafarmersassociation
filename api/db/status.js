@@ -1249,27 +1249,34 @@ async function initDatabaseSchema(pool) {
   }
 }
 var schemaInitialized = false;
+var schemaInitInFlight = null;
 async function ensureDatabaseSchema(pool) {
   if (schemaInitialized) return;
-  try {
-    console.log("[DB DEBUG] Ensuring all database tables exist...");
-    await initDatabaseSchema(pool);
-    const client = await pool.connect();
+  if (schemaInitInFlight) return schemaInitInFlight;
+  schemaInitInFlight = (async () => {
     try {
-      await runSchemaMigrations(client);
+      console.log("[DB DEBUG] Ensuring all database tables exist...");
+      await initDatabaseSchema(pool);
+      const client = await pool.connect();
+      try {
+        await runSchemaMigrations(client);
+      } finally {
+        client.release();
+      }
+      schemaInitialized = true;
+    } catch (err) {
+      console.error("[DB DEBUG] ensureDatabaseSchema failed:", {
+        message: err?.message,
+        code: err?.code,
+        detail: err?.detail,
+        hint: err?.hint
+      });
+      throw err;
     } finally {
-      client.release();
+      schemaInitInFlight = null;
     }
-    schemaInitialized = true;
-  } catch (err) {
-    console.error("[DB DEBUG] ensureDatabaseSchema failed:", {
-      message: err?.message,
-      code: err?.code,
-      detail: err?.detail,
-      hint: err?.hint
-    });
-    throw err;
-  }
+  })();
+  return schemaInitInFlight;
 }
 
 // src/api/auth.ts
@@ -1427,17 +1434,31 @@ async function getLiveTableStats(pool) {
   const tableCounts = {};
   let totalRecords = 0;
   try {
-    for (const table of APP_TABLES) {
-      try {
-        const res = await client.query(`SELECT count(*) as count FROM ${table}`);
-        const count = Number(res.rows[0]?.count || 0);
+    const selectClause = APP_TABLES.map((t) => `(SELECT count(*) FROM ${t}) as ${t}`).join(", ");
+    try {
+      const res = await client.query(`SELECT ${selectClause}`);
+      const row = res.rows[0] || {};
+      for (const table of APP_TABLES) {
+        const count = Number(row[table] || 0);
         tableCounts[table] = count;
         totalRecords += count;
-      } catch {
-        tableCounts[table] = 0;
       }
+      return { tableCounts, totalRecords };
+    } catch {
+      await Promise.all(
+        APP_TABLES.map(async (table) => {
+          try {
+            const res = await client.query(`SELECT count(*) as count FROM ${table}`);
+            const count = Number(res.rows[0]?.count || 0);
+            tableCounts[table] = count;
+            totalRecords += count;
+          } catch {
+            tableCounts[table] = 0;
+          }
+        })
+      );
+      return { tableCounts, totalRecords };
     }
-    return { tableCounts, totalRecords };
   } finally {
     client.release();
   }

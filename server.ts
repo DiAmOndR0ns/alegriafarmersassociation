@@ -224,30 +224,31 @@ export async function createApp() {
         ] as const;
 
         const nowIso = new Date().toISOString();
-        const seeded: any[] = [];
-        for (const spec of specs) {
-          const username = (process.env[`LOCAL_OFFICER_${spec.key}_USER`] || '').trim().toLowerCase();
-          const name = (process.env[`LOCAL_OFFICER_${spec.key}_NAME`] || '').trim();
-          const password = (process.env[`LOCAL_OFFICER_${spec.key}_PASS`] || '').trim();
-          const totpSecret = (process.env[`LOCAL_OFFICER_${spec.key}_TOTP`] || '').trim();
-          if (!username || !password) continue;
-          const passwordHash = await bcrypt.hash(password, 10);
-          seeded.push({
-            id: `local-officer-${spec.key.toLowerCase()}`,
-            username,
-            name: name || `AFA ${spec.role.replace('_', ' ')}`,
-            role: spec.role,
-            isApproved: true,
-            passwordHash,
-            passwordChangedAt: nowIso,
-            passwordHistory: [],
-            mustChangePassword: false,
-            joinedDate: '2026-01-01',
-            farmLocation: 'Sitio Tapon',
-            ...(spec.role === 'President' && totpSecret ? { mfaEnabled: true, totpSecret } : { mfaEnabled: false })
-          });
-        }
-        cachedLocalOfficers = seeded;
+        const seeded = await Promise.all(
+          specs.map(async (spec) => {
+            const username = (process.env[`LOCAL_OFFICER_${spec.key}_USER`] || '').trim().toLowerCase();
+            const name = (process.env[`LOCAL_OFFICER_${spec.key}_NAME`] || '').trim();
+            const password = (process.env[`LOCAL_OFFICER_${spec.key}_PASS`] || '').trim();
+            const totpSecret = (process.env[`LOCAL_OFFICER_${spec.key}_TOTP`] || '').trim();
+            if (!username || !password) return null;
+            const passwordHash = await bcrypt.hash(password, 8);
+            return {
+              id: `local-officer-${spec.key.toLowerCase()}`,
+              username,
+              name: name || `AFA ${spec.role.replace('_', ' ')}`,
+              role: spec.role,
+              isApproved: true,
+              passwordHash,
+              passwordChangedAt: nowIso,
+              passwordHistory: [],
+              mustChangePassword: false,
+              joinedDate: '2026-01-01',
+              farmLocation: 'Sitio Tapon',
+              ...(spec.role === 'President' && totpSecret ? { mfaEnabled: true, totpSecret } : { mfaEnabled: false })
+            };
+          })
+        );
+        cachedLocalOfficers = seeded.filter(Boolean);
       }
       return res.json({ success: true, officers: cachedLocalOfficers });
     });
