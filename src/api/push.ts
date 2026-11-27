@@ -771,36 +771,36 @@ export default async function handler(req: PushApiRequest, res: PushApiResponse)
       });
     }
 
-      // Resolutions writes: President, Secretary, Assistant Secretary, or delegated Vice President (record_approval).
-      const canWriteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role) || (isVicePresident && delegationScopes.has('record_approval'));
-      const canDeleteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role);
-      if (!canWriteResolutions && 'resolutions' in state) {
-        return sendResponse(res, 403, {
-          success: false,
-          message: 'Only the President, Secretary, or a delegated Vice President may create or approve resolutions.',
-        });
-      }
-      if (!canDeleteResolutions && (hasDeletedKey(['resolutions']) || ['resolution', 'resolutions'].includes(deleteItemEntity))) {
-        return sendResponse(res, 403, {
-          success: false,
-          message: 'Only the President or Secretary may delete resolutions.',
-        });
-      }
-      await saveFullStateToPostgres(getPool(), safeState);
-      return sendResponse(res, 200, { success: true, offlineMode: false, message: 'State successfully synced.' });
-    } catch (error: any) {
-      console.error('[Cloud DB Push Error]:', error?.message || error);
-      const statusCode = error?.statusCode === 413 ? 413 : error?.code === '23505' ? 409 : 500;
-      const isFundCodeConflict = error?.code === '23505' && /organization_funds/i.test(String(error?.constraint || error?.detail || ''));
-      return sendResponse(res, statusCode, {
+    // Resolutions writes: President, Secretary, Assistant Secretary, or delegated Vice President (record_approval).
+    const canWriteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role) || (isVicePresident && delegationScopes.has('record_approval'));
+    const canDeleteResolutions = isPresidentRole(user.role) || isSecretaryRole(user.role);
+    if (!canWriteResolutions && 'resolutions' in state) {
+      return sendResponse(res, 403, {
         success: false,
-        message: error?.statusCode === 413
-          ? 'Request body exceeds the allowed limit.'
-          : isFundCodeConflict
-            ? 'A fund source with that code already exists. Choose a different fund code.'
-            : error?.code === '23505'
-              ? 'That officer position is already assigned.'
-              : 'Unable to sync state.',
+        message: 'Only the President, Secretary, or a delegated Vice President may create or approve resolutions.',
       });
     }
+    if (!canDeleteResolutions && (hasDeletedKey(['resolutions']) || ['resolution', 'resolutions'].includes(deleteItemEntity))) {
+      return sendResponse(res, 403, {
+        success: false,
+        message: 'Only the President or Secretary may delete resolutions.',
+      });
+    }
+    await saveFullStateToPostgres(getPool(), safeState);
+    return sendResponse(res, 200, { success: true, offlineMode: false, message: 'State successfully synced.' });
+  } catch (error: any) {
+    console.error('[Cloud DB Push Error]:', error?.message || error);
+    const statusCode = error?.statusCode === 413 ? 413 : error?.code === '23505' ? 409 : 500;
+    const isFundCodeConflict = error?.code === '23505' && /organization_funds/i.test(String(error?.constraint || error?.detail || ''));
+    return sendResponse(res, statusCode, {
+      success: false,
+      message: error?.statusCode === 413
+        ? 'Request body exceeds the allowed limit.'
+        : isFundCodeConflict
+          ? 'A fund source with that code already exists. Choose a different fund code.'
+          : error?.code === '23505'
+            ? 'That officer position is already assigned.'
+            : 'Unable to sync state.',
+    });
   }
+}

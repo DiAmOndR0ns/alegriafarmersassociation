@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSyncPayload } from './App';
+import { buildSyncPayload, filterOutConfirmedPendingMembers } from './App';
 
 /**
  * Contract tests for `/api/sync/push` payloads.
@@ -11,7 +11,7 @@ import { buildSyncPayload } from './App';
  * entire request, so nothing the Secretary saved ever reached the database.
  */
 
-const FINANCIAL_KEYS = ['financialTransactions', 'funds', 'livestockIgp'];
+const FINANCIAL_KEYS = ['financialTransactions', 'funds', 'livestockIgp', 'membershipPayments', 'membershipYearSnapshots'];
 
 function snapshot(overrides: Record<string, any> = {}) {
   return {
@@ -117,11 +117,37 @@ describe('partial writes send only their own entities', () => {
 });
 
 describe('full snapshots respect the role', () => {
-  it('omits financial entities for a Secretary so auto-sync can succeed', () => {
+  it('omits financial and inventory entities for a Secretary so auto-sync can succeed', () => {
     const payload = buildSyncPayload({ ...base, snapshot: snapshot() });
     for (const key of FINANCIAL_KEYS) expect(payload).not.toHaveProperty(key);
+    expect(payload).not.toHaveProperty('inventory');
     expect(payload.members).toEqual([{ id: 'm-old' }]);
     expect(payload.announcements).toEqual([{ id: 'a-old' }]);
+  });
+
+  it('omits inventory and membershipPayments even when passed in Boot Sync overrides for a Secretary', () => {
+    const payload = buildSyncPayload({
+      ...base,
+      overrides: {
+        members: [{ id: 'm-1' }],
+        pendingMembers: [{ id: 'pm-1' }],
+        inventory: [{ id: 'i-1' }],
+        membershipPayments: [{ id: 'mp-1' }],
+        membershipYearSnapshots: [{ year: 2026 }],
+      },
+      deletedIds: {
+        members: ['m-del'],
+        inventory: ['i-del'],
+        membershipPayments: ['mp-del'],
+      },
+      snapshot: snapshot(),
+    });
+    expect(payload.members).toEqual([{ id: 'm-1' }]);
+    expect(payload.pendingMembers).toEqual([{ id: 'pm-1' }]);
+    expect(payload).not.toHaveProperty('inventory');
+    expect(payload).not.toHaveProperty('membershipPayments');
+    expect(payload).not.toHaveProperty('membershipYearSnapshots');
+    expect(payload.deletedIds).toEqual({ members: ['m-del'] });
   });
 
   it('includes them for the Treasurer', () => {
@@ -129,6 +155,51 @@ describe('full snapshots respect the role', () => {
     expect(payload.financialTransactions).toEqual([{ id: 't1' }]);
     expect(payload.funds).toEqual([{ id: 'f1' }]);
     expect(payload.livestockIgp).toEqual({ eggHarvests: [{ id: 'e1' }] });
+    expect(payload.inventory).toEqual([{ id: 'i1' }]);
+  });
+});
+
+describe('filterOutConfirmedPendingMembers', () => {
+  it('removes pending applicants who are already confirmed in the official members table by id or name', () => {
+    const pending = [
+      {
+        id: 'pm-1',
+        name: 'Shoyo, Hinata K.',
+        farmLocation: 'Sitio Pundok 1',
+        primaryCrops: ['Vegetables', 'Corn'],
+        contactNumber: '09977885521',
+        joinedDate: '2026-11-26',
+        isRsbsaRegistered: true,
+        registrationStatus: 'Awaiting Treasurer Fee' as const
+      },
+      {
+        id: 'pm-2',
+        name: 'Tetsurō, Kuroo N.',
+        farmLocation: 'Sitio Pundok 2',
+        primaryCrops: ['Vegetables', 'Cassava'],
+        contactNumber: '112202596',
+        joinedDate: '2026-11-26',
+        isRsbsaRegistered: false,
+        registrationStatus: 'Awaiting Treasurer Fee' as const
+      }
+    ];
+    const confirmed = [
+      {
+        id: 'mem-99',
+        name: 'shoyo, hinata k.',
+        memberIdNumber: 'AFA-2026-001',
+        farmLocation: 'Sitio Pundok 1',
+        primaryCrops: ['Vegetables', 'Corn'],
+        contactNumber: '09977885521',
+        status: 'Active' as const,
+        joinedDate: '2026-11-26',
+        isRsbsaRegistered: true
+      }
+    ];
+
+    const filtered = filterOutConfirmedPendingMembers(pending, confirmed);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].name).toBe('Tetsurō, Kuroo N.');
   });
 });
 

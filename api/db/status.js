@@ -833,6 +833,13 @@ async function runSchemaMigrations(client) {
           END IF;
         END IF;
       END $$; `,
+    // Clean up any pending_members row whose applicant has already been confirmed into `members`.
+    `DELETE FROM pending_members pm
+     WHERE EXISTS (
+       SELECT 1 FROM members m
+       WHERE m.id = pm.id
+          OR lower(trim(m.name)) = lower(trim(pm.name))
+     );`,
     // Clean up orphaned plain Member accounts in `users` whose corresponding member
     // or pending_member record was already deleted earlier.
     `DELETE FROM users u

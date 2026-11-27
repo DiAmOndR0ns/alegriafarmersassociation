@@ -91,6 +91,29 @@ interface StoredDeletedIds {
   membershipPayments?: string[];
 }
 
+export function filterOutConfirmedPendingMembers(
+  pendingList: PendingMember[],
+  confirmedMembers: Member[]
+): PendingMember[] {
+  if (!Array.isArray(pendingList) || pendingList.length === 0) return [];
+  if (!Array.isArray(confirmedMembers) || confirmedMembers.length === 0) return pendingList;
+  const confirmedIds = new Set(
+    confirmedMembers.map(m => String(m?.id || '').trim()).filter(Boolean)
+  );
+  const confirmedNames = new Set(
+    confirmedMembers.map(m => String(m?.name || '').trim().toLowerCase()).filter(Boolean)
+  );
+  return pendingList.filter(pm => {
+    if (!pm) return false;
+    const pmId = String(pm.id || '').trim();
+    const pmName = String(pm.name || '').trim().toLowerCase();
+    return !(
+      (pmId && confirmedIds.has(pmId)) ||
+      (pmName && confirmedNames.has(pmName))
+    );
+  });
+}
+
 /** Entities a push may carry, keyed by the override field that supplies them. */
 const SYNC_ENTITY_KEYS = [
   ['users', 'users'],
@@ -102,37 +125,17 @@ const SYNC_ENTITY_KEYS = [
   ['products', 'products'],
   ['activities', 'activities'],
   ['achievements', 'achievements'],
-  ['inventory', 'inventory'],
-  ['membershipPayments', 'membershipPayments'],
-  ['membershipYearSnapshots', 'membershipYearSnapshots'],
 ] as const;
 
-/**
- * Decides what `/api/sync/push` actually receives.
- *
- * Two rules matter, and both were silently violating production:
- *
- * 1. A change that names an entity sends ONLY that entity. Filling the rest of
- *    the payload from the app snapshot made a Secretary's member save ship
- *    `financialTransactions`, `funds` and `livestockIgp` as well. The server
- *    answers 403 for financial fields from a non-Treasurer and discards the
- *    whole request, so the member, announcement or activity was never stored.
- *
- * 2. Financial entities only travel for the Treasurer / Assistant Treasurer.
- *    That applies to the full snapshot too, which is what every auto-sync path
- *    sends - otherwise a Secretary could never complete ANY sync.
- *
- * Pure on purpose: the payload contract is the thing that broke, so it is
- * covered directly by tests rather than through a rendered App.
- */
 export function buildSyncPayload(params: {
   overrides?: Record<string, any>;
   options?: { scope?: 'eggHarvests' | 'roleUpdate' | 'presidentApproval' | 'auditorReview' };
   snapshot: { livestockIgp: any; transactions: unknown; funds: unknown } & Record<string, any>;
   deletedIds: StoredDeletedIds | Record<string, unknown>;
   canWriteFinancials: boolean;
+  canWriteInventory?: boolean;
 }): Record<string, unknown> {
-  const { overrides, options, snapshot, deletedIds, canWriteFinancials } = params;
+  const { overrides, options, snapshot, deletedIds, canWriteFinancials, canWriteInventory = canWriteFinancials } = params;
   const scope = options?.scope;
 
   if (scope === 'eggHarvests') {
@@ -151,12 +154,33 @@ export function buildSyncPayload(params: {
     return { financialTransactions: overrides?.financialTransactions || [], auditorReviewOnly: true };
   }
 
+  const sanitizeDeletedIdsForRole = (rawDeleted: StoredDeletedIds | Record<string, unknown>) => {
+    if (!rawDeleted || typeof rawDeleted !== 'object') return {};
+    const copy: Record<string, unknown> = { ...(rawDeleted as Record<string, unknown>) };
+    if (!canWriteFinancials) {
+      delete copy.financialTransactions;
+      delete copy.transactions;
+      delete copy.funds;
+      delete copy.organizationFunds;
+      delete copy.membershipPayments;
+      delete copy.membership_payments;
+    }
+    if (!canWriteInventory) {
+      delete copy.inventory;
+    }
+    return copy;
+  };
+  const safeDeletedIds = sanitizeDeletedIdsForRole(deletedIds);
+
   const hasOverride = overrides !== undefined && Object.keys(overrides).length > 0;
 
   if (hasOverride) {
     const payload: Record<string, unknown> = {};
     for (const [overrideKey, payloadKey] of SYNC_ENTITY_KEYS) {
       if (overrides![overrideKey] !== undefined) payload[payloadKey] = overrides![overrideKey];
+    }
+    if (canWriteInventory && overrides!.inventory !== undefined) {
+      payload.inventory = overrides!.inventory;
     }
     if (canWriteFinancials && overrides!.financialTransactions !== undefined) {
       payload.financialTransactions = overrides!.financialTransactions;
@@ -178,7 +202,7 @@ export function buildSyncPayload(params: {
       payload.livestockIgp = overrides!.livestockIgp;
     }
     if (overrides!.systemLogs !== undefined) payload.systemLogs = overrides!.systemLogs;
-    payload.deletedIds = deletedIds;
+    payload.deletedIds = safeDeletedIds;
     return payload;
   }
 
@@ -187,6 +211,9 @@ export function buildSyncPayload(params: {
     snapshotPayload[key] = snapshot[key];
   }
   snapshotPayload.systemLogs = snapshot.logs;
+  if (canWriteInventory) {
+    snapshotPayload.inventory = snapshot.inventory;
+  }
   if (canWriteFinancials) {
     snapshotPayload.financialTransactions = snapshot.transactions;
     snapshotPayload.funds = snapshot.funds;
@@ -194,7 +221,7 @@ export function buildSyncPayload(params: {
     snapshotPayload.membershipPayments = snapshot.membershipPayments;
     snapshotPayload.membershipYearSnapshots = snapshot.membershipYearSnapshots;
   }
-  snapshotPayload.deletedIds = deletedIds;
+  snapshotPayload.deletedIds = safeDeletedIds;
   return snapshotPayload;
 }
 
@@ -430,7 +457,15 @@ export default function App() {
           setInventory(storedInventory || []);
         }
         setDelegationRequests(Array.isArray(storedDelegationRequests) ? storedDelegationRequests : []);
-        setPendingMembers(Array.isArray(storedPendingMembers) ? storedPendingMembers : []);
+        const initialConfirmedMembers = hasOldSeedMembers ? [] : (storedMembers || INITIAL_MEMBERS);
+        const deduplicatedStoredPending = filterOutConfirmedPendingMembers(
+          Array.isArray(storedPendingMembers) ? storedPendingMembers : [],
+          initialConfirmedMembers
+        );
+        setPendingMembers(deduplicatedStoredPending);
+        if (Array.isArray(storedPendingMembers) && deduplicatedStoredPending.length !== storedPendingMembers.length) {
+          void updateStorage('bafa_pending_members', deduplicatedStoredPending);
+        }
         setMembershipPayments(Array.isArray(storedMembershipPayments) ? storedMembershipPayments : []);
         setMembershipYearSnapshots(Array.isArray(storedMembershipYearSnapshots) ? storedMembershipYearSnapshots : []);
         setDeletedArchive(Array.isArray(storedDeletedArchive) ? storedDeletedArchive : []);
@@ -613,6 +648,7 @@ export default function App() {
               ) || false;
               const delUsers = new Set(bootDeletedIds.users || []);
               const delMembers = new Set(bootDeletedIds.members || []);
+              const delPendingMembers = new Set(bootDeletedIds.pendingMembers || []);
               const delMeetings = new Set(bootDeletedIds.meetings || []);
               const delResolutions = new Set(bootDeletedIds.resolutions || []);
               const delTx = new Set([...(bootDeletedIds.financialTransactions || []), ...(bootDeletedIds.transactions || [])]);
@@ -624,6 +660,9 @@ export default function App() {
               const delInventory = new Set(bootDeletedIds.inventory || []);
 
               const cleanMembers = Array.isArray(res.data.members) ? res.data.members.filter((m: any) => !delMembers.has(m.id)) : [];
+              const cleanPendingMembers = Array.isArray(res.data.pendingMembers)
+                ? res.data.pendingMembers.filter((pm: any) => !delPendingMembers.has(pm.id))
+                : [];
               const cleanMeetings = Array.isArray(res.data.meetings) ? res.data.meetings.filter((m: any) => !delMeetings.has(m.id)) : [];
               const cleanResolutions = Array.isArray(res.data.resolutions) ? res.data.resolutions.filter((r: any) => !delResolutions.has(r.id)) : [];
               const cleanTx = Array.isArray(res.data.financialTransactions) ? res.data.financialTransactions.filter((t: any) => !delTx.has(t.id)) : [];
@@ -637,6 +676,10 @@ export default function App() {
                 : [];
               const syncedMembers = storedPendingCloudSync || hasQueuedEntity('member') || delMembers.size > 0
                 ? mergeSyncRecordsById(cleanMembers, localMembers, bootDeletedIds.members) : cleanMembers;
+              const rawSyncedPendingMembers = hasQueuedEntity('pending_member', 'pendingmember', 'pending_members') || delPendingMembers.size > 0
+                ? mergeSyncRecordsById(cleanPendingMembers, Array.isArray(storedPendingMembers) ? storedPendingMembers : [], bootDeletedIds.pendingMembers)
+                : cleanPendingMembers;
+              const syncedPendingMembers = filterOutConfirmedPendingMembers(rawSyncedPendingMembers, syncedMembers);
               const syncedMeetings = storedPendingCloudSync || hasQueuedEntity('meeting') || delMeetings.size > 0
                 ? mergeSyncRecordsById(cleanMeetings, storedMeetings || [], bootDeletedIds.meetings) : cleanMeetings;
               const syncedResolutions = storedPendingCloudSync || hasQueuedEntity('resolution') || delResolutions.size > 0
@@ -676,6 +719,7 @@ export default function App() {
                 : res.data.livestockIgp || storedLivestockIgp || INITIAL_LIVESTOCK_IGP;
 
               if (Array.isArray(res.data.members) || hasPendingLocalChanges) { setMembers(syncedMembers); updateStorage('bafa_members', syncedMembers); }
+              if (Array.isArray(res.data.pendingMembers) || hasPendingLocalChanges) { setPendingMembers(syncedPendingMembers); updateStorage('bafa_pending_members', syncedPendingMembers); }
               if (Array.isArray(res.data.meetings) || hasPendingLocalChanges) { setMeetings(syncedMeetings); updateStorage('bafa_meetings', syncedMeetings); }
               if (Array.isArray(res.data.resolutions) || hasPendingLocalChanges) { setResolutions(syncedResolutions); updateStorage('bafa_resolutions', syncedResolutions); }
               if (Array.isArray(res.data.financialTransactions) || hasPendingLocalChanges) { setTransactions(syncedTransactions); updateStorage('bafa_transactions', syncedTransactions); }
@@ -738,6 +782,7 @@ export default function App() {
                 void pushAllDataToCloud({
                   users: syncedUsers,
                   members: syncedMembers,
+                  pendingMembers: syncedPendingMembers,
                   meetings: syncedMeetings,
                   resolutions: syncedResolutions,
                   financialTransactions: syncedTransactions,
@@ -1123,6 +1168,7 @@ export default function App() {
     // ledger, so only they may put financial entities in a payload.
     const senderRole = String(currentUser?.role || '').trim().toLowerCase().replace(/\s+/g, '_');
     const canWriteFinancials = senderRole === 'treasurer' || senderRole === 'assistant_treasurer';
+    const canWriteInventory = canWriteFinancials || senderRole === 'auditor' || senderRole === 'president';
     const markFullSyncPending = async () => {
       if (!tracksFullSnapshot) return;
       setHasPendingCloudSync(true);
@@ -1196,7 +1242,8 @@ export default function App() {
         options,
         snapshot: snap,
         deletedIds: currentDeletedIds,
-        canWriteFinancials
+        canWriteFinancials,
+        canWriteInventory
       });
 
       const res = await fetch('/api/sync/push', {
@@ -3661,7 +3708,15 @@ export default function App() {
         }))
         : usersFromPull;
       const nextMembers = reconcile(data.members, local.members, pendingDeletes.members);
-      const nextPendingMembers = reconcile(data.pendingMembers, local.pendingMembers, pendingDeletes.pendingMembers);
+      const hasQueuedPendingMembers = syncQueueRef.current.some(item =>
+        ['pending_member', 'pendingmember', 'pending_members'].includes(String(item.entityType).toLowerCase())
+      );
+      const rawNextPendingMembers = Array.isArray(data.pendingMembers)
+        ? (hasQueuedPendingMembers || (pendingDeletes.pendingMembers?.length || 0) > 0
+          ? mergeSyncRecordsById(data.pendingMembers as PendingMember[], local.pendingMembers, pendingDeletes.pendingMembers)
+          : (data.pendingMembers as PendingMember[]))
+        : local.pendingMembers;
+      const nextPendingMembers = filterOutConfirmedPendingMembers(rawNextPendingMembers, nextMembers);
       const nextMeetings = reconcile(data.meetings, local.meetings, pendingDeletes.meetings);
       const nextResolutions = reconcile(data.resolutions, local.resolutions, pendingDeletes.resolutions);
       const nextTransactions = reconcile(

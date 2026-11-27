@@ -458,6 +458,15 @@ export default function SecretaryView({
 
   // Filter Members
   const currentYear = membershipYear ?? new Date().getFullYear();
+  const visiblePendingMembers = pendingMembers.filter((pm) => {
+    const pmId = String(pm?.id || '').trim();
+    const pmName = String(pm?.name || '').trim().toLowerCase();
+    return !members.some(
+      (m) =>
+        (pmId && m.id === pmId) ||
+        (pmName && m.name.trim().toLowerCase() === pmName)
+    );
+  });
   const isMemberPendingSecretaryApproval = (member: Member) => {
     const linked = users.find(u =>
       u.id === member.id ||
@@ -620,7 +629,7 @@ export default function SecretaryView({
                 <Clock className="w-5 h-5 text-amber-800 shrink-0 mt-0.5" />
                 <div>
                   <h3 className="text-sm font-extrabold text-amber-950 flex items-center gap-2">
-                    <span>Pending Member Registrations ({pendingMembers.length})</span>
+                    <span>Pending Member Registrations ({visiblePendingMembers.length})</span>
                     <span className="text-[10px] font-mono bg-amber-200/80 text-amber-950 px-2 py-0.5 rounded-full border border-amber-400">
                       Separate Queue • Not Yet in Official Members Roster
                     </span>
@@ -632,7 +641,7 @@ export default function SecretaryView({
               </div>
             </div>
 
-            {pendingMembers.length === 0 ? (
+            {visiblePendingMembers.length === 0 ? (
               <div className="bg-white/80 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-900 font-medium">
                 No pending member registrations right now. All confirmed members are listed in the official Members table below.
               </div>
@@ -651,7 +660,7 @@ export default function SecretaryView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-amber-200 text-[#1B4332]">
-                      {pendingMembers.map((pm) => {
+                      {visiblePendingMembers.map((pm) => {
                         const needsSecApproval = pm.registrationStatus === 'Pending Secretary Approval';
                         return (
                           <tr key={pm.id} className="hover:bg-amber-50/50">

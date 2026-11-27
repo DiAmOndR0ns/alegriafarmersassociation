@@ -905,6 +905,14 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
         END IF;
       END $$; `,
 
+    // Clean up any pending_members row whose applicant has already been confirmed into `members`.
+    `DELETE FROM pending_members pm
+     WHERE EXISTS (
+       SELECT 1 FROM members m
+       WHERE m.id = pm.id
+          OR lower(trim(m.name)) = lower(trim(pm.name))
+     );`,
+
     // Clean up orphaned plain Member accounts in `users` whose corresponding member
     // or pending_member record was already deleted earlier.
     `DELETE FROM users u
@@ -2620,7 +2628,28 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
     // 2b. Pending Members (Unconfirmed registrations awaiting Secretary approval or Treasurer fee confirmation)
     const rawPendingMembers = state.pendingMembers || state.pending_members;
     if (rawPendingMembers && Array.isArray(rawPendingMembers)) {
-      const activePending = rawPendingMembers.filter((pm: any) => pm?.id && !deletedPendingMemberIds.has(pm.id));
+      const confirmedMembersRes = await client.query('SELECT id, lower(trim(name)) AS norm_name FROM members');
+      const confirmedIds = new Set<string>(
+        confirmedMembersRes.rows.map((r: any) => String(r.id || '').trim()).filter(Boolean)
+      );
+      const confirmedNames = new Set<string>(
+        confirmedMembersRes.rows.map((r: any) => String(r.norm_name || '').trim()).filter(Boolean)
+      );
+      if (Array.isArray(state.members)) {
+        for (const m of state.members) {
+          if (m?.id && !deletedMemberIds.has(m.id)) {
+            confirmedIds.add(String(m.id).trim());
+            const n = cleanText(m.name, 200)?.trim().toLowerCase();
+            if (n) confirmedNames.add(n);
+          }
+        }
+      }
+      const activePending = rawPendingMembers.filter((pm: any) => {
+        if (!pm?.id || deletedPendingMemberIds.has(pm.id)) return false;
+        const pmId = String(pm.id).trim();
+        const pmName = (cleanText(pm.name, 200) || '').trim().toLowerCase();
+        return !confirmedIds.has(pmId) && !(pmName && confirmedNames.has(pmName));
+      });
       for (const pm of activePending) {
         const pmName = cleanText(pm.name, 200);
         if (!pmName) continue;
@@ -2666,9 +2695,16 @@ export async function saveFullStateToPostgres(pool: pg.Pool, state: any) {
           cleanDateString(pm.approvedBySecretaryDate, 50)
         ]);
       }
+      // Always purge any pending_members rows that already exist in confirmed `members`.
+      await client.query(`
+        DELETE FROM pending_members pm
+        WHERE EXISTS (
+          SELECT 1 FROM members m
+          WHERE m.id = pm.id
+             OR lower(trim(m.name)) = lower(trim(pm.name))
+        );
+      `);
     }
-
-    // 3. Transactions (filtered to never re-insert deleted transactions)
     // A President push carries approval-only rows (id + presidentApproval*). Those
     // must update the sign-off columns and nothing else, so the Treasurer's
     // amounts and fund sources are never overwritten by an approval action.

@@ -271,11 +271,19 @@ export default function TreasurerView({
     return row.standing === 'Inactive';
   }), [duesRows, duesStandingFilter, duesTableSearch]);
 
+  const visiblePendingMembers = useMemo(() => pendingMembers.filter(pm => {
+    const pmId = String(pm?.id || '').trim();
+    const pmName = String(pm?.name || '').trim().toLowerCase();
+    return !members.some(
+      m => (pmId && m.id === pmId) || (pmName && m.name.trim().toLowerCase() === pmName)
+    );
+  }), [pendingMembers, members]);
+
   const searchableDuesMembers = useMemo(() => {
     const q = duesMemberSearch.trim().toLowerCase();
     // Combine Secretary-approved pending applicants (awaiting Treasurer fee confirmation & ID assignment)
     // and existing official members so the Treasurer can select either from the searchable dropdown.
-    const pendingAsCandidateMembers: Member[] = pendingMembers
+    const pendingAsCandidateMembers: Member[] = visiblePendingMembers
       .filter(pm => pm.registrationStatus === 'Awaiting Treasurer Fee')
       .map(pm => ({
         id: pm.id,
@@ -301,7 +309,7 @@ export default function TreasurerView({
         (member.farmLocation || '').toLowerCase().includes(q)
       );
     });
-  }, [members, pendingMembers, duesMemberSearch]);
+  }, [members, visiblePendingMembers, duesMemberSearch]);
 
   const duesStats = useMemo(() => {
     const paid = duesRows.filter(row => row.standing === 'Paid').length;
@@ -973,12 +981,12 @@ export default function TreasurerView({
           </div>
 
           {/* SEPARATE PENDING NEW MEMBER REGISTRATIONS TABLE (Awaiting Treasurer Membership Fee Confirmation & Member ID Issuance) */}
-          {pendingMembers.length > 0 && (
+          {visiblePendingMembers.length > 0 && (
             <div id="treasurer-pending-members-table" className="bg-amber-50/80 border border-amber-300 rounded-xl p-4 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h4 className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-2">
-                    <span>Pending New Member Registrations ({pendingMembers.length})</span>
+                    <span>Pending New Member Registrations ({visiblePendingMembers.length})</span>
                     <span className="text-[10px] font-mono bg-amber-200/80 text-amber-950 px-2 py-0.5 rounded-full border border-amber-400">
                       Not Yet in Official Members Table
                     </span>
@@ -1000,7 +1008,7 @@ export default function TreasurerView({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-amber-200 text-[#1B4332]">
-                    {pendingMembers.map(pm => {
+                    {visiblePendingMembers.map(pm => {
                       const awaitingSec = pm.registrationStatus === 'Pending Secretary Approval';
                       return (
                         <tr key={pm.id} className="hover:bg-amber-50/40">

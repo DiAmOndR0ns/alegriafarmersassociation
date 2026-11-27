@@ -961,6 +961,13 @@ async function runSchemaMigrations(client) {
           END IF;
         END IF;
       END $$; `,
+    // Clean up any pending_members row whose applicant has already been confirmed into `members`.
+    `DELETE FROM pending_members pm
+     WHERE EXISTS (
+       SELECT 1 FROM members m
+       WHERE m.id = pm.id
+          OR lower(trim(m.name)) = lower(trim(pm.name))
+     );`,
     // Clean up orphaned plain Member accounts in `users` whose corresponding member
     // or pending_member record was already deleted earlier.
     `DELETE FROM users u
@@ -1956,7 +1963,28 @@ async function saveFullStateToPostgres(pool, state) {
     }
     const rawPendingMembers = state.pendingMembers || state.pending_members;
     if (rawPendingMembers && Array.isArray(rawPendingMembers)) {
-      const activePending = rawPendingMembers.filter((pm) => pm?.id && !deletedPendingMemberIds.has(pm.id));
+      const confirmedMembersRes = await client.query("SELECT id, lower(trim(name)) AS norm_name FROM members");
+      const confirmedIds = new Set(
+        confirmedMembersRes.rows.map((r) => String(r.id || "").trim()).filter(Boolean)
+      );
+      const confirmedNames = new Set(
+        confirmedMembersRes.rows.map((r) => String(r.norm_name || "").trim()).filter(Boolean)
+      );
+      if (Array.isArray(state.members)) {
+        for (const m of state.members) {
+          if (m?.id && !deletedMemberIds.has(m.id)) {
+            confirmedIds.add(String(m.id).trim());
+            const n = cleanText(m.name, 200)?.trim().toLowerCase();
+            if (n) confirmedNames.add(n);
+          }
+        }
+      }
+      const activePending = rawPendingMembers.filter((pm) => {
+        if (!pm?.id || deletedPendingMemberIds.has(pm.id)) return false;
+        const pmId = String(pm.id).trim();
+        const pmName = (cleanText(pm.name, 200) || "").trim().toLowerCase();
+        return !confirmedIds.has(pmId) && !(pmName && confirmedNames.has(pmName));
+      });
       for (const pm of activePending) {
         const pmName = cleanText(pm.name, 200);
         if (!pmName) continue;
@@ -2002,6 +2030,14 @@ async function saveFullStateToPostgres(pool, state) {
           cleanDateString(pm.approvedBySecretaryDate, 50)
         ]);
       }
+      await client.query(`
+        DELETE FROM pending_members pm
+        WHERE EXISTS (
+          SELECT 1 FROM members m
+          WHERE m.id = pm.id
+             OR lower(trim(m.name)) = lower(trim(pm.name))
+        );
+      `);
     }
     const rawTxList = state.financialTransactions || state.transactions;
     if (rawTxList && Array.isArray(rawTxList) && state.auditorReviewOnly === true) {
