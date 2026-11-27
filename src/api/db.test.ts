@@ -560,11 +560,11 @@ describe('IGP expense persistence', () => {
     expect(igpInsert?.values).toEqual(['main_state', ['Poultry Raising (RTL)'], null]);
     expect(salesInsert?.values).toEqual([
       sale.id, sale.produce, sale.date, sale.stage, sale.quantity,
-      sale.revenue, sale.recordedBy, sale.fundSource, sale.notes
+      sale.revenue, sale.recordedBy, sale.fundSource, sale.notes, null
     ]);
     expect(harvestInsert?.values).toEqual([
       harvest.id, harvest.produce, harvest.date, harvest.time, harvest.collectedBy,
-      harvest.eggCount, null, harvest.status, null, null, null, null, null, null
+      harvest.eggCount, null, harvest.status, null, null, null, null, null, null, null
     ]);
     expect(queries.some(query => query.sql.includes('DELETE FROM afa_igp_sales'))).toBe(true);
     // Harvest logs are immutable audit records: syncing livestockIgp must never blanket-delete other harvests.

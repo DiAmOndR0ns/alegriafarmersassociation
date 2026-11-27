@@ -6,6 +6,7 @@ import { isMemberRole, isPresidentRole, isSecretaryRole, isTreasurerRole, reject
 import { parseRequestBody, sendResponse } from './helper';
 import { sanitizeUserRows } from './sanitize';
 import { DelegationRequest, DelegationScope } from '../types';
+import { sanitizeEggSizeBreakdown } from '../utils/eggInventory';
 import { DELEGATION_SCOPES, getActiveDelegationScopes, isValidDelegationDate } from '../utils/delegation';
 
 export type PushApiRequest = Request | (IncomingMessage & {
@@ -318,16 +319,20 @@ export function separateEggHarvestsFromFinancialState(
       )
       // Members may only add a submission, never rewrite an approved one: keep
       // the fields a pending harvest needs and drop workflow/MFA-side data.
-      .map((entry: any) => ({
-        ...(typeof entry.id === 'string' ? { id: entry.id } : {}),
-        ...(typeof entry.produce === 'string' && entry.produce.trim() ? { produce: entry.produce.trim().slice(0, 200) } : {}),
-        collectedBy: entry.collectedBy,
-        eggCount: entry.eggCount,
-        date: entry.date.slice(0, 50),
-        time: entry.time.slice(0, 50),
-        status: 'Pending Audit' as const,
-        notes: typeof entry.notes === 'string' ? entry.notes.slice(0, 1000) : undefined
-      }));
+      .map((entry: any) => {
+        const cleanBreakdown = sanitizeEggSizeBreakdown(entry.sizeBreakdown);
+        return {
+          ...(typeof entry.id === 'string' ? { id: entry.id } : {}),
+          ...(typeof entry.produce === 'string' && entry.produce.trim() ? { produce: entry.produce.trim().slice(0, 200) } : {}),
+          collectedBy: entry.collectedBy,
+          eggCount: entry.eggCount,
+          ...(cleanBreakdown ? { sizeBreakdown: cleanBreakdown } : {}),
+          date: entry.date.slice(0, 50),
+          time: entry.time.slice(0, 50),
+          status: 'Pending Audit' as const,
+          notes: typeof entry.notes === 'string' ? entry.notes.slice(0, 1000) : undefined
+        };
+      });
     safeState.appendEggHarvests = true;
   } else if (mayUpdateEggWorkflow) {
     safeState.eggHarvests = eggHarvests;

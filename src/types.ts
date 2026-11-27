@@ -328,6 +328,18 @@ export interface SystemLog {
 // Income-generating project (IGP) records.
 export type IgpStage = string;
 
+export const EGG_SIZES = [
+  'Small',
+  'Medium',
+  'Large',
+  'Extra Large (XL)',
+  'Jumbo',
+] as const;
+
+export type EggSize = typeof EGG_SIZES[number];
+
+export type EggSizeBreakdown = Partial<Record<EggSize, number>>;
+
 export interface IgpLivestockInventory {
   produce: string;
   /** @deprecated Removed from afa_igp_livestocks; totals derive directly from stageBreakdown rows. */
@@ -352,6 +364,7 @@ export interface IgpSale {
   id: string;
   produce?: string; // e.g., "Livestock", "Poultry Raising"
   stage?: IgpStage;
+  eggSize?: EggSize; // Optional egg size sold when stage === 'Eggs'
   date: string;
   quantity: number;
   revenue: number;
@@ -373,6 +386,7 @@ export interface EggHarvestLog {
   time: string; // time of submission
   collectedBy: string; // member name who submitted the harvest
   eggCount: number; // number of chicken eggs harvested within that day
+  sizeBreakdown?: EggSizeBreakdown; // Segregated counts by egg size (Small, Medium, Large, Extra Large (XL), Jumbo)
   notes?: string; // e.g. "collected from coops 1-3", broken/damaged eggs, etc.
   // --- Approval workflow state ---
   status: 'Pending Audit' | 'Audited' | 'Signed' | 'Returned';

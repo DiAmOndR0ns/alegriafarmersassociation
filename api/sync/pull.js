@@ -1,5 +1,44 @@
 // src/api/db.ts
 import pg from "pg";
+
+// src/types.ts
+var EGG_SIZES = [
+  "Small",
+  "Medium",
+  "Large",
+  "Extra Large (XL)",
+  "Jumbo"
+];
+
+// src/utils/eggInventory.ts
+function normalizeEggSize(value) {
+  if (typeof value !== "string") return void 0;
+  const clean = value.trim().toLowerCase();
+  if (!clean) return void 0;
+  if (clean === "small" || clean === "s") return "Small";
+  if (clean === "medium" || clean === "m") return "Medium";
+  if (clean === "large" || clean === "l") return "Large";
+  if (clean === "extra large (xl)" || clean === "extra large" || clean === "xl" || clean === "x-large") return "Extra Large (XL)";
+  if (clean === "jumbo") return "Jumbo";
+  return EGG_SIZES.find((size) => size.toLowerCase() === clean);
+}
+function sanitizeEggSizeBreakdown(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return void 0;
+  const result = {};
+  let hasPositive = false;
+  for (const [key, val] of Object.entries(raw)) {
+    const size = normalizeEggSize(key);
+    if (!size) continue;
+    const count = Math.max(0, Math.floor(Number(val) || 0));
+    if (count > 0) {
+      result[size] = (result[size] || 0) + count;
+      hasPositive = true;
+    }
+  }
+  return hasPositive ? result : void 0;
+}
+
+// src/api/db.ts
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
 var poolInstance = null;
 var lastUsedConnectionString = null;
@@ -579,6 +618,8 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups; `,
     `ALTER TABLE afa_igp_expenses DROP COLUMN IF EXISTS hog_stage; `,
     `ALTER TABLE afa_igp_sales DROP COLUMN IF EXISTS hog_stage, DROP COLUMN IF EXISTS hogs_count, DROP COLUMN IF EXISTS produce_count; `,
+    `ALTER TABLE afa_igp_harvests ADD COLUMN IF NOT EXISTS size_breakdown JSONB; `,
+    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS egg_size VARCHAR(50); `,
     `DROP TABLE IF EXISTS hog_raising; `,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT; `,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT; `,
@@ -1044,6 +1085,7 @@ async function initDatabaseSchema(pool) {
     time VARCHAR(50),
     collected_by TEXT NOT NULL,
     egg_count INTEGER NOT NULL DEFAULT 0,
+    size_breakdown JSONB,
     notes TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
     audited_by TEXT,
@@ -1060,6 +1102,7 @@ async function initDatabaseSchema(pool) {
     produce TEXT NOT NULL,
     date VARCHAR(50),
     stage TEXT,
+    egg_size VARCHAR(50),
     quantity NUMERIC NOT NULL DEFAULT 0,
     revenue NUMERIC NOT NULL DEFAULT 0,
     recorded_by TEXT,
@@ -1458,33 +1501,41 @@ async function fetchAllDataFromPostgres(pool) {
       eggHarvests: [],
       closedYears: []
     };
-    const normalizedSales = igpSalesRows.rows.map((r) => ({
-      id: r.id,
-      date: r.date || "",
-      quantity: Number(r.quantity || 0),
-      revenue: Number(r.revenue || 0),
-      recordedBy: r.recorded_by || "",
-      ...r.produce ? { produce: r.produce } : {},
-      ...r.stage ? { stage: r.stage } : {},
-      ...r.notes ? { notes: r.notes } : {},
-      ...r.fund_source ? { fundSource: r.fund_source } : {}
-    }));
-    const normalizedHarvests = igpHarvestRows.rows.map((r) => ({
-      id: r.id,
-      date: r.date || "",
-      time: r.time || "",
-      collectedBy: r.collected_by || "",
-      eggCount: Number(r.egg_count || 0),
-      status: r.status || "Pending Audit",
-      ...r.produce ? { produce: r.produce } : {},
-      ...r.notes ? { notes: r.notes } : {},
-      ...r.audited_by ? { auditedBy: r.audited_by } : {},
-      ...r.audited_date ? { auditedDate: r.audited_date } : {},
-      ...r.audit_remarks ? { auditRemarks: r.audit_remarks } : {},
-      ...r.signed_by ? { signedBy: r.signed_by } : {},
-      ...r.signed_date ? { signedDate: r.signed_date } : {},
-      ...r.signature_remarks ? { signatureRemarks: r.signature_remarks } : {}
-    }));
+    const normalizedSales = igpSalesRows.rows.map((r) => {
+      const parsedEggSize = normalizeEggSize(r.egg_size);
+      return {
+        id: r.id,
+        date: r.date || "",
+        quantity: Number(r.quantity || 0),
+        revenue: Number(r.revenue || 0),
+        recordedBy: r.recorded_by || "",
+        ...r.produce ? { produce: r.produce } : {},
+        ...r.stage ? { stage: r.stage } : {},
+        ...parsedEggSize ? { eggSize: parsedEggSize } : {},
+        ...r.notes ? { notes: r.notes } : {},
+        ...r.fund_source ? { fundSource: r.fund_source } : {}
+      };
+    });
+    const normalizedHarvests = igpHarvestRows.rows.map((r) => {
+      const parsedBreakdown = sanitizeEggSizeBreakdown(r.size_breakdown);
+      return {
+        id: r.id,
+        date: r.date || "",
+        time: r.time || "",
+        collectedBy: r.collected_by || "",
+        eggCount: Number(r.egg_count || 0),
+        status: r.status || "Pending Audit",
+        ...r.produce ? { produce: r.produce } : {},
+        ...parsedBreakdown ? { sizeBreakdown: parsedBreakdown } : {},
+        ...r.notes ? { notes: r.notes } : {},
+        ...r.audited_by ? { auditedBy: r.audited_by } : {},
+        ...r.audited_date ? { auditedDate: r.audited_date } : {},
+        ...r.audit_remarks ? { auditRemarks: r.audit_remarks } : {},
+        ...r.signed_by ? { signedBy: r.signed_by } : {},
+        ...r.signed_date ? { signedDate: r.signed_date } : {},
+        ...r.signature_remarks ? { signatureRemarks: r.signature_remarks } : {}
+      };
+    });
     const livestockByProduce = /* @__PURE__ */ new Map();
     for (const r of igpLivestockRows.rows) {
       const produce = String(r.produce || "").trim();

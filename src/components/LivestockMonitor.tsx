@@ -1,13 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  LivestockIgpState, IgpStage, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund, MembershipPayment
+  EGG_SIZES, EggSize, EggSizeBreakdown, LivestockIgpState, IgpStage, IgpExpense, IgpSale, EggHarvestLog, Member, User, Meeting, OrganizationFund, MembershipPayment
 } from '../types';
 import {
   Briefcase, Plus, Trash2, Printer, Calculator, Lock, ArrowDownRight, ArrowUpRight,
   Pencil, X, PiggyBank, Sparkles, Filter, CheckCircle, AlertTriangle
 } from 'lucide-react';
 import AttendanceDividendCalculatorModal from './AttendanceDividendCalculatorModal';
-import { getAvailableEggCount } from '../utils/eggInventory';
+import {
+  EGG_SIZE_SHORT_LABELS,
+  formatEggSizeBreakdown,
+  getAvailableEggCount,
+  getAvailableEggsBySize,
+  resolveSaleEggSize
+} from '../utils/eggInventory';
 import { getIgpInventoryStageCount, getIgpInventoryTotal, isIgpStockPurchaseCategory } from '../utils/igpInventory';
 
 interface LivestockMonitorProps {
@@ -189,9 +195,23 @@ export default function LivestockMonitor({
   const currentRtl = currentStageCount(poultryProduce, ['RTL']);
   const selectedInventory = inventoryFor(selected);
   const selectedInventoryTotal = currentInventoryTotal(selected);
-  const currentEggInventory = isPoultry
-    ? getAvailableEggCount(state.eggHarvests || [], state.sales || [], selected)
-    : 0;
+  const currentEggStock = useMemo(
+    () => (isPoultry
+      ? getAvailableEggsBySize(state.eggHarvests || [], state.sales || [], selected)
+      : {
+        bySize: {
+          'Small': 0,
+          'Medium': 0,
+          'Large': 0,
+          'Extra Large (XL)': 0,
+          'Jumbo': 0,
+        } as Record<EggSize, number>,
+        unsegregated: 0,
+        total: 0,
+      }),
+    [isPoultry, state.eggHarvests, state.sales, selected]
+  );
+  const currentEggInventory = currentEggStock.total;
 
   // ---------- Finance Totals ----------
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -218,6 +238,7 @@ export default function LivestockMonitor({
       by: e.recordedBy
     })),
     ...sales.map((s) => {
+      const saleEggSize = resolveSaleEggSize(s);
       const customSaleLabel = s.stage && !STANDARD_SALE_STAGES.has(s.stage.toLowerCase()) ? s.stage : null;
       return {
         id: s.id,
@@ -225,7 +246,7 @@ export default function LivestockMonitor({
         rawSale: s,
         date: s.date,
         kind: 'Income' as const,
-        stage: s.stage,
+        stage: saleEggSize ? `Eggs (${saleEggSize})` : s.stage,
         label: customSaleLabel || (isRental(selected) ? 'Rental' : 'Sale'),
         detail: s.notes || '',
         qty: s.quantity,
@@ -294,6 +315,7 @@ export default function LivestockMonitor({
   // Sale Form Fields
   const [saleStage, setSaleStage] = useState<IgpStage>('Fattening');
   const [saleCustomStage, setSaleCustomStage] = useState('');
+  const [saleEggSize, setSaleEggSize] = useState<EggSize | ''>('');
   const [saleQty, setSaleQty] = useState('');
   const [saleRevenue, setSaleRevenue] = useState('');
   const [saleDate, setSaleDate] = useState(today());
@@ -309,12 +331,34 @@ export default function LivestockMonitor({
     }
   }, [funds, expFundSource, saleFundSource]);
 
-  // Egg Harvest Submission Form Fields (member daily harvest)
+  // Egg Harvest Submission Form Fields (member daily harvest segregated by size)
+  const EMPTY_EGG_SIZE_INPUTS: Record<EggSize, string> = {
+    'Small': '',
+    'Medium': '',
+    'Large': '',
+    'Extra Large (XL)': '',
+    'Jumbo': '',
+  };
   const [showEggModal, setShowEggModal] = useState(false);
+  const [eggSizeInputs, setEggSizeInputs] = useState<Record<EggSize, string>>(EMPTY_EGG_SIZE_INPUTS);
   const [eggCount, setEggCount] = useState('');
   const [eggDate, setEggDate] = useState(today());
   const [eggNotes, setEggNotes] = useState('');
   const [approvalRemarks, setApprovalRemarks] = useState('');
+
+  const segregatedEggSum = useMemo(
+    () => EGG_SIZES.reduce((sum, size) => sum + Math.max(0, Math.floor(Number(eggSizeInputs[size]) || 0)), 0),
+    [eggSizeInputs]
+  );
+
+  const handleEggSizeInputChange = (size: EggSize, value: string) => {
+    setEggSizeInputs((prev) => {
+      const next = { ...prev, [size]: value };
+      const sum = EGG_SIZES.reduce((acc, s) => acc + Math.max(0, Math.floor(Number(next[s]) || 0)), 0);
+      setEggCount(sum > 0 ? String(sum) : '');
+      return next;
+    });
+  };
 
   const submitEggHarvest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,8 +366,17 @@ export default function LivestockMonitor({
       setFormError('Only member accounts may submit egg harvests.');
       return;
     }
-    const count = parseInt(eggCount, 10);
-    if (!(count >= 1)) return setFormError('Please enter the number of eggs harvested (at least 1).');
+    const breakdown: EggSizeBreakdown = {};
+    let breakdownTotal = 0;
+    for (const size of EGG_SIZES) {
+      const val = Math.max(0, Math.floor(Number(eggSizeInputs[size]) || 0));
+      if (val > 0) {
+        breakdown[size] = val;
+        breakdownTotal += val;
+      }
+    }
+    const count = breakdownTotal > 0 ? breakdownTotal : parseInt(eggCount, 10);
+    if (!(count >= 1)) return setFormError('Please enter the number of eggs harvested (segregated by size or total of at least 1).');
     const closed = closedMsg(eggDate);
     if (closed) return setFormError(closed);
 
@@ -333,8 +386,10 @@ export default function LivestockMonitor({
       time: new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }),
       collectedBy: currentUser?.name || 'Member',
       eggCount: count,
+      ...(breakdownTotal > 0 ? { sizeBreakdown: breakdown } : {}),
       notes: eggNotes.trim() || undefined,
     });
+    setEggSizeInputs(EMPTY_EGG_SIZE_INPUTS);
     setEggCount('');
     setEggNotes('');
     setEggDate(today());
@@ -379,6 +434,7 @@ export default function LivestockMonitor({
     setEditingSale(null);
     setSaleStage(isSwine ? 'Fattening' : isCattle ? 'Fattening' : isPoultry ? 'Eggs' : 'General');
     setSaleCustomStage('');
+    setSaleEggSize('');
     setSaleQty('');
     setSaleRevenue('');
     setSaleNotes('');
@@ -390,6 +446,7 @@ export default function LivestockMonitor({
 
   const openEditSale = (sale: IgpSale) => {
     setEditingSale(sale);
+    const detectedEggSize = resolveSaleEggSize(sale);
     const standardStages = isSwine
       ? ['Fattening', 'Breeding', 'Dispersal']
       : isCattle
@@ -398,7 +455,10 @@ export default function LivestockMonitor({
           ? ['Eggs', 'RTL']
           : null;
     if (standardStages) {
-      if (sale.stage && standardStages.includes(sale.stage)) {
+      if (isPoultry && detectedEggSize) {
+        setSaleStage('Eggs');
+        setSaleCustomStage('');
+      } else if (sale.stage && standardStages.includes(sale.stage)) {
         setSaleStage(sale.stage);
         setSaleCustomStage('');
       } else {
@@ -409,6 +469,7 @@ export default function LivestockMonitor({
       setSaleStage(sale.stage || 'General');
       setSaleCustomStage('');
     }
+    setSaleEggSize(detectedEggSize || '');
     setSaleQty(String(sale.quantity || ''));
     setSaleRevenue(String(sale.revenue));
     setSaleNotes(sale.notes || '');
@@ -491,24 +552,34 @@ export default function LivestockMonitor({
       );
     }
     if (isPoultry && resolvedSaleStage === 'Eggs') {
-      const availableEggs = getAvailableEggCount(
+      const stock = getAvailableEggsBySize(
         state.eggHarvests || [],
         state.sales || [],
         selected,
         editingSale?.id
       );
-      if (qty > availableEggs) {
-        return setFormError(`Only ${availableEggs} verified eggs are available to sell.`);
+      if (saleEggSize) {
+        const availableForSize = stock.bySize[saleEggSize] + stock.unsegregated;
+        if (qty > availableForSize) {
+          return setFormError(
+            `Only ${stock.bySize[saleEggSize]} ${saleEggSize} eggs${stock.unsegregated > 0 ? ` (+ ${stock.unsegregated} unsegregated)` : ''} are available to sell.`
+          );
+        }
+      } else if (qty > stock.total) {
+        return setFormError(`Only ${stock.total} verified eggs are available to sell.`);
       }
     }
     const closed = closedMsg(saleDate);
     if (closed) return setFormError(closed);
+
+    const chosenEggSize = isPoultry && resolvedSaleStage === 'Eggs' && saleEggSize ? saleEggSize : undefined;
 
     if (editingSale) {
       onUpdateSale?.({
         ...editingSale,
         produce: selected,
         stage: resolvedSaleStage,
+        eggSize: chosenEggSize,
         date: saleDate,
         quantity: qty,
         revenue,
@@ -519,6 +590,7 @@ export default function LivestockMonitor({
       onAddSale({
         produce: selected,
         stage: resolvedSaleStage,
+        eggSize: chosenEggSize,
         date: saleDate,
         quantity: qty,
         revenue,
@@ -777,7 +849,27 @@ export default function LivestockMonitor({
             <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/70">
               <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 block">Eggs Available for Sale</span>
               <div className="text-2xl font-black text-[#1B4332] font-mono mt-1">{currentEggInventory} eggs</div>
-              <p className="mt-1 text-[10px] font-semibold text-amber-900">Approved &amp; signed harvests minus eggs sold</p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {EGG_SIZES.map((size) => (
+                  <span
+                    key={size}
+                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                      currentEggStock.bySize[size] > 0
+                        ? 'bg-white text-[#1B4332] border-amber-300'
+                        : 'bg-amber-100/50 text-amber-800/70 border-amber-200'
+                    }`}
+                    title={`${size}: ${currentEggStock.bySize[size]} available`}
+                  >
+                    {EGG_SIZE_SHORT_LABELS[size]}: {currentEggStock.bySize[size]}
+                  </span>
+                ))}
+                {currentEggStock.unsegregated > 0 && (
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border bg-white text-amber-900 border-amber-300">
+                    Unclassified: {currentEggStock.unsegregated}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1.5 text-[10px] font-semibold text-amber-900">Segregated by size • Approved harvests minus eggs sold</p>
             </div>
           )}
 
@@ -1344,9 +1436,48 @@ export default function LivestockMonitor({
               </div>
             )}
 
+            {isPoultry && saleStage === 'Eggs' && (
+              <div>
+                <label className={labelCls}>Egg Size Classification</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSaleEggSize('')}
+                    aria-pressed={saleEggSize === ''}
+                    className={`min-h-10 px-2.5 py-1.5 text-xs font-bold rounded-lg border cursor-pointer ${
+                      saleEggSize === ''
+                        ? 'bg-[#1B4332] text-white border-[#1B4332]'
+                        : 'bg-white text-[#1B4332] border-[#D5CFC1]'
+                    }`}
+                  >
+                    Assorted / All ({currentEggStock.total})
+                  </button>
+                  {EGG_SIZES.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setSaleEggSize(size)}
+                      aria-pressed={saleEggSize === size}
+                      className={`min-h-10 px-2.5 py-1.5 text-xs font-bold rounded-lg border cursor-pointer ${
+                        saleEggSize === size
+                          ? 'bg-[#1B4332] text-white border-[#1B4332]'
+                          : 'bg-white text-[#1B4332] border-[#D5CFC1]'
+                      }`}
+                    >
+                      {EGG_SIZE_SHORT_LABELS[size]} ({currentEggStock.bySize[size]})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>{isPoultry && saleStage === 'Eggs' ? 'Eggs Sold' : 'Quantity Sold / Rental Units'}</label>
+                <label className={labelCls}>
+                  {isPoultry && saleStage === 'Eggs'
+                    ? `Eggs Sold${saleEggSize ? ` (${saleEggSize})` : ''}`
+                    : 'Quantity Sold / Rental Units'}
+                </label>
                 <input
                   type="number"
                   min={1}
@@ -1432,24 +1563,49 @@ export default function LivestockMonitor({
       {/* 8. MODAL: SUBMIT EGG HARVEST (MEMBER DAILY SUBMISSION — CONDITIONAL ON RTL/POULTRY IGP) */}
       {/* ========================================================================= */}
       {showEggModal && isPoultry && (
-        <Modal title="Submit Daily Egg Harvest" onClose={() => setShowEggModal(false)}>
+        <Modal title="Submit Daily Egg Harvest (Segregated by Size)" onClose={() => setShowEggModal(false)}>
           <form onSubmit={submitEggHarvest} className="space-y-3.5 text-left">
             <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-xs font-bold text-[#8A4B08]">
-              Ipadangtang sa asosasyon ang tibuok buok nga itlog nga na-ani karon nga adlaw. Ang Auditor unang magbira kini ug ang President maoy last nagpirmahan.
-              <span className="block mt-1 text-[10px] font-semibold text-[#4A5F57]">(Submit the total number of chicken eggs harvested today. The Auditor verifies the amount and the President signs off last.)</span>
+              I-segregate ang na-ani nga itlog base sa gidak-on (Small, Medium, Large, Extra Large, Jumbo). Ang Auditor unang mag-verify ug ang President maoy mopirma.
+              <span className="block mt-1 text-[10px] font-semibold text-[#4A5F57]">
+                (Enter the count per egg size below; the total eggs harvested is computed automatically. You may also enter a single total if unsegregated.)
+              </span>
+            </div>
+
+            <div>
+              <label className={labelCls}>Segregate Harvested Eggs by Size</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-[#FAF8F5] p-3 rounded-xl border border-[#D5CFC1]">
+                {EGG_SIZES.map((size) => (
+                  <div key={size}>
+                    <label className="block text-[11px] font-extrabold text-[#1B4332] mb-1">
+                      {size}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={eggSizeInputs[size]}
+                      onChange={(e) => handleEggSizeInputChange(size, e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Number of Eggs Harvested</label>
+                <label className={labelCls}>
+                  Total Eggs Harvested {segregatedEggSum > 0 ? '(Auto-summed)' : ''}
+                </label>
                 <input
                   type="number"
                   min={1}
                   required
-                  value={eggCount}
+                  readOnly={segregatedEggSum > 0}
+                  value={segregatedEggSum > 0 ? String(segregatedEggSum) : eggCount}
                   onChange={(e) => setEggCount(e.target.value)}
-                  className={inputCls}
-                  placeholder="e.g. 120"
+                  className={`${inputCls} ${segregatedEggSum > 0 ? 'bg-emerald-50 font-mono font-black' : ''}`}
                 />
               </div>
               <div>
@@ -1471,7 +1627,6 @@ export default function LivestockMonitor({
                 value={eggNotes}
                 onChange={(e) => setEggNotes(e.target.value)}
                 className={inputCls}
-                placeholder="e.g. from coops 1-3, 5 broken eggs excluded"
               />
             </div>
 
@@ -1579,7 +1734,8 @@ export default function LivestockMonitor({
                 <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
                   <th className="py-2.5 pr-3 font-black">Date & Time</th>
                   <th className="py-2.5 pr-3 font-black">Collected By</th>
-                  <th className="py-2.5 pr-3 text-right font-black">Eggs</th>
+                  <th className="py-2.5 pr-3 text-right font-black">Total Eggs</th>
+                  <th className="py-2.5 pr-3 font-black">Size Segregation</th>
                   <th className="py-2.5 pr-3 font-black">Notes</th>
                   <th className="py-2.5 pr-3 font-black">Status</th>
                   {(isAuditor || maySignEggHarvests) && <th className="py-2.5 text-center font-black">Actions</th>}
@@ -1587,13 +1743,24 @@ export default function LivestockMonitor({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(state.eggHarvests || []).length === 0 ? (
-                  <tr><td colSpan={isAuditor || maySignEggHarvests ? 6 : 5} className="py-6 text-center text-slate-500">No egg harvest submitted yet.</td></tr>
+                  <tr><td colSpan={isAuditor || maySignEggHarvests ? 7 : 6} className="py-6 text-center text-slate-500">No egg harvest submitted yet.</td></tr>
                 ) : null}
-                {(state.eggHarvests || []).map((h) => (
+                {(state.eggHarvests || []).map((h) => {
+                  const formattedSizes = formatEggSizeBreakdown(h.sizeBreakdown);
+                  return (
                   <tr key={h.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-2.5 pr-3 font-mono text-slate-600 whitespace-nowrap">{h.date} {h.time}</td>
                     <td className="py-2.5 pr-3 text-slate-700 font-bold">{h.collectedBy}</td>
                     <td className="py-2.5 pr-3 text-right font-mono font-black text-[#1B4332]">{h.eggCount}</td>
+                    <td className="py-2.5 pr-3 text-slate-700">
+                      {formattedSizes ? (
+                        <span className="inline-block font-mono text-[11px] font-bold bg-amber-50 text-[#1B4332] border border-amber-200 px-2 py-0.5 rounded-lg">
+                          {formattedSizes}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">Unsegregated</span>
+                      )}
+                    </td>
                     <td className="py-2.5 pr-3 text-slate-700 max-w-xs whitespace-normal break-words">{h.notes || '—'}</td>
                     <td className="py-2.5 pr-3 whitespace-nowrap">
                       <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ${
@@ -1649,7 +1816,8 @@ export default function LivestockMonitor({
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

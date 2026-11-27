@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { EggHarvestLog, IgpLivestockInventory, IgpSale } from '../types';
+import { normalizeEggSize, sanitizeEggSizeBreakdown } from '../utils/eggInventory';
 import { deriveIgpLivestockInventory } from '../utils/igpInventory';
 import type { MembershipPayment, MembershipYearSnapshot } from '../types';
 import { getInitialFund } from '../utils/fundBalance';
@@ -665,6 +666,8 @@ export async function runSchemaMigrations(client: pg.PoolClient) {
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups; `,
     `ALTER TABLE afa_igp_expenses DROP COLUMN IF EXISTS hog_stage; `,
     `ALTER TABLE afa_igp_sales DROP COLUMN IF EXISTS hog_stage, DROP COLUMN IF EXISTS hogs_count, DROP COLUMN IF EXISTS produce_count; `,
+    `ALTER TABLE afa_igp_harvests ADD COLUMN IF NOT EXISTS size_breakdown JSONB; `,
+    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS egg_size VARCHAR(50); `,
     `DROP TABLE IF EXISTS hog_raising; `,
 
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT; `,
@@ -1164,6 +1167,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
     time VARCHAR(50),
     collected_by TEXT NOT NULL,
     egg_count INTEGER NOT NULL DEFAULT 0,
+    size_breakdown JSONB,
     notes TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
     audited_by TEXT,
@@ -1180,6 +1184,7 @@ export async function initDatabaseSchema(pool: pg.Pool) {
     produce TEXT NOT NULL,
     date VARCHAR(50),
     stage TEXT,
+    egg_size VARCHAR(50),
     quantity NUMERIC NOT NULL DEFAULT 0,
     revenue NUMERIC NOT NULL DEFAULT 0,
     recorded_by TEXT,
@@ -1806,33 +1811,41 @@ export async function fetchAllDataFromPostgres(pool: pg.Pool) {
       closedYears: []
     };
 
-    const normalizedSales: IgpSale[] = igpSalesRows.rows.map((r) => ({
-      id: r.id,
-      date: r.date || '',
-      quantity: Number(r.quantity || 0),
-      revenue: Number(r.revenue || 0),
-      recordedBy: r.recorded_by || '',
-      ...(r.produce ? { produce: r.produce } : {}),
-      ...(r.stage ? { stage: r.stage } : {}),
-      ...(r.notes ? { notes: r.notes } : {}),
-      ...(r.fund_source ? { fundSource: r.fund_source } : {})
-    }));
-    const normalizedHarvests: EggHarvestLog[] = igpHarvestRows.rows.map((r) => ({
-      id: r.id,
-      date: r.date || '',
-      time: r.time || '',
-      collectedBy: r.collected_by || '',
-      eggCount: Number(r.egg_count || 0),
-      status: r.status || 'Pending Audit',
-      ...(r.produce ? { produce: r.produce } : {}),
-      ...(r.notes ? { notes: r.notes } : {}),
-      ...(r.audited_by ? { auditedBy: r.audited_by } : {}),
-      ...(r.audited_date ? { auditedDate: r.audited_date } : {}),
-      ...(r.audit_remarks ? { auditRemarks: r.audit_remarks } : {}),
-      ...(r.signed_by ? { signedBy: r.signed_by } : {}),
-      ...(r.signed_date ? { signedDate: r.signed_date } : {}),
-      ...(r.signature_remarks ? { signatureRemarks: r.signature_remarks } : {})
-    }));
+    const normalizedSales: IgpSale[] = igpSalesRows.rows.map((r) => {
+      const parsedEggSize = normalizeEggSize(r.egg_size);
+      return {
+        id: r.id,
+        date: r.date || '',
+        quantity: Number(r.quantity || 0),
+        revenue: Number(r.revenue || 0),
+        recordedBy: r.recorded_by || '',
+        ...(r.produce ? { produce: r.produce } : {}),
+        ...(r.stage ? { stage: r.stage } : {}),
+        ...(parsedEggSize ? { eggSize: parsedEggSize } : {}),
+        ...(r.notes ? { notes: r.notes } : {}),
+        ...(r.fund_source ? { fundSource: r.fund_source } : {})
+      };
+    });
+    const normalizedHarvests: EggHarvestLog[] = igpHarvestRows.rows.map((r) => {
+      const parsedBreakdown = sanitizeEggSizeBreakdown(r.size_breakdown);
+      return {
+        id: r.id,
+        date: r.date || '',
+        time: r.time || '',
+        collectedBy: r.collected_by || '',
+        eggCount: Number(r.egg_count || 0),
+        status: r.status || 'Pending Audit',
+        ...(r.produce ? { produce: r.produce } : {}),
+        ...(parsedBreakdown ? { sizeBreakdown: parsedBreakdown } : {}),
+        ...(r.notes ? { notes: r.notes } : {}),
+        ...(r.audited_by ? { auditedBy: r.audited_by } : {}),
+        ...(r.audited_date ? { auditedDate: r.audited_date } : {}),
+        ...(r.audit_remarks ? { auditRemarks: r.audit_remarks } : {}),
+        ...(r.signed_by ? { signedBy: r.signed_by } : {}),
+        ...(r.signed_date ? { signedDate: r.signed_date } : {}),
+        ...(r.signature_remarks ? { signatureRemarks: r.signature_remarks } : {})
+      };
+    });
 
     // Group normalized afa_igp_livestocks rows (produce, stage, head_count) by produce
     const livestockByProduce = new Map<string, Record<string, number>>();
@@ -2199,12 +2212,13 @@ async function saveIgpSales(
     }
 
     const produce = cleanText(sale.produce, 200) || 'Unspecified';
+    const cleanEggSize = normalizeEggSize(sale.eggSize) || null;
     ids.push(sale.id);
     await client.query(`
       INSERT INTO afa_igp_sales(
-    id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes
+    id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes, egg_size
   )
-  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (id) DO UPDATE SET
   produce = EXCLUDED.produce,
     date = EXCLUDED.date,
@@ -2213,7 +2227,8 @@ async function saveIgpSales(
     revenue = EXCLUDED.revenue,
     recorded_by = EXCLUDED.recorded_by,
     fund_source = EXCLUDED.fund_source,
-    notes = EXCLUDED.notes;
+    notes = EXCLUDED.notes,
+    egg_size = EXCLUDED.egg_size;
   `, [
       sale.id,
       produce,
@@ -2223,7 +2238,8 @@ async function saveIgpSales(
       cleanNumber(sale.revenue),
       cleanText(sale.recordedBy, 200),
       cleanText(sale.fundSource, 200),
-      cleanText(sale.notes, 2000)
+      cleanText(sale.notes, 2000),
+      cleanEggSize
     ]);
   }
 
@@ -2284,12 +2300,13 @@ async function saveIgpHarvests(
     }
     const collectedBy = cleanText(harvest.collectedBy, 200);
     if (!collectedBy) throw new Error(`Cannot sync IGP harvest ${harvest.id} without a collector`);
+    const cleanBreakdown = sanitizeEggSizeBreakdown(harvest.sizeBreakdown);
     await client.query(`
       INSERT INTO afa_igp_harvests(
     id, produce, date, time, collected_by, egg_count, notes, status,
-    audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
+    audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks, size_breakdown
   )
-  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb)
       ON CONFLICT (id) DO UPDATE SET
   produce = COALESCE(EXCLUDED.produce, afa_igp_harvests.produce),
     date = EXCLUDED.date,
@@ -2303,7 +2320,8 @@ async function saveIgpHarvests(
     audit_remarks = EXCLUDED.audit_remarks,
     signed_by = EXCLUDED.signed_by,
     signed_date = EXCLUDED.signed_date,
-    signature_remarks = EXCLUDED.signature_remarks;
+    signature_remarks = EXCLUDED.signature_remarks,
+    size_breakdown = COALESCE(EXCLUDED.size_breakdown, afa_igp_harvests.size_breakdown);
   `, [
       harvest.id,
       cleanText(harvest.produce, 200),
@@ -2318,7 +2336,8 @@ async function saveIgpHarvests(
       cleanText(harvest.auditRemarks, 2000),
       cleanText(harvest.signedBy, 200),
       cleanDateString(harvest.signedDate, 50),
-      cleanText(harvest.signatureRemarks, 2000)
+      cleanText(harvest.signatureRemarks, 2000),
+      cleanBreakdown ? JSON.stringify(cleanBreakdown) : null
     ]);
   }
 }

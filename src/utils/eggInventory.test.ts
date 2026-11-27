@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EggHarvestLog, IgpSale } from '../types';
-import { getAvailableEggCount, getTotalAvailableEggCount } from './eggInventory';
+import { formatEggSizeBreakdown, getAvailableEggCount, getAvailableEggsBySize, getTotalAvailableEggCount } from './eggInventory';
 
 const harvest = (id: string, eggCount: number, status: EggHarvestLog['status'] = 'Signed'): EggHarvestLog => ({
   id,
@@ -57,5 +57,30 @@ describe('getAvailableEggCount', () => {
     const customProduceHarvest: EggHarvestLog = { ...harvest('h-custom', 80, 'Signed'), produce: 'RTL Chickens (Poultry / Eggs)' };
     expect(getAvailableEggCount([blankProduceHarvest, customProduceHarvest], [], 'RTL Chickens (Poultry / Eggs)')).toBe(200);
     expect(getTotalAvailableEggCount([blankProduceHarvest, customProduceHarvest], [])).toBe(200);
+  });
+
+  it('tracks and deducts segregated egg sizes (Small, Medium, Large, Extra Large (XL), Jumbo)', () => {
+    const segregatedHarvest: EggHarvestLog = {
+      ...harvest('h-seg', 95, 'Signed'),
+      sizeBreakdown: {
+        'Small': 15,
+        'Medium': 30,
+        'Large': 30,
+        'Extra Large (XL)': 15,
+        'Jumbo': 5,
+      }
+    };
+    const largeSale: IgpSale = {
+      ...sale('s-large', 12, 'Eggs'),
+      eggSize: 'Large'
+    };
+
+    const stock = getAvailableEggsBySize([segregatedHarvest], [largeSale], 'Poultry Raising (RTL)');
+    expect(stock.bySize['Large']).toBe(18);
+    expect(stock.bySize['Medium']).toBe(30);
+    expect(stock.total).toBe(83);
+    expect(formatEggSizeBreakdown(segregatedHarvest.sizeBreakdown)).toBe(
+      'S: 15 • M: 30 • L: 30 • XL: 15 • Jumbo: 5'
+    );
   });
 });

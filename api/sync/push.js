@@ -4,6 +4,43 @@ import { randomUUID } from "node:crypto";
 // src/api/db.ts
 import pg from "pg";
 
+// src/types.ts
+var EGG_SIZES = [
+  "Small",
+  "Medium",
+  "Large",
+  "Extra Large (XL)",
+  "Jumbo"
+];
+
+// src/utils/eggInventory.ts
+function normalizeEggSize(value) {
+  if (typeof value !== "string") return void 0;
+  const clean = value.trim().toLowerCase();
+  if (!clean) return void 0;
+  if (clean === "small" || clean === "s") return "Small";
+  if (clean === "medium" || clean === "m") return "Medium";
+  if (clean === "large" || clean === "l") return "Large";
+  if (clean === "extra large (xl)" || clean === "extra large" || clean === "xl" || clean === "x-large") return "Extra Large (XL)";
+  if (clean === "jumbo") return "Jumbo";
+  return EGG_SIZES.find((size) => size.toLowerCase() === clean);
+}
+function sanitizeEggSizeBreakdown(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return void 0;
+  const result = {};
+  let hasPositive = false;
+  for (const [key, val] of Object.entries(raw)) {
+    const size = normalizeEggSize(key);
+    if (!size) continue;
+    const count = Math.max(0, Math.floor(Number(val) || 0));
+    if (count > 0) {
+      result[size] = (result[size] || 0) + count;
+      hasPositive = true;
+    }
+  }
+  return hasPositive ? result : void 0;
+}
+
 // src/utils/igpInventory.ts
 var STOCK_CATEGORIES = ["Piglets / Stock", "Calves / Cattle Stock", "RTL Pullets Stock"];
 var isIgpStockPurchaseCategory = (category) => STOCK_CATEGORIES.includes(category) || /\b(?:stock|animal purchase|livestock purchase)\b/i.test(category);
@@ -731,6 +768,8 @@ async function runSchemaMigrations(client) {
     `ALTER TABLE afa_igp DROP COLUMN IF EXISTS groups; `,
     `ALTER TABLE afa_igp_expenses DROP COLUMN IF EXISTS hog_stage; `,
     `ALTER TABLE afa_igp_sales DROP COLUMN IF EXISTS hog_stage, DROP COLUMN IF EXISTS hogs_count, DROP COLUMN IF EXISTS produce_count; `,
+    `ALTER TABLE afa_igp_harvests ADD COLUMN IF NOT EXISTS size_breakdown JSONB; `,
+    `ALTER TABLE afa_igp_sales ADD COLUMN IF NOT EXISTS egg_size VARCHAR(50); `,
     `DROP TABLE IF EXISTS hog_raising; `,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT; `,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS ceb_name TEXT; `,
@@ -1196,6 +1235,7 @@ async function initDatabaseSchema(pool) {
     time VARCHAR(50),
     collected_by TEXT NOT NULL,
     egg_count INTEGER NOT NULL DEFAULT 0,
+    size_breakdown JSONB,
     notes TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'Pending Audit',
     audited_by TEXT,
@@ -1212,6 +1252,7 @@ async function initDatabaseSchema(pool) {
     produce TEXT NOT NULL,
     date VARCHAR(50),
     stage TEXT,
+    egg_size VARCHAR(50),
     quantity NUMERIC NOT NULL DEFAULT 0,
     revenue NUMERIC NOT NULL DEFAULT 0,
     recorded_by TEXT,
@@ -1554,12 +1595,13 @@ async function saveIgpSales(client, sales) {
       throw new Error("Cannot sync IGP sale without a valid id");
     }
     const produce = cleanText(sale.produce, 200) || "Unspecified";
+    const cleanEggSize = normalizeEggSize(sale.eggSize) || null;
     ids.push(sale.id);
     await client.query(`
       INSERT INTO afa_igp_sales(
-    id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes
+    id, produce, date, stage, quantity, revenue, recorded_by, fund_source, notes, egg_size
   )
-  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (id) DO UPDATE SET
   produce = EXCLUDED.produce,
     date = EXCLUDED.date,
@@ -1568,7 +1610,8 @@ async function saveIgpSales(client, sales) {
     revenue = EXCLUDED.revenue,
     recorded_by = EXCLUDED.recorded_by,
     fund_source = EXCLUDED.fund_source,
-    notes = EXCLUDED.notes;
+    notes = EXCLUDED.notes,
+    egg_size = EXCLUDED.egg_size;
   `, [
       sale.id,
       produce,
@@ -1578,7 +1621,8 @@ async function saveIgpSales(client, sales) {
       cleanNumber(sale.revenue),
       cleanText(sale.recordedBy, 200),
       cleanText(sale.fundSource, 200),
-      cleanText(sale.notes, 2e3)
+      cleanText(sale.notes, 2e3),
+      cleanEggSize
     ]);
   }
   await client.query("DELETE FROM afa_igp_sales WHERE NOT (id = ANY($1::varchar[]))", [ids]);
@@ -1629,12 +1673,13 @@ async function saveIgpHarvests(client, harvests) {
     }
     const collectedBy = cleanText(harvest.collectedBy, 200);
     if (!collectedBy) throw new Error(`Cannot sync IGP harvest ${harvest.id} without a collector`);
+    const cleanBreakdown = sanitizeEggSizeBreakdown(harvest.sizeBreakdown);
     await client.query(`
       INSERT INTO afa_igp_harvests(
     id, produce, date, time, collected_by, egg_count, notes, status,
-    audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks
+    audited_by, audited_date, audit_remarks, signed_by, signed_date, signature_remarks, size_breakdown
   )
-  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb)
       ON CONFLICT (id) DO UPDATE SET
   produce = COALESCE(EXCLUDED.produce, afa_igp_harvests.produce),
     date = EXCLUDED.date,
@@ -1648,7 +1693,8 @@ async function saveIgpHarvests(client, harvests) {
     audit_remarks = EXCLUDED.audit_remarks,
     signed_by = EXCLUDED.signed_by,
     signed_date = EXCLUDED.signed_date,
-    signature_remarks = EXCLUDED.signature_remarks;
+    signature_remarks = EXCLUDED.signature_remarks,
+    size_breakdown = COALESCE(EXCLUDED.size_breakdown, afa_igp_harvests.size_breakdown);
   `, [
       harvest.id,
       cleanText(harvest.produce, 200),
@@ -1663,7 +1709,8 @@ async function saveIgpHarvests(client, harvests) {
       cleanText(harvest.auditRemarks, 2e3),
       cleanText(harvest.signedBy, 200),
       cleanDateString(harvest.signedDate, 50),
-      cleanText(harvest.signatureRemarks, 2e3)
+      cleanText(harvest.signatureRemarks, 2e3),
+      cleanBreakdown ? JSON.stringify(cleanBreakdown) : null
     ]);
   }
 }
@@ -3268,16 +3315,20 @@ function separateEggHarvestsFromFinancialState(state, role, name, hasDelegatedAp
   if (isMember) {
     safeState.eggHarvests = eggHarvests.filter(
       (entry) => entry && typeof entry === "object" && entry.status === "Pending Audit" && typeof name === "string" && entry.collectedBy === name && Number.isInteger(entry.eggCount) && entry.eggCount >= 0 && entry.eggCount <= MAX_EGG_COUNT && typeof entry.date === "string" && typeof entry.time === "string"
-    ).map((entry) => ({
-      ...typeof entry.id === "string" ? { id: entry.id } : {},
-      ...typeof entry.produce === "string" && entry.produce.trim() ? { produce: entry.produce.trim().slice(0, 200) } : {},
-      collectedBy: entry.collectedBy,
-      eggCount: entry.eggCount,
-      date: entry.date.slice(0, 50),
-      time: entry.time.slice(0, 50),
-      status: "Pending Audit",
-      notes: typeof entry.notes === "string" ? entry.notes.slice(0, 1e3) : void 0
-    }));
+    ).map((entry) => {
+      const cleanBreakdown = sanitizeEggSizeBreakdown(entry.sizeBreakdown);
+      return {
+        ...typeof entry.id === "string" ? { id: entry.id } : {},
+        ...typeof entry.produce === "string" && entry.produce.trim() ? { produce: entry.produce.trim().slice(0, 200) } : {},
+        collectedBy: entry.collectedBy,
+        eggCount: entry.eggCount,
+        ...cleanBreakdown ? { sizeBreakdown: cleanBreakdown } : {},
+        date: entry.date.slice(0, 50),
+        time: entry.time.slice(0, 50),
+        status: "Pending Audit",
+        notes: typeof entry.notes === "string" ? entry.notes.slice(0, 1e3) : void 0
+      };
+    });
     safeState.appendEggHarvests = true;
   } else if (mayUpdateEggWorkflow) {
     safeState.eggHarvests = eggHarvests;
