@@ -134,8 +134,17 @@ export function buildSyncPayload(params: {
   deletedIds: StoredDeletedIds | Record<string, unknown>;
   canWriteFinancials: boolean;
   canWriteInventory?: boolean;
+  role?: string;
 }): Record<string, unknown> {
-  const { overrides, options, snapshot, deletedIds, canWriteFinancials, canWriteInventory = canWriteFinancials } = params;
+  const {
+    overrides,
+    options,
+    snapshot,
+    deletedIds,
+    canWriteFinancials,
+    canWriteInventory = canWriteFinancials,
+    role
+  } = params;
   const scope = options?.scope;
 
   if (scope === 'eggHarvests') {
@@ -154,6 +163,19 @@ export function buildSyncPayload(params: {
     return { financialTransactions: overrides?.financialTransactions || [], auditorReviewOnly: true };
   }
 
+  const normalizedRole = role ? role.trim().toLowerCase().replace(/\s+/g, '_') : undefined;
+  const canWriteMembers = !normalizedRole || ['president', 'secretary', 'assistant_secretary', 'treasurer', 'assistant_treasurer'].includes(normalizedRole);
+  const canWriteMeetings = !normalizedRole || ['president', 'secretary', 'assistant_secretary', 'vice_president'].includes(normalizedRole);
+  const canWriteResolutions = !normalizedRole || ['president', 'secretary', 'assistant_secretary', 'vice_president', 'board_member'].includes(normalizedRole);
+  const canDeleteResolutions = !normalizedRole || ['president', 'secretary', 'assistant_secretary'].includes(normalizedRole);
+
+  const isEntityWritableForRole = (payloadKey: string): boolean => {
+    if (payloadKey === 'members' || payloadKey === 'pendingMembers') return canWriteMembers;
+    if (payloadKey === 'meetings') return canWriteMeetings;
+    if (payloadKey === 'resolutions') return canWriteResolutions;
+    return true;
+  };
+
   const sanitizeDeletedIdsForRole = (rawDeleted: StoredDeletedIds | Record<string, unknown>) => {
     if (!rawDeleted || typeof rawDeleted !== 'object') return {};
     const copy: Record<string, unknown> = { ...(rawDeleted as Record<string, unknown>) };
@@ -168,6 +190,17 @@ export function buildSyncPayload(params: {
     if (!canWriteInventory) {
       delete copy.inventory;
     }
+    if (!canWriteMembers) {
+      delete copy.members;
+      delete copy.pendingMembers;
+      delete copy.pending_members;
+    }
+    if (!canWriteMeetings) {
+      delete copy.meetings;
+    }
+    if (!canDeleteResolutions) {
+      delete copy.resolutions;
+    }
     return copy;
   };
   const safeDeletedIds = sanitizeDeletedIdsForRole(deletedIds);
@@ -177,7 +210,9 @@ export function buildSyncPayload(params: {
   if (hasOverride) {
     const payload: Record<string, unknown> = {};
     for (const [overrideKey, payloadKey] of SYNC_ENTITY_KEYS) {
-      if (overrides![overrideKey] !== undefined) payload[payloadKey] = overrides![overrideKey];
+      if (overrides![overrideKey] !== undefined && isEntityWritableForRole(payloadKey)) {
+        payload[payloadKey] = overrides![overrideKey];
+      }
     }
     if (canWriteInventory && overrides!.inventory !== undefined) {
       payload.inventory = overrides!.inventory;
@@ -208,7 +243,9 @@ export function buildSyncPayload(params: {
 
   const snapshotPayload: Record<string, unknown> = {};
   for (const [key] of SYNC_ENTITY_KEYS) {
-    snapshotPayload[key] = snapshot[key];
+    if (isEntityWritableForRole(key)) {
+      snapshotPayload[key] = snapshot[key];
+    }
   }
   snapshotPayload.systemLogs = snapshot.logs;
   if (canWriteInventory) {
@@ -765,9 +802,6 @@ export default function App() {
               if (Array.isArray(res.data.users) || hasPendingLocalChanges) {
                 setUsers(syncedUsers);
                 updateStorage('bafa_users', syncedUsers);
-                if (isOnline && syncedUsers.some((user: User) => !user.passwordHash?.startsWith('$2'))) {
-                  pushAllDataToCloud({ users: syncedUsers }, { silent: true, source: 'Password Hash Upgrade' });
-                }
               }
               console.log('[Cloud DB] Successfully loaded fresh data from PostgreSQL Cloud DB');
               setDbStatus(prev => ({
@@ -777,27 +811,29 @@ export default function App() {
                 checking: false,
               }));
 
-              if (hasPendingLocalChanges) {
+              // Keep appDataRef synchronized immediately so any subsequent sync has the merged state
+              appDataRef.current = {
+                users: syncedUsers,
+                members: syncedMembers,
+                pendingMembers: syncedPendingMembers,
+                meetings: syncedMeetings,
+                resolutions: syncedResolutions,
+                transactions: syncedTransactions,
+                announcements: syncedAnnouncements,
+                products: syncedProducts,
+                activities: syncedActivities,
+                achievements: syncedAchievements,
+                livestockIgp: syncedLivestockIgp,
+                funds: syncedFunds,
+                inventory: syncedInventory,
+                membershipPayments: syncedMembershipPayments,
+                membershipYearSnapshots: syncedMembershipYearSnapshots,
+                logs: activeLogs
+              };
+
+              if (hasPendingLocalChanges && storedCurr) {
                 console.log('[Auto-Sync]: Found locally pending changes. Merged them with cloud records and queued a full sync.');
-                void pushAllDataToCloud({
-                  users: syncedUsers,
-                  members: syncedMembers,
-                  pendingMembers: syncedPendingMembers,
-                  meetings: syncedMeetings,
-                  resolutions: syncedResolutions,
-                  financialTransactions: syncedTransactions,
-                  announcements: syncedAnnouncements,
-                  products: syncedProducts,
-                  activities: syncedActivities,
-                  achievements: syncedAchievements,
-                  funds: syncedFunds,
-                  inventory: syncedInventory,
-                  membershipPayments: syncedMembershipPayments,
-                  membershipYearSnapshots: syncedMembershipYearSnapshots,
-                  livestockIgp: syncedLivestockIgp,
-                  systemLogs: activeLogs,
-                  deletedIds: bootDeletedIds
-                }, { silent: true, source: 'Boot Sync' });
+                void pushAllDataToCloud(undefined, { silent: true, source: 'Boot Sync' });
               }
             } else if (res?.offlineMode) {
               console.log('[Cloud DB] Running in offline / local-first storage mode.');
@@ -1175,6 +1211,9 @@ export default function App() {
       await updateStorage('bafa_pending_cloud_sync', true);
     };
 
+    if (!currentUser) {
+      return false;
+    }
     if (!navigator.onLine) {
       await markFullSyncPending();
       return false;
@@ -1243,7 +1282,8 @@ export default function App() {
         snapshot: snap,
         deletedIds: currentDeletedIds,
         canWriteFinancials,
-        canWriteInventory
+        canWriteInventory,
+        role: currentUser?.role
       });
 
       const res = await fetch('/api/sync/push', {
@@ -1267,19 +1307,20 @@ export default function App() {
           setHasPendingCloudSync(stillPending);
           await updateStorage('bafa_pending_cloud_sync', stillPending);
         } else if (partialWrite) {
-          // A partial write only covered its own entities. The queue and the
-          // pending-deletion list are unknown to this request, so treat them as
-          // flushed ONLY when the delete list went along with it - otherwise the
-          // leftover deletions stay queued and the caller's snapshot stays
-          // `pending`, which is what re-triggers the full sync that clears them.
-          const sentDeletions = Object.values(currentDeletedIds).some(ids => Array.isArray(ids) && ids.length > 0);
-          const remainingQueue = sentDeletions
-            ? syncQueueRef.current.filter(item => !queuedIdsAtStart.has(item.id))
-            : syncQueueRef.current;
+          const remainingQueue = syncQueueRef.current.filter(item => !queuedIdsAtStart.has(item.id));
           syncQueueRef.current = remainingQueue;
           setSyncQueue(remainingQueue);
           void updateStorage('bafa_sync_queue', remainingQueue);
-          if (sentDeletions) clearStoredDeletedIds(currentDeletedIds);
+          clearStoredDeletedIds(currentDeletedIds);
+          setLogs(prev => {
+            const updated = prev.map(log =>
+              pendingLogIdsAtStart.has(log.id) && log.syncStatus === 'pending'
+                ? { ...log, syncStatus: 'synced' as const }
+                : log
+            );
+            updateStorage('bafa_logs', updated);
+            return updated;
+          });
           const pending = remainingQueue.length > 0 || hasPendingDeletions();
           setHasPendingCloudSync(pending);
           await updateStorage('bafa_pending_cloud_sync', pending);

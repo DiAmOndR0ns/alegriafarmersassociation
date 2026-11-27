@@ -150,12 +150,29 @@ describe('full snapshots respect the role', () => {
     expect(payload.deletedIds).toEqual({ members: ['m-del'] });
   });
 
-  it('includes them for the Treasurer', () => {
-    const payload = buildSyncPayload({ ...base, canWriteFinancials: true, snapshot: snapshot() });
+  it('includes them for the Treasurer and omits meetings/resolutions on a Treasurer full sync', () => {
+    const payload = buildSyncPayload({ ...base, canWriteFinancials: true, role: 'Treasurer', snapshot: snapshot() });
     expect(payload.financialTransactions).toEqual([{ id: 't1' }]);
     expect(payload.funds).toEqual([{ id: 'f1' }]);
     expect(payload.livestockIgp).toEqual({ eggHarvests: [{ id: 'e1' }] });
     expect(payload.inventory).toEqual([{ id: 'i1' }]);
+    expect(payload).not.toHaveProperty('meetings');
+    expect(payload).not.toHaveProperty('resolutions');
+  });
+
+  it('omits members, pendingMembers, meetings, and resolutions on an Auditor full sync', () => {
+    const payload = buildSyncPayload({
+      ...base,
+      canWriteFinancials: false,
+      canWriteInventory: true,
+      role: 'Auditor',
+      snapshot: snapshot(),
+    });
+    expect(payload.inventory).toEqual([{ id: 'i1' }]);
+    expect(payload).not.toHaveProperty('members');
+    expect(payload).not.toHaveProperty('pendingMembers');
+    expect(payload).not.toHaveProperty('meetings');
+    expect(payload).not.toHaveProperty('resolutions');
   });
 });
 
