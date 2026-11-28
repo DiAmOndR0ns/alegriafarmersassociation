@@ -11,6 +11,8 @@ import {
 import AnnouncementDashboard from './AnnouncementDashboard';
 import LivestockMonitor from './LivestockMonitor';
 import AffiliationManager from './AffiliationManager';
+import { getPublishedProducts } from './GuestPortal';
+import { EGG_SIZES, EGG_SIZE_SHORT_LABELS } from '../utils/eggInventory';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { compressImageFile } from '../utils/imageUpload';
 
@@ -896,7 +898,9 @@ export default function MemberDashboard({
         </div>
       )}
 
-      {activeTab === 'products' && (
+      {activeTab === 'products' && (() => {
+        const publishedProducts = getPublishedProducts(products, livestockIgpState);
+        return (
         <div id="member-products-panel" className="bg-white border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print space-y-6 text-left">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#F0EBE1] pb-4">
             <div>
@@ -906,13 +910,13 @@ export default function MemberDashboard({
               </h3>
             </div>
             <div className="bg-[#D8F3DC] text-[#1B4332] px-3.5 py-1.5 rounded-xl text-xs font-black border border-[#1B4332]/20">
-              {products.filter(p => p.isPublished).length} Ka Produkto
+              {publishedProducts.length} Ka Produkto
             </div>
           </div>
 
-          {products.filter(p => p.isPublished).length > 0 ? (
+          {publishedProducts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {products.filter(p => p.isPublished).map((prod) => {
+              {publishedProducts.map((prod) => {
                 const isCollapsed = collapsedProductIds.includes(prod.id);
                 const toggleProduct = () => {
                   setCollapsedProductIds((current) =>
@@ -980,6 +984,24 @@ export default function MemberDashboard({
                         </div>
                       </div>
 
+                      {prod.eggSizeBreakdown && EGG_SIZES.some(size => (prod.eggSizeBreakdown?.[size] || 0) > 0) && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {EGG_SIZES.map((size) => {
+                            const count = prod.eggSizeBreakdown?.[size] || 0;
+                            if (count <= 0) return null;
+                            return (
+                              <span
+                                key={size}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-black bg-[#EAF4EC] text-[#1B4332] border border-[#1B4332]/20"
+                              >
+                                <span>{EGG_SIZE_SHORT_LABELS[size]}:</span>
+                                <span className="font-mono">{count.toLocaleString()}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       <div className="bg-[#EAF4EC] border border-[#1B4332]/20 p-2.5 rounded-xl space-y-1 text-xs">
                         <span className="block text-[10px] text-[#1B4332] uppercase font-black tracking-wider">
                           Mag-uuma nga Nagbaligya (Selling Farmer):
@@ -1006,7 +1028,8 @@ export default function MemberDashboard({
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {activeTab === 'activities' && (
         <div id="member-activities-panel" className="bg-white border border-[#E9E4D9] rounded-3xl p-6 shadow-sm no-print space-y-6 text-left">

@@ -53,10 +53,37 @@ describe('GuestPortal product catalog', () => {
     expect(publishedProducts.map(product => product.name)).toEqual(['Published Corn']);
   });
 
-  it('automatically publishes the egg listing with verified stock minus recorded sales', () => {
+  it('automatically publishes the egg listing with verified stock minus recorded sales and per-size availability', () => {
     const eggProduct = { ...makeProduct('eggs', 'Chicken Eggs', false), price: 8, unit: 'per egg' };
+    const stateWithSizes: LivestockIgpState = {
+      expenses: [],
+      sales: [{
+        id: 'egg-sale-1',
+        produce: 'Poultry Raising (RTL)',
+        date: '2026-11-03',
+        stage: 'Eggs (Medium)',
+        eggSize: 'Medium',
+        quantity: 25,
+        revenue: 125,
+        recordedBy: 'Treasurer'
+      }],
+      eggHarvests: [{
+        id: 'egg-harvest-1',
+        produce: 'Poultry Raising (RTL)',
+        date: '2026-11-03',
+        time: '08:00',
+        collectedBy: 'AFA Member',
+        eggCount: 100,
+        sizeBreakdown: {
+          Small: 20,
+          Medium: 50,
+          Large: 30
+        },
+        status: 'Signed'
+      }]
+    };
 
-    const publishedProducts = getPublishedProducts([eggProduct], makeEggState(100, 'Signed', 25));
+    const publishedProducts = getPublishedProducts([eggProduct], stateWithSizes);
 
     expect(publishedProducts).toHaveLength(1);
     expect(publishedProducts[0]).toMatchObject({
@@ -64,8 +91,30 @@ describe('GuestPortal product catalog', () => {
       isPublished: true,
       stockStatus: 'In Stock',
       quantityAvailable: '75 eggs available',
+      eggSizeBreakdown: {
+        Small: 20,
+        Medium: 25,
+        Large: 30
+      },
       price: 8,
       unit: 'per egg'
+    });
+  });
+
+  it('preserves server-computed egg stock and size breakdown when local guest livestockIgp is empty', () => {
+    const serverEggProduct: PublicProduct = {
+      ...makeProduct('eggs', 'Chicken Eggs', true),
+      price: 8,
+      unit: 'per egg',
+      quantityAvailable: '45 eggs available',
+      eggSizeBreakdown: { Small: 15, Large: 30 }
+    };
+
+    const publishedProducts = getPublishedProducts([serverEggProduct], { expenses: [], sales: [], eggHarvests: [] });
+    expect(publishedProducts).toHaveLength(1);
+    expect(publishedProducts[0]).toMatchObject({
+      quantityAvailable: '45 eggs available',
+      eggSizeBreakdown: { Small: 15, Large: 30 }
     });
   });
 

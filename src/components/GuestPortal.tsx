@@ -10,7 +10,14 @@ import {
   AssociationActivity, AssociationAchievement, User
 } from '../types';
 import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } from '../utils/officers';
-import { getTotalAvailableEggCount, isEggCatalogProduct } from '../utils/eggInventory';
+import {
+  EGG_SIZES,
+  EGG_SIZE_SHORT_LABELS,
+  getAvailableEggsBySize,
+  getTotalAvailableEggCount,
+  isEggCatalogProduct,
+  sanitizeEggSizeBreakdown
+} from '../utils/eggInventory';
 import { useLanguage } from '../i18n/LanguageContext';
 
 /** Shape returned by GET /api/public/summary (aggregates + officer names only). */
@@ -71,20 +78,40 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
     return products.filter(product => product.isPublished);
   }
 
-  const availableEggs = getTotalAvailableEggCount(
-    livestockIgp.eggHarvests || [],
-    livestockIgp.sales || []
-  );
+  const harvests = livestockIgp.eggHarvests || [];
+  const sales = livestockIgp.sales || [];
+  const availableEggs = getTotalAvailableEggCount(harvests, sales);
 
-  // If verified egg stock is available and a price is configured, auto-publish with live stock.
+  // If verified egg stock is available and a price is configured, auto-publish with live stock & per-size breakdown.
   if (availableEggs > 0 && Number.isFinite(eggProduct.price) && eggProduct.price > 0) {
+    const eggStockBySize = getAvailableEggsBySize(harvests, sales);
+    const eggSizeBreakdown = sanitizeEggSizeBreakdown(eggStockBySize.bySize);
     const automaticEggListing: PublicProduct = {
       ...eggProduct,
       isPublished: true,
       stockStatus: 'In Stock',
-      quantityAvailable: `${availableEggs.toLocaleString()} eggs available`
+      quantityAvailable: `${availableEggs.toLocaleString()} eggs available`,
+      ...(eggSizeBreakdown ? { eggSizeBreakdown } : { eggSizeBreakdown: undefined })
     };
     return [...publishedProducts, automaticEggListing];
+  }
+
+  // If local livestockIgp is empty (e.g. unauthenticated guest browser) and the egg product
+  // already carries live server-computed egg stock from /api/achievements?resource=products, preserve it.
+  if (
+    harvests.length === 0 &&
+    sales.length === 0 &&
+    eggProduct.isPublished &&
+    (/^[\d,]+\s+eggs available$/i.test(String(eggProduct.quantityAvailable || '').trim()) ||
+      Boolean(sanitizeEggSizeBreakdown(eggProduct.eggSizeBreakdown)))
+  ) {
+    return [
+      ...publishedProducts,
+      {
+        ...eggProduct,
+        eggSizeBreakdown: sanitizeEggSizeBreakdown(eggProduct.eggSizeBreakdown)
+      }
+    ];
   }
 
   // Keep published IGP egg products visible with an "Upcoming Harvest" badge instead of hiding them.
@@ -93,7 +120,8 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
       ...eggProduct,
       isPublished: true,
       stockStatus: 'Pre-Order',
-      quantityAvailable: UPCOMING_HARVEST_TAG
+      quantityAvailable: UPCOMING_HARVEST_TAG,
+      eggSizeBreakdown: undefined
     };
     return [...publishedProducts, upcomingEggListing];
   }
@@ -1129,6 +1157,27 @@ export default function GuestPortal({
                         <p className="text-sm text-[#354B40] line-clamp-2 leading-relaxed">
                           {prod.description}
                         </p>
+
+                        {prod.eggSizeBreakdown && EGG_SIZES.some(size => (prod.eggSizeBreakdown?.[size] || 0) > 0) && (
+                          <div
+                            className="flex flex-wrap items-center gap-1.5 pt-1"
+                            aria-label={t('Mga gidak-on sa itlog nga anaa', 'Available egg sizes')}
+                          >
+                            {EGG_SIZES.map((size) => {
+                              const count = prod.eggSizeBreakdown?.[size] || 0;
+                              if (count <= 0) return null;
+                              return (
+                                <span
+                                  key={size}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-extrabold bg-[#EAF4EC] text-[#1B4332] border border-[#1B4332]/20"
+                                >
+                                  <span>{EGG_SIZE_SHORT_LABELS[size]}:</span>
+                                  <span className="font-mono">{count.toLocaleString()}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1513,6 +1562,34 @@ export default function GuestPortal({
                     </span>
                   </div>
                 </div>
+
+                {/* AVAILABLE EGG SIZES BREAKDOWN */}
+                {selectedProductModal.eggSizeBreakdown && EGG_SIZES.some(size => (selectedProductModal.eggSizeBreakdown?.[size] || 0) > 0) && (
+                  <div className="space-y-2">
+                    <h4 className="portal-meta text-sm font-extrabold uppercase tracking-wider text-[#455C50]">
+                      {t('Mga Gidak-on sa Itlog nga Anaa', 'Available Egg Sizes')}
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      {EGG_SIZES.map((size) => {
+                        const count = selectedProductModal.eggSizeBreakdown?.[size] || 0;
+                        if (count <= 0) return null;
+                        return (
+                          <div
+                            key={size}
+                            className="bg-[#EAF4EC] border border-[#1B4332]/20 rounded-xl px-3 py-2 text-center"
+                          >
+                            <span className="block text-[11px] font-extrabold uppercase text-[#2D6A4F]">
+                              {size}
+                            </span>
+                            <span className="block text-base font-extrabold font-mono text-[#1B4332] mt-0.5">
+                              {count.toLocaleString()} {t('buok', 'pcs')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* DESCRIPTION */}
                 {selectedProductModal.description && (

@@ -123,7 +123,7 @@ export function getAvailableEggCount(
 export function getAvailableEggsBySize(
   harvests: EggHarvestLog[],
   sales: IgpSale[],
-  produce: string,
+  produce: string = '',
   excludeSaleId?: string
 ): { bySize: Record<EggSize, number>; unsegregated: number; total: number } {
   const bySize: Record<EggSize, number> = {
@@ -134,9 +134,11 @@ export function getAvailableEggsBySize(
     'Jumbo': 0,
   };
   let unsegregated = 0;
+  const hasTargetProduce = Boolean(produce && produce.trim());
 
   for (const harvest of harvests) {
-    if (!isVerifiedHarvest(harvest) || !matchesEggProduce(harvest.produce, produce)) continue;
+    if (!isVerifiedHarvest(harvest)) continue;
+    if (hasTargetProduce && !matchesEggProduce(harvest.produce, produce)) continue;
     const totalHarvest = Math.max(0, Math.floor(Number(harvest.eggCount) || 0));
     const breakdown = sanitizeEggSizeBreakdown(harvest.sizeBreakdown);
     if (breakdown) {
@@ -156,7 +158,12 @@ export function getAvailableEggsBySize(
 
   let unsegregatedSold = 0;
   for (const sale of sales) {
-    if (sale.id === excludeSaleId || !matchesEggProduce(sale.produce, produce) || !isEggSale(sale)) continue;
+    if (sale.id === excludeSaleId || !isEggSale(sale)) continue;
+    if (hasTargetProduce) {
+      if (!matchesEggProduce(sale.produce, produce)) continue;
+    } else if (sale.produce && !isPoultryProduceName(sale.produce)) {
+      continue;
+    }
     const qty = Math.max(0, Math.floor(Number(sale.quantity) || 0));
     if (qty <= 0) continue;
     const saleSize = resolveSaleEggSize(sale);

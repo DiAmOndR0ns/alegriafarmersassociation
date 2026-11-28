@@ -1,5 +1,143 @@
 // src/api/db.ts
 import pg from "pg";
+
+// src/types.ts
+var EGG_SIZES = [
+  "Small",
+  "Medium",
+  "Large",
+  "Extra Large (XL)",
+  "Jumbo"
+];
+
+// src/utils/eggInventory.ts
+var LEGACY_POULTRY_PRODUCE = "Poultry Raising (RTL)";
+function normalizeEggSize(value) {
+  if (typeof value !== "string") return void 0;
+  const clean = value.trim().toLowerCase();
+  if (!clean) return void 0;
+  if (clean === "small" || clean === "s") return "Small";
+  if (clean === "medium" || clean === "m") return "Medium";
+  if (clean === "large" || clean === "l") return "Large";
+  if (clean === "extra large (xl)" || clean === "extra large" || clean === "xl" || clean === "x-large") return "Extra Large (XL)";
+  if (clean === "jumbo") return "Jumbo";
+  return EGG_SIZES.find((size) => size.toLowerCase() === clean);
+}
+function sanitizeEggSizeBreakdown(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return void 0;
+  const result = {};
+  let hasPositive = false;
+  for (const [key, val] of Object.entries(raw)) {
+    const size = normalizeEggSize(key);
+    if (!size) continue;
+    const count = Math.max(0, Math.floor(Number(val) || 0));
+    if (count > 0) {
+      result[size] = (result[size] || 0) + count;
+      hasPositive = true;
+    }
+  }
+  return hasPositive ? result : void 0;
+}
+function extractEggSizeFromStage(stage) {
+  if (!stage) return void 0;
+  const match = stage.match(/^Eggs\s*\((.+)\)$/i);
+  if (match) return normalizeEggSize(match[1]);
+  return void 0;
+}
+function resolveSaleEggSize(sale) {
+  return normalizeEggSize(sale.eggSize) || extractEggSizeFromStage(sale.stage);
+}
+var isEggCatalogProduct = (product) => /\beggs?\b|\bitlog\b/i.test(`${product.name} ${product.cebName || ""}`);
+var isPoultryProduceName = (produce) => Boolean(produce && /poultry|rtl|manok|chicken|egg|layer/i.test(produce));
+var isVerifiedHarvest = (harvest) => harvest.status === "Signed";
+var isEggSaleStage = (stage) => stage === "Eggs" || stage === "General" || stage === void 0 || Boolean(stage && /^Eggs\s*\(.+\)$/i.test(stage));
+var isEggSale = (sale) => isEggSaleStage(sale.stage);
+function matchesEggProduce(recordProduce, targetProduce) {
+  const cleanRecord = (recordProduce || "").trim();
+  const cleanTarget = (targetProduce || "").trim();
+  if (!cleanTarget) return true;
+  if (cleanRecord && cleanRecord.toLowerCase() === cleanTarget.toLowerCase()) return true;
+  if (isPoultryProduceName(cleanTarget) && (!cleanRecord || cleanRecord === LEGACY_POULTRY_PRODUCE)) {
+    return true;
+  }
+  return false;
+}
+function getAvailableEggsBySize(harvests, sales, produce = "", excludeSaleId) {
+  const bySize = {
+    "Small": 0,
+    "Medium": 0,
+    "Large": 0,
+    "Extra Large (XL)": 0,
+    "Jumbo": 0
+  };
+  let unsegregated = 0;
+  const hasTargetProduce = Boolean(produce && produce.trim());
+  for (const harvest of harvests) {
+    if (!isVerifiedHarvest(harvest)) continue;
+    if (hasTargetProduce && !matchesEggProduce(harvest.produce, produce)) continue;
+    const totalHarvest = Math.max(0, Math.floor(Number(harvest.eggCount) || 0));
+    const breakdown = sanitizeEggSizeBreakdown(harvest.sizeBreakdown);
+    if (breakdown) {
+      let categorized = 0;
+      for (const size of EGG_SIZES) {
+        const c = Math.max(0, Math.floor(Number(breakdown[size]) || 0));
+        bySize[size] += c;
+        categorized += c;
+      }
+      if (totalHarvest > categorized) {
+        unsegregated += totalHarvest - categorized;
+      }
+    } else {
+      unsegregated += totalHarvest;
+    }
+  }
+  let unsegregatedSold = 0;
+  for (const sale of sales) {
+    if (sale.id === excludeSaleId || !isEggSale(sale)) continue;
+    if (hasTargetProduce) {
+      if (!matchesEggProduce(sale.produce, produce)) continue;
+    } else if (sale.produce && !isPoultryProduceName(sale.produce)) {
+      continue;
+    }
+    const qty = Math.max(0, Math.floor(Number(sale.quantity) || 0));
+    if (qty <= 0) continue;
+    const saleSize = resolveSaleEggSize(sale);
+    if (saleSize) {
+      if (bySize[saleSize] >= qty) {
+        bySize[saleSize] -= qty;
+      } else {
+        const deficit = qty - bySize[saleSize];
+        bySize[saleSize] = 0;
+        unsegregatedSold += deficit;
+      }
+    } else {
+      unsegregatedSold += qty;
+    }
+  }
+  if (unsegregated >= unsegregatedSold) {
+    unsegregated -= unsegregatedSold;
+  } else {
+    let remainingToDeduct = unsegregatedSold - unsegregated;
+    unsegregated = 0;
+    for (const size of EGG_SIZES) {
+      if (remainingToDeduct <= 0) break;
+      const deduct = Math.min(bySize[size], remainingToDeduct);
+      bySize[size] -= deduct;
+      remainingToDeduct -= deduct;
+    }
+  }
+  const total = EGG_SIZES.reduce((sum, size) => sum + bySize[size], 0) + unsegregated;
+  return { bySize, unsegregated, total };
+}
+function getTotalAvailableEggCount(harvests, sales, excludeSaleId) {
+  const collected = harvests.filter(isVerifiedHarvest).reduce((total, harvest) => total + Math.max(0, Math.floor(Number(harvest.eggCount) || 0)), 0);
+  const sold = sales.filter(
+    (sale) => sale.id !== excludeSaleId && isEggSale(sale) && (!sale.produce || isPoultryProduceName(sale.produce))
+  ).reduce((total, sale) => total + Math.max(0, Math.floor(Number(sale.quantity) || 0)), 0);
+  return Math.max(0, collected - sold);
+}
+
+// src/api/db.ts
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
 var poolInstance = null;
 var lastUsedConnectionString = null;
@@ -1304,6 +1442,7 @@ function sendResponse(res, statusCode, data) {
 }
 
 // src/api/achievements.ts
+var UPCOMING_HARVEST_TAG = "Upcoming Harvest";
 async function handler(req, res) {
   if (req.method && req.method !== "GET") {
     return sendResponse(res, 405, { success: false, message: "Method not allowed." });
@@ -1322,15 +1461,25 @@ async function handler(req, res) {
     const pool = getPool();
     await ensureDatabaseSchema(pool);
     if (resource === "products") {
-      const result2 = await pool.query(
-        `SELECT id, name, ceb_name, category, description, unit, price, quantity_available,
-          stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url,
-          is_published
-         FROM products
-         WHERE is_published = TRUE
-         ORDER BY name ASC`
-      );
-      const products = result2.rows.map((row) => ({
+      const [result2, harvestsRes, salesRes] = await Promise.all([
+        pool.query(
+          `SELECT id, name, ceb_name, category, description, unit, price, quantity_available,
+            stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url,
+            is_published
+           FROM products
+           ORDER BY name ASC`
+        ),
+        pool.query(
+          `SELECT id, produce, date, time, collected_by, egg_count, size_breakdown, status
+           FROM afa_igp_harvests
+           WHERE status = 'Signed'`
+        ).catch(() => ({ rows: [] })),
+        pool.query(
+          `SELECT id, produce, date, stage, egg_size, quantity, revenue, recorded_by
+           FROM afa_igp_sales`
+        ).catch(() => ({ rows: [] }))
+      ]);
+      const allProducts = result2.rows.map((row) => ({
         id: row.id,
         name: row.name,
         cebName: row.ceb_name,
@@ -1345,8 +1494,60 @@ async function handler(req, res) {
         farmerPhone: row.farmer_phone,
         contactPerson: row.contact_person,
         imageUrl: row.image_url,
-        isPublished: row.is_published
+        isPublished: Boolean(row.is_published)
       }));
+      const harvests = harvestsRes.rows.map((row) => ({
+        id: row.id,
+        produce: row.produce || void 0,
+        date: row.date || "",
+        time: row.time || "",
+        collectedBy: row.collected_by || "",
+        eggCount: Number(row.egg_count || 0),
+        sizeBreakdown: sanitizeEggSizeBreakdown(row.size_breakdown),
+        status: "Signed"
+      }));
+      const sales = salesRes.rows.map((row) => ({
+        id: row.id,
+        produce: row.produce || void 0,
+        date: row.date || "",
+        stage: row.stage || void 0,
+        eggSize: normalizeEggSize(row.egg_size),
+        quantity: Number(row.quantity || 0),
+        revenue: Number(row.revenue || 0),
+        recordedBy: row.recorded_by || ""
+      }));
+      const eggProduct = allProducts.find(isEggCatalogProduct);
+      const publishedProducts = allProducts.filter(
+        (product) => product.isPublished && (!eggProduct || product.id !== eggProduct.id) && !isEggCatalogProduct(product)
+      );
+      let products = publishedProducts;
+      if (eggProduct) {
+        const availableEggs = getTotalAvailableEggCount(harvests, sales);
+        if (availableEggs > 0 && Number.isFinite(eggProduct.price) && eggProduct.price > 0) {
+          const eggStockBySize = getAvailableEggsBySize(harvests, sales);
+          const eggSizeBreakdown = sanitizeEggSizeBreakdown(eggStockBySize.bySize);
+          products = [
+            ...publishedProducts,
+            {
+              ...eggProduct,
+              isPublished: true,
+              stockStatus: "In Stock",
+              quantityAvailable: `${availableEggs.toLocaleString()} eggs available`,
+              ...eggSizeBreakdown ? { eggSizeBreakdown } : {}
+            }
+          ];
+        } else if (eggProduct.isPublished) {
+          products = [
+            ...publishedProducts,
+            {
+              ...eggProduct,
+              isPublished: true,
+              stockStatus: "Pre-Order",
+              quantityAvailable: UPCOMING_HARVEST_TAG
+            }
+          ];
+        }
+      }
       return sendResponse(res, 200, { success: true, products });
     }
     const result = await pool.query(
