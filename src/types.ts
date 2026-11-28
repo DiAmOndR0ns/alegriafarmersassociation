@@ -276,6 +276,7 @@ export interface Product {
   description: string;
   specs?: string;
   eggSizeBreakdown?: EggSizeBreakdown;
+  unsegregatedEggCount?: number;
   stockStatus: 'In Stock' | 'Low Stock' | 'Pre-Order' | 'Out of Stock' | 'Available' | 'Limited Stock';
   farmerName?: string; // e.g. "Zenaida A. Elbiña"
   farmerSitio?: string; // e.g. "Sitio Tapon"
@@ -290,7 +291,7 @@ export interface Product {
 
 export type PublicProduct = Pick<Product,
   'id' | 'name' | 'cebName' | 'category' | 'price' | 'unit' |
-  'quantityAvailable' | 'description' | 'specs' | 'eggSizeBreakdown' | 'stockStatus' |
+  'quantityAvailable' | 'description' | 'specs' | 'eggSizeBreakdown' | 'unsegregatedEggCount' | 'stockStatus' |
   'farmerName' | 'farmerSitio' | 'farmerPhone' | 'contactPerson' |
   'imageUrl' | 'isPublished'
 >;

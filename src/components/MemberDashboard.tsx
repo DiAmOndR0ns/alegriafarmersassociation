@@ -12,7 +12,7 @@ import AnnouncementDashboard from './AnnouncementDashboard';
 import LivestockMonitor from './LivestockMonitor';
 import AffiliationManager from './AffiliationManager';
 import { getPublishedProducts } from './GuestPortal';
-import { EGG_SIZES, EGG_SIZE_SHORT_LABELS } from '../utils/eggInventory';
+import { EGG_SIZES, EGG_SIZE_SHORT_LABELS, isEggCatalogProduct } from '../utils/eggInventory';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { compressImageFile } from '../utils/imageUpload';
 
@@ -984,21 +984,30 @@ export default function MemberDashboard({
                         </div>
                       </div>
 
-                      {prod.eggSizeBreakdown && EGG_SIZES.some(size => (prod.eggSizeBreakdown?.[size] || 0) > 0) && (
+                      {(isEggCatalogProduct(prod) || prod.eggSizeBreakdown) && (
                         <div className="flex flex-wrap items-center gap-1.5">
                           {EGG_SIZES.map((size) => {
                             const count = prod.eggSizeBreakdown?.[size] || 0;
-                            if (count <= 0) return null;
                             return (
                               <span
                                 key={size}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-black bg-[#EAF4EC] text-[#1B4332] border border-[#1B4332]/20"
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-black border ${
+                                  count > 0
+                                    ? 'bg-[#EAF4EC] text-[#1B4332] border-[#1B4332]/25'
+                                    : 'bg-[#F4F1EA] text-slate-500 border-[#D5CFC1]'
+                                }`}
                               >
                                 <span>{EGG_SIZE_SHORT_LABELS[size]}:</span>
                                 <span className="font-mono">{count.toLocaleString()}</span>
                               </span>
                             );
                           })}
+                          {(prod.unsegregatedEggCount || 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                              <span>Unclassified:</span>
+                              <span className="font-mono">{Number(prod.unsegregatedEggCount).toLocaleString()}</span>
+                            </span>
+                          )}
                         </div>
                       )}
 

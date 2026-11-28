@@ -30,7 +30,7 @@ export default async function handler(req: any, res: any) {
     const pool = getPool();
     await ensureDatabaseSchema(pool);
     if (resource === 'products') {
-      const [result, harvestsRes, salesRes] = await Promise.all([
+      const [result, harvestsRes, salesRes, igpLegacyRes] = await Promise.all([
         pool.query(
           `SELECT id, name, ceb_name, category, description, unit, price, quantity_available,
             stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url,
@@ -40,12 +40,18 @@ export default async function handler(req: any, res: any) {
         ),
         pool.query(
           `SELECT id, produce, date, time, collected_by, egg_count, size_breakdown, status
-           FROM afa_igp_harvests
-           WHERE status = 'Signed'`
+           FROM afa_igp_harvests`
         ).catch(() => ({ rows: [] as any[] })),
         pool.query(
           `SELECT id, produce, date, stage, egg_size, quantity, revenue, recorded_by
            FROM afa_igp_sales`
+        ).catch(() => ({ rows: [] as any[] })),
+        pool.query(
+          `SELECT sales, chore_logs
+           FROM afa_igp
+           WHERE id IN ('main_state', 'afa_igp_main', 'hog_raising_main')
+           ORDER BY (id = 'main_state') DESC
+           LIMIT 1`
         ).catch(() => ({ rows: [] as any[] }))
       ]);
 
@@ -67,27 +73,74 @@ export default async function handler(req: any, res: any) {
         isPublished: Boolean(row.is_published)
       }));
 
-      const harvests: EggHarvestLog[] = harvestsRes.rows.map(row => ({
-        id: row.id,
-        produce: row.produce || undefined,
-        date: row.date || '',
-        time: row.time || '',
-        collectedBy: row.collected_by || '',
-        eggCount: Number(row.egg_count || 0),
-        sizeBreakdown: sanitizeEggSizeBreakdown(row.size_breakdown),
-        status: 'Signed'
-      }));
+      const harvestMap = new Map<string, EggHarvestLog>();
+      const legacyRow = igpLegacyRes.rows[0];
+      if (legacyRow && Array.isArray(legacyRow.chore_logs)) {
+        for (const h of legacyRow.chore_logs) {
+          if (h && typeof h.id === 'string' && h.id) {
+            harvestMap.set(h.id, {
+              id: h.id,
+              produce: h.produce || undefined,
+              date: h.date || '',
+              time: h.time || '',
+              collectedBy: h.collectedBy || h.collected_by || '',
+              eggCount: Number(h.eggCount ?? h.egg_count ?? 0),
+              sizeBreakdown: sanitizeEggSizeBreakdown(h.sizeBreakdown ?? h.size_breakdown),
+              status: h.status || 'Pending Audit'
+            });
+          }
+        }
+      }
+      for (const row of harvestsRes.rows) {
+        if (!row?.id) continue;
+        const existing = harvestMap.get(row.id);
+        harvestMap.set(row.id, {
+          ...existing,
+          id: row.id,
+          produce: row.produce || existing?.produce || undefined,
+          date: row.date || existing?.date || '',
+          time: row.time || existing?.time || '',
+          collectedBy: row.collected_by || existing?.collectedBy || '',
+          eggCount: Number(row.egg_count ?? existing?.eggCount ?? 0),
+          sizeBreakdown: sanitizeEggSizeBreakdown(row.size_breakdown) || existing?.sizeBreakdown,
+          status: row.status || existing?.status || 'Pending Audit'
+        });
+      }
+      const harvests = Array.from(harvestMap.values());
 
-      const sales: IgpSale[] = salesRes.rows.map(row => ({
-        id: row.id,
-        produce: row.produce || undefined,
-        date: row.date || '',
-        stage: row.stage || undefined,
-        eggSize: normalizeEggSize(row.egg_size),
-        quantity: Number(row.quantity || 0),
-        revenue: Number(row.revenue || 0),
-        recordedBy: row.recorded_by || ''
-      }));
+      const salesMap = new Map<string, IgpSale>();
+      if (legacyRow && Array.isArray(legacyRow.sales)) {
+        for (const s of legacyRow.sales) {
+          if (s && typeof s.id === 'string' && s.id) {
+            salesMap.set(s.id, {
+              id: s.id,
+              produce: s.produce || undefined,
+              date: s.date || '',
+              stage: s.stage || s.hogStage || undefined,
+              eggSize: normalizeEggSize(s.eggSize ?? s.egg_size),
+              quantity: Number(s.quantity ?? s.produceCount ?? s.hogsCount ?? 0),
+              revenue: Number(s.revenue || 0),
+              recordedBy: s.recordedBy || s.recorded_by || ''
+            });
+          }
+        }
+      }
+      for (const row of salesRes.rows) {
+        if (!row?.id) continue;
+        const existing = salesMap.get(row.id);
+        salesMap.set(row.id, {
+          ...existing,
+          id: row.id,
+          produce: row.produce || existing?.produce || undefined,
+          date: row.date || existing?.date || '',
+          stage: row.stage || existing?.stage || undefined,
+          eggSize: normalizeEggSize(row.egg_size) || existing?.eggSize,
+          quantity: Number(row.quantity ?? existing?.quantity ?? 0),
+          revenue: Number(row.revenue ?? existing?.revenue ?? 0),
+          recordedBy: row.recorded_by || existing?.recordedBy || ''
+        });
+      }
+      const sales = Array.from(salesMap.values());
 
       const eggProduct = allProducts.find(isEggCatalogProduct);
       const publishedProducts = allProducts.filter(
@@ -99,7 +152,6 @@ export default async function handler(req: any, res: any) {
         const availableEggs = getTotalAvailableEggCount(harvests, sales);
         if (availableEggs > 0 && Number.isFinite(eggProduct.price) && eggProduct.price > 0) {
           const eggStockBySize = getAvailableEggsBySize(harvests, sales);
-          const eggSizeBreakdown = sanitizeEggSizeBreakdown(eggStockBySize.bySize);
           products = [
             ...publishedProducts,
             {
@@ -107,7 +159,8 @@ export default async function handler(req: any, res: any) {
               isPublished: true,
               stockStatus: 'In Stock',
               quantityAvailable: `${availableEggs.toLocaleString()} eggs available`,
-              ...(eggSizeBreakdown ? { eggSizeBreakdown } : {})
+              eggSizeBreakdown: eggStockBySize.bySize,
+              unsegregatedEggCount: eggStockBySize.unsegregated
             }
           ];
         } else if (eggProduct.isPublished) {
@@ -117,7 +170,15 @@ export default async function handler(req: any, res: any) {
               ...eggProduct,
               isPublished: true,
               stockStatus: 'Pre-Order',
-              quantityAvailable: UPCOMING_HARVEST_TAG
+              quantityAvailable: UPCOMING_HARVEST_TAG,
+              eggSizeBreakdown: {
+                'Small': 0,
+                'Medium': 0,
+                'Large': 0,
+                'Extra Large (XL)': 0,
+                'Jumbo': 0
+              },
+              unsegregatedEggCount: 0
             }
           ];
         }

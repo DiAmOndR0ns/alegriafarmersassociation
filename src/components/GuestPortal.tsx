@@ -68,6 +68,14 @@ const isPoultryProject = (produce: string) => /poultry|rtl|manok|chicken/i.test(
 
 export const UPCOMING_HARVEST_TAG = 'Upcoming Harvest';
 
+const EMPTY_EGG_SIZE_BREAKDOWN = {
+  'Small': 0,
+  'Medium': 0,
+  'Large': 0,
+  'Extra Large (XL)': 0,
+  'Jumbo': 0,
+} as const;
+
 export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: LivestockIgpState) => {
   const eggProduct = products.find(isEggCatalogProduct);
   const publishedProducts = products.filter(product =>
@@ -75,23 +83,39 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
   );
 
   if (!eggProduct || !livestockIgp) {
-    return products.filter(product => product.isPublished);
+    return products
+      .filter(product => product.isPublished)
+      .map(product => isEggCatalogProduct(product)
+        ? {
+          ...product,
+          eggSizeBreakdown: { ...EMPTY_EGG_SIZE_BREAKDOWN, ...(sanitizeEggSizeBreakdown(product.eggSizeBreakdown) || {}) }
+        }
+        : product
+      );
   }
 
   const harvests = livestockIgp.eggHarvests || [];
   const sales = livestockIgp.sales || [];
   const availableEggs = getTotalAvailableEggCount(harvests, sales);
+  const serverSizeBreakdown = sanitizeEggSizeBreakdown(eggProduct.eggSizeBreakdown);
 
   // If verified egg stock is available and a price is configured, auto-publish with live stock & per-size breakdown.
   if (availableEggs > 0 && Number.isFinite(eggProduct.price) && eggProduct.price > 0) {
     const eggStockBySize = getAvailableEggsBySize(harvests, sales);
-    const eggSizeBreakdown = sanitizeEggSizeBreakdown(eggStockBySize.bySize);
+    const localHasSegregated = EGG_SIZES.some(size => eggStockBySize.bySize[size] > 0);
+    const resolvedBySize = localHasSegregated || !serverSizeBreakdown
+      ? eggStockBySize.bySize
+      : { ...EMPTY_EGG_SIZE_BREAKDOWN, ...serverSizeBreakdown };
+    const resolvedUnsegregated = localHasSegregated || !serverSizeBreakdown
+      ? eggStockBySize.unsegregated
+      : Math.max(0, Number(eggProduct.unsegregatedEggCount || 0));
     const automaticEggListing: PublicProduct = {
       ...eggProduct,
       isPublished: true,
       stockStatus: 'In Stock',
       quantityAvailable: `${availableEggs.toLocaleString()} eggs available`,
-      ...(eggSizeBreakdown ? { eggSizeBreakdown } : { eggSizeBreakdown: undefined })
+      eggSizeBreakdown: resolvedBySize,
+      unsegregatedEggCount: resolvedUnsegregated
     };
     return [...publishedProducts, automaticEggListing];
   }
@@ -103,13 +127,15 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
     sales.length === 0 &&
     eggProduct.isPublished &&
     (/^[\d,]+\s+eggs available$/i.test(String(eggProduct.quantityAvailable || '').trim()) ||
-      Boolean(sanitizeEggSizeBreakdown(eggProduct.eggSizeBreakdown)))
+      Boolean(serverSizeBreakdown) ||
+      eggProduct.eggSizeBreakdown !== undefined)
   ) {
     return [
       ...publishedProducts,
       {
         ...eggProduct,
-        eggSizeBreakdown: sanitizeEggSizeBreakdown(eggProduct.eggSizeBreakdown)
+        eggSizeBreakdown: { ...EMPTY_EGG_SIZE_BREAKDOWN, ...(serverSizeBreakdown || {}) },
+        unsegregatedEggCount: Math.max(0, Number(eggProduct.unsegregatedEggCount || 0))
       }
     ];
   }
@@ -121,7 +147,8 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
       isPublished: true,
       stockStatus: 'Pre-Order',
       quantityAvailable: UPCOMING_HARVEST_TAG,
-      eggSizeBreakdown: undefined
+      eggSizeBreakdown: { ...EMPTY_EGG_SIZE_BREAKDOWN },
+      unsegregatedEggCount: 0
     };
     return [...publishedProducts, upcomingEggListing];
   }
@@ -1158,24 +1185,33 @@ export default function GuestPortal({
                           {prod.description}
                         </p>
 
-                        {prod.eggSizeBreakdown && EGG_SIZES.some(size => (prod.eggSizeBreakdown?.[size] || 0) > 0) && (
+                        {(isEggCatalogProduct(prod) || prod.eggSizeBreakdown) && (
                           <div
                             className="flex flex-wrap items-center gap-1.5 pt-1"
                             aria-label={t('Mga gidak-on sa itlog nga anaa', 'Available egg sizes')}
                           >
                             {EGG_SIZES.map((size) => {
                               const count = prod.eggSizeBreakdown?.[size] || 0;
-                              if (count <= 0) return null;
                               return (
                                 <span
                                   key={size}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-extrabold bg-[#EAF4EC] text-[#1B4332] border border-[#1B4332]/20"
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-extrabold border ${
+                                    count > 0
+                                      ? 'bg-[#EAF4EC] text-[#1B4332] border-[#1B4332]/25'
+                                      : 'bg-[#F4F1EA] text-[#6E7E75] border-[#D5CFC1]'
+                                  }`}
                                 >
                                   <span>{EGG_SIZE_SHORT_LABELS[size]}:</span>
                                   <span className="font-mono">{count.toLocaleString()}</span>
                                 </span>
                               );
                             })}
+                            {(prod.unsegregatedEggCount || 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-extrabold bg-[#FFF0C2] text-[#7A4904] border border-[#E9B34A]">
+                                <span>{t('Wala ma-size:', 'Unclassified:')}</span>
+                                <span className="font-mono">{Number(prod.unsegregatedEggCount).toLocaleString()}</span>
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1564,7 +1600,7 @@ export default function GuestPortal({
                 </div>
 
                 {/* AVAILABLE EGG SIZES BREAKDOWN */}
-                {selectedProductModal.eggSizeBreakdown && EGG_SIZES.some(size => (selectedProductModal.eggSizeBreakdown?.[size] || 0) > 0) && (
+                {(isEggCatalogProduct(selectedProductModal) || selectedProductModal.eggSizeBreakdown) && (
                   <div className="space-y-2">
                     <h4 className="portal-meta text-sm font-extrabold uppercase tracking-wider text-[#455C50]">
                       {t('Mga Gidak-on sa Itlog nga Anaa', 'Available Egg Sizes')}
@@ -1572,22 +1608,37 @@ export default function GuestPortal({
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                       {EGG_SIZES.map((size) => {
                         const count = selectedProductModal.eggSizeBreakdown?.[size] || 0;
-                        if (count <= 0) return null;
                         return (
                           <div
                             key={size}
-                            className="bg-[#EAF4EC] border border-[#1B4332]/20 rounded-xl px-3 py-2 text-center"
+                            className={`rounded-xl px-3 py-2 text-center border ${
+                              count > 0
+                                ? 'bg-[#EAF4EC] border-[#1B4332]/25'
+                                : 'bg-[#FAF8F5] border-[#E5DEC9] opacity-75'
+                            }`}
                           >
-                            <span className="block text-[11px] font-extrabold uppercase text-[#2D6A4F]">
+                            <span className={`block text-[11px] font-extrabold uppercase ${
+                              count > 0 ? 'text-[#2D6A4F]' : 'text-[#6E7E75]'
+                            }`}>
                               {size}
                             </span>
-                            <span className="block text-base font-extrabold font-mono text-[#1B4332] mt-0.5">
+                            <span className={`block text-base font-extrabold font-mono mt-0.5 ${
+                              count > 0 ? 'text-[#1B4332]' : 'text-[#6E7E75]'
+                            }`}>
                               {count.toLocaleString()} {t('buok', 'pcs')}
                             </span>
                           </div>
                         );
                       })}
                     </div>
+                    {(selectedProductModal.unsegregatedEggCount || 0) > 0 && (
+                      <div className="bg-[#FFF8E1] border border-[#E9B34A] rounded-xl px-3.5 py-2 flex items-center justify-between text-xs font-extrabold text-[#7A4904]">
+                        <span>{t('Assorted / Wala ma-segregate sa gidak-on:', 'Assorted / Unclassified by size:')}</span>
+                        <span className="font-mono text-sm">
+                          {Number(selectedProductModal.unsegregatedEggCount).toLocaleString()} {t('buok', 'pcs')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 
