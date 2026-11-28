@@ -1,4 +1,4 @@
-import { EGG_SIZES, EggHarvestLog, EggSize, EggSizeBreakdown, IgpSale } from '../types';
+import { EGG_SIZES, EggHarvestLog, EggSize, EggSizeBreakdown, EggSizePrices, IgpSale } from '../types';
 
 const LEGACY_POULTRY_PRODUCE = 'Poultry Raising (RTL)';
 
@@ -55,6 +55,68 @@ export function formatEggSizeBreakdown(breakdown?: EggSizeBreakdown): string {
     }
   }
   return parts.join(' • ');
+}
+
+export function sanitizeEggSizePrices(raw: unknown): EggSizePrices | undefined {
+  let obj: unknown = raw;
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return undefined;
+  const result: EggSizePrices = {};
+  let hasPositive = false;
+  for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+    const size = normalizeEggSize(key);
+    if (!size) continue;
+    const price = Math.round((Number(val) || 0) * 100) / 100;
+    if (Number.isFinite(price) && price > 0) {
+      result[size] = price;
+      hasPositive = true;
+    }
+  }
+  return hasPositive ? result : undefined;
+}
+
+export function hasConfiguredEggPrice(product: { price?: number; eggSizePrices?: EggSizePrices }): boolean {
+  if (Number.isFinite(product.price) && Number(product.price) > 0) return true;
+  const sizePrices = sanitizeEggSizePrices(product.eggSizePrices);
+  return Boolean(sizePrices && EGG_SIZES.some((size) => (sizePrices[size] || 0) > 0));
+}
+
+export function getEggSizePrice(
+  product: { price?: number; eggSizePrices?: EggSizePrices },
+  size: EggSize
+): number | undefined {
+  const sizePrices = sanitizeEggSizePrices(product.eggSizePrices);
+  const specific = sizePrices?.[size];
+  if (typeof specific === 'number' && Number.isFinite(specific) && specific > 0) {
+    return specific;
+  }
+  const base = Number(product.price || 0);
+  return Number.isFinite(base) && base > 0 ? base : undefined;
+}
+
+export function formatEggPriceDisplay(
+  product: { price?: number; eggSizePrices?: EggSizePrices },
+  prefix = '₱'
+): string {
+  const sizePrices = sanitizeEggSizePrices(product.eggSizePrices);
+  const configured = sizePrices
+    ? EGG_SIZES.map((s) => sizePrices[s]).filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
+    : [];
+  if (configured.length > 0) {
+    const min = Math.min(...configured);
+    const max = Math.max(...configured);
+    if (min !== max) {
+      return `${prefix}${min.toLocaleString()}–${prefix}${max.toLocaleString()}`;
+    }
+    return `${prefix}${min.toLocaleString()}`;
+  }
+  return `${prefix}${Number(product.price || 0).toLocaleString()}`;
 }
 
 export function extractEggSizeFromStage(stage?: string): EggSize | undefined {

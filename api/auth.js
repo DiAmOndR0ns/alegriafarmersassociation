@@ -874,6 +874,7 @@ async function runSchemaMigrations(client) {
     `CREATE INDEX IF NOT EXISTS inventory_purchase_transaction_id_idx ON inventory(purchase_transaction_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_activity_id_idx ON inventory(activity_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_meeting_id_idx ON inventory(meeting_id); `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS egg_size_prices JSONB; `,
     `CREATE TABLE IF NOT EXISTS achievements(
     id VARCHAR(100) PRIMARY KEY,
     year VARCHAR(20) NOT NULL,
@@ -1246,6 +1247,7 @@ async function initDatabaseSchema(pool) {
     description TEXT,
     unit VARCHAR(50),
     price NUMERIC,
+    egg_size_prices JSONB,
     quantity_available VARCHAR(100),
     stock_status VARCHAR(50),
     farmer_name TEXT,

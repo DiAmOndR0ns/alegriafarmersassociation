@@ -276,6 +276,7 @@ export interface Product {
   description: string;
   specs?: string;
   eggSizeBreakdown?: EggSizeBreakdown;
+  eggSizePrices?: EggSizePrices;
   unsegregatedEggCount?: number;
   stockStatus: 'In Stock' | 'Low Stock' | 'Pre-Order' | 'Out of Stock' | 'Available' | 'Limited Stock';
   farmerName?: string; // e.g. "Zenaida A. Elbiña"
@@ -291,7 +292,7 @@ export interface Product {
 
 export type PublicProduct = Pick<Product,
   'id' | 'name' | 'cebName' | 'category' | 'price' | 'unit' |
-  'quantityAvailable' | 'description' | 'specs' | 'eggSizeBreakdown' | 'unsegregatedEggCount' | 'stockStatus' |
+  'quantityAvailable' | 'description' | 'specs' | 'eggSizeBreakdown' | 'eggSizePrices' | 'unsegregatedEggCount' | 'stockStatus' |
   'farmerName' | 'farmerSitio' | 'farmerPhone' | 'contactPerson' |
   'imageUrl' | 'isPublished'
 >;
@@ -341,6 +342,8 @@ export const EGG_SIZES = [
 export type EggSize = typeof EGG_SIZES[number];
 
 export type EggSizeBreakdown = Partial<Record<EggSize, number>>;
+
+export type EggSizePrices = Partial<Record<EggSize, number>>;
 
 export interface IgpLivestockInventory {
   produce: string;

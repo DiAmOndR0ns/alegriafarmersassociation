@@ -37,6 +37,29 @@ function sanitizeEggSizeBreakdown(raw) {
   }
   return hasPositive ? result : void 0;
 }
+function sanitizeEggSizePrices(raw) {
+  let obj = raw;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return void 0;
+    }
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return void 0;
+  const result = {};
+  let hasPositive = false;
+  for (const [key, val] of Object.entries(obj)) {
+    const size = normalizeEggSize(key);
+    if (!size) continue;
+    const price = Math.round((Number(val) || 0) * 100) / 100;
+    if (Number.isFinite(price) && price > 0) {
+      result[size] = price;
+      hasPositive = true;
+    }
+  }
+  return hasPositive ? result : void 0;
+}
 
 // src/api/db.ts
 var PgPool = pg?.Pool || pg?.default?.Pool || pg?.default || pg;
@@ -747,6 +770,7 @@ async function runSchemaMigrations(client) {
     `CREATE INDEX IF NOT EXISTS inventory_purchase_transaction_id_idx ON inventory(purchase_transaction_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_activity_id_idx ON inventory(activity_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_meeting_id_idx ON inventory(meeting_id); `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS egg_size_prices JSONB; `,
     `CREATE TABLE IF NOT EXISTS achievements(
     id VARCHAR(100) PRIMARY KEY,
     year VARCHAR(20) NOT NULL,
@@ -1119,6 +1143,7 @@ async function initDatabaseSchema(pool) {
     description TEXT,
     unit VARCHAR(50),
     price NUMERIC,
+    egg_size_prices JSONB,
     quantity_available VARCHAR(100),
     stock_status VARCHAR(50),
     farmer_name TEXT,
@@ -1678,26 +1703,30 @@ async function fetchAllDataFromPostgres(pool) {
       hash: r.hash,
       previousHash: r.previous_hash
     }));
-    const products = productsRes.rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      cebName: r.ceb_name,
-      category: r.category,
-      description: r.description,
-      unit: r.unit,
-      price: Number(r.price || 0),
-      quantityAvailable: r.quantity_available,
-      stockStatus: r.stock_status,
-      farmerName: r.farmer_name,
-      farmerSitio: r.farmer_sitio,
-      farmerPhone: r.farmer_phone,
-      contactPerson: r.contact_person,
-      imageUrl: r.image_url,
-      isPublished: r.is_published,
-      updatedBy: r.updated_by,
-      managedBy: r.managed_by,
-      dateUpdated: r.date_updated
-    }));
+    const products = productsRes.rows.map((r) => {
+      const parsedSizePrices = sanitizeEggSizePrices(r.egg_size_prices);
+      return {
+        id: r.id,
+        name: r.name,
+        cebName: r.ceb_name,
+        category: r.category,
+        description: r.description,
+        unit: r.unit,
+        price: Number(r.price || 0),
+        ...parsedSizePrices ? { eggSizePrices: parsedSizePrices } : {},
+        quantityAvailable: r.quantity_available,
+        stockStatus: r.stock_status,
+        farmerName: r.farmer_name,
+        farmerSitio: r.farmer_sitio,
+        farmerPhone: r.farmer_phone,
+        contactPerson: r.contact_person,
+        imageUrl: r.image_url,
+        isPublished: r.is_published,
+        updatedBy: r.updated_by,
+        managedBy: r.managed_by,
+        dateUpdated: r.date_updated
+      };
+    });
     const inventory = inventoryRes.rows.map((r) => ({
       id: r.id,
       name: r.name,

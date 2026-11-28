@@ -1,7 +1,12 @@
 import React, { useRef, useState } from 'react';
-import { Product, OfficerRole, User as SystemUser } from '../types';
+import { EGG_SIZES, EggSize, Product, OfficerRole, User as SystemUser } from '../types';
 import { resolveOfficerPrefixed } from '../utils/officers';
-import { isEggCatalogProduct } from '../utils/eggInventory';
+import {
+  EGG_SIZE_SHORT_LABELS,
+  formatEggPriceDisplay,
+  isEggCatalogProduct,
+  sanitizeEggSizePrices
+} from '../utils/eggInventory';
 import { compressImageFile, hasAttachedImage } from '../utils/imageUpload';
 import { ShoppingBag, Plus, Edit, Trash2, Eye, EyeOff, X, Search, Tag, Package, User, Phone, MapPin, Upload, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -37,6 +42,13 @@ export default function ProductManagementModal({
   const [cebName, setCebName] = useState('');
   const [category, setCategory] = useState<Product['category']>('Produce');
   const [price, setPrice] = useState<number>(100);
+  const [eggSizePricesInput, setEggSizePricesInput] = useState<Record<EggSize, string>>({
+    'Small': '',
+    'Medium': '',
+    'Large': '',
+    'Extra Large (XL)': '',
+    'Jumbo': ''
+  });
   const [unit, setUnit] = useState('matag kilo');
   const [quantityAvailable, setQuantityAvailable] = useState('100 ka kilo');
   const [description, setDescription] = useState('');
@@ -83,6 +95,17 @@ export default function ProductManagementModal({
     }
   };
 
+  const resetEggSizePricesInput = (source?: Product['eggSizePrices']) => {
+    const clean = sanitizeEggSizePrices(source);
+    setEggSizePricesInput({
+      'Small': clean?.['Small'] ? String(clean['Small']) : '',
+      'Medium': clean?.['Medium'] ? String(clean['Medium']) : '',
+      'Large': clean?.['Large'] ? String(clean['Large']) : '',
+      'Extra Large (XL)': clean?.['Extra Large (XL)'] ? String(clean['Extra Large (XL)']) : '',
+      'Jumbo': clean?.['Jumbo'] ? String(clean['Jumbo']) : ''
+    });
+  };
+
   const handleOpenAdd = () => {
     if (!canManageProducts) return;
     setEditingProduct(null);
@@ -90,6 +113,7 @@ export default function ProductManagementModal({
     setCebName('');
     setCategory('Produce');
     setPrice(100);
+    resetEggSizePricesInput();
     setUnit('matag kilo');
     setQuantityAvailable('100 ka kilo');
     setDescription('');
@@ -111,6 +135,7 @@ export default function ProductManagementModal({
     setCebName('Itlog sa Manok');
     setCategory('Produce');
     setPrice(0);
+    resetEggSizePricesInput();
     setUnit('per egg');
     setQuantityAvailable('Managed automatically from verified harvests');
     setDescription('Fresh eggs from the AFA poultry project. Contact AFA to place an order.');
@@ -147,6 +172,7 @@ export default function ProductManagementModal({
       setOtherCategory(p.category === 'Other' ? '' : p.category);
     }
     setPrice(p.price);
+    resetEggSizePricesInput(p.eggSizePrices);
     setUnit(p.unit);
     setQuantityAvailable(p.quantityAvailable || 'Available in harvest stock');
     setDescription(p.description);
@@ -176,6 +202,21 @@ export default function ProductManagementModal({
     const finalCategory = category === 'Other' ? otherCategory.trim() : category.trim();
     if (!finalCategory) return;
 
+    const isEggItem = isEggCatalogProduct({ name, cebName });
+    const cleanEggSizePrices = isEggItem ? sanitizeEggSizePrices(eggSizePricesInput) : undefined;
+    const configuredSizePrices = cleanEggSizePrices
+      ? EGG_SIZES.map((s) => cleanEggSizePrices[s]).filter((v): v is number => typeof v === 'number' && v > 0)
+      : [];
+    const resolvedBasePrice = Number(price) > 0
+      ? Number(price)
+      : configuredSizePrices.length > 0
+        ? Math.min(...configuredSizePrices)
+        : 0;
+
+    if (isEggItem && resolvedBasePrice <= 0 && configuredSizePrices.length === 0) {
+      return;
+    }
+
     const contactStr = `${farmerName || 'AFA Member Farmer'} ${farmerSitio ? `• ${farmerSitio}` : ''} (${farmerPhone || 'Contact AFA Officer'})`;
 
     if (editingProduct) {
@@ -184,7 +225,8 @@ export default function ProductManagementModal({
         name,
         cebName,
         category: finalCategory,
-        price: Number(price),
+        price: resolvedBasePrice,
+        eggSizePrices: cleanEggSizePrices,
         unit,
         quantityAvailable,
         description,
@@ -204,7 +246,8 @@ export default function ProductManagementModal({
         name,
         cebName,
         category: finalCategory,
-        price: Number(price),
+        price: resolvedBasePrice,
+        eggSizePrices: cleanEggSizePrices,
         unit,
         quantityAvailable,
         description,
@@ -416,6 +459,24 @@ export default function ProductManagementModal({
                       <p className="text-[11px] text-[#4A5F57] italic mt-1">Specs: {product.specs}</p>
                     )}
 
+                    {isEggCatalogProduct(product) && product.eggSizePrices && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {EGG_SIZES.map((size) => {
+                          const sizePrice = product.eggSizePrices?.[size];
+                          if (!sizePrice || sizePrice <= 0) return null;
+                          return (
+                            <span
+                              key={size}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-black bg-[#EAF4EC] text-[#1B4332] border border-[#1B4332]/20"
+                            >
+                              <span>{EGG_SIZE_SHORT_LABELS[size]}:</span>
+                              <span className="font-mono text-[#C2410C]">₱{sizePrice.toLocaleString()}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     {/* Quantity Available & Farmer Details */}
                     <div className="mt-2.5 p-2.5 bg-[#F7F4EF] border border-[#D5CFC1] rounded-xl space-y-1 text-xs">
                       {product.quantityAvailable && (
@@ -443,7 +504,9 @@ export default function ProductManagementModal({
                   <div className="pt-2 border-t border-[#D5CFC1] flex items-center justify-between text-xs">
                     <div>
                       <span className="text-sm font-mono font-black text-amber-700">
-                        PHP {product.price.toLocaleString()}
+                        {isEggCatalogProduct(product)
+                          ? formatEggPriceDisplay(product, 'PHP ')
+                          : `PHP ${product.price.toLocaleString()}`}
                       </span>
                       <span className="text-[10px] text-[#4A5F57] ml-1">/ {product.unit}</span>
                     </div>
@@ -678,16 +741,27 @@ export default function ProductManagementModal({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[#4A5F57] font-bold mb-1">Presyo (PHP):</label>
+                  <label className="block text-[#4A5F57] font-bold mb-1">
+                    {isEggCatalogProduct({ name, cebName })
+                      ? (en ? 'Base / Default Price (PHP):' : 'Base / Default nga Presyo (PHP):')
+                      : 'Presyo (PHP):'}
+                  </label>
                   <input
                     type="number"
-                    min={isEggCatalogProduct({ name, cebName }) ? 0.01 : 0}
+                    min={isEggCatalogProduct({ name, cebName }) && sanitizeEggSizePrices(eggSizePricesInput) ? 0 : isEggCatalogProduct({ name, cebName }) ? 0.01 : 0}
                     step="0.01"
-                    required
+                    required={!isEggCatalogProduct({ name, cebName }) || !sanitizeEggSizePrices(eggSizePricesInput)}
                     value={price}
                     onChange={(e) => setPrice(Number(e.target.value))}
                     className="w-full bg-white border border-[#D5CFC1] rounded-xl px-3 py-2 text-[#1B4332] focus:outline-none focus:border-emerald-500 font-mono"
                   />
+                  {isEggCatalogProduct({ name, cebName }) && (
+                    <p className="mt-1 text-[10px] font-semibold text-[#4A5F57]">
+                      {en
+                        ? 'Used for unclassified eggs or any size without a specific price below.'
+                        : 'Gamiton para sa wala ma-size nga itlog o gidak-on nga walay laing presyo sa ubos.'}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -708,6 +782,50 @@ export default function ProductManagementModal({
                   )}
                 </div>
               </div>
+
+              {isEggCatalogProduct({ name, cebName }) && (
+                <div className="p-3.5 bg-[#EAF4EC] border border-[#1B4332]/20 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-[#1B4332] flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-[#2D6A4F]" />
+                      <span>
+                        {en
+                          ? `Price Segregation by Egg Size (PHP / ${unit || 'unit'})`
+                          : `Presyo Matag Gidak-on sa Itlog (PHP / ${unit || 'yunit'})`}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {EGG_SIZES.map((size) => (
+                      <div key={size} className="bg-white border border-[#D5CFC1] rounded-xl p-2">
+                        <label className="block text-[11px] font-extrabold text-[#1B4332] mb-1 truncate" title={size}>
+                          {size}
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-[#4A5F57]">
+                            ₱
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            placeholder={price > 0 ? String(price) : '0.00'}
+                            value={eggSizePricesInput[size]}
+                            onChange={(e) =>
+                              setEggSizePricesInput((prev) => ({
+                                ...prev,
+                                [size]: e.target.value
+                              }))
+                            }
+                            aria-label={`${size} price`}
+                            className="w-full bg-[#FAF8F5] border border-[#D5CFC1] rounded-lg pl-6 pr-2 py-1.5 text-xs font-mono font-bold text-[#1B4332] focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-[#4A5F57] font-bold mb-1">Kadaghanon nga Baligya (Quantity Available):</label>

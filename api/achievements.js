@@ -38,6 +38,34 @@ function sanitizeEggSizeBreakdown(raw) {
   }
   return hasPositive ? result : void 0;
 }
+function sanitizeEggSizePrices(raw) {
+  let obj = raw;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return void 0;
+    }
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return void 0;
+  const result = {};
+  let hasPositive = false;
+  for (const [key, val] of Object.entries(obj)) {
+    const size = normalizeEggSize(key);
+    if (!size) continue;
+    const price = Math.round((Number(val) || 0) * 100) / 100;
+    if (Number.isFinite(price) && price > 0) {
+      result[size] = price;
+      hasPositive = true;
+    }
+  }
+  return hasPositive ? result : void 0;
+}
+function hasConfiguredEggPrice(product) {
+  if (Number.isFinite(product.price) && Number(product.price) > 0) return true;
+  const sizePrices = sanitizeEggSizePrices(product.eggSizePrices);
+  return Boolean(sizePrices && EGG_SIZES.some((size) => (sizePrices[size] || 0) > 0));
+}
 function extractEggSizeFromStage(stage) {
   if (!stage) return void 0;
   const match = stage.match(/^Eggs\s*\((.+)\)$/i);
@@ -846,6 +874,7 @@ async function runSchemaMigrations(client) {
     `CREATE INDEX IF NOT EXISTS inventory_purchase_transaction_id_idx ON inventory(purchase_transaction_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_activity_id_idx ON inventory(activity_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_meeting_id_idx ON inventory(meeting_id); `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS egg_size_prices JSONB; `,
     `CREATE TABLE IF NOT EXISTS achievements(
     id VARCHAR(100) PRIMARY KEY,
     year VARCHAR(20) NOT NULL,
@@ -1218,6 +1247,7 @@ async function initDatabaseSchema(pool) {
     description TEXT,
     unit VARCHAR(50),
     price NUMERIC,
+    egg_size_prices JSONB,
     quantity_available VARCHAR(100),
     stock_status VARCHAR(50),
     farmer_name TEXT,
@@ -1463,7 +1493,7 @@ async function handler(req, res) {
     if (resource === "products") {
       const [result2, harvestsRes, salesRes, igpLegacyRes] = await Promise.all([
         pool.query(
-          `SELECT id, name, ceb_name, category, description, unit, price, quantity_available,
+          `SELECT id, name, ceb_name, category, description, unit, price, egg_size_prices, quantity_available,
             stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url,
             is_published
            FROM products
@@ -1493,6 +1523,7 @@ async function handler(req, res) {
         description: row.description,
         unit: row.unit,
         price: Number(row.price || 0),
+        eggSizePrices: sanitizeEggSizePrices(row.egg_size_prices),
         quantityAvailable: row.quantity_available,
         stockStatus: row.stock_status,
         farmerName: row.farmer_name,
@@ -1576,7 +1607,7 @@ async function handler(req, res) {
       let products = publishedProducts;
       if (eggProduct) {
         const availableEggs = getTotalAvailableEggCount(harvests, sales);
-        if (availableEggs > 0 && Number.isFinite(eggProduct.price) && eggProduct.price > 0) {
+        if (availableEggs > 0 && hasConfiguredEggPrice(eggProduct)) {
           const eggStockBySize = getAvailableEggsBySize(harvests, sales);
           products = [
             ...publishedProducts,
@@ -1586,6 +1617,7 @@ async function handler(req, res) {
               stockStatus: "In Stock",
               quantityAvailable: `${availableEggs.toLocaleString()} eggs available`,
               eggSizeBreakdown: eggStockBySize.bySize,
+              eggSizePrices: sanitizeEggSizePrices(eggProduct.eggSizePrices),
               unsegregatedEggCount: eggStockBySize.unsegregated
             }
           ];
@@ -1604,6 +1636,7 @@ async function handler(req, res) {
                 "Extra Large (XL)": 0,
                 "Jumbo": 0
               },
+              eggSizePrices: sanitizeEggSizePrices(eggProduct.eggSizePrices),
               unsegregatedEggCount: 0
             }
           ];

@@ -13,10 +13,14 @@ import { resolveBoardMemberNames, resolveOfficerName, resolveOfficerRoster } fro
 import {
   EGG_SIZES,
   EGG_SIZE_SHORT_LABELS,
+  formatEggPriceDisplay,
   getAvailableEggsBySize,
+  getEggSizePrice,
   getTotalAvailableEggCount,
+  hasConfiguredEggPrice,
   isEggCatalogProduct,
-  sanitizeEggSizeBreakdown
+  sanitizeEggSizeBreakdown,
+  sanitizeEggSizePrices
 } from '../utils/eggInventory';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -88,7 +92,8 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
       .map(product => isEggCatalogProduct(product)
         ? {
           ...product,
-          eggSizeBreakdown: { ...EMPTY_EGG_SIZE_BREAKDOWN, ...(sanitizeEggSizeBreakdown(product.eggSizeBreakdown) || {}) }
+          eggSizeBreakdown: { ...EMPTY_EGG_SIZE_BREAKDOWN, ...(sanitizeEggSizeBreakdown(product.eggSizeBreakdown) || {}) },
+          eggSizePrices: sanitizeEggSizePrices(product.eggSizePrices)
         }
         : product
       );
@@ -98,9 +103,10 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
   const sales = livestockIgp.sales || [];
   const availableEggs = getTotalAvailableEggCount(harvests, sales);
   const serverSizeBreakdown = sanitizeEggSizeBreakdown(eggProduct.eggSizeBreakdown);
+  const cleanEggSizePrices = sanitizeEggSizePrices(eggProduct.eggSizePrices);
 
   // If verified egg stock is available and a price is configured, auto-publish with live stock & per-size breakdown.
-  if (availableEggs > 0 && Number.isFinite(eggProduct.price) && eggProduct.price > 0) {
+  if (availableEggs > 0 && hasConfiguredEggPrice(eggProduct)) {
     const eggStockBySize = getAvailableEggsBySize(harvests, sales);
     const localHasSegregated = EGG_SIZES.some(size => eggStockBySize.bySize[size] > 0);
     const resolvedBySize = localHasSegregated || !serverSizeBreakdown
@@ -115,6 +121,7 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
       stockStatus: 'In Stock',
       quantityAvailable: `${availableEggs.toLocaleString()} eggs available`,
       eggSizeBreakdown: resolvedBySize,
+      eggSizePrices: cleanEggSizePrices,
       unsegregatedEggCount: resolvedUnsegregated
     };
     return [...publishedProducts, automaticEggListing];
@@ -135,6 +142,7 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
       {
         ...eggProduct,
         eggSizeBreakdown: { ...EMPTY_EGG_SIZE_BREAKDOWN, ...(serverSizeBreakdown || {}) },
+        eggSizePrices: cleanEggSizePrices,
         unsegregatedEggCount: Math.max(0, Number(eggProduct.unsegregatedEggCount || 0))
       }
     ];
@@ -148,6 +156,7 @@ export const getPublishedProducts = (products: PublicProduct[], livestockIgp?: L
       stockStatus: 'Pre-Order',
       quantityAvailable: UPCOMING_HARVEST_TAG,
       eggSizeBreakdown: { ...EMPTY_EGG_SIZE_BREAKDOWN },
+      eggSizePrices: cleanEggSizePrices,
       unsegregatedEggCount: 0
     };
     return [...publishedProducts, upcomingEggListing];
@@ -1177,7 +1186,9 @@ export default function GuestPortal({
                             )}
                           </div>
                           <span className="font-mono text-base sm:text-lg font-extrabold text-[#C2410C] shrink-0">
-                            ₱{Number(prod.price || 0).toLocaleString()}
+                            {isEggCatalogProduct(prod)
+                              ? formatEggPriceDisplay(prod)
+                              : `₱${Number(prod.price || 0).toLocaleString()}`}
                           </span>
                         </div>
 
@@ -1192,6 +1203,7 @@ export default function GuestPortal({
                           >
                             {EGG_SIZES.map((size) => {
                               const count = prod.eggSizeBreakdown?.[size] || 0;
+                              const sizePrice = getEggSizePrice(prod, size);
                               return (
                                 <span
                                   key={size}
@@ -1203,6 +1215,9 @@ export default function GuestPortal({
                                 >
                                   <span>{EGG_SIZE_SHORT_LABELS[size]}:</span>
                                   <span className="font-mono">{count.toLocaleString()}</span>
+                                  {sizePrice !== undefined && prod.eggSizePrices?.[size] && (
+                                    <span className="font-mono text-[#C2410C]">• ₱{sizePrice.toLocaleString()}</span>
+                                  )}
                                 </span>
                               );
                             })}
@@ -1580,7 +1595,9 @@ export default function GuestPortal({
                       {t('Presyo', 'Price')}
                     </span>
                     <span className="block text-xl sm:text-2xl font-extrabold font-mono text-[#C2410C] mt-0.5 leading-tight">
-                      ₱{Number(selectedProductModal.price || 0).toLocaleString()}
+                      {isEggCatalogProduct(selectedProductModal)
+                        ? formatEggPriceDisplay(selectedProductModal)
+                        : `₱${Number(selectedProductModal.price || 0).toLocaleString()}`}
                     </span>
                     {selectedProductModal.unit && (
                       <span className="portal-meta block text-sm font-semibold text-[#455C50] mt-0.5">
@@ -1599,22 +1616,23 @@ export default function GuestPortal({
                   </div>
                 </div>
 
-                {/* AVAILABLE EGG SIZES BREAKDOWN */}
+                {/* AVAILABLE EGG SIZES & PER-SIZE PRICE BREAKDOWN */}
                 {(isEggCatalogProduct(selectedProductModal) || selectedProductModal.eggSizeBreakdown) && (
                   <div className="space-y-2">
                     <h4 className="portal-meta text-sm font-extrabold uppercase tracking-wider text-[#455C50]">
-                      {t('Mga Gidak-on sa Itlog nga Anaa', 'Available Egg Sizes')}
+                      {t('Mga Gidak-on ug Presyo sa Itlog', 'Egg Sizes, Availability & Prices')}
                     </h4>
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                       {EGG_SIZES.map((size) => {
                         const count = selectedProductModal.eggSizeBreakdown?.[size] || 0;
+                        const sizePrice = getEggSizePrice(selectedProductModal, size);
                         return (
                           <div
                             key={size}
                             className={`rounded-xl px-3 py-2 text-center border ${
                               count > 0
                                 ? 'bg-[#EAF4EC] border-[#1B4332]/25'
-                                : 'bg-[#FAF8F5] border-[#E5DEC9] opacity-75'
+                                : 'bg-[#FAF8F5] border-[#E5DEC9] opacity-80'
                             }`}
                           >
                             <span className={`block text-[11px] font-extrabold uppercase ${
@@ -1622,7 +1640,12 @@ export default function GuestPortal({
                             }`}>
                               {size}
                             </span>
-                            <span className={`block text-base font-extrabold font-mono mt-0.5 ${
+                            {sizePrice !== undefined && (
+                              <span className="block text-sm font-extrabold font-mono text-[#C2410C] mt-0.5">
+                                ₱{sizePrice.toLocaleString()}
+                              </span>
+                            )}
+                            <span className={`block text-xs font-extrabold font-mono mt-0.5 ${
                               count > 0 ? 'text-[#1B4332]' : 'text-[#6E7E75]'
                             }`}>
                               {count.toLocaleString()} {t('buok', 'pcs')}
@@ -1636,6 +1659,7 @@ export default function GuestPortal({
                         <span>{t('Assorted / Wala ma-segregate sa gidak-on:', 'Assorted / Unclassified by size:')}</span>
                         <span className="font-mono text-sm">
                           {Number(selectedProductModal.unsegregatedEggCount).toLocaleString()} {t('buok', 'pcs')}
+                          {Number(selectedProductModal.price) > 0 ? ` • ₱${Number(selectedProductModal.price).toLocaleString()}` : ''}
                         </span>
                       </div>
                     )}

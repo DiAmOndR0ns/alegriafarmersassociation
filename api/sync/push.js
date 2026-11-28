@@ -40,6 +40,29 @@ function sanitizeEggSizeBreakdown(raw) {
   }
   return hasPositive ? result : void 0;
 }
+function sanitizeEggSizePrices(raw) {
+  let obj = raw;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return void 0;
+    }
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return void 0;
+  const result = {};
+  let hasPositive = false;
+  for (const [key, val] of Object.entries(obj)) {
+    const size = normalizeEggSize(key);
+    if (!size) continue;
+    const price = Math.round((Number(val) || 0) * 100) / 100;
+    if (Number.isFinite(price) && price > 0) {
+      result[size] = price;
+      hasPositive = true;
+    }
+  }
+  return hasPositive ? result : void 0;
+}
 
 // src/utils/igpInventory.ts
 var STOCK_CATEGORIES = ["Piglets / Stock", "Calves / Cattle Stock", "RTL Pullets Stock"];
@@ -897,6 +920,7 @@ async function runSchemaMigrations(client) {
     `CREATE INDEX IF NOT EXISTS inventory_purchase_transaction_id_idx ON inventory(purchase_transaction_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_activity_id_idx ON inventory(activity_id); `,
     `CREATE INDEX IF NOT EXISTS inventory_meeting_id_idx ON inventory(meeting_id); `,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS egg_size_prices JSONB; `,
     `CREATE TABLE IF NOT EXISTS achievements(
     id VARCHAR(100) PRIMARY KEY,
     year VARCHAR(20) NOT NULL,
@@ -1269,6 +1293,7 @@ async function initDatabaseSchema(pool) {
     description TEXT,
     unit VARCHAR(50),
     price NUMERIC,
+    egg_size_prices JSONB,
     quantity_available VARCHAR(100),
     stock_status VARCHAR(50),
     farmer_name TEXT,
@@ -2353,9 +2378,10 @@ async function saveFullStateToPostgres(pool, state) {
       console.log("[DB DEBUG] Saving", activeProducts.length, "products...");
       for (const p of activeProducts) {
         if (!p || typeof p.id !== "string" || !p.id || !cleanText(p.name, 300)) continue;
+        const cleanSizePrices = sanitizeEggSizePrices(p.eggSizePrices);
         await client.query(`
-          INSERT INTO products(id, name, ceb_name, category, description, unit, price, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
-  VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          INSERT INTO products(id, name, ceb_name, category, description, unit, price, egg_size_prices, quantity_available, stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url, is_published, updated_by, managed_by, date_updated)
+  VALUES($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
     ceb_name = EXCLUDED.ceb_name,
@@ -2363,6 +2389,7 @@ async function saveFullStateToPostgres(pool, state) {
     description = EXCLUDED.description,
     unit = EXCLUDED.unit,
     price = EXCLUDED.price,
+    egg_size_prices = EXCLUDED.egg_size_prices,
     quantity_available = EXCLUDED.quantity_available,
     stock_status = EXCLUDED.stock_status,
     farmer_name = EXCLUDED.farmer_name,
@@ -2382,6 +2409,7 @@ async function saveFullStateToPostgres(pool, state) {
           cleanText(p.description, 5e3),
           cleanText(p.unit, 50),
           cleanNumber(p.price),
+          cleanSizePrices ? JSON.stringify(cleanSizePrices) : null,
           cleanText(p.quantityAvailable, 100),
           cleanText(p.stockStatus, 50),
           cleanText(p.farmerName, 200),
@@ -2683,6 +2711,10 @@ async function saveFullStateToPostgres(pool, state) {
           ["description", "description", (r) => r.description],
           ["unit", "unit", (r) => r.unit],
           ["price", "price", (r) => r.price],
+          ["egg_size_prices", "eggSizePrices", (r) => {
+            const clean = sanitizeEggSizePrices(r.eggSizePrices);
+            return clean ? JSON.stringify(clean) : null;
+          }],
           ["quantity_available", "quantityAvailable", (r) => r.quantityAvailable || null],
           ["stock_status", "stockStatus", (r) => r.stockStatus],
           ["farmer_name", "farmerName", (r) => r.farmerName || null],

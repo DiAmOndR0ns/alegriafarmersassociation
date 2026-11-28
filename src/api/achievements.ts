@@ -3,9 +3,11 @@ import { sendResponse } from './helper';
 import {
   getAvailableEggsBySize,
   getTotalAvailableEggCount,
+  hasConfiguredEggPrice,
   isEggCatalogProduct,
   normalizeEggSize,
-  sanitizeEggSizeBreakdown
+  sanitizeEggSizeBreakdown,
+  sanitizeEggSizePrices
 } from '../utils/eggInventory';
 import type { EggHarvestLog, IgpSale, PublicProduct } from '../types';
 
@@ -32,7 +34,7 @@ export default async function handler(req: any, res: any) {
     if (resource === 'products') {
       const [result, harvestsRes, salesRes, igpLegacyRes] = await Promise.all([
         pool.query(
-          `SELECT id, name, ceb_name, category, description, unit, price, quantity_available,
+          `SELECT id, name, ceb_name, category, description, unit, price, egg_size_prices, quantity_available,
             stock_status, farmer_name, farmer_sitio, farmer_phone, contact_person, image_url,
             is_published
            FROM products
@@ -63,6 +65,7 @@ export default async function handler(req: any, res: any) {
         description: row.description,
         unit: row.unit,
         price: Number(row.price || 0),
+        eggSizePrices: sanitizeEggSizePrices(row.egg_size_prices),
         quantityAvailable: row.quantity_available,
         stockStatus: row.stock_status,
         farmerName: row.farmer_name,
@@ -150,7 +153,7 @@ export default async function handler(req: any, res: any) {
       let products: PublicProduct[] = publishedProducts;
       if (eggProduct) {
         const availableEggs = getTotalAvailableEggCount(harvests, sales);
-        if (availableEggs > 0 && Number.isFinite(eggProduct.price) && eggProduct.price > 0) {
+        if (availableEggs > 0 && hasConfiguredEggPrice(eggProduct)) {
           const eggStockBySize = getAvailableEggsBySize(harvests, sales);
           products = [
             ...publishedProducts,
@@ -160,6 +163,7 @@ export default async function handler(req: any, res: any) {
               stockStatus: 'In Stock',
               quantityAvailable: `${availableEggs.toLocaleString()} eggs available`,
               eggSizeBreakdown: eggStockBySize.bySize,
+              eggSizePrices: sanitizeEggSizePrices(eggProduct.eggSizePrices),
               unsegregatedEggCount: eggStockBySize.unsegregated
             }
           ];
@@ -178,6 +182,7 @@ export default async function handler(req: any, res: any) {
                 'Extra Large (XL)': 0,
                 'Jumbo': 0
               },
+              eggSizePrices: sanitizeEggSizePrices(eggProduct.eggSizePrices),
               unsegregatedEggCount: 0
             }
           ];

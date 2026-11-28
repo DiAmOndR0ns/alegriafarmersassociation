@@ -12,7 +12,13 @@ import AnnouncementDashboard from './AnnouncementDashboard';
 import LivestockMonitor from './LivestockMonitor';
 import AffiliationManager from './AffiliationManager';
 import { getPublishedProducts } from './GuestPortal';
-import { EGG_SIZES, EGG_SIZE_SHORT_LABELS, isEggCatalogProduct } from '../utils/eggInventory';
+import {
+  EGG_SIZES,
+  EGG_SIZE_SHORT_LABELS,
+  formatEggPriceDisplay,
+  getEggSizePrice,
+  isEggCatalogProduct
+} from '../utils/eggInventory';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { compressImageFile } from '../utils/imageUpload';
 
@@ -974,7 +980,9 @@ export default function MemberDashboard({
                         <div>
                           <span className="text-[10px] text-slate-500 uppercase font-extrabold block">Presyo / Yunit:</span>
                           <span className="text-[#BF360C] font-black font-mono text-base">
-                            PHP {Number(prod.price || 0).toLocaleString()} / {prod.unit || 'unit'}
+                            {isEggCatalogProduct(prod)
+                              ? formatEggPriceDisplay(prod, 'PHP ')
+                              : `PHP ${Number(prod.price || 0).toLocaleString()}`} / {prod.unit || 'unit'}
                           </span>
                         </div>
 
@@ -988,6 +996,7 @@ export default function MemberDashboard({
                         <div className="flex flex-wrap items-center gap-1.5">
                           {EGG_SIZES.map((size) => {
                             const count = prod.eggSizeBreakdown?.[size] || 0;
+                            const sizePrice = getEggSizePrice(prod, size);
                             return (
                               <span
                                 key={size}
@@ -999,6 +1008,9 @@ export default function MemberDashboard({
                               >
                                 <span>{EGG_SIZE_SHORT_LABELS[size]}:</span>
                                 <span className="font-mono">{count.toLocaleString()}</span>
+                                {sizePrice !== undefined && prod.eggSizePrices?.[size] && (
+                                  <span className="font-mono text-[#BF360C]">• ₱{sizePrice.toLocaleString()}</span>
+                                )}
                               </span>
                             );
                           })}

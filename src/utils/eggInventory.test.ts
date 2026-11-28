@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { EggHarvestLog, IgpSale } from '../types';
-import { formatEggSizeBreakdown, getAvailableEggCount, getAvailableEggsBySize, getTotalAvailableEggCount } from './eggInventory';
+import {
+  formatEggPriceDisplay,
+  formatEggSizeBreakdown,
+  getAvailableEggCount,
+  getAvailableEggsBySize,
+  getEggSizePrice,
+  getTotalAvailableEggCount,
+  hasConfiguredEggPrice,
+  sanitizeEggSizePrices
+} from './eggInventory';
 
 const harvest = (id: string, eggCount: number, status: EggHarvestLog['status'] = 'Signed'): EggHarvestLog => ({
   id,
@@ -82,5 +91,26 @@ describe('getAvailableEggCount', () => {
     expect(formatEggSizeBreakdown(segregatedHarvest.sizeBreakdown)).toBe(
       'S: 15 • M: 30 • L: 30 • XL: 15 • Jumbo: 5'
     );
+  });
+
+  it('sanitizes and formats per-size egg prices', () => {
+    const prices = sanitizeEggSizePrices({
+      Small: '170',
+      Medium: 185,
+      Large: 200,
+      'Extra Large (XL)': 215,
+      Jumbo: 230
+    });
+    expect(prices).toEqual({
+      Small: 170,
+      Medium: 185,
+      Large: 200,
+      'Extra Large (XL)': 215,
+      Jumbo: 230
+    });
+    expect(hasConfiguredEggPrice({ price: 0, eggSizePrices: prices })).toBe(true);
+    expect(getEggSizePrice({ price: 200, eggSizePrices: prices }, 'Small')).toBe(170);
+    expect(formatEggPriceDisplay({ price: 200, eggSizePrices: prices })).toBe('₱170–₱230');
+    expect(formatEggPriceDisplay({ price: 200 })).toBe('₱200');
   });
 });
