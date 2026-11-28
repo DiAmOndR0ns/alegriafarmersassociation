@@ -1,7 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Announcement, LivestockIgpState, EggHarvestLog, Member, Product, AssociationActivity, MemberAffiliation, MembershipPayment } from '../types';
 import { resolveOfficerName } from '../utils/officers';
-import { DEFAULT_MEMBERSHIP_DUES, PENDING_MEMBER_ID_LABEL, getMembershipStanding, hasAssignedMemberId, hasPaymentForYear } from '../utils/membership';
+import {
+  ANNUAL_MEMBERSHIP_FEE,
+  ANNUAL_SINKING_FUND,
+  DEFAULT_MEMBERSHIP_DUES,
+  MONTHLY_SINKING_FUND,
+  PENDING_MEMBER_ID_LABEL,
+  getMembershipStanding,
+  hasAssignedMemberId,
+  hasPaymentForYear
+} from '../utils/membership';
 import {
   User as UserIcon, MapPin, Smartphone, Layers, Tag, Calendar,
   Printer, Upload, LogOut, FileText, CheckCircle, CreditCard,
@@ -714,16 +723,16 @@ export default function MemberDashboard({
             <div className="bg-[#FFF8E1] border border-[#FFE082] p-4 rounded-2xl flex gap-3 text-left">
               <AlertCircle className="w-5.5 h-5.5 text-[#FFB300] shrink-0 mt-0.5" />
               <div className="space-y-1 text-xs text-[#5D4037]">
-                <h4 className="font-black">Tinuig nga Amot ug Katungod (Annual Renewal)</h4>
+                <h4 className="font-black">Tinuig nga Amot ug DOLE Official Roster (January 1 – January 31 Cutoff)</h4>
                 <p className="leading-relaxed text-[#6D4C41]">
-                  Sigon sa balaod sa atong AFA, ang imong membership balido sulod sa **usa ka (1) tuig** — gikan sa <strong>Enero 1 hangtod Disyembre 31 {currentMembershipYear}</strong>. Ang atong Tesorero ({resolveOfficerName(users, 'Treasurer')}) mangolekta og **PHP {duesAmount.toLocaleString()}.00** nga tinuig nga amot para sa pag-renew sa imong mga benepisyo. Kung dili mabayran, dili ka maapil sa listahan sa mga miyembro alang nianang tuiga.
+                  Ang membership ug pagkolekta sa tinuig nga amot abli lamang matag <strong>Enero (Enero 1 hangtod Enero 31)</strong> tungod kay ang asosasyon mosumite sa opisyal nga report ug listahan sa mga miyembro ngadto sa <strong>Department of Labor and Employment (DOLE) matag Enero 31</strong>. Ang atong Tesorero ({resolveOfficerName(users, 'Treasurer')}) mangolekta og **PHP {duesAmount.toLocaleString()}.00** (**PHP {ANNUAL_MEMBERSHIP_FEE}.00** tinuig nga membership fee + **PHP {ANNUAL_SINKING_FUND}.00** sinking fund nga tag-PHP {MONTHLY_SINKING_FUND}.00 matag bulan). Ang asosasyon dili manirado, apan kung dili ka makabayad sa imong amot sa dili pa ang <strong>Enero 31</strong>, ang imong ngalan <strong>dili maapil sa opisyal nga listahan sa mga miyembro (Official Roster of Members) nga isumite ngadto sa DOLE</strong>.
                 </p>
                 <div className={`pt-1 text-[10px] font-black flex items-center gap-1 uppercase ${membershipStanding === 'Paid' ? 'text-[#1B4332]' : 'text-rose-800'}`}>
                   <span className={`w-2 h-2 rounded-full inline-block ${membershipStanding === 'Paid' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                   <span>
                     {membershipStanding === 'Paid'
-                      ? `Karon nga Status: Bayad na para sa tuig ${currentMembershipYear} (Listed Member)${myPayment ? ` · OR ${myPayment.referenceNo || myPayment.id}` : ''}`
-                      : `Karon nga Status: Wala pa mabayran ang amot sa tuig ${currentMembershipYear} — palihog bayad sa Tesorero`}
+                      ? `Karon nga Status: Bayad na • Apil sa ${currentMembershipYear} Official DOLE Roster${myPayment ? ` · OR ${myPayment.referenceNo || myPayment.id}` : ''}`
+                      : `Karon nga Status: Wala pa mabayran sa dili pa ang Enero 31 — Dili maapil sa ${currentMembershipYear} Official DOLE Roster hangtod mabayran sa Tesorero`}
                   </span>
                 </div>
               </div>
@@ -805,7 +814,7 @@ export default function MemberDashboard({
                           <span className="font-mono font-bold text-[#D8F3DC] text-[7px]">{memberCode}</span>
                         </div>
                         <div className="bg-[#E65100] text-white font-black px-1.5 py-0.5 rounded text-[5.5px] uppercase tracking-wider">
-                          EXPIRES: DEC 2026
+                          DOLE ROSTER: {currentMembershipYear} (JAN 31 CUTOFF)
                         </div>
                       </div>
                     </div>
@@ -815,7 +824,7 @@ export default function MemberDashboard({
                       <div className="space-y-1">
                         <p className="font-black text-[#1B4332] border-b border-[#F0EBE1] pb-1 text-[7px] uppercase tracking-wider">Kasabutan ug Lagda</p>
                         <p>1. Kini nga ID nagpamatud-an nga ang tag-iya usa ka rehistradong mag-uuma sa Brgy. Alegria, Tuburan, Cebu.</p>
-                        <p>2. Kinahanglan i-renew kada Disyembre pinaagi sa pagbayad og PHP 100 nga amot sa Tesorero.</p>
+                        <p>2. Ang amot nga PHP {duesAmount.toLocaleString()} (PHP {ANNUAL_MEMBERSHIP_FEE} membership + PHP {ANNUAL_SINKING_FUND} sinking fund) kinahanglan mabayran sa dili pa ang Enero 31 aron maapil sa Official Roster nga isumite sa DOLE.</p>
                         <p>3. Dili kini pwedeng ipahulam sa uban o gamiton sa dautang buhat.</p>
                       </div>
 
@@ -1170,7 +1179,7 @@ export default function MemberDashboard({
           </p>
 
           <div className="bg-slate-50 border border-slate-300 p-3 text-xs leading-relaxed font-sans text-slate-600 rounded-lg text-center max-w-lg mx-auto">
-            <strong>⚠️ ID Validity Period:</strong> Membership status and digital ID credentials cover the calendar year {currentMembershipYear} (January 1 – December 31) and expire on December 31, {currentMembershipYear}. Annual dues of PHP {duesAmount.toLocaleString()}.00 must be settled with the Treasurer each December to remain on the official list of members for the coming year.
+            <strong>⚠️ DOLE Official Roster Cutoff (January 31):</strong> Membership opens every January (January 1 – January 31) for the annual report submitted to the Department of Labor and Employment (DOLE) on January 31. Annual dues of PHP {duesAmount.toLocaleString()}.00 (PHP {ANNUAL_MEMBERSHIP_FEE}.00 annual membership + PHP {ANNUAL_SINKING_FUND}.00 sinking fund at PHP {MONTHLY_SINKING_FUND}.00/month) must be settled before January 31 to be included in the Official Roster of Members submitted to DOLE for {currentMembershipYear}.
           </div>
 
           <div className="pt-12 grid grid-cols-2 gap-12 text-center font-sans text-xs">
@@ -1251,7 +1260,7 @@ export default function MemberDashboard({
                 <strong className="font-mono text-black">{memberCode}</strong>
               </div>
               <div className="bg-emerald-800 text-white font-bold px-1 py-0.5 text-[6.5px] rounded">
-                VALID: DEC 2026
+                DOLE ROSTER: {currentMembershipYear}
               </div>
             </div>
           </div>
@@ -1261,7 +1270,7 @@ export default function MemberDashboard({
             <div className="space-y-1">
               <h5 className="font-bold text-black border-b border-slate-300 pb-1 text-[8px]">TERMS OF MEMBERSHIP</h5>
               <p>1. Certified active registered farmer in Barangay Alegria, Tuburan, Cebu.</p>
-              <p>2. Dues must be renewed annually at PHP 100.00 every December with the Treasurer.</p>
+              <p>2. Annual dues of PHP {duesAmount.toLocaleString()}.00 (PHP {ANNUAL_MEMBERSHIP_FEE} membership + PHP {ANNUAL_SINKING_FUND} sinking fund) must be paid before January 31 to be included in the Official Roster of Members submitted to DOLE.</p>
               <p>3. This card guarantees registered status for claim of local subsidies.</p>
             </div>
 

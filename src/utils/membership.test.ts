@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { Member, MembershipPayment } from '../types';
 import {
+  ANNUAL_MEMBERSHIP_FEE,
+  ANNUAL_SINKING_FUND,
   DEFAULT_MEMBERSHIP_DUES,
+  MONTHLY_SINKING_FUND,
   PENDING_MEMBER_ID_LABEL,
   assignNextMemberId,
   buildMembershipYearSnapshot,
@@ -50,6 +53,13 @@ describe('membership year', () => {
   it('reads the year from a stored date and from a Date', () => {
     expect(membershipYearOf('2027-02-03')).toBe(2027);
     expect(membershipYearOf(new Date(2028, 6, 1))).toBe(2028);
+  });
+
+  it('computes PHP 145 annual collection from PHP 25 membership + PHP 10/month sinking fund', () => {
+    expect(ANNUAL_MEMBERSHIP_FEE).toBe(25);
+    expect(MONTHLY_SINKING_FUND).toBe(10);
+    expect(ANNUAL_SINKING_FUND).toBe(120);
+    expect(DEFAULT_MEMBERSHIP_DUES).toBe(145);
   });
 });
 
@@ -144,8 +154,8 @@ describe('closing a membership year', () => {
       closedBy: 'Treasurer'
     });
 
-    expect(snapshot.listedMembers[0].amountPaid).toBe(150);
-    expect(snapshot.totalCollected).toBe(150);
+    expect(snapshot.listedMembers[0].amountPaid).toBe(DEFAULT_MEMBERSHIP_DUES + 50);
+    expect(snapshot.totalCollected).toBe(DEFAULT_MEMBERSHIP_DUES + 50);
   });
 
   it('refuses to close the same year twice', () => {

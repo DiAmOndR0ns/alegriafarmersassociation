@@ -635,7 +635,7 @@ export default function SecretaryView({
                     </span>
                   </h3>
                   <p className="text-xs text-amber-900 mt-0.5">
-                    New registrations stay in this separate <strong>Pending Members</strong> table with no Member ID until (1) the Secretary approves the application and (2) the Treasurer confirms their Membership Fee payment.
+                    Membership opens every <strong>January (January 1 – January 31)</strong> for the annual <strong>January 31 DOLE Official Roster report</strong>. New registrations stay in this separate <strong>Pending Members</strong> table with no Member ID until (1) the Secretary approves the application and (2) the Treasurer confirms their PHP 145.00 payment before January 31.
                   </p>
                 </div>
               </div>
@@ -832,20 +832,20 @@ export default function SecretaryView({
                               if (standing === 'Paid') {
                                 return (
                                   <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded font-bold uppercase">
-                                    <CheckCircle2 className="w-2.5 h-2.5" /> Active • Fee {membershipYear ?? new Date().getFullYear()} Paid
+                                    <CheckCircle2 className="w-2.5 h-2.5" /> In {membershipYear ?? new Date().getFullYear()} DOLE Roster • Fee Paid
                                   </span>
                                 );
                               }
                               if (standing === 'Inactive') {
                                 return (
                                   <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold uppercase" title={member.inactiveReason}>
-                                    <XCircle className="w-2.5 h-2.5" /> {member.inactiveReason || 'Inactive'}
+                                    <XCircle className="w-2.5 h-2.5" /> {member.inactiveReason || 'Not in DOLE Roster'}
                                   </span>
                                 );
                               }
                               return (
                                 <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded font-bold uppercase">
-                                  <AlertCircle className="w-2.5 h-2.5" /> Step 2: Awaiting Treasurer Fee
+                                  <AlertCircle className="w-2.5 h-2.5" /> Unpaid • Excluded from Jan 31 DOLE Roster
                                 </span>
                               );
                             })()}

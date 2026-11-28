@@ -1,13 +1,21 @@
 import type { Member, MembershipPayment, MembershipYearSnapshot } from '../types';
 
 /**
- * Annual membership dues.
+ * Annual membership dues and sinking fund collection (January 1 – January 31 DOLE Roster Cutoff).
  *
- * The system follows a CALENDAR membership year (1 January – 31 December). The
- * book closes at the end of the year; from the following 1st of January a member
- * only counts as active when a verified payment exists for that new year.
+ * Membership opens every JANUARY because the association submits its annual Official
+ * Roster of Members Report to the Department of Labor and Employment (DOLE) every
+ * January 31. The association itself does not close; however, if a member is not able
+ * to pay their PHP 145.00 dues before January 31:
+ * - PHP 25.00 for the Annual Membership Fee
+ * - PHP 120.00 for the Sinking Fund (PHP 10.00/month × 12 months, collected in January)
+ * their name will NOT be included in the Official Roster of Members submitted to DOLE.
  */
-export const DEFAULT_MEMBERSHIP_DUES = 100;
+export const ANNUAL_MEMBERSHIP_FEE = 25;
+export const MONTHLY_SINKING_FUND = 10;
+export const ANNUAL_SINKING_FUND = MONTHLY_SINKING_FUND * 12; // 120
+export const DEFAULT_MEMBERSHIP_DUES = ANNUAL_MEMBERSHIP_FEE + ANNUAL_SINKING_FUND; // 145
+export const DOLE_ROSTER_CUTOFF_LABEL = 'January 31';
 
 /** The `inactiveReason` an officer's year-close writes; a later payment clears it. */
 export const UNPAID_DUES_REASON = 'Unpaid dues';
@@ -122,7 +130,7 @@ export function getMembershipStanding(
   year: number
 ): MembershipStanding {
   // An officer's decision (resigned, removed) outranks a dues receipt. Paying
-  // ₱100 must never silently reinstate someone the association removed.
+  // ₱145 must never silently reinstate someone the association removed.
   if (member.status === 'Inactive' && member.inactiveReason && member.inactiveReason !== UNPAID_DUES_REASON) {
     return 'Inactive';
   }

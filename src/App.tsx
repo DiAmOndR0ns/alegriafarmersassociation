@@ -47,7 +47,10 @@ import { deriveIgpLivestockInventory } from './utils/igpInventory';
 import { getAvailableInventoryQuantity, getRentalStockStatus } from './utils/inventory';
 import { getActiveDelegationScopes } from './utils/delegation';
 import {
+  ANNUAL_MEMBERSHIP_FEE,
+  ANNUAL_SINKING_FUND,
   DEFAULT_MEMBERSHIP_DUES,
+  MONTHLY_SINKING_FUND,
   PENDING_MEMBER_ID_LABEL,
   UNPAID_DUES_REASON,
   assignNextMemberId,
@@ -507,7 +510,14 @@ export default function App() {
         setMembershipYearSnapshots(Array.isArray(storedMembershipYearSnapshots) ? storedMembershipYearSnapshots : []);
         setDeletedArchive(Array.isArray(storedDeletedArchive) ? storedDeletedArchive : []);
         const storedDues = Number(storedDuesAmount);
-        setDuesAmount(Number.isFinite(storedDues) && storedDues > 0 ? storedDues : DEFAULT_MEMBERSHIP_DUES);
+        // Migrate legacy default of PHP 100 to the updated PHP 145 annual collection (PHP 25 membership + PHP 120 sinking fund).
+        const resolvedDues = Number.isFinite(storedDues) && storedDues > 0 && storedDues !== 100
+          ? storedDues
+          : DEFAULT_MEMBERSHIP_DUES;
+        setDuesAmount(resolvedDues);
+        if (storedDues === 100) {
+          void updateStorage('bafa_membership_dues_amount', DEFAULT_MEMBERSHIP_DUES);
+        }
 
         syncQueueRef.current = storedQueue || [];
         setSyncQueue(syncQueueRef.current);
@@ -2017,7 +2027,7 @@ export default function App() {
 
     // Dues are income in the ledger, so the fund balance and the books agree.
     const duesFund = funds.find(f => f.code.toUpperCase() === 'DUES') || funds[0];
-    const label = `Membership dues ${year} - ${issuedMemberId || member.name}${input.referenceNo?.trim() ? ` (OR ${input.referenceNo.trim()})` : ''}`;
+    const label = `Membership dues & sinking fund ${year} - ${issuedMemberId || member.name}${input.referenceNo?.trim() ? ` (OR ${input.referenceNo.trim()})` : ''}`;
     if (duesFund) {
       handleAddTransaction({
         type: 'income',
@@ -2025,7 +2035,7 @@ export default function App() {
         amount,
         date: input.datePaid,
         description: label,
-        purpose: `Annual membership dues for ${year}`,
+        purpose: `Annual January collection for ${year} (PHP ${ANNUAL_MEMBERSHIP_FEE} Annual Membership + PHP ${ANNUAL_SINKING_FUND} Sinking Fund @ PHP ${MONTHLY_SINKING_FUND}/month)`,
         fundSource: `${duesFund.code} (${duesFund.name})`,
         recordedBy: currentUser?.name || 'Treasurer'
       });
@@ -2145,14 +2155,14 @@ export default function App() {
 
     if (isOnline) {
       logAction(
-        'Closed Membership Year',
-        `Closed membership year ${year}: ${snapshot.paidMembers} of ${snapshot.totalMembers} members paid, PHP ${snapshot.totalCollected.toLocaleString()} collected. ${snapshot.unpaidMembers} member(s) delisted.`
+        'Finalized Jan 31 DOLE Official Roster',
+        `Finalized January 31, ${year} Official Roster of Members for DOLE submission: ${snapshot.paidMembers} of ${snapshot.totalMembers} members paid before Jan 31 and included in the DOLE roster, PHP ${snapshot.totalCollected.toLocaleString()} collected. ${snapshot.unpaidMembers} unpaid member(s) excluded from the ${year} DOLE Official Roster.`
       );
-      pushAllDataToCloud({ membershipYearSnapshots: updatedSnapshots, members: updatedMembers, users: updatedUsers }, { silent: true, source: 'Membership Year Closed' });
+      pushAllDataToCloud({ membershipYearSnapshots: updatedSnapshots, members: updatedMembers, users: updatedUsers }, { silent: true, source: 'Jan 31 DOLE Roster Finalized' });
     } else {
       addToSyncQueue('create', 'membership_year_snapshot', snapshot);
     }
-    showToastMessage(`Membership year ${year} closed. ${snapshot.paidMembers} listed, ${snapshot.unpaidMembers} delisted.`, 'success');
+    showToastMessage(`January 31, ${year} Official Roster for DOLE finalized — ${snapshot.paidMembers} included, ${snapshot.unpaidMembers} excluded (unpaid).`, 'success');
   };
 
   const handleUpdateDuesAmount = (amount: number) => {

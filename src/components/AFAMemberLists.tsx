@@ -450,7 +450,7 @@ export default function AFAMemberLists({
   onClose,
 }: Props & { users?: User[]; members?: Member[]; membershipPayments?: MembershipPayment[]; membershipYear?: number }) {
   const [paper, setPaper] = useState<PaperKey>(initialPaper);
-  const [statusFilter, setStatusFilter] = useState<'Active' | 'Inactive' | 'All'>('All');
+  const [statusFilter, setStatusFilter] = useState<'Active' | 'Inactive' | 'All'>('Active');
   const [logoOk, setLogoOk] = useState(true);
 
   useEffect(() => {
@@ -487,11 +487,11 @@ export default function AFAMemberLists({
           </select>
         </label>
         <label>
-          Member Status{" "}
+          DOLE Roster Filter{" "}
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'Active' | 'Inactive' | 'All')}>
-            <option value="All">Active &amp; Inactive (All Members)</option>
-            <option value="Active">Active Only (Dues Paid)</option>
-            <option value="Inactive">Inactive Only (Unpaid / Delisted)</option>
+            <option value="Active">Official DOLE Roster Only (Paid Before Jan 31)</option>
+            <option value="All">All Members (Included &amp; Excluded)</option>
+            <option value="Inactive">Excluded from DOLE Roster (Unpaid Before Jan 31)</option>
           </select>
         </label>
         <button type="button" onClick={() => window.print()}>

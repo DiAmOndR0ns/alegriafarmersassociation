@@ -5,7 +5,10 @@ import {
 } from '../types';
 import { getInventoryAssetType } from '../utils/inventory';
 import {
+  ANNUAL_MEMBERSHIP_FEE,
+  ANNUAL_SINKING_FUND,
   DEFAULT_MEMBERSHIP_DUES,
+  MONTHLY_SINKING_FUND,
   PENDING_MEMBER_ID_LABEL,
   getDuesCollected,
   getMembershipReceiptLabel,
@@ -925,11 +928,25 @@ export default function TreasurerView({
             <div>
               <h3 className="text-sm font-black text-[#1B4332] uppercase tracking-wide flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-700" />
-                <span>Annual Membership Dues — {duesYear}</span>
+                <span>Annual Membership &amp; Sinking Fund Collection (Jan 31 DOLE Roster) — {duesYear}</span>
               </h3>
               <p className="text-sm text-[#4A5F57] mt-1">
-                The book closes every 31 December. A member is delisted for {duesYear} until the PHP {duesAmount.toLocaleString()} dues are recorded here.
+                Membership opens every <strong>January (Jan 1 – Jan 31)</strong> for the annual report submitted to <strong>DOLE every January 31</strong>. Each member pays <strong>PHP {duesAmount.toLocaleString()}</strong> (<strong>PHP {ANNUAL_MEMBERSHIP_FEE}</strong> Annual Membership + <strong>PHP {ANNUAL_SINKING_FUND}</strong> Sinking Fund at PHP {MONTHLY_SINKING_FUND}/month × 12). Members who do not pay before <strong>January 31</strong> are not included in the official roster submitted to DOLE.
               </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100/80 text-emerald-950 border border-emerald-300 text-xs font-extrabold">
+                  <span>Annual Membership:</span>
+                  <span className="font-mono">PHP {ANNUAL_MEMBERSHIP_FEE}.00</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100/80 text-amber-950 border border-amber-300 text-xs font-extrabold">
+                  <span>Sinking Fund (PHP {MONTHLY_SINKING_FUND}/mo × 12, collected in Jan):</span>
+                  <span className="font-mono">PHP {ANNUAL_SINKING_FUND}.00</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#1B4332] text-[#FFF0C2] text-xs font-extrabold">
+                  <span>Total Annual Collection (Jan 31 DOLE Cutoff):</span>
+                  <span className="font-mono">PHP {duesAmount.toLocaleString()}.00</span>
+                </span>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               <label className="flex items-center gap-1.5 text-sm font-bold text-[#1B4332]">
@@ -1125,7 +1142,7 @@ export default function TreasurerView({
                         </span>
                       ) : row.standing === 'Paid' ? (
                         <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full">
-                          <CheckCircle className="w-3 h-3" /> Active / Fee Paid
+                          <CheckCircle className="w-3 h-3" /> In DOLE Roster / Fee Paid
                         </span>
                       ) : row.standing === 'Inactive' ? (
                         <span className="inline-flex items-center gap-1 bg-slate-200 text-slate-800 border border-slate-400 text-[10px] font-black px-2 py-0.5 rounded-full" title={row.member.inactiveReason}>
@@ -1133,7 +1150,7 @@ export default function TreasurerView({
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-900 border border-rose-300 text-[10px] font-black px-2 py-0.5 rounded-full">
-                          <AlertTriangle className="w-3 h-3" /> Unpaid Fee
+                          <AlertTriangle className="w-3 h-3" /> Unpaid • Not in DOLE Roster
                         </span>
                       )}
                     </td>
@@ -1188,28 +1205,28 @@ export default function TreasurerView({
 
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-3 border-t border-[#D5CFC1]">
             <p className="text-sm text-[#33473D]">
-              Closing the year freezes the official roster and delists every member who has not paid.
+              The association does not close; however, every <strong>January 31</strong> the Official Roster of Members is submitted to <strong>DOLE</strong>. Members who do not pay their dues before January 31 are not included in the official DOLE roster.
             </p>
             <button
               type="button"
               disabled={duesYearClosed}
               onClick={() => {
-                if (window.confirm(`Close membership year ${duesYear}? The roster is frozen and unpaid members are delisted from the active list.`)) {
-                  const remarks = window.prompt('Remarks for the year-end minutes (optional):') || undefined;
+                if (window.confirm(`Finalize the January 31, ${duesYear} Official Roster of Members for DOLE submission? Members who have not paid their dues before January 31 will not be included in the official DOLE roster.`)) {
+                  const remarks = window.prompt('Remarks for the January 31 DOLE Official Roster report (optional):') || undefined;
                   onCloseMembershipYear(duesYear, remarks);
                 }
               }}
-              className={`flex min-h-11 items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-xl transition-all ${duesYearClosed ? 'bg-slate-300 text-slate-600 cursor-not-allowed' : 'bg-[#14532D] hover:bg-[#123F25] text-white cursor-pointer'}`}
+              className={`flex min-h-11 items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-xl transition-all shrink-0 ${duesYearClosed ? 'bg-slate-300 text-slate-600 cursor-not-allowed' : 'bg-[#14532D] hover:bg-[#123F25] text-white cursor-pointer'}`}
             >
               <Calendar className="w-4 h-4" />
-              <span>{duesYearClosed ? 'Year closed' : `Close ${duesYear} Membership Year`}</span>
+              <span>{duesYearClosed ? `Jan 31, ${duesYear} DOLE Roster Finalized` : `Finalize Jan 31 DOLE Roster (${duesYear})`}</span>
             </button>
           </div>
 
           {duesYearClosed && (
             <p className="text-sm font-bold text-emerald-900 bg-emerald-50 border border-emerald-300 rounded-xl p-3">
-              The {duesYear} roster is closed and sealed
-              {closedYearSnapshot ? ` — ${closedYearSnapshot.paidMembers} listed, ${closedYearSnapshot.unpaidMembers} delisted, PHP ${closedYearSnapshot.totalCollected.toLocaleString()} collected.` : '.'}
+              The January 31, {duesYear} Official Roster of Members for DOLE submission is finalized
+              {closedYearSnapshot ? ` — ${closedYearSnapshot.paidMembers} included in the official DOLE roster, ${closedYearSnapshot.unpaidMembers} excluded (unpaid before Jan 31), PHP ${closedYearSnapshot.totalCollected.toLocaleString()} collected.` : '.'}
             </p>
           )}
         </div>
@@ -1241,8 +1258,10 @@ export default function TreasurerView({
           >
             <div className="flex items-start justify-between gap-3 border-b border-[#D5CFC1] pb-3">
               <div>
-                <h3 className="text-lg font-black text-[#1B4332]">Record Annual Membership Dues</h3>
-                <p className="text-sm text-[#4A5F57]">Membership year {duesYear} · PHP {duesAmount.toLocaleString()} per member</p>
+                <h3 className="text-lg font-black text-[#1B4332]">Record Annual Membership &amp; Sinking Fund</h3>
+                <p className="text-sm text-[#4A5F57]">
+                  Membership year {duesYear} · Collected in January · PHP {duesAmount.toLocaleString()} per member (PHP {ANNUAL_MEMBERSHIP_FEE} Membership + PHP {ANNUAL_SINKING_FUND} Sinking Fund @ PHP {MONTHLY_SINKING_FUND}/mo)
+                </p>
               </div>
               <button type="button" onClick={() => setShowDuesModal(false)} className="text-2xl leading-none text-[#33473D] hover:text-[#1B4332] cursor-pointer" aria-label="Close">&times;</button>
             </div>
